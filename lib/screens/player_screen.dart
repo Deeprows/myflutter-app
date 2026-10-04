@@ -1,6 +1,6 @@
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:flutter/material.dart';
-import 'package:floating/floating.dart';
+import '../services/pip_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -57,7 +57,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _landscape = false;
   String _initialHost = '';
   bool _pipEnabled = false;
-  final Floating _floating = Floating();
 
   Widget? _fullscreenWidget;
   VoidCallback? _fullscreenHidden;
@@ -226,10 +225,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _enterPip() async {
     try {
-      if (await _floating.isPipAvailable) {
-        await _floating.enable(aspectRatio: const Rational(16, 9));
-        return;
-      }
+      if (await PipService.isAvailable() && await PipService.enter()) return;
     } catch (_) {}
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
