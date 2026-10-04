@@ -24,7 +24,7 @@ class AppConfig {
 
   /// Optional remote JSON feed for the fixtures list (same shape as
   /// assets/data/fixtures.json). Leave empty to use only the bundled file.
-  static const fixturesUrl = '';
+  static const fixturesUrl = 'https://github.com/Deeprows/myflutter-app/blob/main/assets/data/fixtures.json';
 
   /// Remote JSON feed for highlights (same shape as assets/data/highlights.json).
   /// The bundled copy is used as an offline fallback.
