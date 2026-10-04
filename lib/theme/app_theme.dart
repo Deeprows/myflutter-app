@@ -36,9 +36,9 @@ class Palette {
 }
 
 class Palettes {
-  /// The original Footbolive look: red on near-black.
+  /// The original Deeprowss look: red on near-black.
   static const red = Palette(
-    name: 'Footbolive Red',
+    name: 'Deeprowss Red',
     tagline: 'Classic red on midnight black',
     bg: Color(0xFF080B10),
     panel: Color(0xFF0F131A),
