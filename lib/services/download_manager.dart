@@ -103,7 +103,6 @@ class DownloadManager extends ChangeNotifier {
   static const _prefsKey = 'downloads_v2';
 
   final List<DownloadTask> _tasks = [];
-  ReceivePort? _port;
   bool _ready = false;
   bool _available = false;
   Timer? _notifyTimer;
@@ -126,7 +125,6 @@ class DownloadManager extends ChangeNotifier {
 
     // Progress updates from the background isolate.
     final port = ReceivePort();
-    _port = port;
     IsolateNameServer.removePortNameMapping(_portName);
     IsolateNameServer.registerPortWithName(port.sendPort, _portName);
     port.listen(_onPort);
