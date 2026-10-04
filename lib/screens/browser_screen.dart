@@ -212,7 +212,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
               Container(
                 height: 56,
                 padding: const EdgeInsets.only(left: 4, right: 4),
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: Ui.panel,
                   border: Border(bottom: BorderSide(color: Ui.line)),
                 ),
@@ -251,7 +251,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
                                     _host,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         color: Ui.muted,
                                         fontSize: 11.5,
                                         fontWeight: FontWeight.w600),
@@ -333,7 +333,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.wifi_off_rounded,
+                            Icon(Icons.wifi_off_rounded,
                                 size: 40, color: Ui.redSoft),
                             const SizedBox(height: 10),
                             const Text('Couldn\'t load this page',
