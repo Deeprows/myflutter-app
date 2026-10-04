@@ -139,7 +139,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                         _loading
                             ? 'Loading…'
                             : '${_all.length} movies and series',
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: Ui.muted,
                             fontSize: 13,
                             fontWeight: FontWeight.w600),
@@ -151,9 +151,9 @@ class _MoviesScreenState extends State<MoviesScreen> {
                         textInputAction: TextInputAction.search,
                         decoration: InputDecoration(
                           hintText: 'Search movies',
-                          hintStyle: const TextStyle(color: Ui.dim),
+                          hintStyle: TextStyle(color: Ui.dim),
                           prefixIcon:
-                              const Icon(Icons.search_rounded, color: Ui.muted),
+                              Icon(Icons.search_rounded, color: Ui.muted),
                           suffixIcon: _query.isEmpty
                               ? null
                               : IconButton(
@@ -169,11 +169,11 @@ class _MoviesScreenState extends State<MoviesScreen> {
                               const EdgeInsets.symmetric(vertical: 12),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(color: Ui.line),
+                            borderSide: BorderSide(color: Ui.line),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(color: Ui.line),
+                            borderSide: BorderSide(color: Ui.line),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -204,12 +204,12 @@ class _MoviesScreenState extends State<MoviesScreen> {
             ),
           ),
           if (_loading)
-            const SliverFillRemaining(
+            SliverFillRemaining(
               hasScrollBody: false,
               child: Center(child: CircularProgressIndicator(color: Ui.red)),
             )
           else if (filtered.isEmpty)
-            const SliverFillRemaining(
+            SliverFillRemaining(
               hasScrollBody: false,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -350,7 +350,7 @@ class _MovieSheet extends StatelessWidget {
                       if (movie.genres.isNotEmpty) ...[
                         const SizedBox(height: 10),
                         Text(movie.genres.join(' · '),
-                            style: const TextStyle(
+                            style: TextStyle(
                                 color: Ui.muted,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600)),
@@ -358,7 +358,7 @@ class _MovieSheet extends StatelessWidget {
                       if (movie.date != null) ...[
                         const SizedBox(height: 8),
                         Text('Added ${shortDate(movie.date!)}',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 color: Ui.dim,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600)),
@@ -390,7 +390,7 @@ class _MovieSheet extends StatelessWidget {
                       onPressed: () => _download(context),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: Ui.line),
+                        side: BorderSide(color: Ui.line),
                       ),
                       icon: const Icon(Icons.download_rounded),
                       label: const Text('Download',
@@ -410,8 +410,8 @@ class _MovieSheet extends StatelessWidget {
 class _Meta extends StatelessWidget {
   final IconData icon;
   final String text;
-  final Color color;
-  const _Meta({required this.icon, required this.text, this.color = Ui.muted});
+  final Color? color;
+  const _Meta({required this.icon, required this.text, this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -425,7 +425,7 @@ class _Meta extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: color),
+          Icon(icon, size: 13, color: color ?? Ui.muted),
           const SizedBox(width: 5),
           Text(text,
               style: const TextStyle(
