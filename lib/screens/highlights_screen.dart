@@ -123,7 +123,7 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
                         _loading
                             ? 'Loading…'
                             : '${_all.length} match replays and goals',
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: Ui.muted,
                             fontSize: 13,
                             fontWeight: FontWeight.w600),
@@ -135,9 +135,9 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
                         textInputAction: TextInputAction.search,
                         decoration: InputDecoration(
                           hintText: 'Search teams or competitions',
-                          hintStyle: const TextStyle(color: Ui.dim),
+                          hintStyle: TextStyle(color: Ui.dim),
                           prefixIcon:
-                              const Icon(Icons.search_rounded, color: Ui.muted),
+                              Icon(Icons.search_rounded, color: Ui.muted),
                           suffixIcon: _query.isEmpty
                               ? null
                               : IconButton(
@@ -153,11 +153,11 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
                               const EdgeInsets.symmetric(vertical: 12),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(color: Ui.line),
+                            borderSide: BorderSide(color: Ui.line),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(color: Ui.line),
+                            borderSide: BorderSide(color: Ui.line),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -187,12 +187,12 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
             ),
           ),
           if (_loading)
-            const SliverFillRemaining(
+            SliverFillRemaining(
               hasScrollBody: false,
               child: Center(child: CircularProgressIndicator(color: Ui.red)),
             )
           else if (filtered.isEmpty)
-            const SliverFillRemaining(
+            SliverFillRemaining(
               hasScrollBody: false,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -224,7 +224,7 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
                       const SizedBox(width: 8),
                       Text(
                         e.key.toUpperCase(),
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: Ui.muted,
                             fontSize: 12,
                             fontWeight: FontWeight.w900,
