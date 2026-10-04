@@ -1,12 +1,12 @@
 /// Central place for the things you are most likely to edit.
 class AppConfig {
-  static const appName = 'Footbolive';
+  static const appName = 'Deeprowss';
   static const appVersion = '1.0';
 
   /// Drawer menu links. Leave a value empty to make its menu item show a
   /// "not set up yet" message instead of opening anything.
-  static const websiteUrl = '';
-  static const joinUrl = ''; // Telegram / WhatsApp / Discord invite link
+  static const websiteUrl = 'deeprowss.com';
+  static const joinUrl = 'https://t.me/deeprows'; // Telegram / WhatsApp / Discord invite link
   static const updateUrl = ''; // release page or direct apk link
 
   /// Optional remote notice (plain text, or JSON {"title":"","message":""}).
@@ -22,22 +22,16 @@ class AppConfig {
   /// mirrors the site the streams were originally played on.
   static const playerOrigin = 'https://deeprowss.com/';
 
-  /// Optional remote JSON feed for the fixtures list (same shape as
-  /// assets/data/fixtures.json). Leave empty to use only the bundled file.
-  static const fixturesUrl = 'https://github.com/Deeprows/myflutter-app/blob/main/assets/data/fixtures.json';
-
-  /// Remote JSON feed for highlights (same shape as assets/data/highlights.json).
-  /// The bundled copy is used as an offline fallback.
-  static const highlightsUrl =
-      'https://deeprowss.com/content/highlights/highlights.json';
-
-  /// Remote JSON feed for movies / series (same shape as
-  /// assets/data/movies.json). The bundled copy is the offline fallback.
-  static const moviesUrl =
-      'https://deeprowss.com/content/movies/movies.json';
-
-  /// Optional remote JSON feed for TV channels (same shape as
-  /// assets/data/tv.json). Leave empty to use only the bundled file.
+  /// All content lives inside this repo (assets/data/*.json) and ships with
+  /// the app: fixtures.json, highlights.json, movies.json and tv.json. Edit
+  /// those files and build a new APK to update the content.
+  ///
+  /// Optional remote feeds (same shape as the matching asset file). Leave a
+  /// value empty to use only the bundled file. If you set one, the app fetches
+  /// it on launch / pull-to-refresh and falls back to the bundled copy offline.
+  static const fixturesUrl = '';
+  static const highlightsUrl = '';
+  static const moviesUrl = '';
   static const tvUrl = '';
 
   /// Used when a fixture has no explicit duration (minutes).
