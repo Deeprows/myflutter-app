@@ -15,7 +15,13 @@ class Settings {
   static const _kLow = 'footbolive_force_low_quality';
   static const _kFloat = 'footbolive_floating_player';
   static const _kCopyright = 'footbolive_copyright_seen';
+  static const _kTheme = 'footbolive_theme';
   static const _kPlaylists = 'footbolive_playlists';
+
+  static Future<int> themeIndex() async =>
+      (await SharedPreferences.getInstance()).getInt(_kTheme) ?? 0;
+  static Future<void> setThemeIndex(int v) async =>
+      (await SharedPreferences.getInstance()).setInt(_kTheme, v);
 
   static Future<bool> forceLowQuality() async =>
       (await SharedPreferences.getInstance()).getBool(_kLow) ?? false;
