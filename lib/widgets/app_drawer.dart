@@ -42,13 +42,15 @@ class FootboliveDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget item(IconData icon, String label, Future<void> Function(BuildContext) f) =>
         ListTile(
-          leading: Icon(icon, size: 26),
+          dense: true,
+          leading: Icon(icon, size: 21),
           title: Text(label,
               style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
           onTap: () => _go(context, f),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-          minVerticalPadding: 14,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 18),
+          minVerticalPadding: 6,
+          horizontalTitleGap: 12,
         );
 
     return Drawer(
@@ -70,8 +72,8 @@ class FootboliveDrawer extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 72,
-                  height: 72,
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
                     color: Ui.red,
                     borderRadius: BorderRadius.circular(20),
@@ -81,23 +83,25 @@ class FootboliveDrawer extends StatelessWidget {
                     ],
                   ),
                   child: const Icon(Icons.sports_soccer_rounded,
-                      color: Colors.white, size: 42),
+                      color: Colors.white, size: 32),
                 ),
                 const SizedBox(height: 14),
                 const Text('DEEPROWSS',
                     style: TextStyle(
-                        fontSize: 22,
+                        fontSize: 18,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 2)),
                 const SizedBox(height: 4),
                 Text('Version: ${AppConfig.appVersion}',
-                    style: TextStyle(color: Ui.muted, fontSize: 13)),
+                    style: TextStyle(color: Ui.muted, fontSize: 11.5)),
               ],
             ),
           ),
           Expanded(
             child: ListView(
-              padding: EdgeInsets.zero,
+              // Bottom padding keeps 'Exit' clear of the phone navigation bar.
+              padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewPadding.bottom + 16),
               children: [
                 item(Icons.link_rounded, 'Network Stream',
                     (c) => _push(c, const NetworkStreamScreen())),
