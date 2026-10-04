@@ -1,7 +1,6 @@
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:flutter/material.dart';
 import '../services/pip_service.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -251,17 +250,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
             'Open "Cast" or "Smart View" from your phone\'s quick settings')));
   }
 
-  Future<void> _share() async {
-    final url = _stream.url;
-    try {
-      await Share.share('${widget.title}\n$url', subject: widget.title);
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Couldn\'t open share')));
-    }
-  }
-
   void _onBack() {
     if (_fullscreenWidget != null) {
       _fullscreenHidden?.call();
@@ -453,13 +441,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           icon: Icons.screen_rotation_rounded,
                           label: 'Rotate',
                           onTap: _toggleLandscape),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _Action(
-                          icon: Icons.share_rounded,
-                          label: 'Share',
-                          onTap: _share),
                     ),
                   ],
                 ),
