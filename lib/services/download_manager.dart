@@ -103,6 +103,7 @@ class DownloadManager extends ChangeNotifier {
   static const _prefsKey = 'downloads_v2';
 
   final List<DownloadTask> _tasks = [];
+  final Set<String> _starting = {};
   bool _ready = false;
   bool _available = false;
   Timer? _notifyTimer;
@@ -266,6 +267,17 @@ class DownloadManager extends ChangeNotifier {
       }
     }
 
+    // A second tap while the first is still being checked does nothing.
+    if (!_starting.add(url)) return null;
+    try {
+      return await _enqueue(url, referer, cookie, name);
+    } finally {
+      _starting.remove(url);
+    }
+  }
+
+  Future<String?> _enqueue(
+      String url, String referer, String cookie, String? name) async {
     final probe = await _probe(url, referer, cookie);
     if (probe.error != null) return probe.error;
 
@@ -420,7 +432,7 @@ class DownloadManager extends ChangeNotifier {
       if (referer.isNotEmpty) req.headers['Referer'] = referer;
       if (cookie.isNotEmpty) req.headers['Cookie'] = cookie;
       if (range) req.headers['Range'] = 'bytes=0-0';
-      return client.send(req).timeout(const Duration(seconds: 20));
+      return client.send(req).timeout(const Duration(seconds: 12));
     }
 
     try {
