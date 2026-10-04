@@ -1,0 +1,33 @@
+name: footbolive
+description: Footbolive - live football fixtures and match highlights with a built-in WebView player (m3u8, mp4, embeds).
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: ^4.10.0
+  webview_flutter_android: ^4.5.0
+  wakelock_plus: ^1.2.10
+  http: ^1.5.0
+  shared_preferences: ^2.5.5
+  url_launcher: ^6.3.1
+  path_provider: ^2.1.5
+  flutter_downloader: ^1.11.8
+  permission_handler: ^11.3.1
+  floating: ^2.0.0
+  share_plus: ^10.1.4
+  android_intent_plus: ^5.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/data/
