@@ -7,6 +7,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../config.dart';
+import '../services/ad_shield.dart';
 import '../services/player_html.dart';
 import '../services/settings_service.dart';
 import '../services/stream_resolver.dart';
@@ -61,7 +62,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // send the player to another website by itself.
   DateTime _startedAt = DateTime.now();
   final Set<String> _allowedSites = {};
-  DateTime _lastBlockNote = DateTime(2000);
   static const _gateWindow = Duration(seconds: 5);
   bool _pipEnabled = false;
 
@@ -81,6 +81,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ..setUserAgent(AppConfig.userAgent)
       ..setNavigationDelegate(NavigationDelegate(
         onPageStarted: (_) => _killPopups(),
+        onProgress: (_) => _killPopups(),
         onPageFinished: (_) {
           _settled = true;
           _killPopups();
@@ -160,9 +161,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
   /// trusted while the first page is loading; afterwards it is blocked and a
   /// snackbar offers ALLOW in case the redirect was legitimate.
   NavigationDecision _onNavigation(NavigationRequest r) {
-    if (!r.isMainFrame) return NavigationDecision.navigate;
+    if (!r.isMainFrame) {
+      // Frames/sub-resources stay allowed (embeds are made of them), except
+      // known ad networks.
+      return AdShield.isAdSubframe(r.url)
+          ? NavigationDecision.prevent
+          : NavigationDecision.navigate;
+    }
     final uri = Uri.tryParse(r.url);
     if (uri == null) return NavigationDecision.prevent;
+    if (AdShield.isAdUrl(r.url)) return NavigationDecision.prevent;
     final scheme = uri.scheme.toLowerCase();
     if (scheme == 'about' || scheme == 'data' || scheme == 'blob') {
       return NavigationDecision.navigate;
@@ -184,44 +192,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return NavigationDecision.prevent;
   }
 
-  void _noteBlocked(Uri uri) {
-    if (!mounted) return;
-    final now = DateTime.now();
-    if (now.difference(_lastBlockNote) < const Duration(seconds: 2)) return;
-    _lastBlockNote = now;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text('Blocked a redirect to ${uri.host}'),
-        duration: const Duration(seconds: 3),
-        action: SnackBarAction(
-          label: 'ALLOW',
-          textColor: Ui.redSoft,
-          onPressed: () {
-            _allowedSites.add(siteOf(uri.host));
-            _wc.loadRequest(uri);
-          },
-        ),
-      ));
-  }
+  /// Blocked redirects are dropped silently (no notification).
+  void _noteBlocked(Uri uri) {}
 
   /// Neutralises pop-ups opened by the page itself and by transparent
   /// click-catcher overlays (window.open / target=_blank links).
   void _killPopups() {
     if (_stream.usesHtmlPlayer) return; // our own page has no ads
-    _wc.runJavaScript(r"""
-(function(){
-  try{
-    window.open=function(){return null};
-    if(!window.__dwNoPop){
-      window.__dwNoPop=1;
-      document.addEventListener('click',function(e){
-        var a=e.target&&e.target.closest?e.target.closest('a[target=_blank],a[target=_new]'):null;
-        if(a){e.preventDefault();e.stopPropagation();}
-      },true);
-    }
-  }catch(e){}
-})();""").catchError((_) {});
+    _wc.runJavaScript(AdShield.adShieldJs).catchError((_) {});
   }
 
   // ------------------------------------------------------------- fullscreen
@@ -495,7 +473,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       Expanded(
                         child: Text(
                           'Stream not loading? Tap Reload, or Switch to try the '
-                          'backup source. Pop-ups and redirects are blocked '
+                          'backup source. Pop-ups, redirects and on-screen ads are blocked '
                           'automatically.',
                           style: TextStyle(
                               color: Ui.muted, fontSize: 12.5, height: 1.45),
