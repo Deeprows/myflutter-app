@@ -82,9 +82,9 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
         child: const Icon(Icons.add_rounded),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Ui.red))
+          ? Center(child: CircularProgressIndicator(color: Ui.red))
           : _items.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text('No playlists yet. Tap + to add one.',
                       style: TextStyle(color: Ui.muted)))
               : ListView.builder(
@@ -163,11 +163,11 @@ class _PlaylistEntriesScreenState extends State<PlaylistEntriesScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(widget.playlist.name)),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Ui.red))
+          ? Center(child: CircularProgressIndicator(color: Ui.red))
           : _error != null
               ? Center(
                   child: Text(_error!,
-                      style: const TextStyle(color: Ui.muted)))
+                      style: TextStyle(color: Ui.muted)))
               : Column(
                   children: [
                     Padding(
