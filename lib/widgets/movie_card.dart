@@ -33,14 +33,14 @@ class MovieCard extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
                   movie.isSeries ? 'Series · ${movie.year}' : movie.year!,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: Ui.muted,
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600),
                 ),
               )
             else if (movie.isSeries)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(top: 2),
                 child: Text('Series',
                     style: TextStyle(
@@ -109,7 +109,7 @@ class MoviePoster extends StatelessWidget {
             Image.network(
               movie.image,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _fallback(),
+              errorBuilder: (_, _, _) => _fallback(),
               loadingBuilder: (_, child, p) =>
                   p == null ? child : Stack(fit: StackFit.expand, children: [
                     _fallback(),
