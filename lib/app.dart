@@ -11,7 +11,7 @@ class FootboliveApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<int>(
       valueListenable: ThemeController.index,
-      builder: (_, __, ___) => MaterialApp(
+      builder: (_, _, _) => MaterialApp(
         title: AppConfig.appName,
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
