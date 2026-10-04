@@ -5,8 +5,8 @@ class AppConfig {
 
   /// Drawer menu links. Leave a value empty to make its menu item show a
   /// "not set up yet" message instead of opening anything.
-  static const websiteUrl = 'deeprowss.com';
-  static const joinUrl = 'https://t.me/deeprows'; // Telegram / WhatsApp / Discord invite link
+  static const websiteUrl = '';
+  static const joinUrl = ''; // Telegram / WhatsApp / Discord invite link
   static const updateUrl = ''; // release page or direct apk link
 
   /// Optional remote notice (plain text, or JSON {"title":"","message":""}).
