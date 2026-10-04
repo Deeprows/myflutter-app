@@ -20,6 +20,10 @@ jobs:
       - run: flutter create . --platforms=android --project-name=footbolive --org com.deeprows
       - run: flutter pub get
 
+      # Deeprowss logo as the launch (splash) screen.
+      - name: Generate splash screen
+        run: dart run flutter_native_splash:create
+
       # Adds INTERNET, notification + foreground-service permissions for
       # background downloads, cleartext http, and the app label.
       - name: Patch AndroidManifest
