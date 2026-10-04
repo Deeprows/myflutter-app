@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
@@ -17,6 +18,30 @@ class ShellScreen extends StatefulWidget {
 
 class _ShellScreenState extends State<ShellScreen> {
   int _index = 0;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  DateTime? _lastBack;
+
+  void _onBack() {
+    final state = _scaffoldKey.currentState;
+    if (state != null && state.isDrawerOpen) {
+      state.closeDrawer();
+      return;
+    }
+    final now = DateTime.now();
+    if (_lastBack != null &&
+        now.difference(_lastBack!) < const Duration(seconds: 2)) {
+      SystemNavigator.pop();
+      return;
+    }
+    _lastBack = now;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(
+        content: Text('Tap back more to exit'),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ));
+  }
 
   @override
   void initState() {
@@ -28,7 +53,13 @@ class _ShellScreenState extends State<ShellScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _onBack();
+      },
+      child: Scaffold(
+      key: _scaffoldKey,
       drawer: const FootboliveDrawer(),
       extendBody: false,
       body: IndexedStack(
@@ -69,6 +100,7 @@ class _ShellScreenState extends State<ShellScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
