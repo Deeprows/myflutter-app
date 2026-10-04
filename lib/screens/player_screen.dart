@@ -12,6 +12,7 @@ import '../services/settings_service.dart';
 import '../services/stream_resolver.dart';
 import '../theme/app_theme.dart';
 import '../widgets/live_dot.dart';
+import 'browser_screen.dart' show siteOf;
 
 /// WebView based player. Plays:
 ///  * m3u8 (hls.js), mpd (dash.js) and direct video files through a built-in
@@ -50,11 +51,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
   ];
   int _srcIdx = 0;
 
-  int _progress = 0;
   bool _error = false;
   bool _settled = false;
   bool _landscape = false;
   String _initialHost = '';
+
+  // Pop-up / redirect blocking. Cross-site hops are only trusted during the
+  // first load (short links, embed redirects); after that, the page may not
+  // send the player to another website by itself.
+  DateTime _startedAt = DateTime.now();
+  final Set<String> _allowedSites = {};
+  DateTime _lastBlockNote = DateTime(2000);
+  static const _gateWindow = Duration(seconds: 5);
   bool _pipEnabled = false;
 
   Widget? _fullscreenWidget;
@@ -72,12 +80,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ..setBackgroundColor(Colors.black)
       ..setUserAgent(AppConfig.userAgent)
       ..setNavigationDelegate(NavigationDelegate(
-        onProgress: (p) {
-          if (mounted) setState(() => _progress = p);
-        },
+        onPageStarted: (_) => _killPopups(),
         onPageFinished: (_) {
           _settled = true;
-          if (mounted) setState(() => _progress = 100);
+          _killPopups();
         },
         onWebResourceError: (e) {
           if (e.isForMainFrame == true && mounted) {
@@ -120,7 +126,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final s = _stream;
     setState(() {
       _error = false;
-      _progress = 0;
       _settled = false;
     });
     if (s.kind == StreamKind.invalid) {
@@ -128,6 +133,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return;
     }
     _initialHost = Uri.tryParse(s.url)?.host ?? '';
+    _startedAt = DateTime.now();
+    _allowedSites
+      ..clear()
+      ..add(siteOf(_initialHost));
     try {
       if (s.usesHtmlPlayer) {
         final low = await Settings.forceLowQuality();
@@ -143,9 +152,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
-  /// Keeps ad redirects out: after the first page has loaded, top-level
-  /// navigation to a different site is blocked. Frames and sub-resources
-  /// (what embeds are made of) are never affected.
+  bool get _gateOpen =>
+      !_settled && DateTime.now().difference(_startedAt) < _gateWindow;
+
+  /// Keeps ad redirects out. Frames and sub-resources (what embeds are made
+  /// of) are never affected. Top-level navigation to another website is only
+  /// trusted while the first page is loading; afterwards it is blocked and a
+  /// snackbar offers ALLOW in case the redirect was legitimate.
   NavigationDecision _onNavigation(NavigationRequest r) {
     if (!r.isMainFrame) return NavigationDecision.navigate;
     final uri = Uri.tryParse(r.url);
@@ -154,27 +167,61 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (scheme == 'about' || scheme == 'data' || scheme == 'blob') {
       return NavigationDecision.navigate;
     }
+    // intent://, market://, custom app schemes: never leave the app.
     if (scheme != 'http' && scheme != 'https') {
       return NavigationDecision.prevent;
     }
-    if (!_settled) return NavigationDecision.navigate;
-    final origin = Uri.parse(AppConfig.playerOrigin).host;
-    if (_sameSite(uri.host, _initialHost) || _sameSite(uri.host, origin)) {
+    final site = siteOf(uri.host);
+    if (_gateOpen) {
+      _allowedSites.add(site);
       return NavigationDecision.navigate;
     }
+    if (_allowedSites.contains(site) ||
+        site == siteOf(Uri.parse(AppConfig.playerOrigin).host)) {
+      return NavigationDecision.navigate;
+    }
+    _noteBlocked(uri);
     return NavigationDecision.prevent;
   }
 
-  bool _sameSite(String a, String b) {
-    if (a.isEmpty || b.isEmpty) return false;
-    String root(String h) {
-      final parts = h.split('.');
-      return parts.length <= 2
-          ? h
-          : parts.sublist(parts.length - 2).join('.');
-    }
+  void _noteBlocked(Uri uri) {
+    if (!mounted) return;
+    final now = DateTime.now();
+    if (now.difference(_lastBlockNote) < const Duration(seconds: 2)) return;
+    _lastBlockNote = now;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text('Blocked a redirect to ${uri.host}'),
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'ALLOW',
+          textColor: Ui.redSoft,
+          onPressed: () {
+            _allowedSites.add(siteOf(uri.host));
+            _wc.loadRequest(uri);
+          },
+        ),
+      ));
+  }
 
-    return root(a.toLowerCase()) == root(b.toLowerCase());
+  /// Neutralises pop-ups opened by the page itself and by transparent
+  /// click-catcher overlays (window.open / target=_blank links).
+  void _killPopups() {
+    if (_stream.usesHtmlPlayer) return; // our own page has no ads
+    _wc.runJavaScript(r"""
+(function(){
+  try{
+    window.open=function(){return null};
+    if(!window.__dwNoPop){
+      window.__dwNoPop=1;
+      document.addEventListener('click',function(e){
+        var a=e.target&&e.target.closest?e.target.closest('a[target=_blank],a[target=_new]'):null;
+        if(a){e.preventDefault();e.stopPropagation();}
+      },true);
+    }
+  }catch(e){}
+})();""").catchError((_) {});
   }
 
   // ------------------------------------------------------------- fullscreen
@@ -273,18 +320,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
         fit: StackFit.expand,
         children: [
           WebViewWidget(controller: _wc),
-          if (_progress < 100 && !_error)
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              child: LinearProgressIndicator(
-                value: _progress == 0 ? null : _progress / 100,
-                minHeight: 2.5,
-                color: Ui.red,
-                backgroundColor: Colors.transparent,
-              ),
-            ),
           if (_error) _ErrorOverlay(
             hasAlt: _sources.length > 1,
             invalid: _stream.kind == StreamKind.invalid,
