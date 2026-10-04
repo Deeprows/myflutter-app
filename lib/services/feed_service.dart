@@ -99,10 +99,16 @@ class FeedService {
     }
     try {
       final prefs = await SharedPreferences.getInstance();
-      final cached = prefs.getString(cacheKey);
-      if (cached != null) {
-        final data = _decode(cached);
-        if (data.isNotEmpty) return data;
+      if (remoteUrl.isEmpty) {
+        // Bundled-only mode: drop any copy cached from an older remote feed,
+        // otherwise it would keep hiding the data shipped in the app.
+        await prefs.remove(cacheKey);
+      } else {
+        final cached = prefs.getString(cacheKey);
+        if (cached != null) {
+          final data = _decode(cached);
+          if (data.isNotEmpty) return data;
+        }
       }
     } catch (_) {}
     return _decode(await rootBundle.loadString(asset));
