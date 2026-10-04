@@ -39,7 +39,7 @@ class FixtureCard extends StatelessWidget {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: live
-            ? [Ui.red.withValues(alpha: .15), const Color(0xFF0C1016)]
+            ? [Ui.red.withValues(alpha: .15), Ui.cardDeep]
             : ended
                 ? [const Color(0x08FFFFFF), const Color(0x03FFFFFF)]
                 : [Ui.card, Ui.cardDeep],
@@ -160,7 +160,7 @@ class FixtureCard extends StatelessWidget {
                       ),
                       if (!f.hasStream) ...[
                         const SizedBox(width: 8),
-                        const Text('· Stream soon',
+                        Text('· Stream soon',
                             style: TextStyle(
                                 color: Ui.dim,
                                 fontSize: 11,
