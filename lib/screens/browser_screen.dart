@@ -18,7 +18,27 @@ final _fileLink = RegExp(
 
 bool isDirectFileLink(String url) {
   final uri = Uri.tryParse(url);
-  return uri != null && _fileLink.hasMatch(uri.path);
+  if (uri == null) return false;
+  if (_fileLink.hasMatch(uri.path)) return true;
+  // e.g. /get.php?file=movie.mkv
+  for (final v in uri.queryParameters.values) {
+    if (_fileLink.hasMatch(v)) return true;
+  }
+  return false;
+}
+
+/// Site key used to tell "same website" from "somewhere else":
+/// cdn.example.com and www.example.com -> example.com.
+String siteOf(String host) {
+  final parts = host.toLowerCase().split('.');
+  if (parts.length <= 2) return parts.join('.');
+  final tld = parts.last;
+  final sld = parts[parts.length - 2];
+  final keep = (tld.length == 2 &&
+          const {'co', 'com', 'org', 'net', 'gov', 'ac', 'edu'}.contains(sld))
+      ? 3
+      : 2;
+  return parts.sublist(parts.length - keep).join('.');
 }
 
 Future<bool> openExternally(String url) async {
@@ -34,10 +54,15 @@ Future<bool> openExternally(String url) async {
 /// Opens [url] in the in-app browser window. Many file hosts serve a landing
 /// page even when the address ends in .mkv, so the first load always happens
 /// in-app; file redirects that happen afterwards are downloaded in-app.
-Future<void> openInApp(BuildContext context, String url, {String? title}) {
+///
+/// With [blockAds] on (download pages), the page may not send you to another
+/// website by itself: pop-ups and click-redirects to ad sites are blocked and
+/// a snackbar offers an ALLOW button in case the redirect was legitimate.
+Future<void> openInApp(BuildContext context, String url,
+    {String? title, bool blockAds = false}) {
   return Navigator.of(context).push(MaterialPageRoute<void>(
     fullscreenDialog: true,
-    builder: (_) => BrowserScreen(url: url, title: title),
+    builder: (_) => BrowserScreen(url: url, title: title, blockAds: blockAds),
   ));
 }
 
@@ -47,7 +72,9 @@ Future<void> openInApp(BuildContext context, String url, {String? title}) {
 class BrowserScreen extends StatefulWidget {
   final String url;
   final String? title;
-  const BrowserScreen({super.key, required this.url, this.title});
+  final bool blockAds;
+  const BrowserScreen(
+      {super.key, required this.url, this.title, this.blockAds = false});
 
   @override
   State<BrowserScreen> createState() => _BrowserScreenState();
@@ -61,10 +88,17 @@ class _BrowserScreenState extends State<BrowserScreen> {
   String _url = '';
   String _pageTitle = '';
 
+  // Ad-redirect blocking.
+  bool _blockOn = true;
+  bool _firstLoadDone = false;
+  final Set<String> _allowedSites = {};
+  DateTime _lastBlockNote = DateTime(2000);
+
   @override
   void initState() {
     super.initState();
     _url = widget.url;
+    _allowedSites.add(siteOf(Uri.tryParse(widget.url)?.host ?? ''));
 
     _wc = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -86,6 +120,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
           final title = await _wc.getTitle();
           final back = await _wc.canGoBack();
           if (!mounted) return;
+          _firstLoadDone = true;
           setState(() {
             _url = u;
             _pageTitle = title ?? '';
@@ -135,7 +170,38 @@ class _BrowserScreenState extends State<BrowserScreen> {
       _startDownload(r.url);
       return NavigationDecision.prevent;
     }
+    if (r.isMainFrame && widget.blockAds && _blockOn) {
+      final site = siteOf(uri.host);
+      if (!_firstLoadDone) {
+        // Redirects while the first page loads are normal (short links,
+        // login hops...): trust them.
+        _allowedSites.add(site);
+      } else if (!_allowedSites.contains(site)) {
+        _noteBlocked(uri);
+        return NavigationDecision.prevent;
+      }
+    }
     return NavigationDecision.navigate;
+  }
+
+  void _noteBlocked(Uri uri) {
+    if (!mounted) return;
+    final now = DateTime.now();
+    if (now.difference(_lastBlockNote) < const Duration(seconds: 2)) return;
+    _lastBlockNote = now;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text('Blocked a redirect to ${uri.host}'),
+        action: SnackBarAction(
+          label: 'ALLOW',
+          textColor: Ui.redSoft,
+          onPressed: () {
+            _allowedSites.add(siteOf(uri.host));
+            _wc.loadRequest(uri);
+          },
+        ),
+      ));
   }
 
   String get _host => Uri.tryParse(_url)?.host ?? '';
@@ -153,14 +219,37 @@ class _BrowserScreenState extends State<BrowserScreen> {
   }
 
   Future<void> _startDownload(String url) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(
+        content: Text('Starting download…'),
+        duration: Duration(seconds: 30),
+      ));
     final cookie = await _pageCookies();
-    DownloadManager.instance.enqueue(
+    // Wait for the real result: the link is checked first and may turn out
+    // not to be a file (or the server may refuse it).
+    final error = await DownloadManager.instance.enqueue(
       url,
       referer: _url,
       cookie: cookie,
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
+    if (error != null) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(error),
+          duration: const Duration(seconds: 8),
+          action: SnackBarAction(
+            label: 'OPEN IN BROWSER',
+            textColor: Ui.redSoft,
+            onPressed: () => openExternally(url),
+          ),
+        ));
+      return;
+    }
+    messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
         content: const Text('Download started'),
@@ -277,9 +366,24 @@ class _BrowserScreenState extends State<BrowserScreen> {
                         if (v == 'share') _share();
                         if (v == 'external') _external();
                         if (v == 'download') _startDownload(_url);
+                        if (v == 'ads') setState(() => _blockOn = !_blockOn);
                       },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(
+                      itemBuilder: (_) => [
+                        if (widget.blockAds)
+                          PopupMenuItem(
+                            value: 'ads',
+                            child: ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(_blockOn
+                                  ? Icons.shield_rounded
+                                  : Icons.shield_outlined),
+                              title: Text(_blockOn
+                                  ? 'Ad redirects: blocked'
+                                  : 'Ad redirects: allowed'),
+                            ),
+                          ),
+                        const PopupMenuItem(
                           value: 'download',
                           child: ListTile(
                             dense: true,
@@ -288,7 +392,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
                             title: Text('Download this link'),
                           ),
                         ),
-                        PopupMenuItem(
+                        const PopupMenuItem(
                           value: 'share',
                           child: ListTile(
                             dense: true,
@@ -297,7 +401,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
                             title: Text('Share'),
                           ),
                         ),
-                        PopupMenuItem(
+                        const PopupMenuItem(
                           value: 'external',
                           child: ListTile(
                             dense: true,
