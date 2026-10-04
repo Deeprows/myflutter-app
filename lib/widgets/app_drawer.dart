@@ -90,7 +90,7 @@ class FootboliveDrawer extends StatelessWidget {
                         fontWeight: FontWeight.w900,
                         letterSpacing: 2)),
                 const SizedBox(height: 4),
-                const Text('Version: ${AppConfig.appVersion}',
+                Text('Version: ${AppConfig.appVersion}',
                     style: TextStyle(color: Ui.muted, fontSize: 13)),
               ],
             ),
@@ -107,6 +107,7 @@ class FootboliveDrawer extends StatelessWidget {
                     showFloatingPlayerDialog),
                 item(Icons.settings_rounded, 'Video Quality Setting',
                     showLowQualityDialog),
+                item(Icons.palette_rounded, 'Themes', showThemeSheet),
                 item(Icons.sports_cricket_rounded, 'Cricket Score',
                     (c) => openInApp(c, AppConfig.cricketScoreUrl,
                         title: 'Cricket Score')),
@@ -132,6 +133,116 @@ class FootboliveDrawer extends StatelessWidget {
 }
 
 // ------------------------------------------------------------------ dialogs
+
+Future<void> showThemeSheet(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Ui.panel,
+    builder: (ctx) => SafeArea(
+      child: ValueListenableBuilder<int>(
+        valueListenable: ThemeController.index,
+        builder: (_, selected, __) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Choose a theme',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 14),
+              for (var i = 0; i < Palettes.all.length; i++)
+                _ThemeTile(
+                  palette: Palettes.all[i],
+                  selected: i == selected,
+                  onTap: () => ThemeController.set(i),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _ThemeTile extends StatelessWidget {
+  final Palette palette;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ThemeTile(
+      {required this.palette, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: palette.card,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: selected ? palette.accent : Colors.white12,
+                  width: selected ? 2 : 1),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 64,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: palette.bg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      for (final c in [
+                        palette.accent,
+                        palette.accentSoft,
+                        palette.panel
+                      ])
+                        Container(
+                          width: 14,
+                          height: 14,
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          decoration:
+                              BoxDecoration(color: c, shape: BoxShape.circle),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(palette.name,
+                          style: const TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(palette.tagline,
+                          style: TextStyle(
+                              color: palette.muted, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                if (selected)
+                  Icon(Icons.check_circle_rounded, color: palette.accent),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 Future<void> showLowQualityDialog(BuildContext context) async {
   var on = await Settings.forceLowQuality();
