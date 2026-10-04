@@ -54,7 +54,7 @@ class _NetworkStreamScreenState extends State<NetworkStreamScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Stream link',
+            Text('Stream link',
                 style: TextStyle(color: Ui.muted, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
             TextField(
@@ -68,7 +68,7 @@ class _NetworkStreamScreenState extends State<NetworkStreamScreen> {
                 fillColor: Ui.card,
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Ui.line)),
+                    borderSide: BorderSide(color: Ui.line)),
                 suffixIcon: IconButton(
                   tooltip: 'Paste',
                   icon: const Icon(Icons.content_paste_rounded),
@@ -85,7 +85,7 @@ class _NetworkStreamScreenState extends State<NetworkStreamScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 14)),
             ),
             const SizedBox(height: 16),
-            const Text('Supports m3u8 (HLS), mpd (DASH), mp4 and embed pages.',
+            Text('Supports m3u8 (HLS), mpd (DASH), mp4 and embed pages.',
                 style: TextStyle(color: Ui.dim, fontSize: 13)),
           ],
         ),
