@@ -119,7 +119,7 @@ class _LiveScreenState extends State<LiveScreen> {
         padding: const EdgeInsets.only(bottom: 8),
         child: ValueListenableBuilder<DateTime>(
           valueListenable: _now,
-          builder: (_, n, __) =>
+          builder: (_, n, _) =>
               FixtureCard(fixture: f, now: n, onTap: () => _open(f)),
         ),
       ));
@@ -150,7 +150,7 @@ class _LiveScreenState extends State<LiveScreen> {
               onLink: () => showLinkSheet(context),
               onRefresh: () async {
                 await _load(remote: true);
-                if (!mounted) return;
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Fixtures updated')));
               },
@@ -178,7 +178,7 @@ class _LiveScreenState extends State<LiveScreen> {
             ),
           ),
           if (_loading)
-            const SliverFillRemaining(
+            SliverFillRemaining(
               hasScrollBody: false,
               child: Center(child: CircularProgressIndicator(color: Ui.red)),
             )
@@ -297,13 +297,13 @@ class _Header extends StatelessWidget {
                       fontWeight: FontWeight.w900)),
               const SizedBox(height: 6),
               Text(today,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: Ui.muted,
                       fontSize: 13,
                       fontWeight: FontWeight.w600)),
               const SizedBox(height: 2),
               Text(summary,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: Ui.redSoft,
                       fontSize: 13,
                       fontWeight: FontWeight.w800)),
@@ -415,7 +415,7 @@ class _Empty extends StatelessWidget {
         Icon(icon, size: 44, color: Ui.dim),
         const SizedBox(height: 10),
         Text(text,
-            style: const TextStyle(
+            style: TextStyle(
                 color: Ui.muted, fontSize: 14, fontWeight: FontWeight.w700)),
       ],
     );
