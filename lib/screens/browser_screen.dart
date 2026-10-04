@@ -4,6 +4,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../config.dart';
+import '../services/ad_shield.dart';
 import '../services/download_manager.dart';
 import '../theme/app_theme.dart';
 import 'downloads_screen.dart';
@@ -91,7 +92,6 @@ class _BrowserScreenState extends State<BrowserScreen> {
   bool _blockOn = true;
   bool _firstLoadDone = false;
   final Set<String> _allowedSites = {};
-  DateTime _lastBlockNote = DateTime(2000);
 
   @override
   void initState() {
@@ -106,6 +106,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
       ..setNavigationDelegate(NavigationDelegate(
         onNavigationRequest: _onNavigation,
         onPageStarted: (u) {
+          _shield();
           if (!mounted) return;
           setState(() {
             _url = u;
@@ -113,9 +114,11 @@ class _BrowserScreenState extends State<BrowserScreen> {
           });
         },
         onProgress: (p) {
+          _shield();
           if (mounted) setState(() => _progress = p);
         },
         onPageFinished: (u) async {
+          _shield();
           final title = await _wc.getTitle();
           final back = await _wc.canGoBack();
           if (!mounted) return;
@@ -169,6 +172,9 @@ class _BrowserScreenState extends State<BrowserScreen> {
       _startDownload(r.url);
       return NavigationDecision.prevent;
     }
+    if (widget.blockAds && _blockOn && AdShield.isAdUrl(r.url)) {
+      return NavigationDecision.prevent;
+    }
     if (r.isMainFrame && widget.blockAds && _blockOn) {
       final site = siteOf(uri.host);
       if (!_firstLoadDone) {
@@ -183,24 +189,14 @@ class _BrowserScreenState extends State<BrowserScreen> {
     return NavigationDecision.navigate;
   }
 
-  void _noteBlocked(Uri uri) {
-    if (!mounted) return;
-    final now = DateTime.now();
-    if (now.difference(_lastBlockNote) < const Duration(seconds: 2)) return;
-    _lastBlockNote = now;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text('Blocked a redirect to ${uri.host}'),
-        action: SnackBarAction(
-          label: 'ALLOW',
-          textColor: Ui.redSoft,
-          onPressed: () {
-            _allowedSites.add(siteOf(uri.host));
-            _wc.loadRequest(uri);
-          },
-        ),
-      ));
+  /// Blocked redirects are dropped silently (no notification). The shield
+  /// icon in the menu still lets you allow redirects for this page.
+  void _noteBlocked(Uri uri) {}
+
+  void _shield() {
+    if (widget.blockAds && _blockOn) {
+      _wc.runJavaScript(AdShield.adShieldJs).catchError((_) {});
+    }
   }
 
   String get _host => Uri.tryParse(_url)?.host ?? '';
