@@ -417,7 +417,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 if (widget.subtitle != null) ...[
                   const SizedBox(height: 4),
                   Text(widget.subtitle!,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: Ui.muted,
                           fontSize: 13,
                           fontWeight: FontWeight.w600)),
@@ -475,7 +475,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: Ui.line),
                   ),
-                  child: const Row(
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(Icons.info_outline_rounded, size: 18, color: Ui.muted),
@@ -522,7 +522,7 @@ class _ErrorOverlay extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline_rounded, color: Ui.redSoft, size: 34),
+          Icon(Icons.error_outline_rounded, color: Ui.redSoft, size: 34),
           const SizedBox(height: 8),
           Text(
             invalid ? 'This link can\'t be played' : 'Couldn\'t load the stream',
@@ -572,7 +572,7 @@ class _Chip extends StatelessWidget {
           Icon(icon, size: 14, color: Ui.muted),
           const SizedBox(width: 6),
           Text(label,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w700,
                   color: Ui.muted)),
