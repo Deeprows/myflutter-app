@@ -1,0 +1,35 @@
+name: Build
+on: [push, workflow_dispatch]
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter create . --platforms=android --project-name=footbolive --org com.deeprows
+      - run: flutter pub get
+
+      # Adds INTERNET, notification + foreground-service permissions for
+      # background downloads, cleartext http, and the app label.
+      - name: Patch AndroidManifest
+        run: python3 tool/patch_android_manifest.py
+
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - run: flutter test
+      - run: flutter build apk --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: footbolive-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
