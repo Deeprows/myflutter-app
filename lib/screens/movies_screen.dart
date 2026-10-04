@@ -286,7 +286,8 @@ class _MovieSheet extends StatelessWidget {
   void _download(BuildContext context) {
     // Opens in the in-app browser window; direct files go to the system
     // downloader.
-    openInApp(context, movie.downloadUrl, title: 'Download · ${movie.title}');
+    openInApp(context, movie.downloadUrl,
+        title: 'Download · ${movie.title}', blockAds: true);
   }
 
   @override
