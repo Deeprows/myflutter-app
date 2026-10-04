@@ -291,7 +291,7 @@ class _TaskTile extends StatelessWidget {
               icon: const Icon(Icons.refresh_rounded)),
           IconButton(
               tooltip: 'Open link in browser window',
-              onPressed: () => openInApp(context, t.url, title: t.name),
+              onPressed: () => openInApp(context, t.url, title: t.name, blockAds: true),
               icon: const Icon(Icons.public_rounded)),
           IconButton(
               tooltip: 'Remove',
