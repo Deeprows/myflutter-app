@@ -24,6 +24,10 @@ jobs:
       - name: Generate splash screen
         run: dart run flutter_native_splash:create
 
+      # Deeprowss logo as the app (launcher) icon.
+      - name: Generate app icon
+        run: dart run flutter_launcher_icons
+
       # Adds INTERNET, notification + foreground-service permissions for
       # background downloads, cleartext http, and the app label.
       - name: Patch AndroidManifest
