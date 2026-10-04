@@ -1,8 +1,8 @@
-# Footbolive (Flutter)
+# Deeprowss (Flutter)
 
 Football and TV Android app with four sections:
 
-* **Live** – fixture cards (UPCOMING / LIVE / ENDED, flags, kick-off time, live countdown) in the same style as the Footbolive website. Filter by status, pull to refresh, tap a card to watch.
+* **Live** – fixture cards (UPCOMING / LIVE / ENDED, flags, kick-off time, live countdown) in the same style as the Deeprowss website. Filter by status, pull to refresh, tap a card to watch.
 * **Highlights** – searchable grid of match replays, grouped by day, with competition filters.
 
 * **TV** – 155 live channels (Sports, Movies, Music, News) with search and category filters.
@@ -29,7 +29,7 @@ Extras: fullscreen from inside the page, rotate button, backup-stream switch, co
 * `assets/data/highlights.json` – highlights (`name`, `url`, `date`).
 * `assets/data/tv.json` – channels (`name`, `url`, `category`: sports / movies / music / news).
 * `assets/data/movies.json` – movies and series (`name`, `url`, optional `downloadUrl`, `date`, `rating`, `genre`, `image`).
-* `lib/config.dart` – set `fixturesUrl` to a hosted JSON with the same shape to update fixtures without a new APK. `highlightsUrl` and `moviesUrl` already point to the website feeds (`tvUrl` can be set the same way); the bundled file is the offline fallback.
+* `assets/data/*.json` – fixtures, highlights, movies and TV channels all live in the repo and ship inside the app. Edit them and build a new APK to update. `lib/config.dart` has optional `fixturesUrl` / `highlightsUrl` / `moviesUrl` / `tvUrl` remote feeds, all empty by default; when empty, any cache from an old remote feed is cleared so the bundled data always shows.
 
 ## Build
 
