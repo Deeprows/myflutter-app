@@ -174,6 +174,10 @@ void main() {
       expect(isDirectFileLink('https://a.com/f/app.APK?x=1'), isTrue);
       expect(isDirectFileLink('https://a.com/download/abc123'), isFalse);
       expect(isDirectFileLink('https://a.com/page.html'), isFalse);
+      expect(isDirectFileLink('https://a.com/get.php?file=movie.mkv'), isTrue);
+      expect(siteOf('cdn.example.com'), 'example.com');
+      expect(siteOf('www.example.co.uk'), 'example.co.uk');
+      expect(siteOf('example.com'), 'example.com');
     });
   });
 
