@@ -9,11 +9,14 @@ class FootboliveApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: AppConfig.appName,
-      debugShowCheckedModeBanner: false,
-      theme: buildTheme(),
-      home: const ShellScreen(),
+    return ValueListenableBuilder<int>(
+      valueListenable: ThemeController.index,
+      builder: (_, __, ___) => MaterialApp(
+        title: AppConfig.appName,
+        debugShowCheckedModeBanner: false,
+        theme: buildTheme(),
+        home: const ShellScreen(),
+      ),
     );
   }
 }
