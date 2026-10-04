@@ -64,7 +64,7 @@ class DownloadsScreen extends StatelessWidget {
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   itemCount: tasks.length + 1,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
                     if (i == tasks.length) return const _Footnote();
                     return _TaskTile(task: tasks[i]);
@@ -81,7 +81,7 @@ class _Empty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Padding(
         padding: EdgeInsets.all(32),
         child: Column(
@@ -110,7 +110,7 @@ class _Footnote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
+    return Padding(
       padding: EdgeInsets.only(top: 8),
       child: Text(
         'Downloads keep running in the background with a notification, even if you close the app, and are saved to your Downloads folder.',
@@ -148,7 +148,7 @@ class _TaskTile extends StatelessWidget {
               child: const Text('Cancel')),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Delete', style: TextStyle(color: Ui.redSoft))),
+              child: Text('Delete', style: TextStyle(color: Ui.redSoft))),
         ],
       ),
     );
@@ -181,7 +181,7 @@ class _TaskTile extends StatelessWidget {
       color: Colors.transparent,
       child: Ink(
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [Ui.card, Ui.cardDeep],
