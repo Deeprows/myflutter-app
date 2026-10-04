@@ -84,7 +84,7 @@ class FootboliveDrawer extends StatelessWidget {
                       color: Colors.white, size: 42),
                 ),
                 const SizedBox(height: 14),
-                const Text('FOOTBOLIVE',
+                const Text('DEEPROWSS',
                     style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
@@ -339,7 +339,7 @@ Future<void> showCopyrightDialog(BuildContext context) {
     builder: (ctx) => AlertDialog(
       title: const Text('Copyright Alert'),
       content: const Text(
-          'Footbolive does not host, upload or own any of the channels, '
+          'Deeprowss does not host, upload or own any of the channels, '
           'matches or videos shown in this application. All content is the '
           'copyright of its respective owners, and you are responsible for '
           'making sure you have the right to watch what you play.',
