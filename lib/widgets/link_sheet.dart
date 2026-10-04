@@ -79,7 +79,7 @@ class _LinkSheetState extends State<_LinkSheet> {
           const Text('Play a link',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
-          const Text('m3u8, mp4, mpd, embed pages or any direct stream link.',
+          Text('m3u8, mp4, mpd, embed pages or any direct stream link.',
               style: TextStyle(color: Ui.muted, fontSize: 13)),
           const SizedBox(height: 14),
           TextField(
@@ -96,11 +96,11 @@ class _LinkSheetState extends State<_LinkSheet> {
               fillColor: Ui.card,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Ui.line),
+                borderSide: BorderSide(color: Ui.line),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Ui.line),
+                borderSide: BorderSide(color: Ui.line),
               ),
               suffixIcon: IconButton(
                 tooltip: 'Paste',
