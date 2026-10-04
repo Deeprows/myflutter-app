@@ -250,26 +250,10 @@ class _Header extends StatelessWidget {
                     onPressed: () => Scaffold.of(context).openDrawer(),
                     icon: const Icon(Icons.menu_rounded),
                   ),
-                  const SizedBox(width: 4),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Ui.red,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Ui.red.withValues(alpha: .45),
-                            blurRadius: 16)
-                      ],
-                    ),
-                    child: const Icon(Icons.sports_soccer_rounded,
-                        color: Colors.white, size: 24),
-                  ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
-                      'FOOTBOLIVE',
+                      'DEEPROWSS',
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
