@@ -54,7 +54,7 @@ class HighlightCard extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               _Monogram(initialsOf(item.home)),
-                              const Padding(
+                              Padding(
                                 padding: EdgeInsets.symmetric(horizontal: 8),
                                 child: Text('VS',
                                     style: TextStyle(
@@ -129,7 +129,7 @@ class HighlightCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       item.date == null ? 'Highlights' : 'Highlights · ${shortDate(item.date!)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: Ui.muted,
                           fontSize: 11,
                           fontWeight: FontWeight.w600),
