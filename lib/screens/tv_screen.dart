@@ -126,7 +126,7 @@ class _TvScreenState extends State<TvScreen> {
                         _loading
                             ? 'Loading…'
                             : '${_all.length} live channels',
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: Ui.muted,
                             fontSize: 13,
                             fontWeight: FontWeight.w600),
@@ -140,8 +140,8 @@ class _TvScreenState extends State<TvScreen> {
                           textInputAction: TextInputAction.search,
                           decoration: InputDecoration(
                             hintText: 'Search channels',
-                            hintStyle: const TextStyle(color: Ui.dim),
-                            prefixIcon: const Icon(Icons.search_rounded,
+                            hintStyle: TextStyle(color: Ui.dim),
+                            prefixIcon: Icon(Icons.search_rounded,
                                 color: Ui.muted),
                             suffixIcon: _query.isEmpty
                                 ? null
@@ -158,11 +158,11 @@ class _TvScreenState extends State<TvScreen> {
                                 const EdgeInsets.symmetric(vertical: 12),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
-                              borderSide: const BorderSide(color: Ui.line),
+                              borderSide: BorderSide(color: Ui.line),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
-                              borderSide: const BorderSide(color: Ui.line),
+                              borderSide: BorderSide(color: Ui.line),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
@@ -196,12 +196,12 @@ class _TvScreenState extends State<TvScreen> {
             ),
           ),
           if (_loading)
-            const SliverFillRemaining(
+            SliverFillRemaining(
               hasScrollBody: false,
               child: Center(child: CircularProgressIndicator(color: Ui.red)),
             )
           else if (filtered.isEmpty)
-            const SliverFillRemaining(
+            SliverFillRemaining(
               hasScrollBody: false,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -234,7 +234,7 @@ class _TvScreenState extends State<TvScreen> {
                         const SizedBox(width: 8),
                         Text(
                           '${cat.label.toUpperCase()} · ${groups[cat]!.length}',
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: Ui.muted,
                               fontSize: 12,
                               fontWeight: FontWeight.w900,
@@ -276,7 +276,7 @@ class _ChannelTile extends StatelessWidget {
       color: Colors.transparent,
       child: Ink(
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [Ui.card, Ui.cardDeep],
@@ -314,7 +314,7 @@ class _ChannelTile extends StatelessWidget {
                               fontSize: 14.5, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 2),
                       Text(channel.category.label,
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: Ui.muted,
                               fontSize: 11.5,
                               fontWeight: FontWeight.w600)),
@@ -330,7 +330,7 @@ class _ChannelTile extends StatelessWidget {
                     borderRadius: BorderRadius.circular(99),
                     border: Border.all(color: Ui.red.withValues(alpha: .3)),
                   ),
-                  child: const Text('LIVE',
+                  child: Text('LIVE',
                       style: TextStyle(
                           color: Ui.redSoft,
                           fontSize: 9.5,
