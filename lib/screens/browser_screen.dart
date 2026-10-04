@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -263,18 +262,6 @@ class _BrowserScreenState extends State<BrowserScreen> {
       ));
   }
 
-  Future<void> _share() async {
-    final t = widget.title;
-    try {
-      await Share.share(t == null || t.isEmpty ? _url : '$t\n$_url',
-          subject: t);
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Couldn\'t open share')));
-    }
-  }
-
   Future<void> _external() async {
     final ok = await openExternally(_url);
     if (!ok && mounted) {
@@ -363,7 +350,6 @@ class _BrowserScreenState extends State<BrowserScreen> {
                       color: Ui.panel,
                       icon: const Icon(Icons.more_vert_rounded),
                       onSelected: (v) {
-                        if (v == 'share') _share();
                         if (v == 'external') _external();
                         if (v == 'download') _startDownload(_url);
                         if (v == 'ads') setState(() => _blockOn = !_blockOn);
@@ -390,15 +376,6 @@ class _BrowserScreenState extends State<BrowserScreen> {
                             contentPadding: EdgeInsets.zero,
                             leading: Icon(Icons.download_rounded),
                             title: Text('Download this link'),
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'share',
-                          child: ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(Icons.share_rounded),
-                            title: Text('Share'),
                           ),
                         ),
                         const PopupMenuItem(
