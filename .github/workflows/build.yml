@@ -25,7 +25,11 @@ jobs:
       - name: Patch AndroidManifest
         run: python3 tool/patch_android_manifest.py
 
-      # The `floating` plugin compiles Kotlin for JVM 1.8 and Java for 11, which
+      # Native picture-in-picture (MethodChannel) for the Floating Player.
+      - name: Patch MainActivity
+        run: python3 tool/patch_main_activity.py
+
+      # Some plugins compile Kotlin and Java for different JVM targets, which
       # Gradle 8 rejects by default. Downgrade that check to a warning.
       - name: Relax Kotlin/Java JVM target check
         run: |
