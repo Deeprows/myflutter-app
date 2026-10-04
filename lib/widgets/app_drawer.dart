@@ -141,7 +141,7 @@ Future<void> showThemeSheet(BuildContext context) {
     builder: (ctx) => SafeArea(
       child: ValueListenableBuilder<int>(
         valueListenable: ThemeController.index,
-        builder: (_, selected, __) => Padding(
+        builder: (_, selected, _) => Padding(
           padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
