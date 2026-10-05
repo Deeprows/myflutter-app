@@ -32,7 +32,7 @@ class AppConfig {
   static const fixturesUrl = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/fixtures.json';
   static const highlightsUrl = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/highlights.json';
   static const moviesUrl = '';
-  static const tvUrl = '';
+  static const tvUrl = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/tv.json';
 
   /// Scrolling ticker on the home screen (same shape as assets/data/ticker.json).
   /// Set this to a raw URL to change the ticker text without a new APK.
