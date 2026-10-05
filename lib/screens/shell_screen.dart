@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/push_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
 import 'highlights_screen.dart';
@@ -20,6 +21,31 @@ class _ShellScreenState extends State<ShellScreen> {
   int _index = 0;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   DateTime? _lastBack;
+
+  @override
+  void initState() {
+    super.initState();
+    // A notification tap that launched the app, or one tapped while open.
+    final pending = PushService.instance.tabRequest.value;
+    if (pending != null) {
+      _index = pending;
+      PushService.instance.tabRequest.value = null;
+    }
+    PushService.instance.tabRequest.addListener(_openRequestedTab);
+  }
+
+  @override
+  void dispose() {
+    PushService.instance.tabRequest.removeListener(_openRequestedTab);
+    super.dispose();
+  }
+
+  void _openRequestedTab() {
+    final tab = PushService.instance.tabRequest.value;
+    if (tab == null) return;
+    PushService.instance.tabRequest.value = null;
+    if (mounted && tab != _index) setState(() => _index = tab);
+  }
 
   void _onBack() {
     final state = _scaffoldKey.currentState;
