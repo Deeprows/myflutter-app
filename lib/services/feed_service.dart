@@ -9,6 +9,7 @@ import '../models/channel.dart';
 import '../models/fixture.dart';
 import '../models/highlight.dart';
 import '../models/movie.dart';
+import '../models/ticker.dart';
 
 /// Loads fixtures and highlights. Order of preference:
 /// remote feed (when asked) -> last cached remote copy -> bundled asset.
@@ -39,6 +40,47 @@ class FeedService {
       return db.compareTo(da);
     });
     return list;
+  }
+
+  /// Ticker text: remote (when asked) -> last cached copy -> bundled asset.
+  /// Never throws; a broken file just hides the ticker.
+  Future<TickerData> loadTicker({bool remote = false}) async {
+    const cacheKey = 'cache_ticker';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (AppConfig.tickerUrl.isEmpty) {
+        await prefs.remove(cacheKey);
+      } else {
+        if (remote) {
+          try {
+            final res = await http
+                .get(Uri.parse(AppConfig.tickerUrl))
+                .timeout(const Duration(seconds: 8));
+            if (res.statusCode == 200) {
+              final body = utf8.decode(res.bodyBytes);
+              final data = TickerData.parse(jsonDecode(body));
+              // An explicit "enabled": false is valid; only unusable
+              // content (no items and not disabled) is ignored.
+              if (data.visible || !data.enabled) {
+                await prefs.setString(cacheKey, body);
+                return data;
+              }
+            }
+          } catch (_) {}
+        }
+        final cached = prefs.getString(cacheKey);
+        if (cached != null) {
+          final data = TickerData.parse(jsonDecode(cached));
+          if (data.visible || !data.enabled) return data;
+        }
+      }
+    } catch (_) {}
+    try {
+      return TickerData.parse(
+          jsonDecode(await rootBundle.loadString('assets/data/ticker.json')));
+    } catch (_) {
+      return TickerData.empty;
+    }
   }
 
   Future<List<Channel>> loadChannels({bool remote = false}) async {
