@@ -71,26 +71,13 @@ class FootboliveDrawer extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: Ui.red,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Ui.red.withValues(alpha: .45), blurRadius: 20)
-                    ],
-                  ),
-                  child: const Icon(Icons.sports_soccer_rounded,
-                      color: Colors.white, size: 32),
+                // App logo (the splash image) in place of the football icon
+                // and the app name.
+                Image.asset(
+                  'assets/splash/splash.png',
+                  height: 132,
+                  fit: BoxFit.contain,
                 ),
-                const SizedBox(height: 14),
-                const Text('DEEPROWSS',
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 2)),
                 const SizedBox(height: 4),
                 Text('Version: ${AppConfig.appVersion}',
                     style: TextStyle(color: Ui.muted, fontSize: 11.5)),
@@ -354,13 +341,6 @@ Future<void> showCopyrightDialog(BuildContext context) {
       ],
     ),
   );
-}
-
-/// Shows the copyright alert once, on the very first launch.
-Future<void> maybeShowFirstLaunchCopyright(BuildContext context) async {
-  if (await Settings.copyrightSeen()) return;
-  await Settings.setCopyrightSeen();
-  if (context.mounted) await showCopyrightDialog(context);
 }
 
 Future<void> showNoticeDialog(BuildContext context) async {
