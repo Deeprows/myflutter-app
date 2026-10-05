@@ -29,7 +29,7 @@ class AppConfig {
   /// Optional remote feeds (same shape as the matching asset file). Leave a
   /// value empty to use only the bundled file. If you set one, the app fetches
   /// it on launch / pull-to-refresh and falls back to the bundled copy offline.
-  static const fixturesUrl = '';
+  static const fixturesUrl = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/fixtures.json';
   static const highlightsUrl = '';
   static const moviesUrl = '';
   static const tvUrl = '';
