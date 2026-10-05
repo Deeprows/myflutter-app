@@ -1,9 +1,11 @@
 name: Build
+
 on: [push, workflow_dispatch]
 
 jobs:
   android:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -50,9 +52,26 @@ jobs:
 
       - run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - run: flutter test
-      # FIREBASE_ANDROID_APP_ID: repo variable (Settings > Secrets and
-      # variables > Actions > Variables). Optional; see PUSH_SETUP.md.
-      - run: flutter build apk --release --dart-define=FIREBASE_ANDROID_APP_ID=${{ vars.FIREBASE_ANDROID_APP_ID }}
+
+      # Firebase Android App ID is required for FCM.
+      - name: Verify Firebase Android App ID
+        env:
+          FIREBASE_ANDROID_APP_ID: ${{ vars.FIREBASE_ANDROID_APP_ID }}
+        run: |
+          test -n "$FIREBASE_ANDROID_APP_ID" || {
+            echo "::error::FIREBASE_ANDROID_APP_ID is not configured."
+            exit 1
+          }
+
+          echo "Firebase Android App ID is configured."
+
+      # Build release APK with the Firebase Android App ID.
+      - name: Build release APK
+        env:
+          FIREBASE_ANDROID_APP_ID: ${{ vars.FIREBASE_ANDROID_APP_ID }}
+        run: |
+          flutter build apk --release \
+            --dart-define=FIREBASE_ANDROID_APP_ID="$FIREBASE_ANDROID_APP_ID"
 
       - uses: actions/upload-artifact@v4
         with:
