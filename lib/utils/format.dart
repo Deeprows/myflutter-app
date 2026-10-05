@@ -58,3 +58,22 @@ String fmtBytes(num bytes) {
   }
   return '${v.toStringAsFixed(v >= 100 ? 0 : 1)} ${units[i]}';
 }
+
+/// "GMT+1", "GMT-5", "GMT+5:30" for the given (local) time.
+String gmtOffset(DateTime d) {
+  final m = d.timeZoneOffset.inMinutes;
+  final sign = m < 0 ? '-' : '+';
+  final h = m.abs() ~/ 60;
+  final mm = m.abs() % 60;
+  return 'GMT$sign$h${mm == 0 ? '' : ':${two(mm)}'}';
+}
+
+/// Short zone name for the user's device ("WAT" in Nigeria), or "GMT+1" when
+/// the platform only reports an offset.
+String tzShort(DateTime d) {
+  final n = d.timeZoneName;
+  if (n.isNotEmpty && n.length <= 5 && RegExp(r'^[A-Za-z]+$').hasMatch(n)) {
+    return n.toUpperCase();
+  }
+  return gmtOffset(d);
+}
