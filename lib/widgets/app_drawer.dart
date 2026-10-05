@@ -9,6 +9,7 @@ import '../screens/browser_screen.dart';
 import '../screens/network_stream_screen.dart';
 import '../screens/playlists_screen.dart';
 import '../services/settings_service.dart';
+import 'notification_settings.dart';
 import '../theme/app_theme.dart';
 
 void _toast(BuildContext c, String msg) =>
@@ -105,7 +106,9 @@ class FootboliveDrawer extends StatelessWidget {
                 item(Icons.sports_soccer_rounded, 'Football Score',
                     (c) => openInApp(c, AppConfig.footballScoreUrl,
                         title: 'Football Score')),
-                item(Icons.notifications_rounded, 'Notice', showNoticeDialog),
+                item(Icons.notifications_active_rounded, 'Notifications',
+                    showNotificationSettings),
+                item(Icons.campaign_rounded, 'Notice', showNoticeDialog),
                 item(Icons.chat_rounded, 'Join Us',
                     (c) => _openLink(c, AppConfig.joinUrl, 'Join Us')),
                 item(Icons.copyright_rounded, 'Copyright',
