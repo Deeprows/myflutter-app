@@ -13,6 +13,7 @@ import '../services/settings_service.dart';
 import '../services/stream_resolver.dart';
 import '../theme/app_theme.dart';
 import '../widgets/live_dot.dart';
+import '../widgets/match_chat.dart';
 import 'browser_screen.dart' show siteOf;
 
 /// WebView based player. Plays:
@@ -26,6 +27,10 @@ class PlayerScreen extends StatefulWidget {
   final String? altUrl;
   final bool isLive;
 
+  /// Set for football matches ("Home vs Away"): the stream page then shows
+  /// the compact controls and the live chat instead of the info panel.
+  final String? chatMatch;
+
   const PlayerScreen({
     super.key,
     required this.title,
@@ -33,6 +38,7 @@ class PlayerScreen extends StatefulWidget {
     this.subtitle,
     this.altUrl,
     this.isLive = false,
+    this.chatMatch,
   });
 
   @override
@@ -346,8 +352,38 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Slim Reload / Switch / Rotate row used on football match pages.
+  Widget _compactControls() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+      child: Row(
+        children: [
+          Expanded(
+              child: _MiniAction(
+                  icon: Icons.refresh_rounded, label: 'Reload', onTap: _start)),
+          const SizedBox(width: 8),
+          Expanded(
+              child: _MiniAction(
+                  icon: Icons.swap_horiz_rounded,
+                  label: _sources.length > 1
+                      ? 'Switch ${_srcIdx + 1}/${_sources.length}'
+                      : 'Switch',
+                  enabled: _sources.length > 1,
+                  onTap: _switchSource)),
+          const SizedBox(width: 8),
+          Expanded(
+              child: _MiniAction(
+                  icon: Icons.screen_rotation_rounded,
+                  label: 'Rotate',
+                  onTap: _toggleLandscape)),
+        ],
+      ),
+    );
+  }
+
   Widget _portraitBody(Widget video) {
     final s = _stream;
+    final match = widget.chatMatch != null;
     return SafeArea(
       child: Column(
         children: [
@@ -402,6 +438,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ),
           ),
           AspectRatio(aspectRatio: 16 / 9, child: video),
+          if (match) ...[
+            _compactControls(),
+            Expanded(child: MatchChat(matchName: widget.chatMatch!)),
+          ] else
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -632,6 +672,56 @@ class _RoundButton extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Icon(icon, color: Colors.white, size: 22),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact pill button: icon and label side by side.
+class _MiniAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool enabled;
+  const _MiniAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.enabled = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1 : .4,
+      child: Material(
+        color: Ui.card,
+        borderRadius: BorderRadius.circular(99),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(99),
+          child: Container(
+            height: 34,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(99),
+              border: Border.all(color: Ui.line),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 16, color: Colors.white),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w800)),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
