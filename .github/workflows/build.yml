@@ -33,6 +33,10 @@ jobs:
       - name: Patch AndroidManifest
         run: python3 tool/patch_android_manifest.py
 
+      # Firebase push: default channel/icon meta-data, status-bar icon, minSdk 24.
+      - name: Patch Android for push notifications
+        run: python3 tool/patch_android_push.py
+
       # Native picture-in-picture (MethodChannel) for the Floating Player.
       - name: Patch MainActivity
         run: python3 tool/patch_main_activity.py
@@ -46,7 +50,9 @@ jobs:
 
       - run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - run: flutter test
-      - run: flutter build apk --release
+      # FIREBASE_ANDROID_APP_ID: repo variable (Settings > Secrets and
+      # variables > Actions > Variables). Optional; see PUSH_SETUP.md.
+      - run: flutter build apk --release --dart-define=FIREBASE_ANDROID_APP_ID=${{ vars.FIREBASE_ANDROID_APP_ID }}
 
       - uses: actions/upload-artifact@v4
         with:
