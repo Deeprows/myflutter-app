@@ -184,3 +184,5 @@ class FeedService {
     );
   }
 }
+
+final feed = FeedService();
