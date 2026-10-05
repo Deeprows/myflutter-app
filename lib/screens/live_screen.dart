@@ -77,7 +77,8 @@ class _LiveScreenState extends State<LiveScreen> {
       builder: (_) => PlayerScreen(
         title: f.title,
         subtitle:
-            '${longDate(f.kickoff.toLocal())} · ${fmtTime(f.kickoff.toLocal())}'
+            '${longDate(f.kickoff.toLocal())} · ${fmtTime(f.kickoff.toLocal())} '
+            '${tzShort(f.kickoff.toLocal())}'
             '${f.league.isEmpty ? '' : ' · ${f.league}'}',
         url: f.url,
         altUrl: f.hasAlt ? f.altUrl : null,
@@ -216,20 +217,30 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
-    final today = longDate(DateTime.now());
-    final summary = live > 0
-        ? '$live live now · $upcoming coming up'
-        : upcoming > 0
-            ? '$upcoming match${upcoming == 1 ? '' : 'es'} coming up'
-            : 'No matches scheduled';
+    final now = DateTime.now();
+    final today = longDate(now);
+    final zone = '${tzShort(now)} · ${gmtOffset(now)}';
+
+    Widget round(IconData icon, String tip, VoidCallback onTap) => Padding(
+          padding: const EdgeInsets.only(left: 6),
+          child: Material(
+            color: Colors.white.withValues(alpha: .07),
+            shape: const CircleBorder(),
+            child: IconButton(
+              tooltip: tip,
+              onPressed: onTap,
+              icon: Icon(icon, size: 22),
+            ),
+          ),
+        );
 
     return Container(
-      padding: EdgeInsets.fromLTRB(16, top + 12, 8, 16),
+      padding: EdgeInsets.fromLTRB(14, top + 10, 14, 16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Ui.red.withValues(alpha: .20), Ui.bg],
+          colors: [Ui.red.withValues(alpha: .24), Ui.bg],
         ),
       ),
       child: Stack(
@@ -245,53 +256,151 @@ class _Header extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  IconButton(
-                    tooltip: 'Menu',
-                    onPressed: () => Scaffold.of(context).openDrawer(),
-                    icon: const Icon(Icons.menu_rounded),
+                  Builder(
+                    builder: (ctx) =>
+                        round(Icons.menu_rounded, 'Menu', () => Scaffold.of(ctx).openDrawer()),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   const Expanded(
                     child: Text(
                       'DEEPROWSS',
                       style: TextStyle(
-                        fontSize: 22,
+                        fontSize: 17,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 2,
+                        letterSpacing: 1.6,
                       ),
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Play a link',
-                    onPressed: onLink,
-                    icon: const Icon(Icons.add_link_rounded),
+                  round(Icons.add_link_rounded, 'Play a link', onLink),
+                  round(Icons.refresh_rounded, 'Refresh', onRefresh),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 5,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Ui.red,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text('Live Events',
+                        style: TextStyle(
+                            fontSize: 28,
+                            height: 1.1,
+                            fontWeight: FontWeight.w900)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.calendar_today_rounded,
+                            size: 13, color: Ui.muted),
+                        const SizedBox(width: 6),
+                        Text(today,
+                            style: TextStyle(
+                                color: Ui.muted,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Ui.line),
+                      ),
+                      child: Text('Times in $zone',
+                          style: TextStyle(
+                              color: Ui.muted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _Stat(
+                      icon: Icons.sensors_rounded,
+                      label: 'Live now',
+                      value: live,
+                      accent: live > 0,
+                    ),
                   ),
-                  IconButton(
-                    tooltip: 'Refresh',
-                    onPressed: onRefresh,
-                    icon: const Icon(Icons.refresh_rounded),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _Stat(
+                      icon: Icons.schedule_rounded,
+                      label: 'Coming up',
+                      value: upcoming,
+                      accent: false,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
-              const Text('Football Live',
-                  style: TextStyle(
-                      fontSize: 26,
-                      height: 1.1,
-                      fontWeight: FontWeight.w900)),
-              const SizedBox(height: 6),
-              Text(today,
-                  style: TextStyle(
-                      color: Ui.muted,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600)),
-              const SizedBox(height: 2),
-              Text(summary,
-                  style: TextStyle(
-                      color: Ui.redSoft,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800)),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int value;
+  final bool accent;
+  const _Stat({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: accent ? Ui.red.withValues(alpha: .16) : Ui.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: accent ? Ui.red.withValues(alpha: .7) : Ui.line),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 22, color: accent ? Ui.redSoft : Ui.muted),
+          const SizedBox(width: 10),
+          Text('$value',
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: Ui.muted,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700)),
           ),
         ],
       ),
