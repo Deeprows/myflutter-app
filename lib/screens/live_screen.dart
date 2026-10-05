@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../config.dart';
 import '../models/fixture.dart';
+import '../models/ticker.dart';
 import '../services/feed_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import '../widgets/fixture_card.dart';
 import '../widgets/link_sheet.dart';
+import '../widgets/news_ticker.dart';
 import '../widgets/pitch_painter.dart';
 import 'player_screen.dart';
 
@@ -25,6 +27,7 @@ class _LiveScreenState extends State<LiveScreen> {
   List<Fixture> _fixtures = const [];
   bool _loading = true;
   _Filter _filter = _Filter.all;
+  TickerData _ticker = TickerData.empty;
 
   final ValueNotifier<DateTime> _now = ValueNotifier(DateTime.now());
   Timer? _timer;
@@ -42,6 +45,9 @@ class _LiveScreenState extends State<LiveScreen> {
     _load().then((_) {
       if (AppConfig.fixturesUrl.isNotEmpty) _load(remote: true);
     });
+    _loadTicker().then((_) {
+      if (AppConfig.tickerUrl.isNotEmpty) _loadTicker(remote: true);
+    });
   }
 
   @override
@@ -54,7 +60,13 @@ class _LiveScreenState extends State<LiveScreen> {
   String _signature(DateTime n) =>
       _fixtures.map((f) => f.phaseAt(n).index).join();
 
+  Future<void> _loadTicker({bool remote = false}) async {
+    final t = await feed.loadTicker(remote: remote);
+    if (mounted) setState(() => _ticker = t);
+  }
+
   Future<void> _load({bool remote = false}) async {
+    if (remote) unawaited(_loadTicker(remote: true));
     final list = await feed.loadFixtures(remote: remote);
     if (!mounted) return;
     setState(() {
@@ -147,6 +159,7 @@ class _LiveScreenState extends State<LiveScreen> {
         slivers: [
           SliverToBoxAdapter(
             child: _Header(
+              ticker: _ticker,
               live: live,
               upcoming: upcoming,
               onLink: () => showLinkSheet(context),
@@ -204,11 +217,13 @@ class _LiveScreenState extends State<LiveScreen> {
 }
 
 class _Header extends StatelessWidget {
+  final TickerData ticker;
   final int live;
   final int upcoming;
   final VoidCallback onLink;
   final VoidCallback onRefresh;
   const _Header({
+    required this.ticker,
     required this.live,
     required this.upcoming,
     required this.onLink,
@@ -276,14 +291,19 @@ class _Header extends StatelessWidget {
                   round(Icons.refresh_rounded, 'Refresh', onRefresh),
                 ],
               ),
-              const SizedBox(height: 20),
+              if (ticker.visible) ...[
+                const SizedBox(height: 12),
+                NewsTicker(data: ticker),
+                const SizedBox(height: 14),
+              ] else
+                const SizedBox(height: 20),
               Padding(
                 padding: const EdgeInsets.only(left: 4),
                 child: Row(
                   children: [
                     Container(
-                      width: 5,
-                      height: 30,
+                      width: 4,
+                      height: 22,
                       decoration: BoxDecoration(
                         color: Ui.red,
                         borderRadius: BorderRadius.circular(4),
@@ -292,7 +312,7 @@ class _Header extends StatelessWidget {
                     const SizedBox(width: 10),
                     const Text('Live Events',
                         style: TextStyle(
-                            fontSize: 28,
+                            fontSize: 21,
                             height: 1.1,
                             fontWeight: FontWeight.w900)),
                   ],
@@ -310,18 +330,18 @@ class _Header extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.calendar_today_rounded,
-                            size: 13, color: Ui.muted),
-                        const SizedBox(width: 6),
+                            size: 11, color: Ui.muted),
+                        const SizedBox(width: 5),
                         Text(today,
                             style: TextStyle(
                                 color: Ui.muted,
-                                fontSize: 13,
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.w600)),
                       ],
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
+                          horizontal: 7, vertical: 1),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Ui.line),
@@ -329,7 +349,7 @@ class _Header extends StatelessWidget {
                       child: Text('Times in $zone',
                           style: TextStyle(
                               color: Ui.muted,
-                              fontSize: 11,
+                              fontSize: 10,
                               fontWeight: FontWeight.w700)),
                     ),
                   ],
