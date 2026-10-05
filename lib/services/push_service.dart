@@ -24,6 +24,15 @@ FirebaseOptions get _options => FirebaseOptions(
   storageBucket: 'deeprows-4d37c.firebasestorage.app',
 );
 
+void _requireAndroidFirebaseConfig() {
+  if (_androidAppId.isEmpty) {
+    throw StateError(
+      'FIREBASE_ANDROID_APP_ID is missing. '
+      'Configure it in GitHub Actions repository variables.',
+    );
+  }
+}
+
 /// Runs in a background isolate when a message arrives while the app is not
 /// running. Notification messages are shown by Android itself; this only
 /// makes sure Firebase is initialised for any future data handling.
