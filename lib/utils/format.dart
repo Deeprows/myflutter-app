@@ -77,3 +77,12 @@ String tzShort(DateTime d) {
   }
   return gmtOffset(d);
 }
+
+/// "09:30 AM" (12-hour clock).
+String fmtTime12(DateTime d) {
+  final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
+  return '${two(h)}:${two(d.minute)} ${d.hour < 12 ? 'AM' : 'PM'}';
+}
+
+/// "05/10/2026" (day/month/year).
+String fmtDateNum(DateTime d) => '${two(d.day)}/${two(d.month)}/${d.year}';
