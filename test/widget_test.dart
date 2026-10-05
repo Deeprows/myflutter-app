@@ -9,6 +9,7 @@ import 'package:footbolive/screens/browser_screen.dart';
 import 'package:footbolive/services/download_manager.dart';
 import 'package:footbolive/utils/format.dart';
 import 'package:footbolive/services/player_html.dart';
+import 'package:footbolive/services/push_service.dart';
 import 'package:footbolive/services/stream_resolver.dart';
 
 void main() {
@@ -165,6 +166,21 @@ void main() {
           'https://bharadwajpro.github.io/m3u8-player/player/#https://x.com/a.m3u8  N ');
       expect(r.kind, StreamKind.hls);
       expect(r.url, 'https://x.com/a.m3u8');
+    });
+  });
+
+  group('Push', () {
+    test('notification payload opens the right tab', () {
+      expect(PushService.tabFor({'tab': 'live'}), 0);
+      expect(PushService.tabFor({'type': 'kickoff'}), 0);
+      expect(PushService.tabFor({'tab': 'highlights'}), 1);
+      expect(PushService.tabFor({'tab': 'movies'}), 3);
+      expect(PushService.tabFor({}), isNull);
+    });
+
+    test('topic ids match what the server publishes to', () {
+      expect(PushTopic.values.map((t) => t.id).toList(),
+          ['kickoff', 'highlights', 'movies']);
     });
   });
 
