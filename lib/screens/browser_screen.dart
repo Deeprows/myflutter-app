@@ -195,7 +195,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
 
   void _shield() {
     if (widget.blockAds && _blockOn) {
-      _wc.runJavaScript(AdShield.adShieldJs).catchError((_) {});
+      _wc.runJavaScript(AdShield.adShieldLightJs).catchError((_) {});
     }
   }
 
