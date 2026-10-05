@@ -38,19 +38,35 @@ class Settings {
   static Future<void> setCopyrightSeen() async =>
       (await SharedPreferences.getInstance()).setBool(_kCopyright, true);
 
+  /// Playlist every install starts with. Users can delete it and add their own.
+  static const defaultPlaylistName = 'Free-TV IPTV';
+  static const defaultPlaylistUrl =
+      'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8';
+  static const _kDefaultSeeded = 'footbolive_default_playlist_seeded';
+
   static Future<List<SavedPlaylist>> playlists() async {
-    final raw = (await SharedPreferences.getInstance()).getString(_kPlaylists);
-    if (raw == null) return [];
-    try {
-      return (jsonDecode(raw) as List)
-          .whereType<Map>()
-          .map((m) => SavedPlaylist(
-              (m['name'] ?? '').toString(), (m['url'] ?? '').toString()))
-          .where((p) => p.url.isNotEmpty)
-          .toList();
-    } catch (_) {
-      return [];
+    final prefs = await SharedPreferences.getInstance();
+    var list = <SavedPlaylist>[];
+    final raw = prefs.getString(_kPlaylists);
+    if (raw != null) {
+      try {
+        list = (jsonDecode(raw) as List)
+            .whereType<Map>()
+            .map((m) => SavedPlaylist(
+                (m['name'] ?? '').toString(), (m['url'] ?? '').toString()))
+            .where((p) => p.url.isNotEmpty)
+            .toList();
+      } catch (_) {}
     }
+    // Added once per install; after the user removes it, it stays removed.
+    if (!(prefs.getBool(_kDefaultSeeded) ?? false)) {
+      await prefs.setBool(_kDefaultSeeded, true);
+      if (!list.any((p) => p.url == defaultPlaylistUrl)) {
+        list = [const SavedPlaylist(defaultPlaylistName, defaultPlaylistUrl), ...list];
+        await savePlaylists(list);
+      }
+    }
+    return list;
   }
 
   static Future<void> savePlaylists(List<SavedPlaylist> list) async =>
