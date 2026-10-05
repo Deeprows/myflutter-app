@@ -83,6 +83,7 @@ class _LiveScreenState extends State<LiveScreen> {
         url: f.url,
         altUrl: f.hasAlt ? f.altUrl : null,
         isLive: phase == MatchPhase.live,
+        chatMatch: f.title,
       ),
     ));
   }
