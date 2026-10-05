@@ -283,11 +283,14 @@ class _MovieSheet extends StatelessWidget {
   final VoidCallback onPlay;
   const _MovieSheet({required this.movie, required this.onPlay});
 
-  void _download(BuildContext context) {
-    // Opens in the in-app browser window; direct files go to the system
-    // downloader.
-    openInApp(context, movie.downloadUrl,
-        title: 'Download · ${movie.title}', blockAds: true);
+  Future<void> _download(BuildContext context) async {
+    // Download links always open in the phone's own browser.
+    final ok = await openExternally(movie.downloadUrl);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the download link')),
+      );
+    }
   }
 
   @override
