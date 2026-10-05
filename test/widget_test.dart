@@ -4,6 +4,7 @@ import 'package:footbolive/models/channel.dart';
 import 'package:footbolive/models/fixture.dart';
 import 'package:footbolive/models/highlight.dart';
 import 'package:footbolive/models/movie.dart';
+import 'package:footbolive/models/ticker.dart';
 import 'package:footbolive/models/download_task.dart';
 import 'package:footbolive/screens/browser_screen.dart';
 import 'package:footbolive/services/download_manager.dart';
@@ -166,6 +167,28 @@ void main() {
           'https://bharadwajpro.github.io/m3u8-player/player/#https://x.com/a.m3u8  N ');
       expect(r.kind, StreamKind.hls);
       expect(r.url, 'https://x.com/a.m3u8');
+    });
+  });
+
+  group('Ticker', () {
+    test('object form', () {
+      final t = TickerData.parse({
+        'enabled': true,
+        'speed': 55,
+        'items': ['Welcome!  Share   us', {'text': 'Second'}, '', 5],
+      });
+      expect(t.visible, isTrue);
+      expect(t.speed, 55);
+      expect(t.items, ['Welcome! Share us', 'Second', '5']);
+    });
+
+    test('plain list, disabled, empty and clamped speed', () {
+      expect(TickerData.parse(['Hi']).items, ['Hi']);
+      expect(TickerData.parse({'enabled': false, 'items': ['x']}).visible,
+          isFalse);
+      expect(TickerData.parse({'items': []}).visible, isFalse);
+      expect(TickerData.parse({'speed': 9999, 'items': ['a']}).speed, 120);
+      expect(TickerData.parse('junk').visible, isFalse);
     });
   });
 
