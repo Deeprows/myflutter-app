@@ -14,16 +14,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 // com.deeprows.footbolive) in the Firebase console and pass its App ID at
 // build time:  --dart-define=FIREBASE_ANDROID_APP_ID=1:227439941748:android:...
 // (the GitHub workflow reads it from the repo variable FIREBASE_ANDROID_APP_ID).
-const _webAppId = '1:227439941748:web:dc00e8a6e620db2279921';
 const _androidAppId = String.fromEnvironment('FIREBASE_ANDROID_APP_ID');
 
 FirebaseOptions get _options => FirebaseOptions(
-      apiKey: 'AIzaSyBs9eSquNu2drJjM3vqFGDX1QU-VE1_F7U',
-      appId: _androidAppId.isNotEmpty ? _androidAppId : _webAppId,
-      messagingSenderId: '227439941748',
-      projectId: 'deeprows-4d37c',
-      storageBucket: 'deeprows-4d37c.firebasestorage.app',
-    );
+  apiKey: 'AIzaSyBs9eSquNu2drJjM3vqFGDX1QU-VE1_F7U',
+  appId: _androidAppId,
+  messagingSenderId: '227439941748',
+  projectId: 'deeprows-4d37c',
+  storageBucket: 'deeprows-4d37c.firebasestorage.app',
+);
 
 /// Runs in a background isolate when a message arrives while the app is not
 /// running. Notification messages are shown by Android itself; this only
