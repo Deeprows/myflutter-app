@@ -42,7 +42,15 @@ class Fixture {
   static Fixture? tryParse(dynamic raw) {
     if (raw is! Map) return null;
     String s(String k) => (raw[k] ?? '').toString().trim();
-    final kickoff = DateTime.tryParse(s('kickoff'));
+    // Kick-off times in the data carry their own offset (e.g. +01:00 for
+    // Nigeria) so every phone converts them to its own timezone. A time with
+    // no offset is read as Nigeria time (WAT, +01:00) rather than as the
+    // phone's local time, so it can't shift between users.
+    var k = s('kickoff');
+    final hasZone =
+        RegExp(r'(Z|[+-]\d{2}:?\d{2})$', caseSensitive: false).hasMatch(k);
+    if (!hasZone && (k.contains('T') || k.contains(' '))) k = '$k+01:00';
+    final kickoff = DateTime.tryParse(k);
     if (kickoff == null || s('home').isEmpty || s('away').isEmpty) return null;
     return Fixture(
       id: s('id').isNotEmpty
