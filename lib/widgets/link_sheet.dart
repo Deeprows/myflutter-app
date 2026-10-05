@@ -60,9 +60,14 @@ class _LinkSheetState extends State<_LinkSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    // Keyboard height when typing, otherwise the phone's navigation bar, so
+    // the Play button is never hidden underneath it.
+    final bottomGap = mq.viewInsets.bottom > mq.viewPadding.bottom
+        ? mq.viewInsets.bottom
+        : mq.viewPadding.bottom;
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-          20, 16, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + bottomGap),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
