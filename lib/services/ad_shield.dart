@@ -9,6 +9,9 @@ class AdShield {
   static final _adHosts = RegExp(
     r'(^|\.)('
     r'doubleclick\.net|googlesyndication\.com|googleadservices\.com|'
+    r'imasdk\.googleapis\.com|2mdn\.net|googletagservices\.com|'
+    r'adsafeprotected\.com|moatads\.com|serving-sys\.com|innovid\.com|'
+    r'spotxchange\.com|springserve\.com|smartadserver\.com|'
     r'adservice\.google\.[a-z.]+|adnxs\.com|adsterra\.com|'
     r'propellerads\.com|popads\.net|popcash\.net|popunder\.net|'
     r'exoclick\.com|exosrv\.com|juicyads\.com|trafficjunky\.net|'
@@ -49,10 +52,14 @@ class AdShield {
 (function(){
   try{
     if(window.__dwShield){window.__dwShield();return}
-    var BAD=/(doubleclick|googlesyndication|googleadservices|adnxs|adsterra|propeller|popads|popcash|exoclick|exosrv|juicyads|trafficjunky|clickadu|hilltopads|adcash|taboola|outbrain|mgid|criteo|onclickads|onclkds|profitablecpmrate|highperformanceformat|effectivegatecpm|a-ads|admaven|ad-maven|monetag|richpush|bidvertiser|tsyndicate|exdynsrv|\/ads?[\/_.-]|adserver|banner|popunder)/i;
-    var SEL='[id^="ad-"],[id^="ad_"],[id$="-ad"],[id$="_ad"],[id*="advert" i],[id*="banner" i],'+
-            '[class^="ad-"],[class^="ad_"],[class*=" ad-"],[class*=" ad_"],[class*="advert" i],[class*="banner" i],'+
-            '[class*="popup" i],[class*="popunder" i],[class*="sponsor" i],[class*="overlay" i],'+
+    var BAD=/(doubleclick|googlesyndication|googleadservices|googletagservices|imasdk|2mdn\.net|adnxs|adsterra|propeller|popads|popcash|exoclick|exosrv|juicyads|trafficjunky|clickadu|hilltopads|adcash|taboola|outbrain|mgid|criteo|onclickads|onclkds|profitablecpmrate|highperformanceformat|effectivegatecpm|a-ads|admaven|ad-maven|monetag|richpush|bidvertiser|tsyndicate|exdynsrv|adsafeprotected|moatads|serving-sys|innovid|spotxchange|springserve|smartadserver|\/ads?[\/_.-]|adserver|popunder)/i;
+    // Text that only appears on ad UI ("Close ad", "Skip ad" ...).
+    var AD_TXT=/^(close ad|skip ads?|skip ad in.*|ad closes in.*|advertisement|sponsored)$/i;
+    var SEL='[id^="ad-"],[id^="ad_"],[id$="-ad"],[id$="_ad"],[id*="advert" i],'+
+            '[class^="ad-"],[class^="ad_"],[class*=" ad-"],[class*=" ad_"],[class*="advert" i],'+
+            '[class*="popunder" i],[class*="sponsor" i],'+
+            '.ima-ad-container,[id*="ima-ad"],[class*="adContainer"],[class*="ad-container"],'+
+            '.videoAdUi,.videoAdUiSkipContainer,[class*="ad-overlay"],[class*="adOverlay"],'+
             'ins.adsbygoogle,[data-ad],[data-ad-slot],[data-adsbygoogle-status]';
     function hasPlayer(el){
       if(!el||el.nodeType!==1)return false;
@@ -61,21 +68,81 @@ class AdShield {
       return !!(el.querySelector&&el.querySelector('video,audio'));
     }
     function isPlayerFrame(f){
-      // the biggest iframe on the page is the real player, never remove it
       var r=f.getBoundingClientRect();
       return r.width*r.height>=0.35*innerWidth*innerHeight;
     }
     function kill(el){try{el.style.setProperty('display','none','important');el.remove()}catch(e){}}
+    function hide(el){try{el.style.setProperty('display','none','important')}catch(e){}}
+
+    // ---- video ad overlays (IMA / VAST players): "Close ad", "Learn more",
+    //      "Replay" end cards. Presses the close/skip button, hides the ad
+    //      layer, silences the ad and lets the real stream continue.
+    function resume(doc,box){
+      setTimeout(function(){
+        try{
+          var all=doc.querySelectorAll('video');
+          for(var q=0;q<all.length;q++){
+            var v=all[q];
+            if(box&&box.contains(v))continue;
+            if(v.paused&&!v.ended)v.play();
+          }
+        }catch(e){}
+      },400);
+    }
+    function handleAd(doc,win,el){
+      el.__dwDone=1;
+      var box=null,cur=el,vw=win.innerWidth||1,vh=win.innerHeight||1;
+      for(var d=0;d<8&&cur&&cur.parentElement&&cur!==doc.body;d++){
+        var cs=win.getComputedStyle(cur);
+        if(cs.position==='fixed'||cs.position==='absolute'){
+          var r=cur.getBoundingClientRect();
+          if(r.width*r.height>=0.2*vw*vh){box=cur;break}
+        }
+        cur=cur.parentElement;
+      }
+      try{if(el.click)el.click()}catch(e){}
+      if(box){
+        var vids=box.querySelectorAll('video,audio');
+        for(var v=0;v<vids.length;v++){try{vids[v].muted=true;vids[v].pause()}catch(e){}}
+        hide(box);
+      }
+      resume(doc,box);
+    }
+    function adUi(doc){
+      var win=doc.defaultView||window;
+      var nodes=doc.querySelectorAll('button,div,span,a,p,li,[role=button],[aria-label]');
+      var hits=[];
+      for(var i=0;i<nodes.length&&i<5000;i++){
+        var e=nodes[i];
+        if(e.__dwDone)continue;
+        var lab=(e.getAttribute&&e.getAttribute('aria-label'))||'';
+        var t='';
+        if(e.children.length<=2){
+          t=(e.textContent||'').replace(/\s+/g,' ').trim();
+          if(t.length>28)t='';
+        }
+        if((t&&AD_TXT.test(t))||/^(close|skip) ad/i.test(lab))hits.push(e);
+      }
+      for(var h=0;h<hits.length;h++)handleAd(doc,win,hits[h]);
+    }
+    function frameDocs(doc){
+      var out=[],fs=doc.querySelectorAll('iframe');
+      for(var i=0;i<fs.length;i++){
+        try{var d=fs[i].contentDocument;if(d&&d.body)out.push(d)}catch(e){}
+      }
+      return out;
+    }
+
     function sweep(){
       try{
         // 1. ad iframes / scripts / images / gifs / videos from ad hosts
-        var list=document.querySelectorAll('iframe,img,video,source,embed,object,script,a,link');
+        var list=document.querySelectorAll('iframe,img,video,source,embed,object,script,link');
         for(var i=0;i<list.length;i++){
           var n=list[i];
           var u=n.src||n.href||n.getAttribute('data-src')||'';
           if(!u||!BAD.test(u))continue;
           if(n.tagName==='VIDEO'&&hasPlayer(n)&&!BAD.test(n.currentSrc||u))continue;
-          if(n.tagName==='IFRAME'&&isPlayerFrame(n)&&!/doubleclick|googlesyndication|adsterra|popads|exoclick/i.test(u))continue;
+          if(n.tagName==='IFRAME'&&isPlayerFrame(n)&&!/doubleclick|googlesyndication|adsterra|popads|exoclick|imasdk/i.test(u))continue;
           kill(n);
         }
         // 2. class / id based ad containers (never ones holding the player)
@@ -84,7 +151,6 @@ class AdShield {
           var e=c[j];
           if(hasPlayer(e)||e.contains(document.activeElement))continue;
           var r=e.getBoundingClientRect();
-          // skip huge containers (page wrappers) - only ad-sized blocks
           if(r.width*r.height>0.6*innerWidth*innerHeight&&!/fixed|absolute|sticky/.test(getComputedStyle(e).position))continue;
           kill(e);
         }
@@ -105,30 +171,55 @@ class AdShield {
           var big=b.width>=0.6*innerWidth&&b.height>=0.6*innerHeight;
           var media=x.tagName==='IMG'||x.tagName==='IFRAME'||x.querySelector('img,iframe,video[muted]');
           var hasText=(x.innerText||'').trim().length>0;
-          // click-catcher: large, transparent/empty, above the player
           if(big&&!hasText&&!x.querySelector('button,input,svg')){kill(x);continue}
-          // floating banner / gif / video ad
           if(media&&!big){kill(x);continue}
         }
+        // 4. video ad overlay UI in the page and in same-origin frames
+        adUi(document);
+        var fr=frameDocs(document);
+        for(var f=0;f<fr.length;f++)adUi(fr[f]);
       }catch(e){}
     }
     window.__dwShield=sweep;
     // pop-ups, new tabs, redirects triggered by scripts
     window.open=function(){return null};
-    try{window.alert=function(){};window.confirm=function(){return false}}catch(e){}
     document.addEventListener('click',function(ev){
       var a=ev.target&&ev.target.closest?ev.target.closest('a[target=_blank],a[target=_new]'):null;
       if(a){ev.preventDefault();ev.stopPropagation()}
     },true);
-    // hide leftovers instantly via CSS, then clean the DOM
     var st=document.createElement('style');
-    st.textContent='ins.adsbygoogle,[id^="google_ads"],[id^="div-gpt-ad"],iframe[src*="doubleclick"],iframe[src*="googlesyndication"],iframe[src*="adsterra"],iframe[src*="popads"],iframe[src*="exoclick"]{display:none!important}';
+    st.textContent='ins.adsbygoogle,[id^="google_ads"],[id^="div-gpt-ad"],.ima-ad-container,.videoAdUi,iframe[src*="doubleclick"],iframe[src*="googlesyndication"],iframe[src*="imasdk"],iframe[src*="adsterra"],iframe[src*="popads"],iframe[src*="exoclick"]{display:none!important}';
     (document.head||document.documentElement).appendChild(st);
     sweep();
     var t=null;
-    new MutationObserver(function(){if(t)return;t=setTimeout(function(){t=null;sweep()},250)})
+    new MutationObserver(function(){if(t)return;t=setTimeout(function(){t=null;sweep()},200)})
       .observe(document.documentElement,{childList:true,subtree:true});
-    setInterval(sweep,2000);
+    setInterval(sweep,1000);
+  }catch(e){}
+})();""";
+
+  /// Gentle version for download pages. It only removes frames, images and
+  /// videos that are served by known ad networks. It never touches links,
+  /// buttons, overlays, pop-ups, alerts or anything else, so download
+  /// buttons and countdown pages keep working.
+  static const adShieldLightJs = r"""
+(function(){
+  try{
+    if(window.__dwLight)return;
+    window.__dwLight=1;
+    var BAD=/(doubleclick|googlesyndication|googleadservices|adnxs|adsterra|propellerads|popads|popcash|exoclick|exosrv|juicyads|trafficjunky|clickadu|hilltopads|adcash|taboola|outbrain|mgid\.com|criteo|onclickads|onclkds|profitablecpmrate|highperformanceformat|effectivegatecpm|a-ads\.com|admaven|ad-maven|monetag|richpush|bidvertiser|tsyndicate|exdynsrv)/i;
+    function sweep(){
+      try{
+        var list=document.querySelectorAll('iframe[src],img[src],embed[src],video[src],source[src]');
+        for(var i=0;i<list.length;i++){
+          if(BAD.test(list[i].src||'')){try{list[i].remove()}catch(e){}}
+        }
+      }catch(e){}
+    }
+    sweep();
+    var t=null;
+    new MutationObserver(function(){if(t)return;t=setTimeout(function(){t=null;sweep()},400)})
+      .observe(document.documentElement,{childList:true,subtree:true});
   }catch(e){}
 })();""";
 }
