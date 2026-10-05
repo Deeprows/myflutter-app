@@ -44,14 +44,6 @@ class _ShellScreenState extends State<ShellScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) maybeShowFirstLaunchCopyright(context);
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
