@@ -145,7 +145,34 @@ class FixtureCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
+                  // Match date and time in the viewer's own timezone.
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .06),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.event_rounded, size: 13, color: Ui.muted),
+                        const SizedBox(width: 5),
+                        Text(
+                          '${dayLabel(kickoff, now)}  ·  ${fmtTime(kickoff)} '
+                          '${tzShort(kickoff)}',
+                          style: TextStyle(
+                            color: ended ? Ui.dim : Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!ended) const SizedBox(height: 4),
+                  if (!ended)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
