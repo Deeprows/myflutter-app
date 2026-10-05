@@ -17,6 +17,7 @@ class Settings {
   static const _kCopyright = 'footbolive_copyright_seen';
   static const _kTheme = 'footbolive_theme';
   static const _kPlaylists = 'footbolive_playlists';
+  static const _kChatName = 'deeprowss_chat_username';
 
   static Future<int> themeIndex() async =>
       (await SharedPreferences.getInstance()).getInt(_kTheme) ?? 0;
@@ -32,6 +33,11 @@ class Settings {
       (await SharedPreferences.getInstance()).getBool(_kFloat) ?? false;
   static Future<void> setFloatingPlayer(bool v) async =>
       (await SharedPreferences.getInstance()).setBool(_kFloat, v);
+
+  static Future<String> chatName() async =>
+      (await SharedPreferences.getInstance()).getString(_kChatName) ?? '';
+  static Future<void> setChatName(String v) async =>
+      (await SharedPreferences.getInstance()).setString(_kChatName, v);
 
   static Future<bool> copyrightSeen() async =>
       (await SharedPreferences.getInstance()).getBool(_kCopyright) ?? false;
