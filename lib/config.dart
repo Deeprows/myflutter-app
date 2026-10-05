@@ -36,7 +36,7 @@ class AppConfig {
 
   /// Scrolling ticker on the home screen (same shape as assets/data/ticker.json).
   /// Set this to a raw URL to change the ticker text without a new APK.
-  static const tickerUrl = '';
+  static const tickerUrl = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/ticker.json';
 
   /// Used when a fixture has no explicit duration (minutes).
   static const defaultMatchMinutes = 96;
