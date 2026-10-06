@@ -9,6 +9,7 @@ import '../services/feed_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import '../widgets/fixture_card.dart';
+import '../services/support_gate.dart';
 import '../widgets/link_sheet.dart';
 import '../widgets/news_ticker.dart';
 import '../widgets/pitch_painter.dart';
@@ -83,21 +84,24 @@ class _LiveScreenState extends State<LiveScreen> {
       );
       return;
     }
-    final now = DateTime.now();
-    final phase = f.phaseAt(now);
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => PlayerScreen(
-        title: f.title,
-        subtitle:
-            '${longDate(f.kickoff.toLocal())} · ${fmtTime(f.kickoff.toLocal())} '
-            '${tzShort(f.kickoff.toLocal())}'
-            '${f.league.isEmpty ? '' : ' · ${f.league}'}',
-        url: f.url,
-        altUrl: f.hasAlt ? f.altUrl : null,
-        isLive: phase == MatchPhase.live,
-        chatMatch: f.title,
-      ),
-    ));
+    SupportGate.guard(context, () {
+      if (!mounted) return;
+      final now = DateTime.now();
+      final phase = f.phaseAt(now);
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => PlayerScreen(
+          title: f.title,
+          subtitle:
+              '${longDate(f.kickoff.toLocal())} · ${fmtTime(f.kickoff.toLocal())} '
+              '${tzShort(f.kickoff.toLocal())}'
+              '${f.league.isEmpty ? '' : ' · ${f.league}'}',
+          url: f.url,
+          altUrl: f.hasAlt ? f.altUrl : null,
+          isLive: phase == MatchPhase.live,
+          chatMatch: f.title,
+        ),
+      ));
+    });
   }
 
   bool _passes(Fixture f, DateTime now) {
