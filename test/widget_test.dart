@@ -11,6 +11,7 @@ import 'package:footbolive/services/download_manager.dart';
 import 'package:footbolive/utils/format.dart';
 import 'package:footbolive/services/player_html.dart';
 import 'package:footbolive/services/push_service.dart';
+import 'package:footbolive/services/support_gate.dart';
 import 'package:footbolive/services/stream_resolver.dart';
 
 void main() {
@@ -167,6 +168,30 @@ void main() {
           'https://bharadwajpro.github.io/m3u8-player/player/#https://x.com/a.m3u8  N ');
       expect(r.kind, StreamKind.hls);
       expect(r.url, 'https://x.com/a.m3u8');
+    });
+  });
+
+  group('Support overlay timing', () {
+    const h = 3600000;
+    final now = DateTime(2026, 10, 6, 12).millisecondsSinceEpoch;
+
+    test('first time: due', () {
+      expect(SupportGate.isDue(nowMs: now), isTrue);
+    });
+
+    test('after support: not due for 12h, due after', () {
+      expect(SupportGate.isDue(nowMs: now, lastDoneMs: now - 11 * h), isFalse);
+      expect(SupportGate.isDue(nowMs: now, lastDoneMs: now - 12 * h), isTrue);
+    });
+
+    test('page could not load: ask again after the retry window', () {
+      expect(SupportGate.isDue(nowMs: now, lastRetryMs: now - 30 * 60000),
+          isFalse);
+      expect(SupportGate.isDue(nowMs: now, lastRetryMs: now - h), isTrue);
+    });
+
+    test('a clock moved back does not hide the overlay forever', () {
+      expect(SupportGate.isDue(nowMs: now, lastDoneMs: now + 5 * h), isTrue);
     });
   });
 
