@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../models/highlight.dart';
 import '../services/feed_service.dart';
+import '../services/support_gate.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import '../widgets/highlight_card.dart';
@@ -58,17 +59,20 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
   }
 
   void _open(Highlight h) {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => PlayerScreen(
-        title: h.title,
-        subtitle: [
-          'Highlights',
-          if (h.competition != null) h.competition!,
-          if (h.date != null) longDate(h.date!),
-        ].join(' · '),
-        url: h.url,
-      ),
-    ));
+    SupportGate.guard(context, () {
+      if (!mounted) return;
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => PlayerScreen(
+          title: h.title,
+          subtitle: [
+            'Highlights',
+            if (h.competition != null) h.competition!,
+            if (h.date != null) longDate(h.date!),
+          ].join(' · '),
+          url: h.url,
+        ),
+      ));
+    });
   }
 
   @override
