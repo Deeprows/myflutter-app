@@ -38,6 +38,16 @@ class AppConfig {
   /// Set this to a raw URL to change the ticker text without a new APK.
   static const tickerUrl = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/ticker.json';
 
+  /// "We Need Your Support" overlay. It appears when a fixture, highlight or
+  /// movie card is tapped, at most once every [supportIntervalHours].
+  ///
+  /// [supportUrl]: the page opened by the CLICK HERE button (your ad / smart
+  /// link). LEAVE EMPTY TO TURN THE OVERLAY OFF.
+  static const supportUrl = '';
+  static const supportIntervalHours = 12;
+  static const supportViewSeconds = 13; // page auto-closes after this long
+  static const supportRetryHours = 1; // if the support page can't load, ask again after
+
   /// Used when a fixture has no explicit duration (minutes).
   static const defaultMatchMinutes = 96;
 
