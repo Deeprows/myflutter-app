@@ -1,0 +1,30 @@
+name: Kick-off reminders (live football push)
+
+# Sends "Kick-off in 5 minutes" and "Match is live" pushes from
+# assets/data/fixtures.json. Starts every 15 minutes (GitHub may start it a
+# few minutes late) and stays alive while a match is coming up, so the
+# notifications themselves are on time. Does nothing when no match is near.
+# Not needed if the Cloud Function "kickoffReminders" is deployed; using both
+# is safe (no duplicates).
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  kickoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm install --no-save firebase-admin@12
+
+      - name: Send kick-off notifications
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/kickoff_reminders.mjs

@@ -1,0 +1,35 @@
+name: Send test push
+
+# Actions > "Send test push" > Run workflow. Sends one real notification to
+# everyone subscribed to the chosen topic (your phone, if the app is installed).
+on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: 'Topic'
+        type: choice
+        options: [kickoff, highlights, movies]
+        default: kickoff
+      title:
+        description: 'Title'
+        default: '✅ Test notification'
+      body:
+        description: 'Message'
+        default: 'Push notifications are working.'
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install --no-save firebase-admin@12
+      - name: Send
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TOPIC: ${{ inputs.topic }}
+          TITLE: ${{ inputs.title }}
+          BODY: ${{ inputs.body }}
+        run: node scripts/send_test_push.mjs
