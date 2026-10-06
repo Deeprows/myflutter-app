@@ -16,8 +16,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 // (the GitHub workflow reads it from the repo variable FIREBASE_ANDROID_APP_ID).
 const _androidAppId = String.fromEnvironment('FIREBASE_ANDROID_APP_ID');
 
+// Optional: the Android API key from Firebase (google-services.json >
+// client > api_key > current_key). If your website's key is restricted to
+// "HTTP referrers" in Google Cloud, Android is blocked and push cannot start;
+// set the repo variable FIREBASE_ANDROID_API_KEY to fix that. Empty = use the
+// website key below.
+const _androidApiKey = String.fromEnvironment('FIREBASE_ANDROID_API_KEY');
+const _webApiKey = 'AIzaSyBs9eSquNu2drJjM3vqFGDX1QU-VE1_F7U';
+
 FirebaseOptions get _options => FirebaseOptions(
-  apiKey: 'AIzaSyBs9eSquNu2drJjM3vqFGDX1QU-VE1_F7U',
+  apiKey: _androidApiKey.isNotEmpty ? _androidApiKey : _webApiKey,
   appId: _androidAppId,
   messagingSenderId: '227439941748',
   projectId: 'deeprows-4d37c',
@@ -88,6 +96,38 @@ class PushService {
   bool _ready = false;
   bool get isReady => _ready;
 
+  /// Why push could not start / what failed last. Shown in the Notifications
+  /// sheet so problems are visible instead of silent.
+  String? initError;
+  String? tokenError;
+  final Map<String, String> topicStatus = {};
+
+  /// App ID in use, shortened for display.
+  String get appIdInfo => _androidAppId.isEmpty
+      ? 'MISSING (FIREBASE_ANDROID_APP_ID was not set in the build)'
+      : _androidAppId;
+  String get apiKeyInfo => _androidApiKey.isNotEmpty
+      ? 'Android key (${_androidApiKey.substring(0, 8)}...)'
+      : 'website key';
+
+  bool _coreReady = false;
+
+  /// Step 1 (called from main() before runApp): Firebase + background
+  /// handler. Must be registered this early for closed-app delivery.
+  Future<void> initCore() async {
+    if (_coreReady) return;
+    try {
+      _requireAndroidFirebaseConfig();
+      await Firebase.initializeApp(options: _options);
+      FirebaseMessaging.onBackgroundMessage(firebaseBackgroundHandler);
+      _coreReady = true;
+      initError = null;
+    } catch (e, st) {
+      initError = 'Firebase start-up failed: $e';
+      debugPrint('Push core init failed: $e\n$st');
+    }
+  }
+
   /// Tab to open for a notification's data payload.
   static int? tabFor(Map<String, dynamic> data) {
     switch ((data['tab'] ?? data['type'] ?? '').toString()) {
@@ -107,12 +147,16 @@ class PushService {
 
   Future<void> _init() async {
     try {
-      await Firebase.initializeApp(options: _options);
-      FirebaseMessaging.onBackgroundMessage(firebaseBackgroundHandler);
+      await initCore();
+      if (!_coreReady) return;
       final messaging = FirebaseMessaging.instance;
 
       // Shows the Android 13+ permission prompt (no-op on older versions).
-      await messaging.requestPermission(alert: true, badge: true, sound: true);
+      try {
+        await messaging.requestPermission(alert: true, badge: true, sound: true);
+      } catch (e) {
+        debugPrint('Permission request failed: $e');
+      }
 
       FirebaseMessaging.onMessage.listen(_onForeground);
       FirebaseMessaging.onMessageOpenedApp.listen(_onOpened);
@@ -120,11 +164,32 @@ class PushService {
       if (initial != null) _onOpened(initial);
 
       _ready = true;
+      await _checkToken();
       await syncTopics();
       messaging.onTokenRefresh.listen((_) => syncTopics());
     } catch (e, st) {
+      initError = 'Push start-up failed: $e';
       debugPrint('Push init failed: $e\n$st');
     }
+  }
+
+  /// Gets the device token (retries a few times: the first call can fail on a
+  /// cold network) and records the exact error when it cannot.
+  Future<String?> _checkToken() async {
+    for (var i = 0; i < 4; i++) {
+      try {
+        final t = await FirebaseMessaging.instance.getToken();
+        if (t != null && t.isNotEmpty) {
+          tokenError = null;
+          return t;
+        }
+        tokenError = 'Firebase returned no token';
+      } catch (e) {
+        tokenError = e.toString();
+      }
+      await Future<void>.delayed(Duration(seconds: 2 + i * 2));
+    }
+    return null;
   }
 
   // ------------------------------------------------------------- topics
@@ -141,10 +206,13 @@ class PushService {
       try {
         if (prefs.getBool(t.prefKey) == false) {
           await messaging.unsubscribeFromTopic(t.id);
+          topicStatus[t.id] = 'off';
         } else {
           await messaging.subscribeToTopic(t.id);
+          topicStatus[t.id] = 'subscribed';
         }
       } catch (e) {
+        topicStatus[t.id] = 'FAILED: $e';
         debugPrint('Topic ${t.id} sync failed: $e');
       }
     }
@@ -177,11 +245,25 @@ class PushService {
 
   Future<String?> token() async {
     if (!_ready) return null;
-    try {
-      return await FirebaseMessaging.instance.getToken();
-    } catch (_) {
-      return null;
+    return _checkToken();
+  }
+
+  /// Plain-text status for the Notifications sheet / bug reports.
+  Future<String> diagnostics() async {
+    final b = StringBuffer()
+      ..writeln('Firebase App ID: $appIdInfo')
+      ..writeln('API key: $apiKeyInfo')
+      ..writeln('Started: ${_ready ? 'yes' : 'NO'}');
+    if (initError != null) b.writeln('Start error: $initError');
+    if (_ready) {
+      b.writeln('Permission: ${await notificationsAllowed() ? 'allowed' : 'NOT allowed'}');
+      final t = await token();
+      b.writeln(t != null ? 'Device token: OK' : 'Device token: FAILED - $tokenError');
+      for (final e in topicStatus.entries) {
+        b.writeln('Topic ${e.key}: ${e.value}');
+      }
     }
+    return b.toString().trimRight();
   }
 
   // ------------------------------------------------------------ handlers
