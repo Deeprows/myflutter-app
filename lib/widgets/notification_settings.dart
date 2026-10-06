@@ -67,22 +67,6 @@ class _NotificationSheetState extends State<_NotificationSheet> {
     }
   }
 
-  Future<void> _copyToken() async {
-    final token = await _push.token();
-    if (!mounted) return;
-    if (token == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Device token not available yet')),
-      );
-      return;
-    }
-    await Clipboard.setData(ClipboardData(text: token));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Device token copied')),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -157,18 +141,6 @@ class _NotificationSheetState extends State<_NotificationSheet> {
                         ),
                       ],
                     ),
-                    if (_push.isReady)
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        leading: const Icon(Icons.copy_rounded, size: 20),
-                        title: const Text('Copy device token',
-                            style: TextStyle(
-                                fontSize: 13, fontWeight: FontWeight.w700)),
-                        subtitle: Text('For testing from the Firebase console',
-                            style: TextStyle(color: Ui.dim, fontSize: 11.5)),
-                        onTap: _copyToken,
-                      ),
                   ],
                 ),
               ),
