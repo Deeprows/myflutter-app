@@ -42,3 +42,30 @@ Firebase project: `deeprows-4d37c` (same as the Footbolive website).
 * `lib/main.dart`, `lib/app.dart`, `lib/screens/shell_screen.dart`, `lib/widgets/app_drawer.dart`
 * `tool/patch_android_push.py`, `tool/patch_main_activity.py`, `.github/workflows/build.yml`
 * `scripts/notify_content.mjs`, `.github/workflows/notify-content.yml`
+
+
+## If notifications do not arrive (troubleshooting)
+
+1. Open the app > drawer > **Notifications** > **Status**. It shows the exact
+   problem: missing App ID, permission not allowed, device token failed (with
+   Firebase's error), or a topic that failed to subscribe. Use **Copy status**
+   to share it.
+2. Test the whole chain from GitHub: **Actions > Send test push > Run
+   workflow** (pick a topic). A message should appear on the phone within
+   seconds. If the run goes red, the log says why (usually the
+   `FIREBASE_SERVICE_ACCOUNT` secret).
+3. Status says "Device token: FAILED" with a 403 / "blocked" / "API key"
+   message: the website API key is restricted to browsers. Either remove the
+   "HTTP referrers" restriction in Google Cloud console > APIs & Services >
+   Credentials, or put the Android key (from Firebase > Project settings >
+   Your apps > Android app > google-services.json > `current_key`) in a repo
+   **variable** named `FIREBASE_ANDROID_API_KEY`, then rebuild.
+4. Android app package in Firebase must be exactly `com.deeprows.footbolive`.
+
+## Kick-off alerts without Cloud Functions
+
+`.github/workflows/kickoff-reminders.yml` sends the 5-minute and kick-off
+alerts from GitHub (needs only the `FIREBASE_SERVICE_ACCOUNT` secret). It
+starts every 15 minutes and, when a match is near, stays alive checking every
+20 seconds. Using it together with the Cloud Function is safe (shared
+duplicate guard).
