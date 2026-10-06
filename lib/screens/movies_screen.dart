@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../models/movie.dart';
 import '../services/feed_service.dart';
+import '../services/support_gate.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import '../widgets/movie_card.dart';
@@ -76,17 +77,20 @@ class _MoviesScreenState extends State<MoviesScreen> {
   }
 
   void _details(Movie m) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => _MovieSheet(
-        movie: m,
-        onPlay: () {
-          Navigator.of(ctx).pop();
-          _play(m);
-        },
-      ),
-    );
+    SupportGate.guard(context, () {
+      if (!mounted) return;
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (ctx) => _MovieSheet(
+          movie: m,
+          onPlay: () {
+            Navigator.of(ctx).pop();
+            _play(m);
+          },
+        ),
+      );
+    });
   }
 
   @override
