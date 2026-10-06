@@ -164,7 +164,8 @@ class PushService {
       if (initial != null) _onOpened(initial);
 
       _ready = true;
-      await _checkToken();
+      // Token check only records problems; it must never delay subscribing.
+      unawaited(_checkToken());
       await syncTopics();
       messaging.onTokenRefresh.listen((_) => syncTopics());
     } catch (e, st) {
