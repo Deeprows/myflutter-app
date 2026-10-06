@@ -13,7 +13,10 @@ Future<void> main() async {
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await ThemeController.load();
   await DownloadManager.instance.init();
+  // Firebase + background handler first (needed to receive alerts while the
+  // app is closed). Failures are recorded, never thrown.
+  await PushService.instance.initCore();
   runApp(const FootboliveApp());
-  // Firebase push notifications; never blocks or crashes app start.
+  // Permission prompt, token and topics; never blocks app start.
   unawaited(PushService.instance.init());
 }
