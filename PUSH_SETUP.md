@@ -32,7 +32,7 @@ Firebase project: `deeprows-4d37c` (same as the Footbolive website).
 * Install the APK, open it once, allow notifications.
 * Firebase console > Engage > Messaging > New campaign > Notifications >
   target a **Topic** (`kickoff`, `highlights` or `movies`).
-* Or open drawer > Notifications > *Copy device token* and send to that token.
+* Or use Actions > Send test push on GitHub.
 * Fixtures that start in the next 5 minutes trigger a real reminder within a
   minute of deploying the function.
 
