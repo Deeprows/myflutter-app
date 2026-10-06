@@ -26,6 +26,7 @@ class _NotificationSheetState extends State<_NotificationSheet> {
   bool _loading = true;
   bool _allowed = false;
   final Map<PushTopic, bool> _on = {};
+  String _diag = '';
 
   @override
   void initState() {
@@ -39,9 +40,11 @@ class _NotificationSheetState extends State<_NotificationSheet> {
     for (final t in PushTopic.values) {
       _on[t] = await _push.isEnabled(t);
     }
+    final diag = await _push.diagnostics();
     if (!mounted) return;
     setState(() {
       _allowed = allowed;
+      _diag = diag;
       _loading = false;
     });
   }
@@ -104,8 +107,7 @@ class _NotificationSheetState extends State<_NotificationSheet> {
                     const SizedBox(height: 12),
                     if (!_push.isReady)
                       _notice(
-                        'Notifications could not start. Check your internet '
-                        'connection and reopen the app.',
+                        'Notifications could not start. See "Status" below.',
                       )
                     else if (!_allowed)
                       _notice(
@@ -127,6 +129,34 @@ class _NotificationSheetState extends State<_NotificationSheet> {
                         value: _on[t] ?? true,
                         onChanged: _push.isReady ? (v) => _toggle(t, v) : null,
                       ),
+                    ExpansionTile(
+                      tilePadding: EdgeInsets.zero,
+                      childrenPadding: EdgeInsets.zero,
+                      shape: const Border(),
+                      collapsedShape: const Border(),
+                      leading: const Icon(Icons.info_outline_rounded, size: 20),
+                      title: const Text('Status',
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w700)),
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: SelectableText(_diag,
+                              style: TextStyle(color: Ui.muted, fontSize: 11.5)),
+                        ),
+                        TextButton.icon(
+                          onPressed: () async {
+                            await Clipboard.setData(ClipboardData(text: _diag));
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Status copied')),
+                            );
+                          },
+                          icon: const Icon(Icons.copy_rounded, size: 16),
+                          label: const Text('Copy status'),
+                        ),
+                      ],
+                    ),
                     if (_push.isReady)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
