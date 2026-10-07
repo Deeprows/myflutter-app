@@ -39,6 +39,25 @@ traffic to that site already shows up in that zone's Analytics.
 Check: use the new APK, then open the `/stats?token=...` page (data appears
 after a minute or two).
 
+## Nothing shows up? Check in this order
+
+1. Open `https://<worker-address>/health`. It must show
+   `"analytics":true` and (for the stats page) `"stats":true`.
+   * `analytics:false` -> step 3 above is missing: **Settings > Bindings >
+     Add > Analytics Engine**, variable name exactly `ANALYTICS`, dataset
+     `deeprowss_app`. Without it the app still works but nothing is recorded.
+   * `stats:false` -> add the three secrets from step 4.
+   * No `analytics` field at all -> the deployed Worker is an old copy; paste
+     the current `cloudflare/worker.js` and **Deploy** again.
+2. Open the app once on a phone with internet (use the APK built by GitHub
+   Actions, not `flutter run` in debug, if you want the real app version).
+3. Wait 1-2 minutes, then open `/stats?token=<STATS_TOKEN>`.
+   "App opens" counts one launch (or a return after 30+ minutes away); a ping
+   that fails is retried up to 3 times.
+
+Data is sampled by install id, so distinct-phone counts stay accurate even at
+higher traffic.
+
 ## Good to know
 
 * **Free plan limit:** 100,000 Worker requests per day. One open app makes
