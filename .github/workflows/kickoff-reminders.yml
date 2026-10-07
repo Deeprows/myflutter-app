@@ -1,20 +1,40 @@
 name: Kick-off reminders (live football push)
 
 # Sends "Kick-off in 5 minutes" and "Match is live" pushes from
-# assets/data/fixtures.json. Starts every 15 minutes (GitHub may start it a
-# few minutes late) and stays alive while a match is coming up, so the
-# notifications themselves are on time. Does nothing when no match is near.
-# Not needed if the Cloud Function "kickoffReminders" is deployed; using both
-# is safe (no duplicates).
+# assets/data/fixtures.json.
+#
+#  * Starts whenever fixtures.json is changed and 4 times an hour (off-peak
+#    minutes). If a match is due within ~5 hours the job STAYS ALIVE and checks
+#    every 20 seconds, re-reading the newest fixtures.json every minute, so the
+#    alerts are on time and new matches are picked up. With no match in that
+#    window it exits at once (no minutes wasted).
+#  * Only one real run at a time; Firestore marker "kickoff_sent" prevents
+#    repeats.
+#  * TEST: Actions > Kick-off reminders > Run workflow > test_in_minutes = 6
+#    sends a real "5 minutes" alert after about a minute and a "kick-off" alert
+#    after 6 minutes for a temporary "Test FC vs Demo United" match.
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '7,22,37,52 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'assets/data/fixtures.json'
   workflow_dispatch:
+    inputs:
+      test_in_minutes:
+        description: 'Test: temporary match kicking off in N minutes (e.g. 6). Leave empty for normal run.'
+        type: string
+        default: ''
+
+concurrency:
+  group: kickoff-reminders-${{ github.event_name == 'workflow_dispatch' && inputs.test_in_minutes != '' && 'test' || 'main' }}
+  cancel-in-progress: false
 
 jobs:
   kickoff:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
 
@@ -27,4 +47,6 @@ jobs:
       - name: Send kick-off notifications
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TEST_IN_MINUTES: ${{ inputs.test_in_minutes }}
+          LOOP_MINUTES: ${{ inputs.test_in_minutes != '' && '12' || '330' }}
         run: node scripts/kickoff_reminders.mjs
