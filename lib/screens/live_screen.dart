@@ -4,9 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../config.dart';
 import '../models/fixture.dart';
+import '../models/push_target.dart';
 import '../models/ticker.dart';
 import '../services/feed_service.dart';
+import '../services/push_service.dart';
+import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_refresh.dart';
 import '../utils/format.dart';
 import '../widgets/fixture_card.dart';
 import '../services/support_gate.dart';
@@ -49,10 +53,46 @@ class _LiveScreenState extends State<LiveScreen> {
     _loadTicker().then((_) {
       if (AppConfig.tickerUrl.isNotEmpty) _loadTicker(remote: true);
     });
+    PushService.instance.target.addListener(_onTarget);
+    ContentSync.tick.addListener(_onSync);
+  }
+
+  void _onSync() {
+    if (!_loading) _load(remote: true);
+  }
+
+  // ---- a tapped notification that points at one match ----------------------
+
+  void _onTarget() {
+    final t = PushService.instance.target.value;
+    if (t == null || t.kind != 'kickoff' || _loading) return;
+    // Not in the list yet (just added)? Pull the newest list, then re-check.
+    if (!_openTarget(t)) _load(remote: true);
+  }
+
+  bool _openTarget(PushTarget t) {
+    for (final f in _fixtures) {
+      if (t.matchesFixture(f.home, f.away, f.kickoff.millisecondsSinceEpoch)) {
+        PushService.instance.target.value = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _open(f);
+        });
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _afterLoad({required bool last}) {
+    final t = PushService.instance.target.value;
+    if (t == null || t.kind != 'kickoff') return;
+    if (!_openTarget(t) && last) PushService.instance.target.value = null;
   }
 
   @override
   void dispose() {
+    PushService.instance.target.removeListener(_onTarget);
+    ContentSync.tick.removeListener(_onSync);
     _timer?.cancel();
     _now.dispose();
     super.dispose();
@@ -75,6 +115,7 @@ class _LiveScreenState extends State<LiveScreen> {
       _loading = false;
       _sig = _signature(DateTime.now());
     });
+    _afterLoad(last: remote || AppConfig.fixturesUrl.isEmpty);
   }
 
   void _open(Fixture f) {
@@ -154,10 +195,11 @@ class _LiveScreenState extends State<LiveScreen> {
     final ended = _fixtures.length - live - upcoming;
     final items = _items(now);
 
-    return RefreshIndicator(
-      color: Ui.red,
-      backgroundColor: Ui.panel,
-      onRefresh: () => _load(remote: true),
+    return AppRefresh(
+      onRefresh: () async {
+        await _load(remote: true);
+        return !feed.lastRemoteFailed;
+      },
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
