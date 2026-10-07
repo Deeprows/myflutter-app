@@ -1,3 +1,5 @@
+import '../utils/posted_at.dart';
+
 class Highlight {
   final String name;
   final String url;
@@ -22,7 +24,8 @@ class Highlight {
     final name = (raw['name'] ?? '').toString().trim();
     final url = (raw['url'] ?? '').toString().trim();
     if (name.isEmpty || url.isEmpty) return null;
-    final date = DateTime.tryParse((raw['date'] ?? '').toString());
+    final date = parsePostedAt(
+        (raw['date'] ?? '').toString(), (raw['time'] ?? '').toString());
 
     var t = name
         .replaceAll(RegExp(r'\s*highlights?\s*$', caseSensitive: false), '')
