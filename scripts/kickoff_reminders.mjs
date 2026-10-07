@@ -2,10 +2,14 @@
 // at kick-off) straight from GitHub Actions, using assets/data/fixtures.json
 // from the checkout (no caching delay). Needs FIREBASE_SERVICE_ACCOUNT.
 //
-// The workflow starts every 15 minutes. If a match is coming up, this script
-// stays alive and checks every 20 seconds, so alerts are on time to the
-// minute. If nothing is coming up it exits immediately (no Actions minutes
-// wasted).
+// If a match is coming up in the next ~5 hours, this script stays alive and
+// checks every 20 seconds, so alerts are on time to the minute (it does not
+// depend on GitHub's unreliable cron timing). If nothing is coming up it exits
+// immediately (no Actions minutes wasted).
+//
+//   TEST_IN_MINUTES=6  adds a temporary "Test FC vs Demo United" match that
+//                      kicks off in 6 minutes (never saved), to test the whole
+//                      chain: reminder after ~1 min, kick-off after 6 min.
 //
 //   DRY_RUN=1 node scripts/kickoff_reminders.mjs   -> prints, sends nothing
 //
@@ -22,7 +26,9 @@ import {
 
 const DRY = process.env.DRY_RUN === "1";
 const FILE = process.env.FIXTURES_FILE || "assets/data/fixtures.json";
-const LOOP_MINUTES = Number(process.env.LOOP_MINUTES || 55);
+const LOOP_MINUTES = Number(process.env.LOOP_MINUTES || 330);
+const TEST_IN = Number(process.env.TEST_IN_MINUTES || 0);
+const TEST_KICKOFF_MS = TEST_IN > 0 ? Date.now() + TEST_IN * 60000 : 0;
 const POLL_MS = Number(process.env.POLL_SECONDS || 20) * 1000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -68,11 +74,24 @@ async function claim(key) {
 }
 
 async function release(key) {
+  sentHere.delete(key);
   if (DRY || !db) return;
   try { await db.collection("kickoff_sent").doc(key).delete(); } catch {}
 }
 
 let lastFetch = 0;
+
+/** Adds the temporary test match (only when TEST_IN_MINUTES is set). */
+function withTest(list) {
+  if (!TEST_KICKOFF_MS) return list;
+  return [...list, {
+    id: `test-${TEST_KICKOFF_MS}`,
+    home: "Test FC",
+    away: "Demo United",
+    league: "Notification test",
+    kickoffMs: TEST_KICKOFF_MS,
+  }];
+}
 
 /** Newest fixtures.json: pulled from GitHub every minute so a match you add
  *  while this job is already running is picked up (not only at start-up). */
@@ -86,7 +105,7 @@ function readFixtures(strict = false) {
     } catch { text = null; }
   }
   try {
-    return normalizeFixtures(JSON.parse(text ?? readFileSync(FILE, "utf8")));
+    return withTest(normalizeFixtures(JSON.parse(text ?? readFileSync(FILE, "utf8"))));
   } catch (e) {
     console.error(`::error file=${FILE}::${FILE} cannot be read as JSON: ${e.message}`);
     if (strict) process.exit(1);
@@ -137,7 +156,12 @@ async function main() {
   await setupFirebase();
 
   for (;;) {
-    await tick(fixtures);
+    try {
+      await tick(fixtures);
+    } catch (e) {
+      // e.g. a network blip: log it and try again on the next check.
+      console.error(`::warning::Sending failed, will retry: ${e.message}`);
+    }
     if (Date.now() >= end) break;
     await sleep(POLL_MS);
     fixtures = readFixtures();
