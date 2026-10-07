@@ -1,33 +1,52 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io' show Platform;
 
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
-import 'app.dart';
-import 'services/analytics_service.dart';
-import 'services/download_manager.dart';
-import 'services/push_service.dart';
-import 'theme/app_theme.dart';
+import '../config.dart';
+import 'install_id.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+/// Anonymous "app opened" ping sent to the Cloudflare Worker (`POST /analytics`).
+///
+/// Only a random install id, the app version and the platform are sent. It
+/// never throws and never blocks app startup; if [AppConfig.feedBase] is empty
+/// or the network is down it silently does nothing.
+class AnalyticsService {
+  AnalyticsService._();
 
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  static final AnalyticsService instance = AnalyticsService._();
 
-  await ThemeController.load();
-  await DownloadManager.instance.init();
+  bool _sent = false;
 
-  // Firebase + background handler first (needed to receive alerts while the
-  // app is closed). Failures are recorded, never thrown.
-  await PushService.instance.initCore();
+  /// Records one `app_open` event per app launch.
+  Future<void> trackAppOpen() async {
+    if (_sent) return;
+    _sent = true;
 
-  runApp(const FootboliveApp());
+    final base = AppConfig.feedBase.trim();
+    if (base.isEmpty) return;
 
-  // Anonymous usage analytics. Never blocks app startup.
-  unawaited(AnalyticsService.appOpened());
+    try {
+      final installId = await InstallId.get();
+      final uri = Uri.parse(
+        '${base.replaceAll(RegExp(r'/+$'), '')}/analytics',
+      );
 
-  // Permission prompt, token and topics; never blocks app start.
-  unawaited(PushService.instance.init());
+      await http
+          .post(
+            uri,
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'event': 'app_open',
+              'installId': installId,
+              'appVersion': AppConfig.appVersion,
+              'platform': Platform.isAndroid ? 'android' : Platform.operatingSystem,
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // Analytics must never affect the app.
+    }
+  }
 }
