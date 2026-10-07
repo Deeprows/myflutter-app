@@ -46,7 +46,7 @@ Firebase project: `deeprows-4d37c` (same as the Footbolive website).
 
 ## If notifications do not arrive (troubleshooting)
 
-1. Open the app > drawer > **Notifications** > **Status**. It shows the exact
+1. (Removed from the app menu.) Use the GitHub test push below to check delivery.
    problem: missing App ID, permission not allowed, device token failed (with
    Firebase's error), or a topic that failed to subscribe. Use **Copy status**
    to share it.
@@ -69,3 +69,36 @@ alerts from GitHub (needs only the `FIREBASE_SERVICE_ACCOUNT` secret). It
 starts every 15 minutes and, when a match is near, stays alive checking every
 20 seconds. Using it together with the Cloud Function is safe (shared
 duplicate guard).
+
+
+## Notifications while the app is open, and opening the exact item
+
+* While the app is open, a notification is now drawn in the phone's status
+  bar / tray like any other app (native code in `MainActivity`, patched by
+  `tool/patch_main_activity.py`). If notifications are switched off for the
+  app, a banner inside the app is shown instead.
+* Tapping a notification opens the exact highlight, movie sheet or match
+  player (the push carries `url` or `home`/`away`/`kickoffMs`). When several
+  items are announced at once it opens the matching section.
+
+## Not arriving when the app is closed?
+
+Some phone makers stop apps in the background and swipe-closing the app
+counts as "force stop", which blocks all push messages. In the phone's
+settings for the app, allow **Auto-start / Autostart**, set battery to
+**Unrestricted / No restrictions**, and lock the app in the recent-apps list.
+
+## Testing the "5 minutes to kick-off" alert (no waiting for a real match)
+
+Actions > **Kick-off reminders** > Run workflow > `test_in_minutes` = `6`.
+A real notification "Kick-off in 5 minutes - Test FC vs Demo United" arrives
+after about a minute, and "Kick-off! Match is live" after 6 minutes. If both
+arrive, the whole chain works and a real match only needs a valid `kickoff`
+(with time and zone) in `assets/data/fixtures.json`. If they do not, open the
+run log: it states why.
+
+## Order of highlights and movies
+
+Newest first by `date` (and time). Items posted on the same day keep the order
+of the file, so put the newest entry at the top. To control the order inside a
+day add a time: `"date": "2026-10-06 14:30"` or `"date": "2026-10-06", "time": "14:30"`.
