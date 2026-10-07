@@ -4,6 +4,8 @@ import 'package:footbolive/models/channel.dart';
 import 'package:footbolive/models/fixture.dart';
 import 'package:footbolive/models/highlight.dart';
 import 'package:footbolive/models/movie.dart';
+import 'package:footbolive/models/push_target.dart';
+import 'package:footbolive/utils/posted_at.dart';
 import 'package:footbolive/models/ticker.dart';
 import 'package:footbolive/models/download_task.dart';
 import 'package:footbolive/screens/browser_screen.dart';
@@ -214,6 +216,62 @@ void main() {
       expect(TickerData.parse({'items': []}).visible, isFalse);
       expect(TickerData.parse({'speed': 9999, 'items': ['a']}).speed, 120);
       expect(TickerData.parse('junk').visible, isFalse);
+    });
+  });
+
+  group('Newest first', () {
+    test('date + time, then file order for the same moment', () {
+      final items = [
+        {'n': 'old', 'd': parsePostedAt('2026-09-01')},
+        {'n': 'today-9', 'd': parsePostedAt('2026-10-06', '09:00')},
+        {'n': 'today-15', 'd': parsePostedAt('2026-10-06 15:30')},
+        {'n': 'nodate', 'd': null},
+        {'n': 'same-a', 'd': parsePostedAt('2026-10-05')},
+        {'n': 'same-b', 'd': parsePostedAt('2026-10-05')},
+      ];
+      final sorted =
+          newestFirst(items, (i) => i['d'] as DateTime?).map((i) => i['n']);
+      expect(sorted.toList(),
+          ['today-15', 'today-9', 'same-a', 'same-b', 'old', 'nodate']);
+    });
+
+    test('bad values are ignored', () {
+      expect(parsePostedAt(''), isNull);
+      expect(parsePostedAt('soon'), isNull);
+      expect(parsePostedAt('2026-10-06', '9am')!.hour, 0);
+      expect(parsePostedAt('2026-10-06', '7:05')!.minute, 5);
+    });
+  });
+
+  group('Push target (opens the exact item)', () {
+    test('highlight / movie by url', () {
+      final t = PushTarget.fromData({'type': 'movies', 'url': 'https://x/m1'})!;
+      expect(t.kind, 'movies');
+      expect(t.tab, 3);
+      expect(t.hasItem, isTrue);
+      expect(t.url, 'https://x/m1');
+    });
+
+    test('single match by teams and kick-off', () {
+      final k = DateTime.utc(2026, 10, 6, 18, 45).millisecondsSinceEpoch;
+      final t = PushTarget.fromData({
+        'type': 'kickoff',
+        'tab': 'live',
+        'home': 'Croatia',
+        'away': 'Spain',
+        'kickoffMs': '$k',
+      })!;
+      expect(t.hasItem, isTrue);
+      expect(t.matchesFixture('croatia', 'SPAIN', k + 30000), isTrue);
+      expect(t.matchesFixture('Croatia', 'Spain', k + 3600000), isFalse);
+      expect(t.matchesFixture('England', 'Spain', k), isFalse);
+    });
+
+    test('several items: only the section opens', () {
+      final t = PushTarget.fromData({'type': 'highlights', 'tab': 'highlights'})!;
+      expect(t.hasItem, isFalse);
+      expect(t.tab, 1);
+      expect(PushTarget.fromData({'foo': 'bar'}), isNull);
     });
   });
 
