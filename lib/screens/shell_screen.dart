@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/content_sync.dart';
 import '../services/push_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
@@ -17,10 +20,12 @@ class ShellScreen extends StatefulWidget {
   State<ShellScreen> createState() => _ShellScreenState();
 }
 
-class _ShellScreenState extends State<ShellScreen> {
+class _ShellScreenState extends State<ShellScreen>
+    with WidgetsBindingObserver {
   int _index = 0;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   DateTime? _lastBack;
+  Timer? _autoRefresh;
 
   @override
   void initState() {
@@ -32,10 +37,24 @@ class _ShellScreenState extends State<ShellScreen> {
       PushService.instance.tabRequest.value = null;
     }
     PushService.instance.tabRequest.addListener(_openRequestedTab);
+
+    // Keep every list current without the person having to pull down.
+    WidgetsBinding.instance.addObserver(this);
+    _autoRefresh = Timer.periodic(
+      const Duration(minutes: 2),
+      (_) => ContentSync.request(),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) ContentSync.request();
   }
 
   @override
   void dispose() {
+    _autoRefresh?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     PushService.instance.tabRequest.removeListener(_openRequestedTab);
     super.dispose();
   }
