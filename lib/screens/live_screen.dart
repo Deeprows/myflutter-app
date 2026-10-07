@@ -41,60 +41,95 @@ class _LiveScreenState extends State<LiveScreen> {
   @override
   void initState() {
     super.initState();
+
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       final n = DateTime.now();
       _now.value = n;
+
       final s = _signature(n);
-      if (s != _sig && mounted) setState(() => _sig = s);
+      if (s != _sig && mounted) {
+        setState(() => _sig = s);
+      }
     });
+
     _load().then((_) {
-      if (AppConfig.fixturesUrl.isNotEmpty) _load(remote: true);
+      if (AppConfig.fixturesUrl.isNotEmpty) {
+        _load(remote: true);
+      }
     });
+
     _loadTicker().then((_) {
-      if (AppConfig.tickerUrl.isNotEmpty) _loadTicker(remote: true);
+      if (AppConfig.tickerUrl.isNotEmpty) {
+        _loadTicker(remote: true);
+      }
     });
+
     PushService.instance.target.addListener(_onTarget);
     ContentSync.tick.addListener(_onSync);
   }
 
   void _onSync() {
-    if (!_loading) _load(remote: true);
+    if (!_loading) {
+      _load(remote: true);
+    }
   }
 
-  // ---- a tapped notification that points at one match ----------------------
+  // ---- A tapped notification that points at one match ----------------------
 
   void _onTarget() {
     final t = PushService.instance.target.value;
-    if (t == null || t.kind != 'kickoff' || _loading) return;
-    // Not in the list yet (just added)? Pull the newest list, then re-check.
-    if (!_openTarget(t)) _load(remote: true);
+
+    if (t == null || t.kind != 'kickoff' || _loading) {
+      return;
+    }
+
+    if (!_openTarget(t)) {
+      _load(remote: true);
+    }
   }
 
   bool _openTarget(PushTarget t) {
     for (final f in _fixtures) {
-      if (t.matchesFixture(f.home, f.away, f.kickoff.millisecondsSinceEpoch)) {
+      if (t.matchesFixture(
+        f.home,
+        f.away,
+        f.kickoff.millisecondsSinceEpoch,
+      )) {
         PushService.instance.target.value = null;
+
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _open(f);
+          if (mounted) {
+            _open(f);
+          }
         });
+
         return true;
       }
     }
+
     return false;
   }
 
   void _afterLoad({required bool last}) {
     final t = PushService.instance.target.value;
-    if (t == null || t.kind != 'kickoff') return;
-    if (!_openTarget(t) && last) PushService.instance.target.value = null;
+
+    if (t == null || t.kind != 'kickoff') {
+      return;
+    }
+
+    if (!_openTarget(t) && last) {
+      PushService.instance.target.value = null;
+    }
   }
 
   @override
   void dispose() {
     PushService.instance.target.removeListener(_onTarget);
     ContentSync.tick.removeListener(_onSync);
+
     _timer?.cancel();
     _now.dispose();
+
     super.dispose();
   }
 
@@ -103,45 +138,64 @@ class _LiveScreenState extends State<LiveScreen> {
 
   Future<void> _loadTicker({bool remote = false}) async {
     final t = await feed.loadTicker(remote: remote);
-    if (mounted) setState(() => _ticker = t);
+
+    if (!mounted) return;
+
+    setState(() => _ticker = t);
   }
 
   Future<void> _load({bool remote = false}) async {
-    if (remote) unawaited(_loadTicker(remote: true));
+    if (remote) {
+      unawaited(_loadTicker(remote: true));
+    }
+
     final list = await feed.loadFixtures(remote: remote);
+
     if (!mounted) return;
+
     setState(() {
       _fixtures = list;
       _loading = false;
       _sig = _signature(DateTime.now());
     });
-    _afterLoad(last: remote || AppConfig.fixturesUrl.isEmpty);
+
+    _afterLoad(
+      last: remote || AppConfig.fixturesUrl.isEmpty,
+    );
   }
 
   void _open(Fixture f) {
     if (!f.hasStream) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No stream for this match yet')),
+        const SnackBar(
+          content: Text('No stream for this match yet'),
+        ),
       );
       return;
     }
+
     SupportGate.guard(context, () {
       if (!mounted) return;
+
       final now = DateTime.now();
       final phase = f.phaseAt(now);
-      Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => PlayerScreen(
-          title: f.title,
-          subtitle:
-              '${longDate(f.kickoff.toLocal())} · ${fmtTime(f.kickoff.toLocal())} '
-              '${tzShort(f.kickoff.toLocal())}'
-              '${f.league.isEmpty ? '' : ' · ${f.league}'}',
-          url: f.url,
-          altUrl: f.hasAlt ? f.altUrl : null,
-          isLive: phase == MatchPhase.live,
-          chatMatch: f.title,
+
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PlayerScreen(
+            title: f.title,
+            subtitle:
+                '${longDate(f.kickoff.toLocal())} · '
+                '${fmtTime(f.kickoff.toLocal())} '
+                '${tzShort(f.kickoff.toLocal())}'
+                '${f.league.isEmpty ? '' : ' · ${f.league}'}',
+            url: f.url,
+            altUrl: f.hasAlt ? f.altUrl : null,
+            isLive: phase == MatchPhase.live,
+            chatMatch: f.title,
+          ),
         ),
-      ));
+      );
     });
   }
 
@@ -149,50 +203,80 @@ class _LiveScreenState extends State<LiveScreen> {
     switch (_filter) {
       case _Filter.all:
         return true;
+
       case _Filter.live:
         return f.phaseAt(now) == MatchPhase.live;
+
       case _Filter.upcoming:
         return f.phaseAt(now) == MatchPhase.upcoming;
+
       case _Filter.ended:
         return f.phaseAt(now) == MatchPhase.ended;
     }
   }
 
   List<Widget> _items(DateTime now) {
-    final sorted = sortFixtures(_fixtures, now).where((f) => _passes(f, now));
+    final sorted = sortFixtures(
+      _fixtures,
+      now,
+    ).where((f) => _passes(f, now));
+
     final out = <Widget>[];
     String? last;
+
     for (final f in sorted) {
       final phase = f.phaseAt(now);
       final day = dayLabel(f.kickoff.toLocal(), now);
+
       final key = phase == MatchPhase.live
           ? 'LIVE NOW'
           : phase == MatchPhase.upcoming
               ? 'UPCOMING · $day'
               : 'FINISHED · $day';
+
       if (key != last) {
-        out.add(_SectionLabel(text: key, live: phase == MatchPhase.live));
+        out.add(
+          _SectionLabel(
+            text: key,
+            live: phase == MatchPhase.live,
+          ),
+        );
+
         last = key;
       }
-      out.add(Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: ValueListenableBuilder<DateTime>(
-          valueListenable: _now,
-          builder: (_, n, _) =>
-              FixtureCard(fixture: f, now: n, onTap: () => _open(f)),
+
+      out.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 5),
+          child: ValueListenableBuilder<DateTime>(
+            valueListenable: _now,
+            builder: (_, n, _) => FixtureCard(
+              fixture: f,
+              now: n,
+              onTap: () => _open(f),
+            ),
+          ),
         ),
-      ));
+      );
     }
+
     return out;
   }
 
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final live = _fixtures.where((f) => f.phaseAt(now) == MatchPhase.live).length;
-    final upcoming =
-        _fixtures.where((f) => f.phaseAt(now) == MatchPhase.upcoming).length;
+
+    final live = _fixtures
+        .where((f) => f.phaseAt(now) == MatchPhase.live)
+        .length;
+
+    final upcoming = _fixtures
+        .where((f) => f.phaseAt(now) == MatchPhase.upcoming)
+        .length;
+
     final ended = _fixtures.length - live - upcoming;
+
     final items = _items(now);
 
     return AppRefresh(
@@ -211,37 +295,64 @@ class _LiveScreenState extends State<LiveScreen> {
               onLink: () => showLinkSheet(context),
               onRefresh: () async {
                 await _load(remote: true);
+
                 if (!context.mounted) return;
+
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Fixtures updated')));
+                  const SnackBar(
+                    content: Text('Fixtures updated'),
+                  ),
+                );
               },
             ),
           ),
+
+          // Compact filters
           SliverToBoxAdapter(
             child: SizedBox(
-              height: 46,
+              height: 39,
               child: ListView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                padding: const EdgeInsets.fromLTRB(14, 3, 14, 5),
                 children: [
-                  _FilterChip('All', _fixtures.length, _filter == _Filter.all,
-                      () => setState(() => _filter = _Filter.all)),
-                  _FilterChip('Live', live, _filter == _Filter.live,
-                      () => setState(() => _filter = _Filter.live),
-                      accent: true),
-                  _FilterChip('Upcoming', upcoming,
-                      _filter == _Filter.upcoming,
-                      () => setState(() => _filter = _Filter.upcoming)),
-                  _FilterChip('Ended', ended, _filter == _Filter.ended,
-                      () => setState(() => _filter = _Filter.ended)),
+                  _FilterChip(
+                    'All',
+                    _fixtures.length,
+                    _filter == _Filter.all,
+                    () => setState(() => _filter = _Filter.all),
+                  ),
+                  _FilterChip(
+                    'Live',
+                    live,
+                    _filter == _Filter.live,
+                    () => setState(() => _filter = _Filter.live),
+                    accent: true,
+                  ),
+                  _FilterChip(
+                    'Upcoming',
+                    upcoming,
+                    _filter == _Filter.upcoming,
+                    () => setState(() => _filter = _Filter.upcoming),
+                  ),
+                  _FilterChip(
+                    'Ended',
+                    ended,
+                    _filter == _Filter.ended,
+                    () => setState(() => _filter = _Filter.ended),
+                  ),
                 ],
               ),
             ),
           ),
+
           if (_loading)
             SliverFillRemaining(
               hasScrollBody: false,
-              child: Center(child: CircularProgressIndicator(color: Ui.red)),
+              child: Center(
+                child: CircularProgressIndicator(
+                  color: Ui.red,
+                ),
+              ),
             )
           else if (items.isEmpty)
             const SliverFillRemaining(
@@ -253,8 +364,15 @@ class _LiveScreenState extends State<LiveScreen> {
             )
           else
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-              sliver: SliverList(delegate: SliverChildListDelegate(items)),
+              padding: const EdgeInsets.fromLTRB(
+                14,
+                2,
+                14,
+                18,
+              ),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate(items),
+              ),
             ),
         ],
       ),
@@ -262,12 +380,17 @@ class _LiveScreenState extends State<LiveScreen> {
   }
 }
 
+// -----------------------------------------------------------------------------
+// HEADER
+// -----------------------------------------------------------------------------
+
 class _Header extends StatelessWidget {
   final TickerData ticker;
   final int live;
   final int upcoming;
   final VoidCallback onLink;
   final VoidCallback onRefresh;
+
   const _Header({
     required this.ticker,
     required this.live,
@@ -279,30 +402,57 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
+
     final now = DateTime.now();
     final today = longDate(now);
     final zone = '${tzShort(now)} · ${gmtOffset(now)}';
 
-    Widget round(IconData icon, String tip, VoidCallback onTap) => Padding(
-          padding: const EdgeInsets.only(left: 6),
+    Widget round(
+      IconData icon,
+      String tip,
+      VoidCallback onTap,
+    ) {
+      return Padding(
+        padding: const EdgeInsets.only(left: 5),
+        child: SizedBox(
+          width: 38,
+          height: 38,
           child: Material(
-            color: Colors.white.withValues(alpha: .07),
+            color: Colors.white.withValues(alpha: .06),
             shape: const CircleBorder(),
             child: IconButton(
               tooltip: tip,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(
+                minWidth: 38,
+                minHeight: 38,
+              ),
               onPressed: onTap,
-              icon: Icon(icon, size: 22),
+              icon: Icon(
+                icon,
+                size: 19,
+              ),
             ),
           ),
-        );
+        ),
+      );
+    }
 
     return Container(
-      padding: EdgeInsets.fromLTRB(14, top + 10, 14, 16),
+      padding: EdgeInsets.fromLTRB(
+        14,
+        top + 6,
+        14,
+        10,
+      ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Ui.red.withValues(alpha: .24), Ui.bg],
+          colors: [
+            Ui.red.withValues(alpha: .20),
+            Ui.bg,
+          ],
         ),
       ),
       child: Stack(
@@ -310,98 +460,154 @@ class _Header extends StatelessWidget {
           const Positioned.fill(
             child: Opacity(
               opacity: 1,
-              child: CustomPaint(painter: PitchPainter()),
+              child: CustomPaint(
+                painter: PitchPainter(),
+              ),
             ),
           ),
+
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ----------------------------------------------------------------
+              // APP BAR
+              // ----------------------------------------------------------------
               Row(
                 children: [
                   Builder(
-                    builder: (ctx) =>
-                        round(Icons.menu_rounded, 'Menu', () => Scaffold.of(ctx).openDrawer()),
+                    builder: (ctx) => round(
+                      Icons.menu_rounded,
+                      'Menu',
+                      () => Scaffold.of(ctx).openDrawer(),
+                    ),
                   ),
-                  const SizedBox(width: 10),
+
+                  const SizedBox(width: 8),
+
                   const Expanded(
                     child: Text(
                       'DEEPROWSS',
                       style: TextStyle(
-                        fontSize: 17,
+                        fontSize: 16,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 1.6,
+                        letterSpacing: 1.4,
                       ),
                     ),
                   ),
-                  round(Icons.add_link_rounded, 'Play a link', onLink),
-                  round(Icons.refresh_rounded, 'Refresh', onRefresh),
+
+                  round(
+                    Icons.add_link_rounded,
+                    'Play a link',
+                    onLink,
+                  ),
+
+                  round(
+                    Icons.refresh_rounded,
+                    'Refresh',
+                    onRefresh,
+                  ),
                 ],
               ),
+
+              // ----------------------------------------------------------------
+              // NEWS TICKER
+              // ----------------------------------------------------------------
               if (ticker.visible) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 NewsTicker(data: ticker),
-                const SizedBox(height: 14),
+                const SizedBox(height: 9),
               ] else
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
+
+              // ----------------------------------------------------------------
+              // LIVE EVENTS TITLE
+              // ----------------------------------------------------------------
               Padding(
                 padding: const EdgeInsets.only(left: 4),
                 child: Row(
                   children: [
                     Container(
                       width: 4,
-                      height: 22,
+                      height: 19,
                       decoration: BoxDecoration(
                         color: Ui.red,
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    const Text('Live Events',
-                        style: TextStyle(
-                            fontSize: 21,
-                            height: 1.1,
-                            fontWeight: FontWeight.w900)),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Live Events',
+                      style: TextStyle(
+                        fontSize: 18,
+                        height: 1.1,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
+
+              const SizedBox(height: 6),
+
+              // ----------------------------------------------------------------
+              // DATE + TIMEZONE
+              // ----------------------------------------------------------------
               Padding(
                 padding: const EdgeInsets.only(left: 4),
                 child: Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
+                  spacing: 7,
+                  runSpacing: 5,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.calendar_today_rounded,
-                            size: 11, color: Ui.muted),
+                        Icon(
+                          Icons.calendar_today_rounded,
+                          size: 10,
+                          color: Ui.muted,
+                        ),
                         const SizedBox(width: 5),
-                        Text(today,
-                            style: TextStyle(
-                                color: Ui.muted,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600)),
+                        Text(
+                          today,
+                          style: TextStyle(
+                            color: Ui.muted,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ],
                     ),
+
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 1),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Ui.line),
+                        horizontal: 7,
+                        vertical: 1,
                       ),
-                      child: Text('Times in $zone',
-                          style: TextStyle(
-                              color: Ui.muted,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700)),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(
+                          color: Ui.line,
+                        ),
+                      ),
+                      child: Text(
+                        'Times in $zone',
+                        style: TextStyle(
+                          color: Ui.muted,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+
+              const SizedBox(height: 10),
+
+              // ----------------------------------------------------------------
+              // LIVE / UPCOMING STATS
+              // ----------------------------------------------------------------
               Row(
                 children: [
                   Expanded(
@@ -412,7 +618,9 @@ class _Header extends StatelessWidget {
                       accent: live > 0,
                     ),
                   ),
-                  const SizedBox(width: 10),
+
+                  const SizedBox(width: 8),
+
                   Expanded(
                     child: _Stat(
                       icon: Icons.schedule_rounded,
@@ -431,11 +639,16 @@ class _Header extends StatelessWidget {
   }
 }
 
+// -----------------------------------------------------------------------------
+// STAT CARD
+// -----------------------------------------------------------------------------
+
 class _Stat extends StatelessWidget {
   final IconData icon;
   final String label;
   final int value;
   final bool accent;
+
   const _Stat({
     required this.icon,
     required this.label,
@@ -446,28 +659,52 @@ class _Stat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      height: 52,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+      ),
       decoration: BoxDecoration(
-        color: accent ? Ui.red.withValues(alpha: .16) : Ui.card,
-        borderRadius: BorderRadius.circular(14),
+        color: accent
+            ? Ui.red.withValues(alpha: .13)
+            : Ui.card,
+        borderRadius: BorderRadius.circular(11),
         border: Border.all(
-            color: accent ? Ui.red.withValues(alpha: .7) : Ui.line),
+          color: accent
+              ? Ui.red.withValues(alpha: .65)
+              : Ui.line,
+        ),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 22, color: accent ? Ui.redSoft : Ui.muted),
-          const SizedBox(width: 10),
-          Text('$value',
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
-          const SizedBox(width: 8),
+          Icon(
+            icon,
+            size: 18,
+            color: accent ? Ui.redSoft : Ui.muted,
+          ),
+
+          const SizedBox(width: 7),
+
+          Text(
+            '$value',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+
+          const SizedBox(width: 6),
+
           Expanded(
-            child: Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: Ui.muted,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700)),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Ui.muted,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -475,33 +712,48 @@ class _Stat extends StatelessWidget {
   }
 }
 
+// -----------------------------------------------------------------------------
+// SECTION LABEL
+// -----------------------------------------------------------------------------
+
 class _SectionLabel extends StatelessWidget {
   final String text;
   final bool live;
-  const _SectionLabel({required this.text, required this.live});
+
+  const _SectionLabel({
+    required this.text,
+    required this.live,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
+      padding: const EdgeInsets.fromLTRB(
+        2,
+        7,
+        2,
+        6,
+      ),
       child: Row(
         children: [
           Container(
-            width: 4,
-            height: 14,
+            width: 3,
+            height: 13,
             decoration: BoxDecoration(
               color: live ? Ui.red : Ui.dim,
               borderRadius: BorderRadius.circular(4),
             ),
           ),
-          const SizedBox(width: 8),
+
+          const SizedBox(width: 7),
+
           Text(
             text,
             style: TextStyle(
               color: live ? Colors.white : Ui.muted,
-              fontSize: 12,
+              fontSize: 10.5,
               fontWeight: FontWeight.w900,
-              letterSpacing: 1.2,
+              letterSpacing: 1.0,
             ),
           ),
         ],
@@ -509,6 +761,10 @@ class _SectionLabel extends StatelessWidget {
     );
   }
 }
+
+// -----------------------------------------------------------------------------
+// FILTER CHIP
+// -----------------------------------------------------------------------------
 
 class _FilterChip extends StatelessWidget {
   final String label;
@@ -516,43 +772,63 @@ class _FilterChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final bool accent;
-  const _FilterChip(this.label, this.count, this.selected, this.onTap,
-      {this.accent = false});
+
+  const _FilterChip(
+    this.label,
+    this.count,
+    this.selected,
+    this.onTap, {
+    this.accent = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.only(right: 6),
       child: Material(
-        color: selected ? Ui.red.withValues(alpha: .16) : Ui.card,
-        borderRadius: BorderRadius.circular(12),
+        color: selected
+            ? Ui.red.withValues(alpha: .16)
+            : Ui.card,
+        borderRadius: BorderRadius.circular(9),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(9),
           child: Container(
-            height: 34,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            height: 29,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 9,
+            ),
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(9),
               border: Border.all(
-                  color: selected || (accent && count > 0)
-                      ? Ui.red
-                      : Ui.line,
-                  width: 1.2),
+                color: selected || (accent && count > 0)
+                    ? Ui.red
+                    : Ui.line,
+                width: 1.0,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (selected) ...[
-                  const Icon(Icons.check_rounded, size: 18),
-                  const SizedBox(width: 4),
+                  const Icon(
+                    Icons.check_rounded,
+                    size: 14,
+                  ),
+                  const SizedBox(width: 3),
                 ],
-                Text('$label ($count)',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: selected ? Colors.white : Ui.muted)),
+
+                Text(
+                  '$label ($count)',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: selected
+                        ? Colors.white
+                        : Ui.muted,
+                  ),
+                ),
               ],
             ),
           ),
@@ -562,21 +838,38 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
+// -----------------------------------------------------------------------------
+// EMPTY STATE
+// -----------------------------------------------------------------------------
+
 class _Empty extends StatelessWidget {
   final IconData icon;
   final String text;
-  const _Empty({required this.icon, required this.text});
+
+  const _Empty({
+    required this.icon,
+    required this.text,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(icon, size: 44, color: Ui.dim),
-        const SizedBox(height: 10),
-        Text(text,
-            style: TextStyle(
-                color: Ui.muted, fontSize: 14, fontWeight: FontWeight.w700)),
+        Icon(
+          icon,
+          size: 40,
+          color: Ui.dim,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          text,
+          style: TextStyle(
+            color: Ui.muted,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ],
     );
   }
