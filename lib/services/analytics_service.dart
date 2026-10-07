@@ -1,54 +1,44 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../config.dart';
-
 class AnalyticsService {
-  AnalyticsService._();
+  static const String _endpoint =
+      'https://deeprowss-feed.deeprows.workers.dev/analytics';
 
-  static final AnalyticsService instance = AnalyticsService._();
+  static const String _installIdKey = 'deeprowss_install_id';
 
-  static const _installIdKey = 'analytics_install_id';
-
-  Future<void> trackAppOpen() async {
-    final base = AppConfig.feedBase.trim();
-
-    if (base.isEmpty) return;
-
+  static Future<void> appOpened() async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
       var installId = prefs.getString(_installIdKey);
 
       if (installId == null || installId.isEmpty) {
-        installId = _createInstallId();
+        installId = _generateInstallId();
         await prefs.setString(_installIdKey, installId);
       }
 
-      await http
-          .post(
-            Uri.parse('$base/analytics'),
-            headers: {
-              'content-type': 'application/json',
-            },
-            body: '''
-{
-  "event": "app_open",
-  "installId": "$installId",
-  "appVersion": "${AppConfig.appVersion}",
-  "platform": "android"
-}
-''',
-          )
-          .timeout(const Duration(seconds: 5));
+      await http.post(
+        Uri.parse(_endpoint),
+        headers: {
+          'content-type': 'application/json',
+          'x-install-id': installId,
+          'x-app-version': 'dev',
+          'x-platform': 'android',
+        },
+        body: jsonEncode({
+          'event': 'app_open',
+        }),
+      ).timeout(const Duration(seconds: 5));
     } catch (_) {
-      // Analytics must never prevent the app from opening.
+      // Analytics must never prevent the app from starting.
     }
   }
 
-  String _createInstallId() {
+  static String _generateInstallId() {
     final random = Random.secure();
 
     final bytes = List<int>.generate(
@@ -57,7 +47,7 @@ class AnalyticsService {
     );
 
     return bytes
-        .map((value) => value.toRadixString(16).padLeft(2, '0'))
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
         .join();
   }
 }
