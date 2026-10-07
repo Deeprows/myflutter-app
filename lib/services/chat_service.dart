@@ -15,8 +15,8 @@ class ChatMessage {
 /// Match chat shared with the Footbolive website.
 ///
 /// Same Firestore data the website uses:
-///   match_chats/<slug of "Home vs Away">/messages/{username, message,
-///   matchName, createdAt}
+///   `match_chats/<slug of "Home vs Away">/messages`
+///   with fields username, message, matchName and createdAt
 /// so fans on the website and in the app chat in the same room. It talks to
 /// Firestore's REST API (no extra Android setup), refreshing by polling.
 class ChatService {
