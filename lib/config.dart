@@ -56,7 +56,7 @@ class AppConfig {
   ///
   /// [supportUrl]: the page opened by the CLICK HERE button (your ad / smart
   /// link). LEAVE EMPTY TO TURN THE OVERLAY OFF.
-  static const supportUrl = '';
+  static const supportUrl = 'https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60';
   static const supportIntervalHours = 12;
   static const supportViewSeconds = 13; // page auto-closes after this long
   static const supportRetryHours = 1; // if the support page can't load, ask again after
