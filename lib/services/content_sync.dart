@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 /// Asks every screen to re-download its list (fixtures, highlights, movies,
-/// TV). Triggered when the app returns to the foreground, every couple of
+/// TV). Triggered when the app returns to the foreground, every few
 /// minutes while it is open, and when a push notification arrives.
 class ContentSync {
   static final ValueNotifier<int> tick = ValueNotifier<int>(0);
