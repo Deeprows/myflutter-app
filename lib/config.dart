@@ -7,6 +7,29 @@ class AppConfig {
   static const appVersion =
       String.fromEnvironment('APP_VERSION', defaultValue: 'dev');
 
+  // -------------------------------------------------------------------------
+  // TMDB
+  // -------------------------------------------------------------------------
+
+  /// TMDB API base URL.
+  static const tmdbBaseUrl = 'https://api.themoviedb.org/3';
+
+  /// TMDB image base URL.
+  ///
+  /// Poster images will normally use this base URL with a size such as
+  /// `w500` followed by the poster path returned by TMDB.
+  static const tmdbImageBaseUrl = 'https://image.tmdb.org/t/p/w500';
+
+  /// TMDB Bearer access token.
+  ///
+  /// IMPORTANT:
+  /// Do not put the token directly in this file or commit it to GitHub.
+  /// Supply it at build/run time with:
+  ///
+  /// `--dart-define=TMDB_ACCESS_TOKEN=YOUR_TOKEN`
+  static const tmdbAccessToken =
+      String.fromEnvironment('TMDB_ACCESS_TOKEN');
+
   /// Drawer menu links. Leave a value empty to make its menu item show a
   /// "not set up yet" message instead of opening anything.
   static const websiteUrl = '';
@@ -51,7 +74,7 @@ class AppConfig {
   /// them from GitHub and records anonymous usage. If the Worker is down the
   /// app falls back to the GitHub links above, so keep those set.
   ///
-  /// Example: `https://feed.deeprowss.com`.
+  /// Example: `https://feed.deeprows.com`.
   /// Empty = download from GitHub only.
   static const feedBase = '';
 
