@@ -68,6 +68,11 @@ export default {
       return json({
         ok: true,
         service: "deeprowss-feed",
+        // Setup check (no secret values): both should be true.
+        analytics: Boolean(env.ANALYTICS),
+        stats: Boolean(
+          env.STATS_TOKEN && env.CF_ACCOUNT_ID && env.CF_API_TOKEN
+        ),
       });
     }
 
@@ -149,8 +154,11 @@ async function analytics(request, env) {
       }, 400);
     }
 
+    // The index is what Analytics Engine samples on. A constant index would
+    // put every event in one bucket and undercount phones as traffic grows,
+    // so use the (high-cardinality) install id.
     env.ANALYTICS.writeDataPoint({
-      indexes: ["app_open"],
+      indexes: [installId],
 
       blobs: [
         "app_open",
@@ -328,8 +336,10 @@ function record(
 
     const h = request.headers;
 
+    const installId = (h.get("x-install-id") || "").slice(0, 64);
+
     env.ANALYTICS.writeDataPoint({
-      indexes: [file],
+      indexes: [installId || file],
 
       blobs: [
         file,
