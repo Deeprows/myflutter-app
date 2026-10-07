@@ -22,6 +22,126 @@ jobs:
       - run: flutter create . --platforms=android --project-name=footbolive --org com.deeprows
       - run: flutter pub get
 
+      # ---------------------------------------------------------------
+      # Android release signing
+      # ---------------------------------------------------------------
+
+      # Restore the private release keystore from GitHub Actions Secrets.
+      - name: Restore release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || {
+            echo "::error::KEYSTORE_BASE64 secret is not configured."
+            exit 1
+          }
+
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/upload-keystore.jks
+
+      # Create the signing configuration used by Gradle.
+      - name: Create Android signing properties
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_PASSWORD" || {
+            echo "::error::KEYSTORE_PASSWORD secret is not configured."
+            exit 1
+          }
+
+          test -n "$KEY_ALIAS" || {
+            echo "::error::KEY_ALIAS secret is not configured."
+            exit 1
+          }
+
+          test -n "$KEY_PASSWORD" || {
+            echo "::error::KEY_PASSWORD secret is not configured."
+            exit 1
+          }
+
+          cat > android/key.properties <<EOF
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+
+      # Configure Gradle to sign release builds.
+      - name: Configure Android release signing
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("android/app/build.gradle.kts")
+
+          if not path.exists():
+              raise SystemExit(
+                  "::error::Expected android/app/build.gradle.kts was not generated."
+              )
+
+          text = path.read_text()
+
+          if "signingConfigs" in text and "key.properties" in text:
+              print("Release signing configuration already exists.")
+              raise SystemExit(0)
+
+          signing_block = r'''
+          import java.io.FileInputStream
+          import java.util.Properties
+
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          val keystoreProperties = Properties()
+
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+          }
+
+          text = signing_block + text
+
+          marker = "android {"
+
+          if marker not in text:
+              raise SystemExit(
+                  "::error::Could not find the Android configuration block."
+              )
+
+          text = text.replace(
+              marker,
+              android {
+              signingConfigs {
+                  create("release") {
+                      keyAlias = keystoreProperties["keyAlias"] as String?
+                      keyPassword = keystoreProperties["keyPassword"] as String?
+                      storeFile = keystoreProperties["storeFile"]?.let { file(it) }
+                      storePassword = keystoreProperties["storePassword"] as String?
+                  }
+              }
+         ,
+              1,
+          )
+
+          release_marker = 'buildTypes {
+              release {'
+
+          if release_marker not in text:
+              raise SystemExit(
+                  "::error::Could not find the release build type."
+              )
+
+          text = text.replace(
+              release_marker,
+              buildTypes {
+              release {
+                  signingConfig = signingConfigs.getByName("release")
+         ,
+              1,
+          )
+
+          path.write_text(text)
+          print("Release signing configured.")
+          PY
+
       # Deeprowss logo as the launch (splash) screen.
       - name: Generate splash screen
         run: dart run flutter_native_splash:create
@@ -65,8 +185,8 @@ jobs:
 
           echo "Firebase Android App ID is configured."
 
-      # Build release APK with the Firebase Android App ID.
-      - name: Build release APK
+      # Build signed release APK with the Firebase Android App ID.
+      - name: Build signed release APK
         env:
           FIREBASE_ANDROID_APP_ID: ${{ vars.FIREBASE_ANDROID_APP_ID }}
           FIREBASE_ANDROID_API_KEY: ${{ vars.FIREBASE_ANDROID_API_KEY }}
