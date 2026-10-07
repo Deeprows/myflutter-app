@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../config.dart';
 import '../models/highlight.dart';
+import '../models/push_target.dart';
 import '../services/feed_service.dart';
+import '../services/push_service.dart';
 import '../services/support_gate.dart';
+import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_refresh.dart';
 import '../utils/format.dart';
 import '../widgets/highlight_card.dart';
 import '../widgets/pitch_painter.dart';
@@ -30,10 +34,45 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
     _load().then((_) {
       if (AppConfig.highlightsUrl.isNotEmpty) _load(remote: true);
     });
+    PushService.instance.target.addListener(_onTarget);
+    ContentSync.tick.addListener(_onSync);
+  }
+
+  void _onSync() {
+    if (!_loading) _load(remote: true);
+  }
+
+  // ---- a tapped notification that points at one highlight ------------------
+
+  void _onTarget() {
+    final t = PushService.instance.target.value;
+    if (t == null || t.kind != 'highlights' || _loading) return;
+    if (!_openTarget(t)) _load(remote: true);
+  }
+
+  bool _openTarget(PushTarget t) {
+    for (final h in _all) {
+      if (h.url.trim() == t.url) {
+        PushService.instance.target.value = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _open(h);
+        });
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _afterLoad({required bool last}) {
+    final t = PushService.instance.target.value;
+    if (t == null || t.kind != 'highlights') return;
+    if (!_openTarget(t) && last) PushService.instance.target.value = null;
   }
 
   @override
   void dispose() {
+    PushService.instance.target.removeListener(_onTarget);
+    ContentSync.tick.removeListener(_onSync);
     _search.dispose();
     super.dispose();
   }
@@ -45,6 +84,7 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
       _all = list;
       _loading = false;
     });
+    _afterLoad(last: remote || AppConfig.highlightsUrl.isEmpty);
   }
 
   List<String> get _competitions {
@@ -93,10 +133,11 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
 
     final top = MediaQuery.of(context).padding.top;
 
-    return RefreshIndicator(
-      color: Ui.red,
-      backgroundColor: Ui.panel,
-      onRefresh: () => _load(remote: true),
+    return AppRefresh(
+      onRefresh: () async {
+        await _load(remote: true);
+        return !feed.lastRemoteFailed;
+      },
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
