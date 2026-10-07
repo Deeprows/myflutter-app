@@ -140,7 +140,7 @@ class _NotificationSheetState extends State<_NotificationSheet> {
             Icon(Icons.notifications_off_rounded, size: 20, color: Ui.red),
             const SizedBox(width: 10),
             Expanded(child: Text(text, style: const TextStyle(fontSize: 12.5))),
-            if (action != null) action,
+            ?action,
           ],
         ),
       );
