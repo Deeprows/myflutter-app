@@ -28,7 +28,7 @@ Future<void> main() async {
 
   // Analytics never blocks app startup.
   unawaited(
-    AnalyticsService.instance.trackAppOpen(),
+    AnalyticsService.instance.start(),
   );
 
   // Permission prompt, token and topics; never blocks app start.
