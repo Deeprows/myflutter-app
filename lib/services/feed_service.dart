@@ -11,6 +11,7 @@ import '../models/highlight.dart';
 import '../models/movie.dart';
 import '../models/ticker.dart';
 import '../utils/posted_at.dart';
+import 'install_id.dart';
 
 /// Loads fixtures and highlights. Order of preference:
 /// remote feed (when asked) -> last cached remote copy -> bundled asset.
@@ -21,6 +22,7 @@ class FeedService {
 
   Future<List<Fixture>> loadFixtures({bool remote = false}) async {
     final raw = await _list(
+      name: 'fixtures',
       asset: 'assets/data/fixtures.json',
       cacheKey: 'cache_fixtures',
       remoteUrl: AppConfig.fixturesUrl,
@@ -31,6 +33,7 @@ class FeedService {
 
   Future<List<Highlight>> loadHighlights({bool remote = false}) async {
     final raw = await _list(
+      name: 'highlights',
       asset: 'assets/data/highlights.json',
       cacheKey: 'cache_highlights',
       remoteUrl: AppConfig.highlightsUrl,
@@ -56,9 +59,9 @@ class FeedService {
       } else {
         if (remote) {
           try {
-            final res = await _getFresh(AppConfig.tickerUrl);
+            final res = await _download('ticker', AppConfig.tickerUrl);
 
-            if (res.statusCode == 200) {
+            if (res != null && res.statusCode == 200) {
               final body = utf8.decode(res.bodyBytes);
               final data = TickerData.parse(jsonDecode(body));
 
@@ -97,6 +100,7 @@ class FeedService {
 
   Future<List<Channel>> loadChannels({bool remote = false}) async {
     final raw = await _list(
+      name: 'tv',
       asset: 'assets/data/tv.json',
       cacheKey: 'cache_tv',
       remoteUrl: AppConfig.tvUrl,
@@ -108,6 +112,7 @@ class FeedService {
 
   Future<List<Movie>> loadMovies({bool remote = false}) async {
     final raw = await _list(
+      name: 'movies',
       asset: 'assets/data/movies.json',
       cacheKey: 'cache_movies',
       remoteUrl: AppConfig.moviesUrl,
@@ -127,6 +132,7 @@ class FeedService {
   }
 
   Future<List<dynamic>> _list({
+    required String name,
     required String asset,
     required String cacheKey,
     required String remoteUrl,
@@ -135,9 +141,9 @@ class FeedService {
     if (remote && remoteUrl.isNotEmpty) {
       lastRemoteFailed = true; // until a download succeeds below
       try {
-        final res = await _getFresh(remoteUrl);
+        final res = await _download(name, remoteUrl);
 
-        if (res.statusCode == 200) {
+        if (res != null && res.statusCode == 200) {
           final data = _decode(utf8.decode(res.bodyBytes));
 
           if (data.isNotEmpty) {
@@ -184,11 +190,42 @@ class FeedService {
     );
   }
 
+  /// Downloads one feed: through your Cloudflare Worker when
+  /// [AppConfig.feedBase] is set (so the request is counted), otherwise - or if
+  /// the Worker is unreachable - straight from [fallbackUrl] (GitHub).
+  Future<http.Response?> _download(String name, String fallbackUrl) async {
+    final base = AppConfig.feedBase.trim().replaceAll(RegExp(r'/+$'), '');
+    if (base.isNotEmpty) {
+      try {
+        final res = await _getFresh(
+          '$base/feed/$name.json',
+          headers: {
+            'X-Install-Id': await InstallId.get(),
+            'X-App-Version': AppConfig.appVersion,
+            'X-Platform': 'android',
+          },
+        );
+        if (res.statusCode == 200) return res;
+      } catch (_) {
+        // Worker down / blocked: use the direct link below.
+      }
+    }
+    if (fallbackUrl.isEmpty) return null;
+    try {
+      return await _getFresh(fallbackUrl);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Fetches a remote feed while preventing normal HTTP/proxy caching.
   ///
   /// The timestamp is added to the URL so GitHub Raw/CDN/proxy layers
   /// treat each refresh as a new request.
-  Future<http.Response> _getFresh(String url) {
+  Future<http.Response> _getFresh(
+    String url, {
+    Map<String, String> headers = const {},
+  }) {
     final original = Uri.parse(url);
 
     final uri = original.replace(
@@ -201,9 +238,10 @@ class FeedService {
     return http
         .get(
           uri,
-          headers: const {
+          headers: {
             'Cache-Control': 'no-cache, no-store, max-age=0',
             'Pragma': 'no-cache',
+            ...headers,
           },
         )
         .timeout(
