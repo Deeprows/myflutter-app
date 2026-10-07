@@ -41,7 +41,7 @@ class _ShellScreenState extends State<ShellScreen>
     // Keep every list current without the person having to pull down.
     WidgetsBinding.instance.addObserver(this);
     _autoRefresh = Timer.periodic(
-      const Duration(minutes: 2),
+      const Duration(minutes: 5),
       (_) => ContentSync.request(),
     );
   }
