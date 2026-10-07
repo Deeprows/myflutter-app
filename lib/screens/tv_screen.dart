@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../models/channel.dart';
 import '../services/feed_service.dart';
+import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_refresh.dart';
 import '../widgets/link_sheet.dart';
 import '../widgets/pitch_painter.dart';
 import 'player_screen.dart';
@@ -28,10 +30,16 @@ class _TvScreenState extends State<TvScreen> {
     _load().then((_) {
       if (AppConfig.tvUrl.isNotEmpty) _load(remote: true);
     });
+    ContentSync.tick.addListener(_onSync);
+  }
+
+  void _onSync() {
+    if (!_loading) _load(remote: true);
   }
 
   @override
   void dispose() {
+    ContentSync.tick.removeListener(_onSync);
     _search.dispose();
     super.dispose();
   }
@@ -81,10 +89,11 @@ class _TvScreenState extends State<TvScreen> {
     final cats = ChannelCategory.values.where(counts.containsKey).toList();
     final top = MediaQuery.of(context).padding.top;
 
-    return RefreshIndicator(
-      color: Ui.red,
-      backgroundColor: Ui.panel,
-      onRefresh: () => _load(remote: true),
+    return AppRefresh(
+      onRefresh: () async {
+        await _load(remote: true);
+        return !feed.lastRemoteFailed;
+      },
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
