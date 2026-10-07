@@ -1,53 +1,33 @@
-import 'dart:convert';
-import 'dart:math';
+import 'dart:async';
 
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-class AnalyticsService {
-  static const String _endpoint =
-      'https://deeprowss-feed.deeprows.workers.dev/analytics';
+import 'app.dart';
+import 'services/analytics_service.dart';
+import 'services/download_manager.dart';
+import 'services/push_service.dart';
+import 'theme/app_theme.dart';
 
-  static const String _installIdKey = 'deeprowss_install_id';
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-  static Future<void> appOpened() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
 
-      var installId = prefs.getString(_installIdKey);
+  await ThemeController.load();
+  await DownloadManager.instance.init();
 
-      if (installId == null || installId.isEmpty) {
-        installId = _generateInstallId();
-        await prefs.setString(_installIdKey, installId);
-      }
+  // Firebase + background handler first (needed to receive alerts while the
+  // app is closed). Failures are recorded, never thrown.
+  await PushService.instance.initCore();
 
-      await http.post(
-        Uri.parse(_endpoint),
-        headers: {
-          'content-type': 'application/json',
-          'x-install-id': installId,
-          'x-app-version': 'dev',
-          'x-platform': 'android',
-        },
-        body: jsonEncode({
-          'event': 'app_open',
-        }),
-      ).timeout(const Duration(seconds: 5));
-    } catch (_) {
-      // Analytics must never prevent the app from starting.
-    }
-  }
+  runApp(const FootboliveApp());
 
-  static String _generateInstallId() {
-    final random = Random.secure();
+  // Anonymous usage analytics. Never blocks app startup.
+  unawaited(AnalyticsService.appOpened());
 
-    final bytes = List<int>.generate(
-      16,
-      (_) => random.nextInt(256),
-    );
-
-    return bytes
-        .map((b) => b.toRadixString(16).padLeft(2, '0'))
-        .join();
-  }
+  // Permission prompt, token and topics; never blocks app start.
+  unawaited(PushService.instance.init());
 }
