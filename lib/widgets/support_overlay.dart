@@ -106,7 +106,7 @@ class _SupportOverlayState extends State<SupportOverlay>
               child: Center(
                 child: SingleChildScrollView(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 480),
                     child: Column(
@@ -131,7 +131,7 @@ class _SupportOverlayState extends State<SupportOverlay>
 
   Widget _topCard(int hours, String hLabel, int secs) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       decoration: BoxDecoration(
         color: Ui.panel,
         gradient: LinearGradient(
@@ -153,8 +153,8 @@ class _SupportOverlayState extends State<SupportOverlay>
       child: Column(
         children: [
           Container(
-            width: 58,
-            height: 58,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(
@@ -170,9 +170,9 @@ class _SupportOverlayState extends State<SupportOverlay>
               ],
             ),
             child: const Icon(Icons.favorite_rounded,
-                color: Colors.white, size: 30),
+                color: Colors.white, size: 25),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           ShaderMask(
             blendMode: BlendMode.srcIn,
             shaderCallback: (r) =>
@@ -181,23 +181,23 @@ class _SupportOverlayState extends State<SupportOverlay>
               'We Need Your Support',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 27,
+                fontSize: 23,
                 fontWeight: FontWeight.w900,
-                height: 1.1,
+                height: 1.05,
                 color: Colors.white,
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 5),
           Text(
             'Help us keep Deeprowss running',
             textAlign: TextAlign.center,
             style: TextStyle(
-                color: Ui.muted, fontSize: 16, fontWeight: FontWeight.w600),
+                color: Ui.muted, fontSize: 14, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: Ui.cardDeep,
               borderRadius: BorderRadius.circular(20),
@@ -207,21 +207,21 @@ class _SupportOverlayState extends State<SupportOverlay>
               'Wait time: ${secs}s  •  Trigger: every ${hours}h  •  Auto close: ON',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  color: Ui.dim, fontSize: 11.5, fontWeight: FontWeight.w600),
+                  color: Ui.dim, fontSize: 10, fontWeight: FontWeight.w600),
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 10),
           Text(
             'Choose your experience — support us with a single visit and '
             'enjoy $hours $hLabel of uninterrupted streaming.',
             textAlign: TextAlign.center,
             style: TextStyle(
                 color: Ui.muted,
-                fontSize: 16,
-                height: 1.45,
+                fontSize: 14,
+                height: 1.25,
                 fontWeight: FontWeight.w500),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 12),
           _button(hours),
         ],
       ),
@@ -252,14 +252,14 @@ class _SupportOverlayState extends State<SupportOverlay>
               borderRadius: BorderRadius.circular(26),
               onTap: _open,
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 17),
+                padding: const EdgeInsets.symmetric(vertical: 11),
                 child: Column(
                   children: [
                     const Text(
                       'Click Here',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 25,
+                        fontSize: 22,
                         fontWeight: FontWeight.w900,
                         letterSpacing: .3,
                       ),
@@ -269,7 +269,7 @@ class _SupportOverlayState extends State<SupportOverlay>
                       'Open 1 AD per ${hours}h',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: .88),
-                        fontSize: 13.5,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -287,7 +287,7 @@ class _SupportOverlayState extends State<SupportOverlay>
 
   Widget _stepsCard(List<String> steps) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      padding: const EdgeInsets.fromLTRB(12, 13, 12, 12),
       decoration: BoxDecoration(
         color: Ui.panel,
         borderRadius: BorderRadius.circular(28),
@@ -297,14 +297,14 @@ class _SupportOverlayState extends State<SupportOverlay>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Padding(
-            padding: EdgeInsets.only(left: 4, bottom: 12),
+            padding: EdgeInsets.only(left: 3, bottom: 8),
             child: Text('Instructions —',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           ),
           for (var i = 0; i < steps.length; i++)
             Container(
-              margin: EdgeInsets.only(bottom: i == steps.length - 1 ? 0 : 9),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              margin: EdgeInsets.only(bottom: i == steps.length - 1 ? 0 : 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 color: Ui.cardDeep,
                 borderRadius: BorderRadius.circular(18),
@@ -313,8 +313,8 @@ class _SupportOverlayState extends State<SupportOverlay>
               child: Row(
                 children: [
                   Container(
-                    width: 32,
-                    height: 32,
+                    width: 28,
+                    height: 28,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
@@ -324,14 +324,14 @@ class _SupportOverlayState extends State<SupportOverlay>
                     child: Text('${i + 1}',
                         style: TextStyle(
                             color: Ui.redSoft,
-                            fontSize: 14,
+                            fontSize: 12,
                             fontWeight: FontWeight.w800)),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(steps[i],
                         style: const TextStyle(
-                            fontSize: 15, height: 1.3, fontWeight: FontWeight.w600)),
+                            fontSize: 13, height: 1.2, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
