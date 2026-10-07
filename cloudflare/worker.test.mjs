@@ -15,8 +15,8 @@ globalThis.fetch = async (url, opts) => {
   if (u.includes("api.cloudflare.com")) {
     const sql = opts.body;
     assert.match(opts.headers.authorization, /^Bearer tok/);
-    const data = /COUNT\(DISTINCT blob4\) AS phones FROM deeprowss_app WHERE timestamp > NOW\(\) - INTERVAL '1' DAY FORMAT/.test(sql)
-      ? [{ requests: 1234, phones: 56 }] : [{ day: "2026-10-07 00:00:00", country: "NG", version: "1.0.9", file: "movies.json", requests: 10, phones: 3 }];
+    const data = /AS phones, SUM\(_sample_interval\) AS app_opens FROM deeprowss_app WHERE blob1 = 'app_open' AND timestamp > NOW\(\) - INTERVAL '1' DAY FORMAT/.test(sql)
+      ? [{ app_opens: 1234, phones: 56 }] : [{ day: "2026-10-07 00:00:00", country: "NG", version: "1.0.9", file: "movies.json", requests: 10, phones: 3, app_opens: 7 }];
     return new Response(JSON.stringify({ data }), { status: 200 });
   }
   upstreamCalls++;
@@ -42,6 +42,8 @@ assert.equal(r.headers.get("access-control-allow-origin"), "*");
 assert.equal(points.length, 2);
 assert.deepEqual(points[0].blobs, ["movies.json", "1.0.9", "android", "abc123", "NG", "MISS"]);
 assert.equal(points[1].blobs[3], "unknown");
+assert.deepEqual(points[0].indexes, ["abc123"]);
+assert.deepEqual(points[1].indexes, ["movies.json"]);
 
 // 2. unknown file / path
 assert.equal((await get("/feed/secret.json")).status, 404);
@@ -61,6 +63,37 @@ assert.equal(r.status, 200);
 assert.equal((await get("/stats")).status, 404);
 assert.equal((await get("/stats?token=wrong")).status, 404);
 r = await get("/stats?token=secret"); const page = await r.text();
-assert.equal(r.status, 200); assert.match(page, /1,234/); assert.match(page, /phones \(24 h\)/);
+assert.equal(r.status, 200); assert.match(page, /1,234/); assert.match(page, /unique phones \(24 h\)/);
+assert.match(page, />\s*56\s*</);
+
+// 6. POST /analytics: app_open is recorded, bad input is rejected
+const post = (path, body, e = env) =>
+  worker.fetch(Object.assign(new Request("https://feed.example.com" + path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  }), { cf: { country: "EG" } }), e, ctx);
+
+points.length = 0;
+r = await post("/analytics", { event: "app_open", installId: "phone1", appVersion: "1.0.9", platform: "android" });
+assert.equal(r.status, 200); assert.equal((await r.json()).ok, true);
+assert.equal(points.length, 1);
+assert.deepEqual(points[0].blobs, ["app_open", "1.0.9", "android", "phone1", "EG", "app"]);
+assert.deepEqual(points[0].indexes, ["phone1"]);
+assert.deepEqual(points[0].doubles, [1, 200]);
+
+assert.equal((await post("/analytics", { event: "other", installId: "p" })).status, 400);
+assert.equal((await post("/analytics", { event: "app_open" })).status, 400);
+assert.equal((await post("/analytics", "not json")).status, 400);
+assert.equal(points.length, 1);
+assert.equal((await post("/analytics", { event: "app_open", installId: "p" }, {})).status, 503);
+assert.equal((await get("/analytics")).status, 404); // GET is not allowed
+
+// 7. health shows whether the Cloudflare setup is complete
+let h = await (await get("/health")).json();
+assert.deepEqual([h.ok, h.analytics, h.stats], [true, true, true]);
+h = await (await worker.fetch(new Request("https://f.example.com/"), {}, ctx)).json();
+assert.deepEqual([h.ok, h.analytics, h.stats], [true, false, false]);
+
 console.log("worker.js: all tests passed");
 globalThis.fetch = realFetch;
