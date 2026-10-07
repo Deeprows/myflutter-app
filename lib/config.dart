@@ -34,6 +34,19 @@ class AppConfig {
   static const moviesUrl = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/movies.json';
   static const tvUrl = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/tv.json';
 
+  /// Cloudflare feed (traffic monitoring). When set, fixtures, highlights,
+  /// movies, TV and the ticker are downloaded from
+  ///   <feedBase>/feed/<fixtures|highlights|movies|tv|ticker>.json
+  /// through your Cloudflare Worker (see cloudflare/README.md), which fetches
+  /// them from GitHub and records anonymous usage. If the Worker is down the
+  /// app falls back to the GitHub links above, so keep those set.
+  /// Example: 'https://feed.deeprowss.com'. Empty = download from GitHub only.
+  static const feedBase = '';
+
+  /// Shown in your Cloudflare stats; set by the build (APP_VERSION).
+  static const appVersion =
+      String.fromEnvironment('APP_VERSION', defaultValue: 'dev');
+
   /// Scrolling ticker on the home screen (same shape as assets/data/ticker.json).
   /// Set this to a raw URL to change the ticker text without a new APK.
   static const tickerUrl = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/ticker.json';
@@ -43,7 +56,7 @@ class AppConfig {
   ///
   /// [supportUrl]: the page opened by the CLICK HERE button (your ad / smart
   /// link). LEAVE EMPTY TO TURN THE OVERLAY OFF.
-  static const supportUrl = 'https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60';
+  static const supportUrl = '';
   static const supportIntervalHours = 12;
   static const supportViewSeconds = 13; // page auto-closes after this long
   static const supportRetryHours = 1; // if the support page can't load, ask again after
