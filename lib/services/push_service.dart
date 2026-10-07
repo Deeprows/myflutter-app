@@ -1,9 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../models/push_target.dart';
+import 'content_sync.dart';
+import 'native_notifier.dart';
 
 // ---------------------------------------------------------------- Firebase
 // Same Firebase project the Deeprowss website uses (deeprows-4d37c), so the
@@ -55,7 +60,7 @@ enum PushTopic {
   kickoff(
     'kickoff',
     'Live match alerts',
-    '5 minutes before kick-off and when the match starts',
+    'New matches, 5 minutes before kick-off and when it starts',
     Icons.sports_soccer_rounded,
   ),
   highlights(
@@ -92,6 +97,23 @@ class PushService {
   /// notification is tapped; ShellScreen switches tab and clears it.
   final ValueNotifier<int?> tabRequest = ValueNotifier<int?>(null);
 
+  /// The specific highlight / movie / match a tapped notification points at.
+  /// The Live, Highlights and Movies screens open it and then clear it.
+  final ValueNotifier<PushTarget?> target = ValueNotifier<PushTarget?>(null);
+
+  void _dispatch(PushTarget? t) {
+    if (t == null) return;
+    tabRequest.value = t.tab;
+    target.value = t.hasItem ? t : null;
+  }
+
+  void _onPayload(String json) {
+    try {
+      final d = jsonDecode(json);
+      if (d is Map) _dispatch(PushTarget.fromData(Map<String, dynamic>.from(d)));
+    } catch (_) {}
+  }
+
   Future<void>? _initFuture;
   bool _ready = false;
   bool get isReady => _ready;
@@ -116,6 +138,10 @@ class PushService {
   /// handler. Must be registered this early for closed-app delivery.
   Future<void> initCore() async {
     if (_coreReady) return;
+    // Taps on notifications drawn by the app itself (see NativeNotifier).
+    NativeNotifier.listen(_onPayload);
+    final launched = await NativeNotifier.launchPayload();
+    if (launched != null && launched.isNotEmpty) _onPayload(launched);
     try {
       _requireAndroidFirebaseConfig();
       await Firebase.initializeApp(options: _options);
@@ -129,18 +155,8 @@ class PushService {
   }
 
   /// Tab to open for a notification's data payload.
-  static int? tabFor(Map<String, dynamic> data) {
-    switch ((data['tab'] ?? data['type'] ?? '').toString()) {
-      case 'live':
-      case 'kickoff':
-        return 0;
-      case 'highlights':
-        return 1;
-      case 'movies':
-        return 3;
-    }
-    return null;
-  }
+  static int? tabFor(Map<String, dynamic> data) =>
+      PushTarget.fromData(data)?.tab;
 
   /// Safe to call many times; the work runs once.
   Future<void> init() => _initFuture ??= _init();
@@ -269,12 +285,31 @@ class PushService {
 
   // ------------------------------------------------------------ handlers
 
-  /// App is open: Android does not draw a tray notification, so show a banner.
-  void _onForeground(RemoteMessage m) {
+  /// App is open: FCM does not draw a notification by itself, so draw a real
+  /// one (status bar + tray, tappable). Falls back to an in-app banner only if
+  /// that is impossible (e.g. notifications switched off for the app).
+  Future<void> _onForeground(RemoteMessage m) async {
+    // New content was just announced: fetch it now.
+    ContentSync.request(force: true);
     final title = (m.notification?.title ?? m.data['title'] ?? '').toString();
     final body = (m.notification?.body ?? m.data['body'] ?? '').toString();
     if (title.isEmpty && body.isEmpty) return;
-    final tab = tabFor(m.data);
+    final t = PushTarget.fromData(m.data);
+    final channel = m.notification?.android?.channelId ??
+        (t?.kind == 'kickoff' ? 'kickoff' : 'content');
+    final payload = jsonEncode(
+        m.data.map((k, v) => MapEntry(k.toString(), v.toString())));
+
+    final shown = await NativeNotifier.show(
+      title: title,
+      body: body,
+      channel: channel,
+      payload: payload,
+    );
+    if (!shown) _banner(title, body, t);
+  }
+
+  void _banner(String title, String body, PushTarget? t) {
     messengerKey.currentState
       ?..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
@@ -289,18 +324,12 @@ class PushService {
             if (body.isNotEmpty) Text(body),
           ],
         ),
-        action: tab == null
+        action: t == null
             ? null
-            : SnackBarAction(
-                label: 'OPEN',
-                onPressed: () => tabRequest.value = tab,
-              ),
+            : SnackBarAction(label: 'OPEN', onPressed: () => _dispatch(t)),
       ));
   }
 
-  /// User tapped a notification (app was in background or closed).
-  void _onOpened(RemoteMessage m) {
-    final tab = tabFor(m.data);
-    if (tab != null) tabRequest.value = tab;
-  }
+  /// User tapped a notification drawn by Firebase (app in background/closed).
+  void _onOpened(RemoteMessage m) => _dispatch(PushTarget.fromData(m.data));
 }
