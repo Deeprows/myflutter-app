@@ -1,5 +1,136 @@
-      # Configure Gradle to sign release builds.
-      - name: Configure Android release signing
+```yaml
+name: Build Android APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  android:
+    name: Build Android Release
+    runs-on: ubuntu-latest
+
+    steps:
+      # ---------------------------------------------------------------
+      # Checkout
+      # ---------------------------------------------------------------
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ---------------------------------------------------------------
+      # Java
+      # ---------------------------------------------------------------
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # ---------------------------------------------------------------
+      # Flutter
+      # ---------------------------------------------------------------
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create Android project
+        run: |
+          flutter create . \
+            --platforms=android \
+            --project-name=footbolive \
+            --org com.deeprows
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      # ---------------------------------------------------------------
+      # App branding
+      # ---------------------------------------------------------------
+
+      - name: Generate splash screen
+        run: dart run flutter_native_splash:create
+
+      - name: Generate launcher icon
+        run: dart run flutter_launcher_icons
+
+      # ---------------------------------------------------------------
+      # Android configuration
+      # ---------------------------------------------------------------
+
+      - name: Patch AndroidManifest
+        run: python3 tool/patch_android_manifest.py
+
+      - name: Patch Android push notifications
+        run: python3 tool/patch_android_push.py
+
+      - name: Patch MainActivity
+        run: python3 tool/patch_main_activity.py
+
+      - name: Configure Kotlin and Java JVM targets
+        run: |
+          {
+            echo ""
+            echo "kotlin.jvm.target.validation.mode=warning"
+          } >> android/gradle.properties
+
+      # ---------------------------------------------------------------
+      # Release signing
+      # ---------------------------------------------------------------
+
+      - name: Restore release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || {
+            echo "::error::KEYSTORE_BASE64 secret is not configured."
+            exit 1
+          }
+
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/upload-keystore.jks
+
+          test -f android/upload-keystore.jks || {
+            echo "::error::Release keystore could not be restored."
+            exit 1
+          }
+
+          echo "Release keystore restored."
+
+      - name: Create signing properties
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_PASSWORD" || {
+            echo "::error::KEYSTORE_PASSWORD secret is not configured."
+            exit 1
+          }
+
+          test -n "$KEY_ALIAS" || {
+            echo "::error::KEY_ALIAS secret is not configured."
+            exit 1
+          }
+
+          test -n "$KEY_PASSWORD" || {
+            echo "::error::KEY_PASSWORD secret is not configured."
+            exit 1
+          }
+
+          cat > android/key.properties <<EOF
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+
+          echo "Android signing properties created."
+
+      - name: Configure release signing
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -17,43 +148,41 @@
               print("Release signing configuration already exists.")
               raise SystemExit(0)
 
-          # Add imports and load key.properties.
           header = (
-              'import java.io.FileInputStream\n'
-              'import java.util.Properties\n'
-              '\n'
+              "import java.io.FileInputStream\n"
+              "import java.util.Properties\n"
+              "\n"
               'val keystorePropertiesFile = rootProject.file("key.properties")\n'
-              'val keystoreProperties = Properties()\n'
-              '\n'
-              'if (keystorePropertiesFile.exists()) {\n'
-              '    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\n'
-              '}\n'
-              '\n'
+              "val keystoreProperties = Properties()\n"
+              "\n"
+              "if (keystorePropertiesFile.exists()) {\n"
+              "    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\n"
+              "}\n"
+              "\n"
           )
 
           text = header + text
 
-          # Add signingConfigs inside the existing android block.
           android_marker = "android {"
-
-          signing_config = (
-              'android {\n'
-              '    signingConfigs {\n'
-              '        create("release") {\n'
-              '            keyAlias = keystoreProperties["keyAlias"] as String?\n'
-              '            keyPassword = keystoreProperties["keyPassword"] as String?\n'
-              '            storeFile = keystoreProperties["storeFile"]?.let {\n'
-              '                rootProject.file(it)\n'
-              '            }\n'
-              '            storePassword = keystoreProperties["storePassword"] as String?\n'
-              '        }\n'
-              '    }'
-          )
 
           if android_marker not in text:
               raise SystemExit(
                   "::error::Could not find android { block."
               )
+
+          signing_config = (
+              "android {\n"
+              "    signingConfigs {\n"
+              '        create("release") {\n'
+              '            keyAlias = keystoreProperties["keyAlias"] as String?\n'
+              '            keyPassword = keystoreProperties["keyPassword"] as String?\n'
+              '            storeFile = keystoreProperties["storeFile"]?.let {\n'
+              "                rootProject.file(it)\n"
+              "            }\n"
+              '            storePassword = keystoreProperties["storePassword"] as String?\n'
+              "        }\n"
+              "    }"
+          )
 
           text = text.replace(
               android_marker,
@@ -61,7 +190,6 @@
               1,
           )
 
-          # Find the release build type and attach the signing config.
           release_marker = "        release {"
 
           if release_marker not in text:
@@ -83,3 +211,67 @@
 
           print("Release signing configured successfully.")
           PY
+
+      # ---------------------------------------------------------------
+      # Code quality
+      # ---------------------------------------------------------------
+
+      - name: Analyze Flutter project
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Run Flutter tests
+        run: flutter test
+
+      # ---------------------------------------------------------------
+      # Firebase
+      # ---------------------------------------------------------------
+
+      - name: Verify Firebase Android App ID
+        env:
+          FIREBASE_ANDROID_APP_ID: ${{ vars.FIREBASE_ANDROID_APP_ID }}
+        run: |
+          test -n "$FIREBASE_ANDROID_APP_ID" || {
+            echo "::error::FIREBASE_ANDROID_APP_ID is not configured."
+            exit 1
+          }
+
+          echo "Firebase Android App ID is configured."
+
+      # ---------------------------------------------------------------
+      # Build
+      # ---------------------------------------------------------------
+
+      - name: Build signed release APK
+        env:
+          FIREBASE_ANDROID_APP_ID: ${{ vars.FIREBASE_ANDROID_APP_ID }}
+          FIREBASE_ANDROID_API_KEY: ${{ vars.FIREBASE_ANDROID_API_KEY }}
+        run: |
+          flutter build apk --release \
+            --dart-define=FIREBASE_ANDROID_APP_ID="$FIREBASE_ANDROID_APP_ID" \
+            --dart-define=FIREBASE_ANDROID_API_KEY="$FIREBASE_ANDROID_API_KEY" \
+            --dart-define=APP_VERSION="1.0.${{ github.run_number }}"
+
+      # ---------------------------------------------------------------
+      # Verify output
+      # ---------------------------------------------------------------
+
+      - name: Verify release APK
+        run: |
+          test -f build/app/outputs/flutter-apk/app-release.apk || {
+            echo "::error::Release APK was not created."
+            exit 1
+          }
+
+          echo "Release APK created successfully."
+
+      # ---------------------------------------------------------------
+      # Upload APK
+      # ---------------------------------------------------------------
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: footbolive-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+```
