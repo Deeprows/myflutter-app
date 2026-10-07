@@ -10,10 +10,15 @@ import '../models/fixture.dart';
 import '../models/highlight.dart';
 import '../models/movie.dart';
 import '../models/ticker.dart';
+import '../utils/posted_at.dart';
 
 /// Loads fixtures and highlights. Order of preference:
 /// remote feed (when asked) -> last cached remote copy -> bundled asset.
 class FeedService {
+  /// True when the last remote download failed and saved/bundled content was
+  /// used instead. Read right after a load; the screens show it after a pull.
+  bool lastRemoteFailed = false;
+
   Future<List<Fixture>> loadFixtures({bool remote = false}) async {
     final raw = await _list(
       asset: 'assets/data/fixtures.json',
@@ -34,17 +39,8 @@ class FeedService {
 
     final list = raw.map(Highlight.tryParse).whereType<Highlight>().toList();
 
-    list.sort((a, b) {
-      final da = a.date, db = b.date;
-
-      if (da == null && db == null) return 0;
-      if (da == null) return 1;
-      if (db == null) return -1;
-
-      return db.compareTo(da);
-    });
-
-    return list;
+    // Newest first (date and time), stable for items posted the same day.
+    return newestFirst(list, (h) => h.date);
   }
 
   /// Ticker text: remote (when asked) -> last cached copy -> bundled asset.
@@ -126,17 +122,8 @@ class FeedService {
         .where((m) => seen.add(m.url))
         .toList();
 
-    list.sort((a, b) {
-      final da = a.date, db = b.date;
-
-      if (da == null && db == null) return 0;
-      if (da == null) return 1;
-      if (db == null) return -1;
-
-      return db.compareTo(da);
-    });
-
-    return list;
+    // Newest first (date and time), stable for items posted the same day.
+    return newestFirst(list, (m) => m.date);
   }
 
   Future<List<dynamic>> _list({
@@ -146,6 +133,7 @@ class FeedService {
     required bool remote,
   }) async {
     if (remote && remoteUrl.isNotEmpty) {
+      lastRemoteFailed = true; // until a download succeeds below
       try {
         final res = await _getFresh(remoteUrl);
 
@@ -160,12 +148,15 @@ class FeedService {
               jsonEncode(data),
             );
 
+            lastRemoteFailed = false;
             return data;
           }
         }
       } catch (_) {
         // fall through to cache / bundled copy
       }
+    } else if (remote) {
+      lastRemoteFailed = false; // bundled-only mode: nothing to download
     }
 
     try {
