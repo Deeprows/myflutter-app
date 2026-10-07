@@ -53,7 +53,7 @@ class AppConfig {
   ///
   /// Example: `https://feed.deeprowss.com`.
   /// Empty = download from GitHub only.
-  static const feedBase = '';
+  static const feedBase = 'https://deeprowss-feed.deeprows.workers.dev';
 
   /// Scrolling ticker on the home screen (same shape as
   /// `assets/data/ticker.json`).
