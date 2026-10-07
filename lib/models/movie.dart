@@ -1,3 +1,4 @@
+import '../utils/posted_at.dart';
 class Movie {
   final String name;
   final String url;
@@ -51,7 +52,7 @@ class Movie {
       name: name,
       url: url,
       downloadUrl: dl,
-      date: DateTime.tryParse(date),
+      date: parsePostedAt(date, s('time')),
       rating: parseRating(s('rating')),
       genres: s('genre')
           .split(',')
