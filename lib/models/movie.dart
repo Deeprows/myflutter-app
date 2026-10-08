@@ -1,3 +1,4 @@
+import '../config.dart';
 import '../utils/posted_at.dart';
 class Movie {
   final String name;
@@ -8,6 +9,9 @@ class Movie {
   final List<String> genres;
   final String image;
 
+  /// TMDB id (null for older rows that only have a plain link).
+  final int? tmdbId;
+
   const Movie({
     required this.name,
     required this.url,
@@ -16,7 +20,33 @@ class Movie {
     required this.rating,
     required this.genres,
     required this.image,
+    this.tmdbId,
   });
+
+  /// Player link for a TMDB id.
+  static String embedUrlFor(int tmdbId, {bool tv = false}) =>
+      '${AppConfig.embedBase}/${tv ? 'tv' : 'movie'}/$tmdbId';
+
+  /// Download link for a TMDB id: `<downloadBase>/movie/<id>` or
+  /// `<downloadBase>/tv/<id>`.
+  static String downloadUrlFor(int tmdbId, {bool tv = false}) =>
+      '${AppConfig.downloadBase}/${tv ? 'tv' : 'movie'}/$tmdbId';
+
+  /// A row that only carries a TMDB id and still needs its details.
+  bool get needsDetails => tmdbId != null && name.isEmpty;
+
+  /// Fills empty fields of this row from [o] (the TMDB copy); anything the
+  /// row already sets itself wins.
+  Movie fillFrom(Movie o) => Movie(
+        name: name.isEmpty ? o.name : name,
+        url: url,
+        downloadUrl: downloadUrl,
+        date: date ?? o.date,
+        rating: rating ?? o.rating,
+        genres: genres.isEmpty ? o.genres : genres,
+        image: image.isEmpty ? o.image : image,
+        tmdbId: tmdbId,
+      );
 
   bool get isSeries => url.contains('/embed/tv/');
   bool get hasDownload => downloadUrl.startsWith('http');
@@ -37,8 +67,19 @@ class Movie {
     if (raw is! Map) return null;
     String s(String k) => (raw[k] ?? '').toString().trim();
     final name = s('name');
-    final url = s('url');
-    if (name.isEmpty || !url.startsWith('http')) return null;
+    var url = s('url');
+
+    // A row can be just a TMDB id: {"tmdbId": 9319989, "type": "movie"}
+    // ("type": "tv" for a series). Links are built from the id.
+    final tmdbId = int.tryParse(
+        (raw['tmdbId'] ?? raw['tmdb_id'] ?? raw['tmdb'] ?? '').toString());
+    final tv = const {'tv', 'series', 'show'}
+        .contains((raw['type'] ?? raw['mediaType'] ?? '').toString().toLowerCase());
+    if (tmdbId != null && !url.startsWith('http')) {
+      url = embedUrlFor(tmdbId, tv: tv);
+    }
+    if (!url.startsWith('http')) return null;
+    if (name.isEmpty && tmdbId == null) return null;
 
     var date = s('date');
     var dl = s('downloadUrl');
@@ -46,6 +87,13 @@ class Movie {
     if (!dl.startsWith('http')) {
       if (date.isEmpty && RegExp(r'^\d{4}-\d\d-\d\d').hasMatch(dl)) date = dl;
       dl = '';
+    }
+    if (dl.isEmpty && tmdbId != null) {
+      if (url.contains('/embed/tv/')) {
+        dl = downloadUrlFor(tmdbId, tv: true);
+      } else if (url.contains('/embed/movie/')) {
+        dl = downloadUrlFor(tmdbId);
+      }
     }
 
     return Movie(
@@ -60,6 +108,7 @@ class Movie {
           .where((e) => e.isNotEmpty)
           .toList(),
       image: s('image'),
+      tmdbId: tmdbId,
     );
   }
 
