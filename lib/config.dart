@@ -98,6 +98,9 @@ class AppConfig {
   /// Worker (`PRICE_NGN`, default 2000) so one change updates every phone.
   static const premiumPriceFallbackNgn = 2000;
 
+  /// Yearly price shown until the Worker answers (set PRICE_NGN_YEAR there).
+  static const premiumYearPriceFallbackNgn = 20000;
+
   /// WhatsApp chat for people who cannot pay online (manual activation).
   /// Example: `https://wa.me/2348012345678`. Empty = the button tells the
   /// person it is coming soon. The app adds the person's ID to the message.
