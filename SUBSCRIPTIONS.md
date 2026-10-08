@@ -1,3 +1,5 @@
+> **Premium is temporarily hidden** (`AppConfig.showSubscriptions = false`). Set it to `true` to show the plans page, menu item and "go Premium" button again.
+
 # Free & Premium (Paystack)
 
 On start the app shows a plans page.
