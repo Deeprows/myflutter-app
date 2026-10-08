@@ -81,15 +81,51 @@ class AppConfig {
   static const tickerUrl =
       'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/ticker.json';
 
-  /// "We Need Your Support" overlay. It appears when a fixture, highlight or
-  /// movie card is tapped, at most once every [supportIntervalHours].
+  /// ---- Free vs Premium ---------------------------------------------------
   ///
-  /// [supportUrl]: the page opened by the CLICK HERE button (your ad / smart
-  /// link). LEAVE EMPTY TO TURN THE OVERLAY OFF.
+  /// On start the app shows a plans page: FREE (everything, with the
+  /// "We Need Your Support" page every [adIntervalMinutes] minutes of use) or
+  /// PREMIUM (no ads, paid through Paystack). Needs [feedBase] (the Worker
+  /// does the payment work, see SUBSCRIPTIONS.md). false = no plans page and
+  /// no ads for anyone.
+  static const plansEnabled = true;
+
+  /// true: the plans page shows on every launch for people who are not
+  /// premium. false: only on the first launch and after a premium ends.
+  static const showPlansEveryStart = true;
+
+  /// Shown only until the Worker answers; the real price lives in the
+  /// Worker (`PRICE_NGN`, default 2000) so one change updates every phone.
+  static const premiumPriceFallbackNgn = 2000;
+
+  /// WhatsApp chat for people who cannot pay online (manual activation).
+  /// Example: `https://wa.me/2348012345678`. Empty = the button tells the
+  /// person it is coming soon. The app adds the person's ID to the message.
+  static const whatsappUrl = '';
+  static const whatsappMessage =
+      'Hello, I want to pay for Deeprowss Premium manually.';
+
+  /// ---- "We Need Your Support" ad page (free plan) --------------------------
+  ///
+  /// Appears after [adIntervalMinutes] minutes of real use (the clock only
+  /// runs while the app is open on screen and keeps counting across
+  /// launches). Premium people never see it. The person opens
+  /// [supportUrl] (your ad / smart link) and the page closes by itself after
+  /// [supportViewSeconds].
+  /// [supportUrl] empty = no ads at all.
   static const supportUrl =
       'https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60';
-  static const supportIntervalHours = 12;
+  static const adIntervalMinutes = 15;
   static const supportViewSeconds = 13; // page auto-closes after this long
+
+  /// If the support page cannot load (offline / dead link) nobody is locked
+  /// out; the overlay comes back after this many minutes of use.
+  static const adRetryMinutes = 3;
+
+  /// The OLD trigger (tap a fixture / highlight / movie card, once every
+  /// [supportIntervalHours]) is switched off. Set true to bring it back.
+  static const supportOnCardTap = false;
+  static const supportIntervalHours = 12;
   static const supportRetryHours =
       1; // if the support page can't load, ask again after
 
