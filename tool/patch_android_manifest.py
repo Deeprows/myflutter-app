@@ -28,6 +28,7 @@ perms = [
     "android.permission.POST_NOTIFICATIONS",
     "android.permission.FOREGROUND_SERVICE",
     "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+    "android.permission.REQUEST_INSTALL_PACKAGES",  # install Deeprows Browser
 ]
 add = ""
 for p in perms:
@@ -41,6 +42,21 @@ if add:
 
 if "usesCleartextTraffic" not in s:
     s = s.replace("<application", '<application android:usesCleartextTraffic="true"', 1)
+
+# Android 11+ only lets an app see another app that is listed in <queries>.
+# The package name comes from lib/config.dart (partnerBrowserPackage).
+try:
+    cfg = open("lib/config.dart", encoding="utf8").read()
+    m = re.search(r"partnerBrowserPackage\s*=\s*'([^']+)'", cfg)
+    partner = m.group(1).strip() if m else ""
+except OSError:
+    partner = ""
+if partner and f'android:name="{partner}"' not in s:
+    tag = f'<package android:name="{partner}"/>'
+    if "<queries>" in s:
+        s = s.replace("<queries>", "<queries>\n        " + tag, 1)
+    else:
+        s = s.replace("<application", f"<queries>\n        {tag}\n    </queries>\n    <application", 1)
 
 s = re.sub(r'android:label="[^"]*"', 'android:label="Deeprowss"', s, count=1)
 
