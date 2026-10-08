@@ -128,7 +128,7 @@ class _SupportOverlayState extends State<SupportOverlay>
                         _topCard(mins, mLabel, secs),
                         const SizedBox(height: 14),
                         _stepsCard(steps),
-                        if (SubscriptionService.instance.enabled) ...[
+                        if (SubscriptionService.instance.visible) ...[
                           const SizedBox(height: 10),
                           _premiumButton(),
                         ],
