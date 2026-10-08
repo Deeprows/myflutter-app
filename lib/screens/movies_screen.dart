@@ -59,6 +59,8 @@ class _MoviesScreenState extends State<MoviesScreen> {
     return Stack(
       fit: StackFit.expand,
       children: [
+        // Base: accent tint fading into the page colour (also the fallback
+        // when there is no poster).
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -74,28 +76,53 @@ class _MoviesScreenState extends State<MoviesScreen> {
             child: SizedBox.expand(
               key: ValueKey(poster.url),
               child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 2.5, sigmaY: 2.5),
-                child: Image.network(
-                  poster.image,
-                  fit: BoxFit.cover,
-                  alignment: const Alignment(0, -.5),
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                imageFilter: ImageFilter.blur(sigmaX: 7, sigmaY: 7),
+                child: ColorFiltered(
+                  // Dim the artwork so white text always stands out.
+                  colorFilter: ColorFilter.mode(
+                      Colors.black.withValues(alpha: .55), BlendMode.darken),
+                  child: Image.network(
+                    poster.image,
+                    fit: BoxFit.cover,
+                    alignment: const Alignment(0, -.5),
+                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                  ),
                 ),
               ),
             ),
           ),
+        // Dark veil: strongest where the text sits, clear fade to the page
+        // colour at the bottom edge (no visible line under the header).
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Ui.bg.withValues(alpha: .55),
-                Ui.red.withValues(alpha: .22),
-                Ui.bg.withValues(alpha: .85),
+                Ui.bg.withValues(alpha: .62),
+                Ui.bg.withValues(alpha: .72),
+                Ui.bg.withValues(alpha: .86),
                 Ui.bg,
               ],
-              stops: const [0, .35, .8, 1],
+              stops: const [0, .45, .8, 1],
+            ),
+          ),
+        ),
+        // Accent glow (lives here, so it is never cut off into a box).
+        Positioned(
+          right: -50,
+          top: -30,
+          child: IgnorePointer(
+            child: Container(
+              width: 220,
+              height: 220,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(colors: [
+                  Ui.red.withValues(alpha: .22),
+                  Colors.transparent,
+                ]),
+              ),
             ),
           ),
         ),
@@ -333,21 +360,6 @@ class _MoviesScreenState extends State<MoviesScreen> {
               padding: EdgeInsets.fromLTRB(16, top + 14, 16, 14),
               child: Stack(
                 children: [
-                  Positioned(
-                    right: -50,
-                    top: -30,
-                    child: Container(
-                      width: 190,
-                      height: 190,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(colors: [
-                          Ui.red.withValues(alpha: .30),
-                          Colors.transparent,
-                        ]),
-                      ),
-                    ),
-                  ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -357,7 +369,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
-                              color: Ui.red.withValues(alpha: .16),
+                              color: Ui.bg.withValues(alpha: .72),
                               borderRadius: BorderRadius.circular(99),
                               border:
                                   Border.all(color: Ui.red.withValues(alpha: .5)),
@@ -373,7 +385,12 @@ class _MoviesScreenState extends State<MoviesScreen> {
                                         fontSize: 11,
                                         letterSpacing: 1,
                                         fontWeight: FontWeight.w900,
-                                        color: Ui.redSoft)),
+                                        color: Ui.redSoft,
+                                        shadows: const [
+                                          Shadow(
+                                              color: Colors.black87,
+                                              blurRadius: 6)
+                                        ])),
                               ],
                             ),
                           ),
@@ -401,9 +418,13 @@ class _MoviesScreenState extends State<MoviesScreen> {
                           const SizedBox(width: 6),
                           Text('Search any movie and watch.',
                               style: TextStyle(
-                                  color: Ui.muted,
+                                  color: Colors.white.withValues(alpha: .88),
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w700)),
+                                  fontWeight: FontWeight.w700,
+                                  shadows: const [
+                                    Shadow(
+                                        color: Colors.black87, blurRadius: 8)
+                                  ])),
                         ],
                       ),
                       const SizedBox(height: 16),
