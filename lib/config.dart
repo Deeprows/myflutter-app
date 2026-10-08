@@ -164,6 +164,22 @@ class AppConfig {
   ///   <altEmbedBase>/tv/<tmdb id>/1/1
   static const altEmbedBase = 'https://web.nxsha.app/embed';
 
+  /// ---- Deeprows Browser promotion (movie Download button) -----------------
+  ///
+  /// Tapping Download on a movie shows a pop-up: get the Deeprows Browser (the
+  /// app downloads + installs it, then opens the movie download page in it)
+  /// or use the phone's own browser. If the browser is already installed the
+  /// page opens straight in it ([partnerOpenDirectIfInstalled]).
+  ///
+  /// [partnerBrowserApkUrl] must be a DIRECT link to the .apk file (not a web
+  /// page). [partnerBrowserPackage] is the browser's Android package name,
+  /// e.g. `com.deeprows.browser`. Either empty = no pop-up, Download opens the
+  /// phone's browser as before.
+  static const partnerBrowserName = 'Deeprows Browser';
+  static const partnerBrowserApkUrl = '';
+  static const partnerBrowserPackage = '';
+  static const partnerOpenDirectIfInstalled = true;
+
   /// Download links:  <downloadBase>/movie/<tmdb id>  and
   ///                  <downloadBase>/tv/<tmdb id>
   static const downloadBase = 'https://web.nxsha.app/dl';
