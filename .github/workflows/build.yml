@@ -70,6 +70,9 @@ jobs:
       - name: Patch MainActivity
         run: python3 tool/patch_main_activity.py
 
+      - name: Patch background playback
+        run: python3 tool/patch_background_playback.py
+
       - name: Configure Kotlin and Java JVM targets
         run: |
           {
