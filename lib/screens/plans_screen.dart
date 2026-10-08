@@ -42,6 +42,8 @@ class _PlansScreenState extends State<PlansScreen> {
   PlanInfo _plan = PlanInfo.fallback();
   String _installId = '';
   bool _auto = false;
+  bool _yearly = false;
+  String _method = 'card'; // card | ussd | bank_transfer | any
   bool _busy = false;
   String? _error;
 
@@ -111,7 +113,9 @@ class _PlansScreenState extends State<PlansScreen> {
     try {
       final start = await _sub.startCheckout(
         email: mail,
-        recurring: _auto && _plan.recurring,
+        recurring: _auto && _canAuto,
+        period: _yearly ? 'year' : 'month',
+        channels: _channels,
       );
       if (!mounted) return;
       final doneUrl =
@@ -144,6 +148,21 @@ class _PlansScreenState extends State<PlansScreen> {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  /// Auto-renew exists only for cards and only when a plan code is set.
+  bool get _canAuto =>
+      _method == 'card' && (_yearly ? _plan.recurringYear : _plan.recurring);
+
+  List<String> get _channels => switch (_method) {
+        'card' => const ['card'],
+        'ussd' => const ['ussd'],
+        'bank_transfer' => const ['bank_transfer'],
+        _ => const [],
+      };
+
+  String get _shownPrice => _yearly ? _plan.yearPriceDisplay : _plan.priceDisplay;
+  String? get _shownLocal => _yearly ? _plan.yearLocalDisplay : _plan.localDisplay;
+  String get _perLabel => _yearly ? 'year' : 'month';
 
   Future<void> _whatsapp() async {
     final uri = buildWhatsappUri(
@@ -360,21 +379,23 @@ class _PlansScreenState extends State<PlansScreen> {
             ),
           ]),
           const SizedBox(height: 12),
+          _periodToggle(),
+          const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text(_plan.priceDisplay,
+              Text(_shownPrice,
                   style: const TextStyle(
                       fontSize: 32, fontWeight: FontWeight.w900)),
-              Text('  / month',
+              Text('  / $_perLabel',
                   style: TextStyle(color: Ui.muted, fontSize: 14)),
             ],
           ),
-          if (_plan.localDisplay != null)
+          if (_shownLocal != null)
             Padding(
               padding: const EdgeInsets.only(top: 2),
-              child: Text('≈ ${_plan.localDisplay} / month in your currency',
+              child: Text('≈ $_shownLocal / $_perLabel in your currency',
                   style: TextStyle(
                       color: Ui.muted,
                       fontSize: 13,
@@ -383,7 +404,8 @@ class _PlansScreenState extends State<PlansScreen> {
           const SizedBox(height: 12),
           feature('No pop-ups'),
           feature('Stream without interruptions'),
-          feature('Pay with card, bank transfer or USSD'),
+          feature('Pay with card, USSD or bank transfer'),
+          feature('Monthly or yearly (save with yearly)'),
           const SizedBox(height: 8),
           TextField(
             controller: _email,
@@ -397,19 +419,21 @@ class _PlansScreenState extends State<PlansScreen> {
               errorMaxLines: 3,
             ),
           ),
-          if (_plan.recurring)
+          if (_canAuto)
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               dense: true,
               value: _auto,
               onChanged: _busy ? null : (v) => setState(() => _auto = v),
-              title: const Text('Renew automatically every month',
+              title: Text('Renew automatically every $_perLabel',
                   style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
-              subtitle: Text('Card only. Otherwise pay again each month.',
+              subtitle: Text('Card only. Otherwise pay again each $_perLabel.',
                   style: TextStyle(color: Ui.muted, fontSize: 12)),
             ),
           const SizedBox(height: 8),
           _paystackStrip(),
+          const SizedBox(height: 10),
+          _methodPicker(),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
@@ -434,8 +458,8 @@ class _PlansScreenState extends State<PlansScreen> {
                                   strokeWidth: 2.5, color: Colors.white))
                           : Text(
                               premium
-                                  ? 'Add 1 more month'
-                                  : 'Subscribe  •  ${_plan.priceDisplay}/month',
+                                  ? 'Add 1 more $_perLabel'
+                                  : 'Pay  •  $_shownPrice/$_perLabel',
                               style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 17,
@@ -466,6 +490,103 @@ class _PlansScreenState extends State<PlansScreen> {
     );
   }
 
+  Widget _periodToggle() {
+    Widget tab(String label, bool yearly, {String? badge}) {
+      final on = _yearly == yearly;
+      return Expanded(
+        child: GestureDetector(
+          onTap: _busy ? null : () => setState(() => _yearly = yearly),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: on ? Ui.red.withValues(alpha: .22) : Colors.transparent,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                  color: on ? Ui.red : Colors.transparent, width: 1.2),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: on ? FontWeight.w900 : FontWeight.w700,
+                        color: on ? null : Ui.muted)),
+                if (badge != null) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Ui.green.withValues(alpha: .2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(badge,
+                        style: TextStyle(
+                            color: Ui.green,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w900)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final save = _plan.yearSavingPercent;
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Ui.bg.withValues(alpha: .5),
+        borderRadius: BorderRadius.circular(21),
+        border: Border.all(color: Ui.line),
+      ),
+      child: Row(children: [
+        tab('Monthly', false),
+        tab('Yearly', true, badge: save > 0 ? 'SAVE $save%' : null),
+      ]),
+    );
+  }
+
+  Widget _methodPicker() {
+    Widget chip(String id, IconData icon, String label) {
+      final on = _method == id;
+      return ChoiceChip(
+        avatar: Icon(icon, size: 16, color: on ? Colors.white : Ui.muted),
+        label: Text(label),
+        selected: on,
+        showCheckmark: false,
+        selectedColor: Ui.red,
+        backgroundColor: Ui.bg.withValues(alpha: .5),
+        side: BorderSide(color: on ? Ui.red : Ui.line),
+        labelStyle: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w800,
+            color: on ? Colors.white : null),
+        onSelected: _busy ? null : (_) => setState(() => _method = id),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Pay with',
+            style: TextStyle(
+                color: Ui.muted, fontSize: 12.5, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        Wrap(spacing: 8, runSpacing: 6, children: [
+          chip('card', Icons.credit_card_rounded, 'Card'),
+          chip('ussd', Icons.dialpad_rounded, 'USSD'),
+          chip('bank_transfer', Icons.account_balance_rounded, 'Bank transfer'),
+          chip('any', Icons.apps_rounded, 'All options'),
+        ]),
+      ],
+    );
+  }
+
   /// Shows that checkout is run by Paystack (card, bank transfer, USSD).
   Widget _paystackStrip() => Container(
         width: double.infinity,
@@ -493,7 +614,7 @@ class _PlansScreenState extends State<PlansScreen> {
               ]),
             ),
           ),
-          Text('Card • Transfer • USSD',
+          Text('Card • USSD • Transfer',
               style: TextStyle(
                   color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w700)),
         ]),
