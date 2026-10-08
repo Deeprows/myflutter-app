@@ -73,6 +73,35 @@ class AppConfig {
   static const supportRetryHours =
       1; // if the support page can't load, ask again after
 
+  /// ---- TMDB (themoviedb.org) -------------------------------------------
+  ///
+  /// The TMDB id is the single key for a title: it is turned into the player
+  /// link and the download link below, and TMDB supplies the name, poster,
+  /// rating, genres and release date.
+  ///
+  /// v3 API key. Override at build time with
+  /// `--dart-define=TMDB_API_KEY=...` (the GitHub workflow can pass a repo
+  /// secret). Leave empty to switch every TMDB feature off.
+  static const tmdbApiKey = String.fromEnvironment(
+    'TMDB_API_KEY',
+    defaultValue: 'b83de997ce0ca0406c12cab7f256e43a',
+  );
+
+  /// Player (embed) links:  <embedBase>/movie/<tmdb id>  and
+  ///                        <embedBase>/tv/<tmdb id>
+  static const embedBase = 'https://vsembed.su/embed';
+
+  /// Download links:  <downloadBase>/movie/<tmdb id>  and
+  ///                  <downloadBase>/tv/<tmdb id>
+  static const downloadBase = 'https://web.nxsha.app/dl';
+
+  /// Adds TMDB's trending movies + series (about 40 titles) after the titles
+  /// listed in `movies.json`. Set to false to show only your own list.
+  static const tmdbTrending = true;
+
+  /// Search box in Movies also searches the whole TMDB catalogue.
+  static const tmdbSearch = true;
+
   /// Used when a fixture has no explicit duration (minutes).
   static const defaultMatchMinutes = 96;
 
