@@ -1,23 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
 import '../theme/app_theme.dart';
 import '../widgets/support_overlay.dart';
+import 'ad_scheduler.dart';
 import 'push_service.dart';
 
-/// The OLD trigger for the "We Need Your Support" overlay (tapping a card).
-/// It is switched off ([AppConfig.supportOnCardTap] = false): free-plan ads
-/// now come from `AdScheduler` every 15 minutes. [guard] just lets the tap
-/// through while it is off. Call [guard] from a card's tap handler:
+/// First-tap trigger for the "We Need Your Support" overlay. Call [guard]
+/// from a card's tap handler:
 ///
 ///   SupportGate.guard(context, () => openThePlayer());
-///
-/// The overlay appears at most once every 12 hours (AppConfig). Either way,
-/// `proceed` runs afterwards so the tapped card still opens.
 class SupportGate {
-  static const _kDone = 'support_last_done_ms';
-  static const _kRetry = 'support_last_retry_ms';
   static bool _showing = false;
 
   /// Pure rule, unit-tested. [lastDoneMs] = last time the support page was
@@ -41,29 +34,28 @@ class SupportGate {
         !within(lastRetryMs, retryHours);
   }
 
+  static bool _shownThisLaunch = false;
+
+  /// True while the first-tap overlay is on screen.
+  static bool get showing => _showing;
+
+  /// Call from a card's tap handler. The FIRST tap in each app launch (free
+  /// plan only) shows the overlay; afterwards `AdScheduler` brings it back
+  /// every [AppConfig.adIntervalMinutes] minutes. Either way [proceed] runs
+  /// afterwards so the tapped item still opens.
   static Future<void> guard(BuildContext context, VoidCallback proceed) async {
     if (_showing) return; // ignore a second tap while the overlay is up
-    if (!AppConfig.supportOnCardTap || AppConfig.supportUrl.trim().isEmpty) {
+    final ads = AdScheduler.instance;
+    if (!AppConfig.supportOnFirstTap ||
+        _shownThisLaunch ||
+        !ads.adsOn ||
+        ads.isShowing ||
+        !context.mounted) {
       proceed();
       return;
     }
 
-    SharedPreferences? prefs;
-    var due = false;
-    try {
-      prefs = await SharedPreferences.getInstance();
-      due = isDue(
-        nowMs: DateTime.now().millisecondsSinceEpoch,
-        lastDoneMs: prefs.getInt(_kDone),
-        lastRetryMs: prefs.getInt(_kRetry),
-      );
-    } catch (_) {}
-
-    if (!due || prefs == null || !context.mounted) {
-      proceed();
-      return;
-    }
-
+    _shownThisLaunch = true;
     _showing = true;
     SupportChoice? choice;
     try {
@@ -72,16 +64,12 @@ class SupportGate {
       _showing = false;
     }
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    try {
-      if (choice == SupportChoice.supported) {
-        await prefs.setInt(_kDone, now);
-      } else {
-        await prefs.setInt(_kRetry, now);
-      }
-    } catch (_) {}
-
-    if (choice == SupportChoice.supported) showThanks();
+    if (choice == SupportChoice.supported) {
+      ads.restartClock(); // next overlay in a full interval
+      showThanks();
+    } else if (choice == SupportChoice.premium) {
+      ads.restartClock();
+    }
     proceed();
   }
 
