@@ -129,7 +129,7 @@ class _PlansScreenState extends State<PlansScreen> {
       if (!mounted) return;
       switch (result) {
         case PaymentResult.active:
-          _toast('Premium is on. Thank you! 💗');
+          await _showAccessCode(start.reference, mail);
         case PaymentResult.pending:
           _toast('Your payment is still being confirmed. It switches on '
               'by itself in a few minutes.');
@@ -381,7 +381,7 @@ class _PlansScreenState extends State<PlansScreen> {
                       fontWeight: FontWeight.w600)),
             ),
           const SizedBox(height: 12),
-          feature('No “We Need Your Support” pop-ups'),
+          feature('No pop-ups'),
           feature('Stream without interruptions'),
           feature('Pay with card, bank transfer or USSD'),
           const SizedBox(height: 8),
@@ -408,7 +408,9 @@ class _PlansScreenState extends State<PlansScreen> {
               subtitle: Text('Card only. Otherwise pay again each month.',
                   style: TextStyle(color: Ui.muted, fontSize: 12)),
             ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
+          _paystackStrip(),
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: DecoratedBox(
@@ -444,6 +446,14 @@ class _PlansScreenState extends State<PlansScreen> {
               ),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Text(
+                'Pay securely with Paystack. Premium turns on automatically '
+                'and your receipt is sent to your e-mail.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.3)),
+          ),
           if (!_plan.available)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -451,6 +461,89 @@ class _PlansScreenState extends State<PlansScreen> {
                   'Use WhatsApp below.',
                   style: TextStyle(color: Ui.muted, fontSize: 12.5)),
             ),
+        ],
+      ),
+    );
+  }
+
+  /// Shows that checkout is run by Paystack (card, bank transfer, USSD).
+  Widget _paystackStrip() => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Ui.bg.withValues(alpha: .5),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Ui.line),
+        ),
+        child: Row(children: [
+          Icon(Icons.lock_rounded, size: 18, color: Ui.green),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text.rich(
+              TextSpan(children: [
+                TextSpan(
+                    text: 'Secured by ',
+                    style: TextStyle(color: Ui.muted, fontSize: 12.5)),
+                const TextSpan(
+                    text: 'Paystack',
+                    style: TextStyle(
+                        color: Color(0xFF00C3F7),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900)),
+              ]),
+            ),
+          ),
+          Text('Card • Transfer • USSD',
+              style: TextStyle(
+                  color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w700)),
+        ]),
+      );
+
+  /// Shown once a payment succeeds: the payment reference is the access
+  /// code (works with "Restore purchase" on any phone).
+  Future<void> _showAccessCode(String reference, String email) async {
+    if (reference.isEmpty) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Ui.panel,
+        title: const Text('Payment received 🎉'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Premium is on. Your access code:',
+                style: TextStyle(color: Ui.muted, fontSize: 13)),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Ui.bg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Ui.line),
+              ),
+              child: SelectableText(reference,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w800)),
+            ),
+            const SizedBox(height: 10),
+            Text(
+                'Your receipt was sent to $email. Keep this code: use '
+                '"Restore purchase" with it if you change phone.',
+                style: TextStyle(color: Ui.muted, fontSize: 12.5, height: 1.3)),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: reference));
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) _toast('Access code copied');
+              },
+              child: const Text('Copy')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
         ],
       ),
     );
