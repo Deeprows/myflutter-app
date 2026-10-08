@@ -12,6 +12,7 @@ dependencies:
   webview_flutter: ^4.10.0
   webview_flutter_android: ^4.5.0
   wakelock_plus: ^1.2.10
+  video_player: ^2.9.2
   http: ^1.5.0
   shared_preferences: ^2.5.5
   url_launcher: ^6.3.1
