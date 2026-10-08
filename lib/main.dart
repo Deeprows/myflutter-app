@@ -7,6 +7,7 @@ import 'app.dart';
 import 'services/analytics_service.dart';
 import 'services/download_manager.dart';
 import 'services/push_service.dart';
+import 'services/subscription_service.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -17,6 +18,9 @@ Future<void> main() async {
   ]);
 
   await ThemeController.load();
+
+  // Free / Premium: reads the saved copy only; the Worker is asked later.
+  await SubscriptionService.instance.init();
 
   await DownloadManager.instance.init();
 
