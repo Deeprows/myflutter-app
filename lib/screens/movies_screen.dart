@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../config.dart';
@@ -6,6 +8,7 @@ import '../models/push_target.dart';
 import '../services/feed_service.dart';
 import '../services/push_service.dart';
 import '../services/support_gate.dart';
+import '../services/tmdb_service.dart';
 import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_refresh.dart';
@@ -29,6 +32,8 @@ class _MoviesScreenState extends State<MoviesScreen> {
   bool _loading = true;
   String _query = '';
   String? _genre;
+  List<Movie> _found = const []; // TMDB search results
+  Timer? _debounce;
   final _search = TextEditingController();
 
   @override
@@ -76,6 +81,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
   void dispose() {
     PushService.instance.target.removeListener(_onTarget);
     ContentSync.tick.removeListener(_onSync);
+    _debounce?.cancel();
     _search.dispose();
     super.dispose();
   }
@@ -88,6 +94,21 @@ class _MoviesScreenState extends State<MoviesScreen> {
       _loading = false;
     });
     _afterLoad(last: remote || AppConfig.moviesUrl.isEmpty);
+  }
+
+  /// Searches the whole TMDB catalogue shortly after typing stops.
+  void _onQuery(String v) {
+    setState(() => _query = v);
+    _debounce?.cancel();
+    if (!AppConfig.tmdbSearch || !TmdbService.enabled || v.trim().length < 2) {
+      if (_found.isNotEmpty) setState(() => _found = const []);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 450), () async {
+      final res = await tmdb.search(v);
+      if (!mounted || _query.trim() != v.trim()) return;
+      setState(() => _found = res);
+    });
   }
 
   List<String> get _genres {
@@ -140,6 +161,15 @@ class _MoviesScreenState extends State<MoviesScreen> {
       if (_genre != null && !m.genres.contains(_genre)) return false;
       return q.isEmpty || m.name.toLowerCase().contains(q);
     }).toList();
+    if (q.isNotEmpty) {
+      // Add TMDB search hits that are not already in the list.
+      final urls = {for (final m in _all) m.url};
+      final ids = {for (final m in _all) if (m.tmdbId != null) m.tmdbId};
+      for (final m in _found) {
+        if (_genre != null && !m.genres.contains(_genre)) continue;
+        if (!urls.contains(m.url) && !ids.contains(m.tmdbId)) filtered.add(m);
+      }
+    }
     final top = MediaQuery.of(context).padding.top;
 
     return AppRefresh(
@@ -192,7 +222,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                       const SizedBox(height: 14),
                       TextField(
                         controller: _search,
-                        onChanged: (v) => setState(() => _query = v),
+                        onChanged: _onQuery,
                         textInputAction: TextInputAction.search,
                         decoration: InputDecoration(
                           hintText: 'Search movies',
@@ -205,7 +235,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                                   icon: const Icon(Icons.close_rounded),
                                   onPressed: () {
                                     _search.clear();
-                                    setState(() => _query = '');
+                                    _onQuery('');
                                   },
                                 ),
                           filled: true,
