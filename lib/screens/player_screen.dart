@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:flutter/material.dart';
 import '../services/pip_service.dart';
@@ -17,6 +19,7 @@ import '../services/tmdb_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/live_dot.dart';
 import '../widgets/match_chat.dart';
+import '../widgets/movie_card.dart' show MoviePoster;
 import '../widgets/movie_info_panel.dart';
 import 'browser_screen.dart' show siteOf;
 
@@ -406,40 +409,111 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Title block with the movie's artwork as a faded background: TMDB's wide
+  /// backdrop when it has one, otherwise the poster, blurred.
+  Widget _movieHeader(MovieInfo? info) {
+    final m = widget.movie!;
+    final wide = info != null && info.backdrop.isNotEmpty;
+    final bg = wide ? info.backdrop : m.image;
+    Widget art = Image.network(
+      bg,
+      fit: BoxFit.cover,
+      alignment: Alignment.topCenter,
+      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+    );
+    if (!wide) {
+      art = ImageFiltered(
+        imageFilter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: art,
+      );
+    }
+    return ClipRect(
+      child: Stack(
+        children: [
+          if (bg.startsWith('http')) Positioned.fill(child: art),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Ui.bg.withValues(alpha: bg.startsWith('http') ? .35 : 0),
+                    Ui.bg.withValues(alpha: .78),
+                    Ui.bg,
+                  ],
+                  stops: const [0, .62, 1],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  width: 100,
+                  height: 150,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withValues(alpha: .55),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8)),
+                    ],
+                  ),
+                  child: MoviePoster(movie: m),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(widget.title,
+                          style: const TextStyle(
+                              fontSize: 22,
+                              height: 1.15,
+                              fontWeight: FontWeight.w900)),
+                      if (widget.subtitle != null) ...[
+                        const SizedBox(height: 6),
+                        Text(widget.subtitle!,
+                            style: TextStyle(
+                                color: Ui.muted,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                      if (info != null && info.tagline.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(info.tagline,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: Ui.dim,
+                                fontSize: 12.5,
+                                fontStyle: FontStyle.italic)),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Movie / series page: title, slim controls, then the TMDB details.
   Widget _movieBody() {
     final info = _info;
     return ListView(
       padding: const EdgeInsets.only(bottom: 28),
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(widget.title,
-                  style: const TextStyle(
-                      fontSize: 22, height: 1.15, fontWeight: FontWeight.w900)),
-              if (widget.subtitle != null) ...[
-                const SizedBox(height: 5),
-                Text(widget.subtitle!,
-                    style: TextStyle(
-                        color: Ui.muted,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
-              ],
-              if (info != null && info.tagline.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(info.tagline,
-                    style: TextStyle(
-                        color: Ui.dim,
-                        fontSize: 13,
-                        fontStyle: FontStyle.italic)),
-              ],
-            ],
-          ),
-        ),
-        _compactControls(side: 16, top: 14),
+        _movieHeader(info),
+        _compactControls(side: 16, top: 6),
         MovieInfoPanel(
             movie: widget.movie!, info: info, loading: _infoLoading),
       ],
