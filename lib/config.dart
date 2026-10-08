@@ -176,8 +176,8 @@ class AppConfig {
   /// e.g. `com.deeprows.browser`. Either empty = no pop-up, Download opens the
   /// phone's browser as before.
   static const partnerBrowserName = 'Deeprows Browser';
-  static const partnerBrowserApkUrl = '';
-  static const partnerBrowserPackage = '';
+  static const partnerBrowserApkUrl = 'https://github.com/Deeprows/Deeprowss-browser-updated-2/releases/download/v0.1.4/app-release.apk';
+  static const partnerBrowserPackage = 'com.deeprows.browser';
   static const partnerOpenDirectIfInstalled = true;
 
   /// Download links:  <downloadBase>/movie/<tmdb id>  and
