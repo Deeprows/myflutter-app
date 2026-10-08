@@ -4,6 +4,7 @@ import 'package:footbolive/models/channel.dart';
 import 'package:footbolive/models/fixture.dart';
 import 'package:footbolive/models/highlight.dart';
 import 'package:footbolive/models/movie.dart';
+import 'package:footbolive/models/movie_info.dart';
 import 'package:footbolive/services/tmdb_service.dart';
 import 'package:footbolive/models/push_target.dart';
 import 'package:footbolive/utils/posted_at.dart';
@@ -154,6 +155,16 @@ void main() {
       expect(m.title, 'X');
     });
 
+    test('genre spellings are unified', () {
+      final m = Movie.tryParse({
+        'name': 'X 2022',
+        'url': 'https://a.com/e',
+        'genre': 'Science Fiction,Sci-fi,Drama',
+      })!;
+      expect(m.genres, ['Sci-Fi', 'Drama']);
+      expect(Movie.genreNames('Action & Adventure'), ['Action', 'Adventure']);
+    });
+
     test('a TMDB id alone builds the player and download links', () {
       final m = Movie.tryParse({'tmdbId': 9319989, 'type': 'movie'})!;
       expect(m.url, 'https://vsembed.su/embed/movie/9319989');
@@ -189,6 +200,57 @@ void main() {
       expect(s.url, 'https://vsembed.su/embed/tv/1396');
       expect(s.downloadUrl, 'https://web.nxsha.app/dl/tv/1396');
       expect(TmdbService.fromJson({'id': 1, 'media_type': 'person'}), isNull);
+    });
+  });
+
+  group('MovieInfo', () {
+    test('parses TMDB details with credits', () {
+      final i = MovieInfo.fromJson({
+        'overview': 'A story.',
+        'tagline': 'Hunt.',
+        'runtime': 104,
+        'status': 'Released',
+        'release_date': '2024-05-01',
+        'genres': [
+          {'name': 'Science Fiction'},
+          {'name': 'Drama'}
+        ],
+        'spoken_languages': [
+          {'english_name': 'English'}
+        ],
+        'credits': {
+          'cast': [
+            {'name': 'A B', 'character': 'Lead', 'profile_path': '/x.jpg'},
+            {'name': 'C D', 'character': '', 'profile_path': null},
+          ],
+          'crew': [
+            {'name': 'Dir One', 'job': 'Director'},
+            {'name': 'Someone', 'job': 'Writer'},
+          ],
+        },
+      }, tv: false)!;
+      expect(i.runtimeText, '1h 44m');
+      expect(i.genres, ['Sci-Fi', 'Drama']);
+      expect(i.directors, ['Dir One']);
+      expect(i.cast.length, 2);
+      expect(i.cast.first.photo, 'https://image.tmdb.org/t/p/w185/x.jpg');
+      expect(i.cast.last.hasPhoto, isFalse);
+      expect(i.language, 'English');
+    });
+
+    test('series use creators and season counts', () {
+      final i = MovieInfo.fromJson({
+        'overview': 'x',
+        'number_of_seasons': 5,
+        'number_of_episodes': 62,
+        'episode_run_time': [47],
+        'created_by': [
+          {'name': 'Vince'}
+        ],
+      }, tv: true)!;
+      expect(i.directors, ['Vince']);
+      expect(i.seasons, 5);
+      expect(i.runtimeText, '47m');
     });
   });
 
