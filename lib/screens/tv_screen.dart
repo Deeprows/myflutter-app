@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../models/channel.dart';
 import '../services/feed_service.dart';
+import '../services/support_gate.dart';
 import '../services/content_sync.dart';
 import '../services/nexus_service.dart';
 import '../theme/app_theme.dart';
@@ -78,6 +79,12 @@ class _TvScreenState extends State<TvScreen> {
   }
 
   void _open(Channel c) {
+    SupportGate.guard(context, () {
+      if (mounted) _openNow(c);
+    });
+  }
+
+  void _openNow(Channel c) {
     // HLS / DASH / video links: native player (real Referer + User-Agent).
     // Embed pages (and anything it can't handle) keep using the web player.
     if (AppConfig.nativeTvPlayer && nativePlayable(c.url)) {
