@@ -111,6 +111,9 @@ class SubscriptionService extends ChangeNotifier {
   bool get enabled =>
       AppConfig.plansEnabled && AppConfig.feedBase.trim().isNotEmpty;
 
+  /// Whether Premium is shown to people (AppConfig.showSubscriptions).
+  bool get visible => enabled && AppConfig.showSubscriptions;
+
   bool get isPremium => _expires != null && _expires!.isAfter(DateTime.now());
   DateTime? get expiresAt => _expires;
 
