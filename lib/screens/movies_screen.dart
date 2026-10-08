@@ -14,7 +14,6 @@ import '../theme/app_theme.dart';
 import '../widgets/app_refresh.dart';
 import '../utils/format.dart';
 import '../widgets/movie_card.dart';
-import '../widgets/pitch_painter.dart';
 import '../services/download_manager.dart';
 import 'browser_screen.dart';
 import 'downloads_screen.dart';
@@ -32,7 +31,10 @@ class _MoviesScreenState extends State<MoviesScreen> {
   bool _loading = true;
   String _query = '';
   String? _genre;
+  String? _type; // null = all, 'movie' or 'tv'
   List<Movie> _found = const []; // TMDB search results
+  final Map<String, List<Movie>> _discover = {}; // TMDB titles per category
+  bool _discovering = false;
   Timer? _debounce;
   final _search = TextEditingController();
 
@@ -111,6 +113,25 @@ class _MoviesScreenState extends State<MoviesScreen> {
     });
   }
 
+  void _pickGenre(String g) {
+    setState(() => _genre = _genre == g ? null : g);
+    _fetchDiscover();
+  }
+
+  /// Loads TMDB's popular titles for the selected category.
+  Future<void> _fetchDiscover({bool force = false}) async {
+    final g = _genre;
+    if (g == null || !AppConfig.tmdbCategories || !TmdbService.enabled) return;
+    if (!force && _discover.containsKey(g)) return;
+    setState(() => _discovering = true);
+    final res = await tmdb.discover(g);
+    if (!mounted) return;
+    setState(() {
+      _discover[g] = res;
+      _discovering = false;
+    });
+  }
+
   List<String> get _genres {
     final counts = <String, int>{};
     for (final m in _all) {
@@ -120,7 +141,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
     }
     final keys = counts.keys.toList()
       ..sort((a, b) => counts[b]!.compareTo(counts[a]!));
-    return keys.take(8).toList();
+    return keys.take(12).toList();
   }
 
   void _play(Movie m) {
@@ -133,6 +154,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
           if (m.rating != null) '★ ${m.rating}',
         ].join(' · '),
         url: m.url,
+        movie: m,
       ),
     ));
   }
@@ -157,24 +179,44 @@ class _MoviesScreenState extends State<MoviesScreen> {
   @override
   Widget build(BuildContext context) {
     final q = _query.trim().toLowerCase();
+    bool typeOk(Movie m) => _type == null || m.isSeries == (_type == 'tv');
+    bool genreOk(Movie m) => _genre == null || m.genres.contains(_genre);
     final filtered = _all.where((m) {
-      if (_genre != null && !m.genres.contains(_genre)) return false;
+      if (!typeOk(m) || !genreOk(m)) return false;
       return q.isEmpty || m.name.toLowerCase().contains(q);
     }).toList();
+
+    // TMDB titles from the search box and from the selected category come
+    // after the ones in your own list.
+    final urls = {for (final m in _all) m.url};
+    final ids = {for (final m in _all) if (m.tmdbId != null) m.tmdbId};
+    void addExtra(Movie m, {required bool matchName}) {
+      if (!typeOk(m) || !genreOk(m)) return;
+      if (matchName && q.isNotEmpty && !m.name.toLowerCase().contains(q)) {
+        return;
+      }
+      if (urls.contains(m.url) || ids.contains(m.tmdbId)) return;
+      urls.add(m.url);
+      filtered.add(m);
+    }
+
     if (q.isNotEmpty) {
-      // Add TMDB search hits that are not already in the list.
-      final urls = {for (final m in _all) m.url};
-      final ids = {for (final m in _all) if (m.tmdbId != null) m.tmdbId};
       for (final m in _found) {
-        if (_genre != null && !m.genres.contains(_genre)) continue;
-        if (!urls.contains(m.url) && !ids.contains(m.tmdbId)) filtered.add(m);
+        addExtra(m, matchName: false);
+      }
+    }
+    if (_genre != null) {
+      for (final m in _discover[_genre] ?? const <Movie>[]) {
+        addExtra(m, matchName: true);
       }
     }
     final top = MediaQuery.of(context).padding.top;
 
     return AppRefresh(
       onRefresh: () async {
+        _discover.clear();
         await _load(remote: true);
+        await _fetchDiscover(force: true);
         return !feed.lastRemoteFailed;
       },
       child: CustomScrollView(
@@ -182,78 +224,135 @@ class _MoviesScreenState extends State<MoviesScreen> {
         slivers: [
           SliverToBoxAdapter(
             child: Container(
-              padding: EdgeInsets.fromLTRB(16, top + 16, 16, 12),
+              padding: EdgeInsets.fromLTRB(16, top + 14, 16, 14),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Ui.red.withValues(alpha: .20), Ui.bg],
+                  colors: [Ui.red.withValues(alpha: .28), Ui.bg],
                 ),
               ),
               child: Stack(
                 children: [
-                  const Positioned.fill(
-                      child: CustomPaint(painter: PitchPainter())),
+                  Positioned(
+                    right: -50,
+                    top: -30,
+                    child: Container(
+                      width: 190,
+                      height: 190,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(colors: [
+                          Ui.red.withValues(alpha: .30),
+                          Colors.transparent,
+                        ]),
+                      ),
+                    ),
+                  ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          const Expanded(
-                            child: Text('Movies',
-                                style: TextStyle(
-                                    fontSize: 26,
-                                    height: 1.1,
-                                    fontWeight: FontWeight.w900)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Ui.red.withValues(alpha: .16),
+                              borderRadius: BorderRadius.circular(99),
+                              border:
+                                  Border.all(color: Ui.red.withValues(alpha: .5)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.local_fire_department_rounded,
+                                    size: 14, color: Ui.redSoft),
+                                const SizedBox(width: 5),
+                                Text('TRENDING NOW',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        letterSpacing: 1,
+                                        fontWeight: FontWeight.w900,
+                                        color: Ui.redSoft)),
+                              ],
+                            ),
                           ),
+                          const Spacer(),
                           const _DownloadsButton(),
                         ],
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _loading
-                            ? 'Loading…'
-                            : '${_all.length} movies and series',
-                        style: TextStyle(
-                            color: Ui.muted,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600),
+                      const SizedBox(height: 12),
+                      ShaderMask(
+                        shaderCallback: (r) => LinearGradient(
+                                colors: [Colors.white, Ui.redSoft])
+                            .createShader(r),
+                        child: const Text('Top Movies & Series\nDatabase',
+                            style: TextStyle(
+                                fontSize: 29,
+                                height: 1.1,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white)),
                       ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        controller: _search,
-                        onChanged: _onQuery,
-                        textInputAction: TextInputAction.search,
-                        decoration: InputDecoration(
-                          hintText: 'Search movies',
-                          hintStyle: TextStyle(color: Ui.dim),
-                          prefixIcon:
-                              Icon(Icons.search_rounded, color: Ui.muted),
-                          suffixIcon: _query.isEmpty
-                              ? null
-                              : IconButton(
-                                  icon: const Icon(Icons.close_rounded),
-                                  onPressed: () {
-                                    _search.clear();
-                                    _onQuery('');
-                                  },
-                                ),
-                          filled: true,
-                          fillColor: Ui.card,
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 12),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(color: Ui.line),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(color: Ui.line),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                                color: Ui.red.withValues(alpha: .7)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(Icons.play_circle_fill_rounded,
+                              size: 17, color: Ui.red),
+                          const SizedBox(width: 6),
+                          Text('Search any movie and watch.',
+                              style: TextStyle(
+                                  color: Ui.muted,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                                color: Ui.red.withValues(alpha: .28),
+                                blurRadius: 22,
+                                offset: const Offset(0, 6)),
+                          ],
+                        ),
+                        child: TextField(
+                          controller: _search,
+                          onChanged: _onQuery,
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration(
+                            hintText: 'Search any movie or series…',
+                            hintStyle: TextStyle(color: Ui.dim),
+                            prefixIcon:
+                                Icon(Icons.search_rounded, color: Ui.muted),
+                            suffixIcon: _query.isEmpty
+                                ? null
+                                : IconButton(
+                                    icon: const Icon(Icons.close_rounded),
+                                    onPressed: () {
+                                      _search.clear();
+                                      _onQuery('');
+                                    },
+                                  ),
+                            filled: true,
+                            fillColor: Ui.card,
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 14),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(color: Ui.line),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(color: Ui.line),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                  color: Ui.red.withValues(alpha: .8)),
+                            ),
                           ),
                         ),
                       ),
@@ -270,15 +369,23 @@ class _MoviesScreenState extends State<MoviesScreen> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
                 children: [
-                  _Pill('All', _genre == null,
-                      () => setState(() => _genre = null)),
+                  _Pill('All', _genre == null && _type == null,
+                      () => setState(() {
+                            _genre = null;
+                            _type = null;
+                          })),
+                  _Pill('Movies', _type == 'movie',
+                      () => setState(
+                          () => _type = _type == 'movie' ? null : 'movie')),
+                  _Pill('Series', _type == 'tv',
+                      () => setState(() => _type = _type == 'tv' ? null : 'tv')),
                   for (final g in _genres)
-                    _Pill(g, _genre == g, () => setState(() => _genre = g)),
+                    _Pill(g, _genre == g, () => _pickGenre(g)),
                 ],
               ),
             ),
           ),
-          if (_loading)
+          if (_loading || (filtered.isEmpty && _discovering))
             SliverFillRemaining(
               hasScrollBody: false,
               child: Center(child: CircularProgressIndicator(color: Ui.red)),
