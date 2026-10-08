@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../config.dart';
+import '../services/background_playback.dart';
 import '../services/stream_resolver.dart';
 import '../theme/app_theme.dart';
 import 'player_screen.dart';
@@ -62,7 +63,8 @@ class NativePlayerScreen extends StatefulWidget {
   State<NativePlayerScreen> createState() => _NativePlayerScreenState();
 }
 
-class _NativePlayerScreenState extends State<NativePlayerScreen> {
+class _NativePlayerScreenState extends State<NativePlayerScreen>
+    with WidgetsBindingObserver {
   VideoPlayerController? _c;
   int _idx = 0;
   int _gen = 0; // bumps on every start, so stale async work can bail out
@@ -83,11 +85,46 @@ class _NativePlayerScreenState extends State<NativePlayerScreen> {
   void initState() {
     super.initState();
     WakelockPlus.enable();
+    WidgetsBinding.instance.addObserver(this);
+    BackgroundPlayback.start(widget.title, _onStopTapped);
     _start(0);
+  }
+
+  /// "Stop" on the background-playback notification: close the player.
+  void _onStopTapped() {
+    if (mounted) Navigator.of(context).maybePop();
+  }
+
+  bool _wasPlaying = false;
+
+  /// Keeps the stream going when the app is minimised; if the player paused
+  /// itself because the video surface went away, start it again.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final c = _c;
+    if (c == null || !c.value.isInitialized) return;
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _wasPlaying = _wasPlaying || c.value.isPlaying;
+      for (final ms in const [300, 1200]) {
+        Future.delayed(Duration(milliseconds: ms), () {
+          final cur = _c;
+          if (mounted && cur != null && _wasPlaying && !cur.value.isPlaying) {
+            cur.play();
+          }
+        });
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      if (_wasPlaying && !c.value.isPlaying) c.play();
+      _wasPlaying = false;
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    BackgroundPlayback.stop(_onStopTapped);
     _hide?.cancel();
     _gen++;
     final c = _c;
