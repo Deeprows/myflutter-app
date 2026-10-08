@@ -34,6 +34,13 @@ class PlayerScreen extends StatefulWidget {
   final String? altUrl;
   final bool isLive;
 
+  /// Optional per-stream headers (IPTV Nexus). The referer becomes the
+  /// player page origin; the user agent replaces the default one.
+  final String? referer;
+  final String? userAgent;
+  final String? altReferer;
+  final String? altUserAgent;
+
   /// Set for football matches ("Home vs Away"): the stream page then shows
   /// the compact controls and the live chat instead of the info panel.
   final String? chatMatch;
@@ -48,6 +55,10 @@ class PlayerScreen extends StatefulWidget {
     required this.url,
     this.subtitle,
     this.altUrl,
+    this.referer,
+    this.userAgent,
+    this.altReferer,
+    this.altUserAgent,
     this.isLive = false,
     this.chatMatch,
     this.movie,
@@ -68,7 +79,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
         widget.altUrl!.trim() != widget.url.trim())
       widget.altUrl!,
   ];
+  late final List<String?> _referers = [
+    widget.referer,
+    if (_sources.length > 1) widget.altReferer,
+  ];
+  late final List<String?> _agents = [
+    widget.userAgent,
+    if (_sources.length > 1) widget.altUserAgent,
+  ];
   int _srcIdx = 0;
+
+  /// Page origin for the built-in player. Uses the stream's own referer when
+  /// it has one. Plain http:// streams get an http:// origin, because a
+  /// WebView blocks http requests made from an https page (mixed content).
+  String _playerBase(String streamUrl) {
+    final ref = (_referers[_srcIdx] ?? '').trim();
+    if (ref.startsWith('http://') || ref.startsWith('https://')) return ref;
+    if (streamUrl.toLowerCase().startsWith('http://')) {
+      return AppConfig.playerOrigin.replaceFirst('https://', 'http://');
+    }
+    return AppConfig.playerOrigin;
+  }
 
   bool _error = false;
   bool _settled = false;
@@ -173,11 +204,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ..clear()
       ..add(siteOf(_initialHost));
     try {
+      await _wc.setUserAgent(_agents[_srcIdx] ?? AppConfig.userAgent);
       if (s.usesHtmlPlayer) {
         final low = await Settings.forceLowQuality();
         await _wc.loadHtmlString(
           buildPlayerHtml(s, lowQuality: low),
-          baseUrl: AppConfig.playerOrigin,
+          baseUrl: _playerBase(s.url),
         );
       } else {
         await _wc.loadRequest(Uri.parse(s.url));
