@@ -30,7 +30,9 @@
  *   /sub/admin         grant / revoke manually (WhatsApp payers)
  *   Settings: PAYSTACK_SECRET_KEY (secret), PAYSTACK_PLAN_CODE (optional),
  *             ADMIN_TOKEN (secret, falls back to STATS_TOKEN),
- *             PRICE_NGN (optional, default 2000), DB (D1 binding)
+ *             PRICE_NGN (optional, default 2000), PRICE_NGN_YEAR (optional,
+ *             default 20000), PAYSTACK_PLAN_CODE_YEAR (optional),
+ *             DB (D1 binding)
  *
  * Analytics: only an anonymous random install id, app version, platform and
  * country are recorded. Subscriptions store the install id and the e-mail
@@ -886,6 +888,7 @@ ${body}
 
 const DAY_MS = 86400000;
 const PERIOD_DAYS = 31; // one paid month, with a day of slack for renewals
+const YEAR_DAYS = 366; // one paid year, with a day of slack
 const ID_RE = /^[a-z0-9]{16,64}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -893,6 +896,17 @@ let schemaReady = false;
 
 const priceNgn = (env) =>
   Math.max(1, parseInt(env.PRICE_NGN ?? "2000", 10) || 2000);
+
+// Yearly price (default 20,000 = two months free). Change PRICE_NGN_YEAR.
+const priceYearNgn = (env) =>
+  Math.max(1, parseInt(env.PRICE_NGN_YEAR ?? "20000", 10) || 20000);
+
+/** "year" or "month". Renewals carry no metadata, so fall back to the amount. */
+function periodOf(env, tx) {
+  const p = String(tx?.metadata?.period || "");
+  if (p === "year" || p === "month") return p;
+  return Number(tx?.amount) >= priceYearNgn(env) * 100 ? "year" : "month";
+}
 
 async function ensureSchema(env) {
   if (schemaReady) return;
@@ -991,13 +1005,18 @@ function money(amount, currency) {
 
 async function subConfig(url, env) {
   const price = priceNgn(env);
+  const yearPrice = priceYearNgn(env);
   const out = {
     price_ngn: price,
     price_display: money(price, "NGN").replace(/\.00$/, ""),
+    year_price_ngn: yearPrice,
+    year_price_display: money(yearPrice, "NGN").replace(/\.00$/, ""),
     recurring: Boolean(env.PAYSTACK_PLAN_CODE),
+    recurring_year: Boolean(env.PAYSTACK_PLAN_CODE_YEAR),
     available: Boolean(env.DB && env.PAYSTACK_SECRET_KEY),
     currency: "NGN",
     local_display: null,
+    year_local_display: null,
   };
 
   const cur = (url.searchParams.get("cur") || "").toUpperCase();
@@ -1009,9 +1028,11 @@ async function subConfig(url, env) {
         // Round up to a whole cent so the shown amount never looks cheaper
         // than what the bank will really take.
         const local = Math.ceil(price * rate * 100) / 100;
+        const localYear = Math.ceil(yearPrice * rate * 100) / 100;
         out.currency = cur;
         out.local_amount = local;
         out.local_display = money(local, cur);
+        out.year_local_display = money(localYear, cur);
       }
     } catch {
       // No rates: the app simply shows the naira price.
@@ -1084,7 +1105,9 @@ async function addDays(env, installId, { email, source, days }) {
 /** Turns a successful Paystack transaction into premium time, once. */
 async function settle(env, tx) {
   if (!tx || tx.status !== "success") return null;
-  if (tx.currency !== "NGN" || Number(tx.amount) < priceNgn(env) * 100) {
+  const period = periodOf(env, tx);
+  const need = (period === "year" ? priceYearNgn(env) : priceNgn(env)) * 100;
+  if (tx.currency !== "NGN" || Number(tx.amount) < need) {
     return null;
   }
   const reference = String(tx.reference || "");
@@ -1119,7 +1142,7 @@ async function settle(env, tx) {
   const expires = await addDays(env, installId, {
     email,
     source: "paystack",
-    days: PERIOD_DAYS,
+    days: period === "year" ? YEAR_DAYS : PERIOD_DAYS,
   });
   return { installId, expires };
 }
@@ -1147,20 +1170,30 @@ async function subStart(request, env, url) {
     return json({ error: "Enter a valid e-mail address" }, 400);
   }
 
+  const period = b.period === "year" ? "year" : "month";
+  const allChannels = ["card", "ussd", "bank_transfer", "bank", "mobile_money"];
+  const channels = Array.isArray(b.channels)
+    ? b.channels.filter((c) => allChannels.includes(c))
+    : [];
+
   const reference =
     "DR" +
     Date.now().toString(36) +
     crypto.randomUUID().replace(/-/g, "").slice(0, 10);
   const body = {
     email,
-    amount: priceNgn(env) * 100, // Paystack counts in kobo
+    amount: (period === "year" ? priceYearNgn(env) : priceNgn(env)) * 100, // kobo
     currency: "NGN",
     reference,
     callback_url: `${url.origin}/sub/done`,
-    metadata: { install_id: installId, app: "deeprowss" },
+    metadata: { install_id: installId, app: "deeprowss", period },
   };
+  // Open Paystack straight on the method the person picked (card / USSD / ...).
+  if (channels.length) body.channels = channels;
   // A plan makes the card renew by itself every month (card payments only).
-  if (b.recurring && env.PAYSTACK_PLAN_CODE) body.plan = env.PAYSTACK_PLAN_CODE;
+  const planCode =
+    period === "year" ? env.PAYSTACK_PLAN_CODE_YEAR : env.PAYSTACK_PLAN_CODE;
+  if (b.recurring && planCode) body.plan = planCode;
 
   const r = await paystack(env, "/transaction/initialize", {
     method: "POST",
