@@ -17,6 +17,8 @@ import 'package:footbolive/services/player_html.dart';
 import 'package:footbolive/services/push_service.dart';
 import 'package:footbolive/services/support_gate.dart';
 import 'package:footbolive/services/stream_resolver.dart';
+import 'package:footbolive/services/nexus_service.dart';
+import 'package:footbolive/screens/native_player_screen.dart';
 
 void main() {
   group('StreamResolver', () {
@@ -453,6 +455,89 @@ void main() {
       expect(back.received, 10);
       expect(back.extension, 'mkv');
       expect(DownloadTask(id: '2', url: 'u', name: 'n').progress, isNull);
+    });
+  });
+
+  group('IPTV Nexus', () {
+    const payload = '''
+[
+  {"id":"A.us","name":"Alpha News","country":"US","categories":["news","business"],
+   "is_nsfw":false,"logo":"https://x/a.png","score":90,"best_quality":"720p",
+   "streams":[
+     {"url":"http://h/low.m3u8","quality":"360p","rank":50,"referrer":null,"user_agent":null,"health":{"status":"online"}},
+     {"url":"https://h/best.m3u8","quality":"1080p","rank":99,"referrer":"https://p.example/","user_agent":"UA/1","health":{"status":"online"}},
+     {"url":"https://h/dead.m3u8","quality":"1080p","rank":120,"health":{"status":"offline"}}
+   ]},
+  {"id":"B.us","name":"Beta","country":"US","categories":["sports"],"is_nsfw":true,"score":100,
+   "streams":[{"url":"https://h/b.m3u8","rank":1,"health":{"status":"online"}}]},
+  {"id":"C.gb","name":"Gamma","country":"GB","categories":["general"],"score":100,
+   "streams":[{"url":"https://h/c.m3u8","rank":1,"health":{"status":"blocked"}}]}
+]
+''';
+
+    test('keeps working streams, best first, hides nsfw / dead channels', () {
+      final out = slimDown(payload);
+      expect(out.length, 1);
+      final c = Channel.tryParse(out.single)!;
+      expect(c.name, 'Alpha News');
+      expect(c.category, ChannelCategory.news);
+      expect(c.url, 'https://h/best.m3u8');
+      expect(c.referer, 'https://p.example/');
+      expect(c.userAgent, 'UA/1');
+      expect(c.altUrl, 'http://h/low.m3u8');
+      expect(c.country, 'US');
+      expect(c.flag, isNotEmpty);
+    });
+
+    test('merge folds a same-name Nexus channel into yours', () {
+      const own = [
+        Channel(
+            name: 'ESPN',
+            url: 'https://mine/espn.m3u8',
+            category: ChannelCategory.sports),
+      ];
+      const nexus = [
+        Channel(
+            name: 'espn',
+            url: 'https://nx/espn.m3u8',
+            category: ChannelCategory.sports,
+            quality: '1080p',
+            country: 'US'),
+        Channel(
+            name: 'Other',
+            url: 'https://nx/o.m3u8',
+            category: ChannelCategory.general),
+      ];
+      final m = mergeChannels(own, nexus);
+      expect(m.length, 2);
+      expect(m.first.url, 'https://mine/espn.m3u8');
+      expect(m.first.altUrl, 'https://nx/espn.m3u8');
+      expect(m.first.qualityLabel, 'FHD');
+      expect(m.last.name, 'Other');
+    });
+
+    test('native player headers and routing', () {
+      final h = nativeHeaders('https://ref.example/', 'UA/9');
+      expect(h['User-Agent'], 'UA/9');
+      expect(h['Referer'], 'https://ref.example/');
+      final d = nativeHeaders(null, null);
+      expect(d.containsKey('Referer'), isFalse);
+      expect(d['User-Agent'], isNotEmpty);
+      expect(nativePlayable('https://a/live/index.m3u8'), isTrue);
+      expect(nativePlayable('https://abisnews.com/espn.php'), isFalse);
+    });
+
+    test('Channel JSON round trip', () {
+      const c = Channel(
+          name: 'X',
+          url: 'https://a/b.m3u8',
+          category: ChannelCategory.kids,
+          country: 'DE',
+          referer: 'https://r/');
+      final back = Channel.tryParse(c.toJson())!;
+      expect(back.category, ChannelCategory.kids);
+      expect(back.referer, 'https://r/');
+      expect(back.country, 'DE');
     });
   });
 }
