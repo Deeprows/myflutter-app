@@ -16,6 +16,9 @@ import 'package:footbolive/utils/format.dart';
 import 'package:footbolive/services/player_html.dart';
 import 'package:footbolive/services/push_service.dart';
 import 'package:footbolive/services/support_gate.dart';
+import 'package:footbolive/services/subscription_service.dart';
+import 'package:footbolive/screens/plans_screen.dart';
+import 'package:footbolive/utils/currency_map.dart';
 import 'package:footbolive/services/stream_resolver.dart';
 import 'package:footbolive/services/nexus_service.dart';
 import 'package:footbolive/screens/native_player_screen.dart';
@@ -538,6 +541,41 @@ void main() {
       expect(back.category, ChannelCategory.kids);
       expect(back.referer, 'https://r/');
       expect(back.country, 'DE');
+    });
+  });
+
+  group('Plans', () {
+    test('country -> currency, unknown falls back to USD', () {
+      expect(currencyForCountry('NG'), 'NGN');
+      expect(currencyForCountry('gh'), 'GHS');
+      expect(currencyForCountry('GB'), 'GBP');
+      expect(currencyForCountry('DE'), 'EUR');
+      expect(currencyForCountry('XX'), 'USD');
+      expect(currencyForCountry(null), 'USD');
+    });
+
+    test('plan info from the Worker', () {
+      final p = PlanInfo.fromJson({
+        'available': true,
+        'recurring': true,
+        'price_display': '₦2,000',
+        'local_display': r'$1.30',
+      });
+      expect(p.available, isTrue);
+      expect(p.recurring, isTrue);
+      expect(p.priceDisplay, '₦2,000');
+      expect(p.localDisplay, r'$1.30');
+      expect(PlanInfo.fromJson({'local_display': null}).localDisplay, isNull);
+      expect(PlanInfo.fallback().priceDisplay, '₦2,000');
+    });
+
+    test('whatsapp link carries the message and the install id', () {
+      expect(buildWhatsappUri('', 'Hi', 'abc'), isNull);
+      final u = buildWhatsappUri('https://wa.me/2348012345678', 'Hi', 'abc123')!;
+      expect(u.host, 'wa.me');
+      expect(u.path, '/2348012345678');
+      expect(u.queryParameters['text'], contains('abc123'));
+      expect(u.queryParameters['text'], startsWith('Hi'));
     });
   });
 }
