@@ -6,8 +6,10 @@ import '../theme/app_theme.dart';
 import '../widgets/support_overlay.dart';
 import 'push_service.dart';
 
-/// Decides when the "We Need Your Support" overlay is shown and what happens
-/// afterwards. Call [guard] from a card's tap handler:
+/// The OLD trigger for the "We Need Your Support" overlay (tapping a card).
+/// It is switched off ([AppConfig.supportOnCardTap] = false): free-plan ads
+/// now come from `AdScheduler` every 15 minutes. [guard] just lets the tap
+/// through while it is off. Call [guard] from a card's tap handler:
 ///
 ///   SupportGate.guard(context, () => openThePlayer());
 ///
@@ -41,7 +43,7 @@ class SupportGate {
 
   static Future<void> guard(BuildContext context, VoidCallback proceed) async {
     if (_showing) return; // ignore a second tap while the overlay is up
-    if (AppConfig.supportUrl.trim().isEmpty) {
+    if (!AppConfig.supportOnCardTap || AppConfig.supportUrl.trim().isEmpty) {
       proceed();
       return;
     }
@@ -87,7 +89,7 @@ class SupportGate {
   static void showThanks() {
     final messenger = PushService.messengerKey.currentState;
     if (messenger == null) return;
-    final h = AppConfig.supportIntervalHours;
+    final m = AppConfig.adIntervalMinutes;
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
@@ -136,7 +138,7 @@ class SupportGate {
                             color: Colors.white)),
                     const SizedBox(height: 2),
                     Text(
-                      'Enjoy $h hours of uninterrupted streaming.',
+                      'Enjoy $m minutes of uninterrupted streaming.',
                       style: TextStyle(color: Ui.muted, fontSize: 12.5),
                     ),
                   ],
