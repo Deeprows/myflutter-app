@@ -4,7 +4,7 @@ On start the app shows a plans page.
 
 * **Free** - everything is open. The "We Need Your Support" page appears after
   every 15 minutes of use (`AppConfig.adIntervalMinutes`).
-* **Premium** - ₦2,000 / month through Paystack. No support page. People
+* **Premium** - ₦2,000 / month through Paystack (shown on the card as "Secured by Paystack"). No pop-ups. After paying, Premium turns on by itself, an access code (the Paystack payment reference) is shown and can be used with *Restore purchase*, and Paystack e-mails the receipt. People
   outside Nigeria see the same price in their own currency (an estimate; the
   charge is always in naira).
 * **Can't pay online** - the *Pay manually on WhatsApp* button opens a chat
