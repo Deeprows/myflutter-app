@@ -61,6 +61,11 @@ Every title is keyed by its TMDB id (settings are in `lib/config.dart`):
   Add `"date": "2026-10-08"` to place it in the newest-first order.
 * **Trending** TMDB movies and series are listed after your own titles
   (`AppConfig.tmdbTrending`).
+* **Movie page**: slim Reload / Switch / Rotate buttons, then TMDB details
+  (overview, runtime, release date, director, cast). Titles without a TMDB id are
+  matched through the id in their link or by exact title and year.
+* **Categories**: picking Drama, Action, etc. also lists that category's popular
+  TMDB titles (`AppConfig.tmdbCategories`); pull down to refresh them.
 * **Search** in the Movies tab also searches all of TMDB (`AppConfig.tmdbSearch`).
 * The v3 API key is `AppConfig.tmdbApiKey`; override it at build time with
   `--dart-define=TMDB_API_KEY=...`.
