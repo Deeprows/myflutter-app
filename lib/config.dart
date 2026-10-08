@@ -99,6 +99,10 @@ class AppConfig {
   /// listed in `movies.json`. Set to false to show only your own list.
   static const tmdbTrending = true;
 
+  /// Picking a category pill (Drama, Action, ...) also lists that category's
+  /// popular TMDB movies and series after your own titles.
+  static const tmdbCategories = true;
+
   /// Search box in Movies also searches the whole TMDB catalogue.
   static const tmdbSearch = true;
 
