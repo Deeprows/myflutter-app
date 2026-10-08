@@ -32,6 +32,29 @@ class Movie {
   static String downloadUrlFor(int tmdbId, {bool tv = false}) =>
       '${AppConfig.downloadBase}/${tv ? 'tv' : 'movie'}/$tmdbId';
 
+  /// Genre labels in one spelling, so your own rows and TMDB titles land in
+  /// the same category pill ("Science Fiction" / "Sci-fi" -> "Sci-Fi";
+  /// TMDB's "Action & Adventure" -> "Action" + "Adventure").
+  static List<String> genreNames(String raw) {
+    final g = raw.trim();
+    switch (g.toLowerCase()) {
+      case '':
+        return const [];
+      case 'science fiction':
+      case 'sci-fi':
+      case 'sci fi':
+      case 'scifi':
+        return const ['Sci-Fi'];
+      case 'action & adventure':
+        return const ['Action', 'Adventure'];
+      case 'sci-fi & fantasy':
+        return const ['Sci-Fi', 'Fantasy'];
+      case 'war & politics':
+        return const ['War'];
+    }
+    return [g];
+  }
+
   /// A row that only carries a TMDB id and still needs its details.
   bool get needsDetails => tmdbId != null && name.isEmpty;
 
@@ -104,8 +127,8 @@ class Movie {
       rating: parseRating(s('rating')),
       genres: s('genre')
           .split(',')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
+          .expand(genreNames)
+          .toSet()
           .toList(),
       image: s('image'),
       tmdbId: tmdbId,
