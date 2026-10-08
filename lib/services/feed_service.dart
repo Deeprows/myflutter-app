@@ -12,6 +12,7 @@ import '../models/movie.dart';
 import '../models/ticker.dart';
 import '../utils/posted_at.dart';
 import 'install_id.dart';
+import 'nexus_service.dart';
 import 'tmdb_service.dart';
 
 /// Loads fixtures and highlights. Order of preference:
@@ -99,7 +100,13 @@ class FeedService {
     }
   }
 
-  Future<List<Channel>> loadChannels({bool remote = false}) async {
+  final _nexus = NexusService();
+
+  /// Your own channels (`tv.json`) first, then IPTV Nexus channels (working
+  /// streams, healthiest first). [force] makes Nexus download again even if
+  /// its saved copy is recent (pull-to-refresh).
+  Future<List<Channel>> loadChannels(
+      {bool remote = false, bool force = false}) async {
     final raw = await _list(
       name: 'tv',
       asset: 'assets/data/tv.json',
@@ -108,7 +115,12 @@ class FeedService {
       remote: remote,
     );
 
-    return raw.map(Channel.tryParse).whereType<Channel>().toList();
+    final own = raw.map(Channel.tryParse).whereType<Channel>().toList();
+    if (!NexusService.enabled) return own;
+
+    final nexus = await _nexus.load(remote: remote, force: force);
+    if (remote && _nexus.lastFailed) lastRemoteFailed = true;
+    return mergeChannels(own, nexus);
   }
 
   Future<List<Movie>> loadMovies({bool remote = false}) async {
