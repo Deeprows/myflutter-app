@@ -7,13 +7,17 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../config.dart';
+import '../models/movie.dart';
+import '../models/movie_info.dart';
 import '../services/ad_shield.dart';
 import '../services/player_html.dart';
 import '../services/settings_service.dart';
 import '../services/stream_resolver.dart';
+import '../services/tmdb_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/live_dot.dart';
 import '../widgets/match_chat.dart';
+import '../widgets/movie_info_panel.dart';
 import 'browser_screen.dart' show siteOf;
 
 /// WebView based player. Plays:
@@ -31,6 +35,10 @@ class PlayerScreen extends StatefulWidget {
   /// the compact controls and the live chat instead of the info panel.
   final String? chatMatch;
 
+  /// Set for movies and series: the page then shows slim controls and the
+  /// TMDB details (overview, cast, ...) instead of the stream help box.
+  final Movie? movie;
+
   const PlayerScreen({
     super.key,
     required this.title,
@@ -39,6 +47,7 @@ class PlayerScreen extends StatefulWidget {
     this.altUrl,
     this.isLive = false,
     this.chatMatch,
+    this.movie,
   });
 
   @override
@@ -70,6 +79,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   final Set<String> _allowedSites = {};
   static const _gateWindow = Duration(seconds: 5);
   bool _pipEnabled = false;
+
+  MovieInfo? _info; // TMDB details of a movie page
+  bool _infoLoading = false;
 
   Widget? _fullscreenWidget;
   VoidCallback? _fullscreenHidden;
@@ -117,6 +129,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (mounted) setState(() => _pipEnabled = v);
     });
     _start();
+
+    final movie = widget.movie;
+    if (movie != null && TmdbService.enabled) {
+      _infoLoading = true;
+      tmdb.info(movie).then((i) {
+        if (mounted) {
+          setState(() {
+            _info = i;
+            _infoLoading = false;
+          });
+        }
+      });
+    }
   }
 
   @override
@@ -353,9 +378,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   /// Slim Reload / Switch / Rotate row used on football match pages.
-  Widget _compactControls() {
+  Widget _compactControls({double side = 10, double top = 6}) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+      padding: EdgeInsets.fromLTRB(side, top, side, 8),
       child: Row(
         children: [
           Expanded(
@@ -378,6 +403,46 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   onTap: _toggleLandscape)),
         ],
       ),
+    );
+  }
+
+  /// Movie / series page: title, slim controls, then the TMDB details.
+  Widget _movieBody() {
+    final info = _info;
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 28),
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.title,
+                  style: const TextStyle(
+                      fontSize: 22, height: 1.15, fontWeight: FontWeight.w900)),
+              if (widget.subtitle != null) ...[
+                const SizedBox(height: 5),
+                Text(widget.subtitle!,
+                    style: TextStyle(
+                        color: Ui.muted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600)),
+              ],
+              if (info != null && info.tagline.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(info.tagline,
+                    style: TextStyle(
+                        color: Ui.dim,
+                        fontSize: 13,
+                        fontStyle: FontStyle.italic)),
+              ],
+            ],
+          ),
+        ),
+        _compactControls(side: 16, top: 14),
+        MovieInfoPanel(
+            movie: widget.movie!, info: info, loading: _infoLoading),
+      ],
     );
   }
 
@@ -441,7 +506,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           if (match) ...[
             _compactControls(),
             Expanded(child: MatchChat(matchName: widget.chatMatch!)),
-          ] else
+          ] else if (widget.movie != null)
+            Expanded(child: _movieBody())
+          else
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
