@@ -85,6 +85,19 @@ class Movie {
         tmdbId: tmdbId,
       );
 
+  /// Saved form for Watch Later / Watch history; read back by [tryParse].
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'url': url,
+        'downloadUrl': downloadUrl,
+        if (date != null) 'date': date!.toIso8601String(),
+        if (rating != null) 'rating': '$rating/10',
+        'genre': genres.join(','),
+        'image': image,
+        if (tmdbId != null) 'tmdbId': tmdbId,
+        'type': isSeries ? 'tv' : 'movie',
+      };
+
   bool get isSeries => url.contains('/embed/tv/');
   bool get hasDownload => downloadUrl.startsWith('http');
   bool get hasImage => image.startsWith('http');
