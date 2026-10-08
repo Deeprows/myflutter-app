@@ -15,26 +15,58 @@ import 'install_id.dart';
 class PlanInfo {
   final bool available;
   final bool recurring;
+  final bool recurringYear;
   final String priceDisplay; // "₦2,000"
   final String? localDisplay; // "$1.30" (null for naira users / no rate)
+  final String yearPriceDisplay; // "₦20,000"
+  final String? yearLocalDisplay;
+  final int priceNgn;
+  final int yearPriceNgn;
 
   const PlanInfo({
     required this.available,
     required this.recurring,
     required this.priceDisplay,
     this.localDisplay,
+    this.recurringYear = false,
+    this.yearPriceDisplay = '₦20,000',
+    this.yearLocalDisplay,
+    this.priceNgn = 2000,
+    this.yearPriceNgn = 20000,
   });
+
+  /// Whole months of the monthly price that the yearly price saves.
+  int get yearSavingPercent {
+    final full = priceNgn * 12;
+    if (full <= 0 || yearPriceNgn >= full) return 0;
+    return (((full - yearPriceNgn) / full) * 100).round();
+  }
 
   /// Used until the Worker answers (or when it cannot be reached).
   factory PlanInfo.fallback() => PlanInfo(
         available: true,
         recurring: false,
         priceDisplay: '₦${_withCommas(AppConfig.premiumPriceFallbackNgn)}',
+        yearPriceDisplay:
+            '₦${_withCommas(AppConfig.premiumYearPriceFallbackNgn)}',
+        priceNgn: AppConfig.premiumPriceFallbackNgn,
+        yearPriceNgn: AppConfig.premiumYearPriceFallbackNgn,
       );
 
   factory PlanInfo.fromJson(Map<String, dynamic> j) => PlanInfo(
         available: j['available'] == true,
         recurring: j['recurring'] == true,
+        recurringYear: j['recurring_year'] == true,
+        priceNgn: (j['price_ngn'] as num?)?.toInt() ??
+            AppConfig.premiumPriceFallbackNgn,
+        yearPriceNgn: (j['year_price_ngn'] as num?)?.toInt() ??
+            AppConfig.premiumYearPriceFallbackNgn,
+        yearPriceDisplay: (j['year_price_display'] ?? '').toString().isEmpty
+            ? '₦${_withCommas(AppConfig.premiumYearPriceFallbackNgn)}'
+            : j['year_price_display'].toString(),
+        yearLocalDisplay: (j['year_local_display'] ?? '').toString().isEmpty
+            ? null
+            : j['year_local_display'].toString(),
         priceDisplay: (j['price_display'] ?? '').toString().isEmpty
             ? '₦${_withCommas(AppConfig.premiumPriceFallbackNgn)}'
             : j['price_display'].toString(),
@@ -168,6 +200,8 @@ class SubscriptionService extends ChangeNotifier {
   Future<CheckoutStart> startCheckout({
     required String email,
     required bool recurring,
+    String period = 'month',
+    List<String> channels = const [],
   }) async {
     final id = await InstallId.get();
     final http.Response r;
@@ -180,6 +214,8 @@ class SubscriptionService extends ChangeNotifier {
               'install_id': id,
               'email': email,
               'recurring': recurring,
+              'period': period,
+              if (channels.isNotEmpty) 'channels': channels,
             }),
           )
           .timeout(const Duration(seconds: 20));
