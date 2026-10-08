@@ -401,7 +401,7 @@ class _PlayerScreenState extends State<PlayerScreen>
           tooltip: saved ? 'Remove from Watch later' : 'Save to Watch later',
           onPressed: () async {
             final now = await MovieLibrary.instance.toggleWatchLater(m);
-            if (!mounted) return;
+            if (!context.mounted) return;
             ScaffoldMessenger.of(context)
               ..hideCurrentSnackBar()
               ..showSnackBar(SnackBar(
