@@ -8,6 +8,7 @@ import '../config.dart';
 import '../models/movie.dart';
 import '../models/push_target.dart';
 import '../services/feed_service.dart';
+import '../services/partner_browser.dart';
 import '../services/push_service.dart';
 import '../services/support_gate.dart';
 import '../services/tmdb_service.dart';
@@ -599,15 +600,9 @@ class _MovieSheet extends StatelessWidget {
   final VoidCallback onPlay;
   const _MovieSheet({required this.movie, required this.onPlay});
 
-  Future<void> _download(BuildContext context) async {
-    // Download links always open in the phone's own browser.
-    final ok = await openExternally(movie.downloadUrl);
-    if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open the download link')),
-      );
-    }
-  }
+  Future<void> _download(BuildContext context) =>
+      // Deeprows Browser offer; otherwise the phone's own browser.
+      PartnerBrowser.instance.download(context, movie.downloadUrl);
 
   @override
   Widget build(BuildContext context) {
