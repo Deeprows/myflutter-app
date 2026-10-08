@@ -93,7 +93,7 @@ class FootboliveDrawer extends StatelessWidget {
               padding: EdgeInsets.only(
                   bottom: MediaQuery.of(context).viewPadding.bottom + 16),
               children: [
-                if (SubscriptionService.instance.enabled)
+                if (SubscriptionService.instance.visible)
                   item(
                       Icons.workspace_premium_rounded,
                       SubscriptionService.instance.isPremium
