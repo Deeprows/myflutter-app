@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
 import '../models/movie.dart';
+import '../models/movie_info.dart';
 
 /// Talks to TMDB (api.themoviedb.org, v3) and turns its results into [Movie]s.
 ///
@@ -85,12 +86,14 @@ class TmdbService {
     final genres = <String>[];
     if (raw['genres'] is List) {
       for (final g in raw['genres'] as List) {
-        if (g is Map && g['name'] != null) genres.add(g['name'].toString());
+        if (g is Map && g['name'] != null) {
+          genres.addAll(Movie.genreNames(g['name'].toString()));
+        }
       }
     } else if (raw['genre_ids'] is List) {
       for (final g in raw['genre_ids'] as List) {
         final n = _genres[g];
-        if (n != null) genres.add(n);
+        if (n != null) genres.addAll(Movie.genreNames(n));
       }
     }
 
@@ -106,7 +109,7 @@ class TmdbService {
       downloadUrl: Movie.downloadUrlFor(id, tv: tv),
       date: null, // keep "Added <date>" for rows you add yourself
       rating: rating,
-      genres: genres,
+      genres: genres.toSet().toList(),
       image: poster.isEmpty ? '' : 'https://image.tmdb.org/t/p/w500$poster',
       tmdbId: id,
     );
@@ -160,6 +163,134 @@ class TmdbService {
     }
   }
 
+  // category name -> [TMDB movie genre id, TMDB series genre id]
+  static const _discoverIds = <String, List<String?>>{
+    'Action': ['28', '10759'],
+    'Adventure': ['12', '10759'],
+    'Animation': ['16', '16'],
+    'Comedy': ['35', '35'],
+    'Crime': ['80', '80'],
+    'Documentary': ['99', '99'],
+    'Drama': ['18', '18'],
+    'Family': ['10751', '10751'],
+    'Fantasy': ['14', '10765'],
+    'History': ['36', null],
+    'Horror': ['27', null],
+    'Music': ['10402', null],
+    'Mystery': ['9648', '9648'],
+    'Romance': ['10749', null],
+    'Sci-Fi': ['878', '10765'],
+    'Thriller': ['53', null],
+    'War': ['10752', '10768'],
+    'Western': ['37', '37'],
+  };
+
+  /// Popular TMDB movies and series of one category (movies and series
+  /// alternate in the result). Empty for categories TMDB does not have.
+  Future<List<Movie>> discover(String genre) async {
+    final ids = _discoverIds[genre];
+    if (ids == null) return const [];
+    const types = ['movie', 'tv'];
+    final calls = <Future<dynamic>>[];
+    final used = <String>[];
+    for (var i = 0; i < 2; i++) {
+      final id = ids[i];
+      if (id == null) continue;
+      used.add(types[i]);
+      calls.add(_get('/discover/${types[i]}', {
+        'with_genres': id,
+        'sort_by': 'popularity.desc',
+        'include_adult': 'false',
+        'vote_count.gte': '50',
+      }));
+    }
+    final res = await Future.wait(calls);
+    final lists = <List<Movie>>[];
+    for (var i = 0; i < res.length; i++) {
+      final r = res[i];
+      lists.add(r is Map && r['results'] is List
+          ? (r['results'] as List)
+              .map((e) => fromJson(e, type: used[i]))
+              .whereType<Movie>()
+              .toList()
+          : <Movie>[]);
+    }
+    final out = <Movie>[];
+    final longest = lists.fold<int>(0, (a, l) => l.length > a ? l.length : a);
+    for (var i = 0; i < longest; i++) {
+      for (final l in lists) {
+        if (i < l.length) out.add(l[i]);
+      }
+    }
+    return out;
+  }
+
+  final Map<String, MovieInfo> _infoCache = {};
+
+  /// Overview, cast, director, runtime... for one title (null when TMDB has
+  /// nothing for it). Works for rows with a TMDB id, rows whose link holds a
+  /// TMDB or IMDb id, and otherwise looks the title up by name and year.
+  Future<MovieInfo?> info(Movie m) async {
+    if (!enabled) return null;
+    try {
+      final t = await _resolve(m);
+      if (t == null) return null;
+      final key = '${t.tv ? 'tv' : 'movie'}:${t.id}';
+      final hit = _infoCache[key];
+      if (hit != null) return hit;
+      final d = await _get('/${t.tv ? 'tv' : 'movie'}/${t.id}',
+          {'append_to_response': 'credits'});
+      final info = MovieInfo.fromJson(d, tv: t.tv);
+      if (info != null && info.hasContent) _infoCache[key] = info;
+      return info;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<_Target?> _resolve(Movie m) async {
+    if (m.tmdbId != null) return _Target(m.tmdbId!, m.isSeries);
+
+    final mt = RegExp(r'/embed/(movie|tv)/(tt\d+|\d+)').firstMatch(m.url);
+    if (mt != null) {
+      final tv = mt.group(1) == 'tv';
+      final id = mt.group(2)!;
+      if (!id.startsWith('tt')) return _Target(int.parse(id), tv);
+      final f = await _get('/find/$id', {'external_source': 'imdb_id'});
+      if (f is Map) {
+        final l = f[tv ? 'tv_results' : 'movie_results'];
+        if (l is List && l.isNotEmpty) {
+          final first = l.first;
+          if (first is Map && first['id'] is int) {
+            return _Target(first['id'] as int, tv);
+          }
+        }
+      }
+    }
+
+    // Last resort: search by title (and year); only an exact title match is
+    // accepted so a wrong film is never shown.
+    final tv = m.isSeries;
+    final title = m.title;
+    if (title.isEmpty) return null;
+    final yearKey = tv ? 'first_air_date_year' : 'year';
+    final d = await _get(tv ? '/search/tv' : '/search/movie', {
+      'query': title,
+      if (m.year != null) yearKey: m.year!,
+    });
+    if (d is! Map || d['results'] is! List) return null;
+    String norm(String x) => x.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final want = norm(title);
+    for (final r in d['results'] as List) {
+      if (r is! Map || r['id'] is! int) continue;
+      final names = [r['title'], r['name'], r['original_title'], r['original_name']];
+      if (names.any((n) => n != null && norm(n.toString()) == want)) {
+        return _Target(r['id'] as int, tv);
+      }
+    }
+    return null;
+  }
+
   /// Searches movies and series on TMDB.
   Future<List<Movie>> search(String query) async {
     final q = query.trim();
@@ -171,6 +302,12 @@ class TmdbService {
         .whereType<Movie>()
         .toList();
   }
+}
+
+class _Target {
+  final int id;
+  final bool tv;
+  const _Target(this.id, this.tv);
 }
 
 final tmdb = TmdbService();
