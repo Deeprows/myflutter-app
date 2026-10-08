@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math' show Random;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
@@ -38,6 +40,69 @@ class _MoviesScreenState extends State<MoviesScreen> {
   Timer? _debounce;
   final _search = TextEditingController();
 
+  // Random poster behind the header; picked once, and again on a new day.
+  Movie? _bg;
+  int _bgDay = 0;
+
+  void _pickBg() {
+    if (_bg != null && _bgDay == _dayKey) return;
+    final withArt = _all.where((m) => m.hasImage).toList();
+    if (withArt.isEmpty) return;
+    _bg = withArt[Random().nextInt(withArt.length)];
+    _bgDay = _dayKey;
+  }
+
+  /// Poster behind "Trending now / Top Movies & Series": darkened and fading
+  /// into the page colour so the text stays readable.
+  Widget _headerBackdrop() {
+    final poster = _bg;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Ui.red.withValues(alpha: .28), Ui.bg],
+            ),
+          ),
+        ),
+        if (poster != null)
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 600),
+            child: SizedBox.expand(
+              key: ValueKey(poster.url),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: 2.5, sigmaY: 2.5),
+                child: Image.network(
+                  poster.image,
+                  fit: BoxFit.cover,
+                  alignment: const Alignment(0, -.5),
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Ui.bg.withValues(alpha: .55),
+                Ui.red.withValues(alpha: .22),
+                Ui.bg.withValues(alpha: .85),
+                Ui.bg,
+              ],
+              stops: const [0, .35, .8, 1],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   // The front page order is shuffled once per day (local midnight).
   Timer? _midnight;
   int _dayKey = _today();
@@ -54,7 +119,10 @@ class _MoviesScreenState extends State<MoviesScreen> {
     final next = DateTime(n.year, n.month, n.day + 1, 0, 0, 2);
     _midnight = Timer(next.difference(n), () {
       if (!mounted) return;
-      setState(() => _dayKey = _today());
+      setState(() {
+        _dayKey = _today();
+        _pickBg();
+      });
       _armMidnight();
     });
   }
@@ -83,7 +151,12 @@ class _MoviesScreenState extends State<MoviesScreen> {
 
   void _onSync() {
     // Coming back to the app after midnight: pick up the new day's order.
-    if (_dayKey != _today()) setState(() => _dayKey = _today());
+    if (_dayKey != _today()) {
+      setState(() {
+        _dayKey = _today();
+        _pickBg();
+      });
+    }
     if (!_loading) _load(remote: true);
   }
 
@@ -130,6 +203,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
     setState(() {
       _all = list;
       _loading = false;
+      _pickBg();
     });
     _afterLoad(last: remote || AppConfig.moviesUrl.isEmpty);
   }
@@ -252,15 +326,11 @@ class _MoviesScreenState extends State<MoviesScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverToBoxAdapter(
-            child: Container(
+            child: Stack(
+              children: [
+                Positioned.fill(child: _headerBackdrop()),
+                Container(
               padding: EdgeInsets.fromLTRB(16, top + 14, 16, 14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Ui.red.withValues(alpha: .28), Ui.bg],
-                ),
-              ),
               child: Stack(
                 children: [
                   Positioned(
@@ -389,6 +459,8 @@ class _MoviesScreenState extends State<MoviesScreen> {
                   ),
                 ],
               ),
+            ),
+              ],
             ),
           ),
           SliverToBoxAdapter(
