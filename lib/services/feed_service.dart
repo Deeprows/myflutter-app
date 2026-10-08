@@ -12,6 +12,7 @@ import '../models/movie.dart';
 import '../models/ticker.dart';
 import '../utils/posted_at.dart';
 import 'install_id.dart';
+import 'tmdb_service.dart';
 
 /// Loads fixtures and highlights. Order of preference:
 /// remote feed (when asked) -> last cached remote copy -> bundled asset.
@@ -119,16 +120,37 @@ class FeedService {
       remote: remote,
     );
 
-    final seen = <String>{};
+    final parsed = raw.map(Movie.tryParse).whereType<Movie>().toList();
 
-    final list = raw
-        .map(Movie.tryParse)
-        .whereType<Movie>()
-        .where((m) => seen.add(m.url))
-        .toList();
+    // Rows that only hold a TMDB id get their name, poster, rating and genres
+    // from TMDB (saved copy when offline / not refreshing).
+    final fetch = remote && TmdbService.enabled;
+    final filled = <Movie>[];
+    for (var i = 0; i < parsed.length; i += 8) {
+      final chunk = parsed.skip(i).take(8);
+      filled.addAll((await Future.wait(chunk.map((m) async {
+        if (!m.needsDetails) return m;
+        final d = await tmdb.details(m.tmdbId!,
+            tv: m.isSeries, fetch: fetch);
+        return d == null ? null : m.fillFrom(d);
+      })))
+          .whereType<Movie>());
+    }
+
+    final seen = <String>{};
+    final list = filled.where((m) => seen.add(m.url)).toList();
 
     // Newest first (date and time), stable for items posted the same day.
-    return newestFirst(list, (m) => m.date);
+    final sorted = newestFirst(list, (m) => m.date);
+
+    // TMDB trending titles go after your own list.
+    if (AppConfig.tmdbTrending && TmdbService.enabled) {
+      final ids = {for (final m in sorted) if (m.tmdbId != null) m.tmdbId};
+      for (final m in await tmdb.trending(fetch: remote)) {
+        if (seen.add(m.url) && !ids.contains(m.tmdbId)) sorted.add(m);
+      }
+    }
+    return sorted;
   }
 
   Future<List<dynamic>> _list({
