@@ -12,6 +12,7 @@ import '../config.dart';
 import '../models/movie.dart';
 import '../models/movie_info.dart';
 import '../services/ad_shield.dart';
+import '../services/movie_library.dart';
 import '../services/player_html.dart';
 import '../services/settings_service.dart';
 import '../services/stream_resolver.dart';
@@ -165,6 +166,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _start();
 
     final movie = widget.movie;
+    if (movie != null) MovieLibrary.instance.addToHistory(movie);
     if (movie != null && TmdbService.enabled) {
       _infoLoading = true;
       tmdb.info(movie).then((i) {
@@ -339,6 +341,33 @@ class _PlayerScreenState extends State<PlayerScreen> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text(
             'Open "Cast" or "Smart View" from your phone\'s quick settings')));
+  }
+
+  /// Bookmark next to "Cast to screen": saves the movie for later.
+  Widget _watchLaterButton(Movie m) {
+    return ListenableBuilder(
+      listenable: MovieLibrary.instance,
+      builder: (context, _) {
+        final saved = MovieLibrary.instance.isSaved(m);
+        return IconButton(
+          tooltip: saved ? 'Remove from Watch later' : 'Save to Watch later',
+          onPressed: () async {
+            final now = await MovieLibrary.instance.toggleWatchLater(m);
+            if (!mounted) return;
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(
+                  duration: const Duration(seconds: 2),
+                  content: Text(
+                      now ? 'Saved to Watch later' : 'Removed from Watch later')));
+          },
+          icon: Icon(
+            saved ? Icons.bookmark_rounded : Icons.bookmark_add_outlined,
+            color: saved ? Ui.red : null,
+          ),
+        );
+      },
+    );
   }
 
   void _onBack() {
@@ -575,6 +604,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         fontSize: 16, fontWeight: FontWeight.w900),
                   ),
                 ),
+                if (widget.movie != null) _watchLaterButton(widget.movie!),
                 IconButton(
                   tooltip: 'Cast to screen',
                   onPressed: _cast,
