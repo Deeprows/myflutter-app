@@ -27,6 +27,20 @@ class Movie {
   static String embedUrlFor(int tmdbId, {bool tv = false}) =>
       '${AppConfig.embedBase}/${tv ? 'tv' : 'movie'}/$tmdbId';
 
+  /// Backup player link (Switch button): movies `<altEmbedBase>/movie/<id>`,
+  /// series `<altEmbedBase>/tv/<id>/1/1`.
+  static String altEmbedUrlFor(String id, {bool tv = false}) => tv
+      ? '${AppConfig.altEmbedBase}/tv/$id/1/1'
+      : '${AppConfig.altEmbedBase}/movie/$id';
+
+  /// Backup player for this title, or '' when its id is unknown. The id is
+  /// the TMDB id, or the id inside the row's own embed link (older rows).
+  String get altUrl {
+    final id = tmdbId?.toString() ??
+        RegExp(r'/embed/(?:movie|tv)/(tt\d+|\d+)').firstMatch(url)?.group(1);
+    return id == null ? '' : altEmbedUrlFor(id, tv: isSeries);
+  }
+
   /// Download link for a TMDB id: `<downloadBase>/movie/<id>` or
   /// `<downloadBase>/tv/<id>`.
   static String downloadUrlFor(int tmdbId, {bool tv = false}) =>
