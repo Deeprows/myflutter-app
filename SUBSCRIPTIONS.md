@@ -25,7 +25,7 @@ Paystack -> Worker /sub/webhook (signed) and app -> /sub/verify
 
 The Paystack secret key lives only in the Worker. A payment is counted once
 per Paystack reference, and only when it is a successful NGN payment of at
-least the price. One paid month = 31 days; paying again stacks on the time
+least the price. One paid month = 31 days, one paid year = 366 days; paying again stacks on the time
 that is left.
 
 ## One-time setup (phone browser is enough)
@@ -45,6 +45,8 @@ that is left.
      switch is hidden and each month is paid by hand
    * `ADMIN_TOKEN` (secret) - any long random text, for the admin page
    * `PRICE_NGN` (optional) - default 2000; change it here, no new APK needed
+   * `PRICE_NGN_YEAR` (optional) - yearly price, default 20000 (two months free)
+   * `PAYSTACK_PLAN_CODE_YEAR` (optional) - a yearly Paystack plan for card auto-renew
 5. Paste the new `cloudflare/worker.js` into the Worker and **Deploy**.
 6. Open `https://deeprowss-feed.deeprows.workers.dev/health`. It must show
    `"subscriptions":true`.
