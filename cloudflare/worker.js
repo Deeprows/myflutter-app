@@ -20,8 +20,21 @@
  *   CF_API_TOKEN     secret
  *   ANALYTICS        Analytics Engine binding
  *
- * Only an anonymous random install id, app version, platform and country
- * are recorded. No names, no emails.
+ * Premium subscriptions (Paystack + D1), see SUBSCRIPTIONS.md:
+ *   GET  /sub/config   price, local-currency equivalent
+ *   POST /sub/start    creates a Paystack checkout
+ *   GET  /sub/verify   confirms a payment after checkout
+ *   GET  /sub/status   is this install premium?
+ *   POST /sub/webhook  Paystack events (signature checked)
+ *   POST /sub/restore  move a paid subscription to a new phone
+ *   /sub/admin         grant / revoke manually (WhatsApp payers)
+ *   Settings: PAYSTACK_SECRET_KEY (secret), PAYSTACK_PLAN_CODE (optional),
+ *             ADMIN_TOKEN (secret, falls back to STATS_TOKEN),
+ *             PRICE_NGN (optional, default 2000), DB (D1 binding)
+ *
+ * Analytics: only an anonymous random install id, app version, platform and
+ * country are recorded. Subscriptions store the install id and the e-mail
+ * the person typed at checkout.
  */
 
 const FILES = {
@@ -73,6 +86,7 @@ export default {
         stats: Boolean(
           env.STATS_TOKEN && env.CF_ACCOUNT_ID && env.CF_API_TOKEN
         ),
+        subscriptions: Boolean(env.DB && env.PAYSTACK_SECRET_KEY),
       });
     }
 
@@ -90,6 +104,11 @@ export default {
       request.method === "GET"
     ) {
       return stats(url, env);
+    }
+
+    // Premium subscriptions.
+    if (url.pathname.startsWith("/sub/")) {
+      return subscriptions(request, env, url);
     }
 
     // Feed routes.
@@ -854,4 +873,465 @@ ${body}
 
 </body>
 </html>`;
+}
+
+// -------------------------------------------------------------- subscriptions
+//
+// Premium = no "Support" pop-ups. The app only ever asks THIS Worker whether
+// an install is premium; the Paystack secret key never leaves the Worker.
+//
+//   charge.success (webhook) or /sub/verify  ->  payments (one row per
+//   Paystack reference, so a payment can never be counted twice)  ->  subs
+//   (one row per install id with the expiry time).
+
+const DAY_MS = 86400000;
+const PERIOD_DAYS = 31; // one paid month, with a day of slack for renewals
+const ID_RE = /^[a-z0-9]{16,64}$/i;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+let schemaReady = false;
+
+const priceNgn = (env) =>
+  Math.max(1, parseInt(env.PRICE_NGN ?? "2000", 10) || 2000);
+
+async function ensureSchema(env) {
+  if (schemaReady) return;
+  await env.DB.batch([
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS subs (install_id TEXT PRIMARY KEY, email TEXT, expires_at INTEGER NOT NULL DEFAULT 0, source TEXT, updated_at INTEGER NOT NULL DEFAULT 0)"
+    ),
+    env.DB.prepare(
+      "CREATE INDEX IF NOT EXISTS subs_email ON subs (email)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS payments (reference TEXT PRIMARY KEY, install_id TEXT, email TEXT, amount INTEGER, created_at INTEGER NOT NULL DEFAULT 0)"
+    ),
+  ]);
+  schemaReady = true;
+}
+
+async function subscriptions(request, env, url) {
+  const path = url.pathname;
+
+  // The "payment finished" page Paystack sends the person back to. The app's
+  // checkout window notices this address and closes itself.
+  if (path === "/sub/done") {
+    return new Response(
+      `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:sans-serif;background:#080b10;color:#fff;text-align:center;padding:48px 20px"><h2>Payment received</h2><p>You can go back to the Deeprowss app.</p>`,
+      { headers: { "content-type": "text/html; charset=utf-8" } }
+    );
+  }
+
+  if (path === "/sub/config" && request.method === "GET") {
+    return subConfig(url, env);
+  }
+
+  if (!env.DB || !env.PAYSTACK_SECRET_KEY) {
+    return json({ error: "subscriptions are not set up on the server" }, 503);
+  }
+
+  try {
+    await ensureSchema(env);
+
+    if (path === "/sub/status" && request.method === "GET") {
+      return subStatus(url, env);
+    }
+    if (path === "/sub/start" && request.method === "POST") {
+      return subStart(request, env, url);
+    }
+    if (path === "/sub/verify" && request.method === "GET") {
+      return subVerify(url, env);
+    }
+    if (path === "/sub/webhook" && request.method === "POST") {
+      return subWebhook(request, env);
+    }
+    if (path === "/sub/restore" && request.method === "POST") {
+      return subRestore(request, env);
+    }
+    if (path === "/sub/admin") {
+      return subAdmin(request, env, url);
+    }
+  } catch (e) {
+    console.error("subscription error", e && e.message);
+    return json({ error: "server error" }, 500);
+  }
+
+  return json({ error: "not found" }, 404);
+}
+
+// ---- price + local currency ------------------------------------------------
+
+async function ngnRates() {
+  const key = new Request("https://rates.internal/ngn");
+  let res = await caches.default.match(key);
+  if (!res) {
+    const r = await fetch("https://open.er-api.com/v6/latest/NGN");
+    if (!r.ok) return null;
+    const body = await r.json();
+    if (!body || !body.rates) return null;
+    res = new Response(JSON.stringify(body.rates), {
+      headers: { "cache-control": "public, max-age=21600" },
+    });
+    await caches.default.put(key, res.clone());
+  }
+  return res.json();
+}
+
+function money(amount, currency) {
+  try {
+    return new Intl.NumberFormat("en", {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
+}
+
+async function subConfig(url, env) {
+  const price = priceNgn(env);
+  const out = {
+    price_ngn: price,
+    price_display: money(price, "NGN").replace(/\.00$/, ""),
+    recurring: Boolean(env.PAYSTACK_PLAN_CODE),
+    available: Boolean(env.DB && env.PAYSTACK_SECRET_KEY),
+    currency: "NGN",
+    local_display: null,
+  };
+
+  const cur = (url.searchParams.get("cur") || "").toUpperCase();
+  if (/^[A-Z]{3}$/.test(cur) && cur !== "NGN") {
+    try {
+      const rates = await ngnRates();
+      const rate = rates && Number(rates[cur]);
+      if (rate > 0) {
+        // Round up to a whole cent so the shown amount never looks cheaper
+        // than what the bank will really take.
+        const local = Math.ceil(price * rate * 100) / 100;
+        out.currency = cur;
+        out.local_amount = local;
+        out.local_display = money(local, cur);
+      }
+    } catch {
+      // No rates: the app simply shows the naira price.
+    }
+  }
+  return json(out);
+}
+
+// ---- Paystack --------------------------------------------------------------
+
+async function paystack(env, path, init = {}) {
+  const r = await fetch(`https://api.paystack.co${path}`, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}`,
+      "content-type": "application/json",
+    },
+  });
+  let body = null;
+  try {
+    body = await r.json();
+  } catch {}
+  return { ok: r.ok && body && body.status === true, body };
+}
+
+async function hmacHex(secret, text) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-512" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(text)
+  );
+  return [...new Uint8Array(sig)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// ---- entitlement -----------------------------------------------------------
+
+async function expiryOf(env, installId) {
+  const row = await env.DB.prepare(
+    "SELECT expires_at FROM subs WHERE install_id = ?"
+  )
+    .bind(installId)
+    .first();
+  return row ? Number(row.expires_at) || 0 : 0;
+}
+
+/** Adds [days] on top of whatever time is left (never loses paid time). */
+async function addDays(env, installId, { email, source, days }) {
+  const now = Date.now();
+  const left = await expiryOf(env, installId);
+  const expires = Math.max(now, left) + days * DAY_MS;
+  await env.DB.prepare(
+    "INSERT INTO subs (install_id, email, expires_at, source, updated_at) VALUES (?, ?, ?, ?, ?) " +
+      "ON CONFLICT(install_id) DO UPDATE SET expires_at = excluded.expires_at, " +
+      "email = COALESCE(excluded.email, subs.email), source = excluded.source, updated_at = excluded.updated_at"
+  )
+    .bind(installId, email || null, expires, source, now)
+    .run();
+  return expires;
+}
+
+/** Turns a successful Paystack transaction into premium time, once. */
+async function settle(env, tx) {
+  if (!tx || tx.status !== "success") return null;
+  if (tx.currency !== "NGN" || Number(tx.amount) < priceNgn(env) * 100) {
+    return null;
+  }
+  const reference = String(tx.reference || "");
+  if (!reference) return null;
+
+  const email = String(tx.customer?.email || "").toLowerCase() || null;
+  let installId = tx.metadata?.install_id;
+  if (!ID_RE.test(String(installId || ""))) {
+    // An automatic renewal: Paystack does not repeat our metadata, so find
+    // the install by the customer's e-mail.
+    const row = email
+      ? await env.DB.prepare(
+          "SELECT install_id FROM subs WHERE email = ? ORDER BY updated_at DESC LIMIT 1"
+        )
+          .bind(email)
+          .first()
+      : null;
+    installId = row?.install_id;
+  }
+  if (!installId) return null;
+
+  const ins = await env.DB.prepare(
+    "INSERT OR IGNORE INTO payments (reference, install_id, email, amount, created_at) VALUES (?, ?, ?, ?, ?)"
+  )
+    .bind(reference, installId, email, Number(tx.amount), Date.now())
+    .run();
+
+  if (ins.meta && ins.meta.changes === 0) {
+    // Already counted (webhook and verify both arrive for one payment).
+    return { installId, expires: await expiryOf(env, installId) };
+  }
+  const expires = await addDays(env, installId, {
+    email,
+    source: "paystack",
+    days: PERIOD_DAYS,
+  });
+  return { installId, expires };
+}
+
+// ---- routes ----------------------------------------------------------------
+
+async function subStatus(url, env) {
+  const id = url.searchParams.get("install") || "";
+  if (!ID_RE.test(id)) return json({ error: "bad install id" }, 400);
+  const expires = await expiryOf(env, id);
+  return json({ active: expires > Date.now(), expires_at: expires });
+}
+
+async function subStart(request, env, url) {
+  let b;
+  try {
+    b = await request.json();
+  } catch {
+    return json({ error: "bad request" }, 400);
+  }
+  const installId = String(b.install_id || "");
+  const email = String(b.email || "").trim().toLowerCase();
+  if (!ID_RE.test(installId)) return json({ error: "bad install id" }, 400);
+  if (!EMAIL_RE.test(email)) {
+    return json({ error: "Enter a valid e-mail address" }, 400);
+  }
+
+  const reference =
+    "DR" +
+    Date.now().toString(36) +
+    crypto.randomUUID().replace(/-/g, "").slice(0, 10);
+  const body = {
+    email,
+    amount: priceNgn(env) * 100, // Paystack counts in kobo
+    currency: "NGN",
+    reference,
+    callback_url: `${url.origin}/sub/done`,
+    metadata: { install_id: installId, app: "deeprowss" },
+  };
+  // A plan makes the card renew by itself every month (card payments only).
+  if (b.recurring && env.PAYSTACK_PLAN_CODE) body.plan = env.PAYSTACK_PLAN_CODE;
+
+  const r = await paystack(env, "/transaction/initialize", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!r.ok || !r.body.data?.authorization_url) {
+    return json(
+      { error: r.body?.message || "Could not start the payment" },
+      502
+    );
+  }
+
+  // Remember the e-mail now so a renewal can find this install later.
+  await env.DB.prepare(
+    "INSERT INTO subs (install_id, email, expires_at, source, updated_at) VALUES (?, ?, 0, 'pending', ?) " +
+      "ON CONFLICT(install_id) DO UPDATE SET email = excluded.email"
+  )
+    .bind(installId, email, Date.now())
+    .run();
+
+  return json({
+    authorization_url: r.body.data.authorization_url,
+    reference,
+  });
+}
+
+async function subVerify(url, env) {
+  const reference = url.searchParams.get("reference") || "";
+  if (!/^[A-Za-z0-9._-]{6,80}$/.test(reference)) {
+    return json({ error: "bad reference" }, 400);
+  }
+  const r = await paystack(
+    env,
+    `/transaction/verify/${encodeURIComponent(reference)}`
+  );
+  if (!r.ok) return json({ status: "failed" });
+  const tx = r.body.data;
+  if (tx.status !== "success") {
+    const pending = ["pending", "ongoing", "processing", "queued"].includes(
+      tx.status
+    );
+    return json({ status: pending ? "pending" : "failed" });
+  }
+  const done = await settle(env, tx);
+  if (!done) return json({ status: "failed" });
+  return json({
+    status: "success",
+    active: done.expires > Date.now(),
+    expires_at: done.expires,
+    install_id: done.installId,
+  });
+}
+
+async function subWebhook(request, env) {
+  const raw = await request.text();
+  const sig = request.headers.get("x-paystack-signature") || "";
+  if (!sig || sig !== (await hmacHex(env.PAYSTACK_SECRET_KEY, raw))) {
+    return json({ error: "bad signature" }, 401);
+  }
+  let ev;
+  try {
+    ev = JSON.parse(raw);
+  } catch {
+    return json({ ok: true });
+  }
+  if (ev.event === "charge.success") await settle(env, ev.data);
+  return json({ ok: true });
+}
+
+/** New phone: prove the payment with its e-mail + Paystack reference. */
+async function subRestore(request, env) {
+  let b;
+  try {
+    b = await request.json();
+  } catch {
+    return json({ error: "bad request" }, 400);
+  }
+  const installId = String(b.install_id || "");
+  const email = String(b.email || "").trim().toLowerCase();
+  const reference = String(b.reference || "").trim();
+  if (!ID_RE.test(installId) || !EMAIL_RE.test(email) || !reference) {
+    return json({ error: "Enter your e-mail and payment reference" }, 400);
+  }
+  const r = await paystack(
+    env,
+    `/transaction/verify/${encodeURIComponent(reference)}`
+  );
+  const tx = r.ok ? r.body.data : null;
+  if (
+    !tx ||
+    tx.status !== "success" ||
+    String(tx.customer?.email || "").toLowerCase() !== email
+  ) {
+    return json({ error: "No payment found for that e-mail and reference" }, 404);
+  }
+  const row = await env.DB.prepare(
+    "SELECT MAX(expires_at) AS e FROM subs WHERE email = ?"
+  )
+    .bind(email)
+    .first();
+  const expires = Number(row?.e) || 0;
+  if (expires <= Date.now()) {
+    return json({ error: "That subscription has expired" }, 404);
+  }
+  await env.DB.prepare(
+    "INSERT INTO subs (install_id, email, expires_at, source, updated_at) VALUES (?, ?, ?, 'restored', ?) " +
+      "ON CONFLICT(install_id) DO UPDATE SET expires_at = MAX(subs.expires_at, excluded.expires_at), email = excluded.email, source = 'restored', updated_at = excluded.updated_at"
+  )
+    .bind(installId, email, expires, Date.now())
+    .run();
+  return json({ ok: true, active: true, expires_at: expires });
+}
+
+/**
+ * Phone-friendly page for manual (WhatsApp) payers:
+ *   /sub/admin?token=<ADMIN_TOKEN>
+ * Paste the person's ID (it is in their WhatsApp message), choose the days
+ * and press Grant. Use 0 days to switch someone off.
+ */
+async function subAdmin(request, env, url) {
+  const secret = env.ADMIN_TOKEN || env.STATS_TOKEN;
+  const token =
+    request.method === "POST"
+      ? (await request.clone().formData()).get("token")
+      : url.searchParams.get("token");
+  if (!secret || token !== secret) return json({ error: "forbidden" }, 403);
+
+  let note = "";
+  if (request.method === "POST") {
+    const f = await request.formData();
+    const id = String(f.get("install_id") || "").trim();
+    const days = parseInt(String(f.get("days") || ""), 10);
+    if (!ID_RE.test(id) || !(days >= 0 && days <= 3650)) {
+      note = "Check the ID (letters/numbers only) and the days (0-3650).";
+    } else if (days === 0) {
+      await env.DB.prepare(
+        "INSERT INTO subs (install_id, expires_at, source, updated_at) VALUES (?, 0, 'revoked', ?) " +
+          "ON CONFLICT(install_id) DO UPDATE SET expires_at = 0, source = 'revoked', updated_at = excluded.updated_at"
+      )
+        .bind(id, Date.now())
+        .run();
+      note = `Premium switched off for ${id}`;
+    } else {
+      const e = await addDays(env, id, { email: null, source: "manual", days });
+      note = `Premium until ${new Date(e).toISOString().slice(0, 10)} for ${id}`;
+    }
+  }
+
+  const rows = await env.DB.prepare(
+    "SELECT install_id, email, expires_at, source FROM subs WHERE expires_at > 0 ORDER BY updated_at DESC LIMIT 25"
+  ).all();
+  const list = (rows.results || [])
+    .map(
+      (r) =>
+        `<tr><td>${esc(String(r.install_id).slice(0, 12))}…</td><td>${esc(r.source)}</td><td>${esc(new Date(Number(r.expires_at)).toISOString().slice(0, 10))}</td><td>${esc(r.email || "")}</td></tr>`
+    )
+    .join("");
+
+  return html(
+    `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Premium admin</title>
+<body style="font-family:sans-serif;background:#080b10;color:#e8edf5;padding:18px;max-width:560px;margin:auto">
+<h2>Premium admin</h2>
+${note ? `<p style="background:#16202e;padding:10px;border-radius:8px">${esc(note)}</p>` : ""}
+<form method="post">
+<input type="hidden" name="token" value="${esc(String(token))}">
+<p><input name="install_id" placeholder="Paste the person's ID" style="width:100%;padding:12px;box-sizing:border-box"></p>
+<p><input name="days" type="number" value="30" style="width:100%;padding:12px;box-sizing:border-box"></p>
+<p><button style="width:100%;padding:12px;font-size:16px">Grant days (0 = switch off)</button></p>
+</form>
+<h3>Active premium</h3>
+<table style="width:100%;font-size:12.5px"><tr><th align=left>ID<th align=left>Source<th align=left>Until<th align=left>E-mail</tr>${list}</table>
+</body>`
+  );
 }
