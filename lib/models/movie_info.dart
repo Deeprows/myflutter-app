@@ -21,6 +21,7 @@ class MovieInfo {
   final String status;
   final String language;
   final String releaseDate; // yyyy-mm-dd or ''
+  final String backdrop; // wide background image url or ''
   final int? runtime; // minutes (per episode for series)
   final int? seasons;
   final int? episodes;
@@ -35,6 +36,7 @@ class MovieInfo {
     required this.status,
     required this.language,
     required this.releaseDate,
+    required this.backdrop,
     required this.runtime,
     required this.seasons,
     required this.episodes,
@@ -125,6 +127,9 @@ class MovieInfo {
       status: s('status'),
       language: language,
       releaseDate: s(tv ? 'first_air_date' : 'release_date'),
+      backdrop: s('backdrop_path').isEmpty
+          ? ''
+          : 'https://image.tmdb.org/t/p/w780${s('backdrop_path')}',
       runtime: runtime,
       seasons: j['number_of_seasons'] is num
           ? (j['number_of_seasons'] as num).toInt()
