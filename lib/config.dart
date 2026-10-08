@@ -44,6 +44,26 @@ class AppConfig {
   static const tvUrl =
       'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/tv.json';
 
+  /// ---- IPTV Nexus (static JSON API, no key / auth) ----------------------
+  ///
+  /// Live channels with health data. The app downloads
+  /// `<nexusBase>/api/v1/channels.online.json` (working channels only),
+  /// keeps the best working stream per channel and merges the result into
+  /// the TV tab after your own `tv.json` channels. Empty = Nexus off.
+  static const nexusBase = 'https://dearbulut.github.io/iptv';
+  static const nexusOnlinePath = '/api/v1/channels.online.json';
+
+  /// Minimum time between Nexus downloads. Pull-to-refresh ignores it.
+  static const nexusRefreshMinutes = 180;
+
+  /// TV tab: play HLS / DASH / direct video links with the native player
+  /// (ExoPlayer, real Referer + User-Agent headers, no CORS limits). Embed
+  /// pages still use the web player. Set false to use the web player only.
+  static const nativeTvPlayer = true;
+
+  /// Hide channels flagged `is_nsfw` by the API.
+  static const nexusHideNsfw = true;
+
   /// Cloudflare feed (traffic monitoring). When set, fixtures, highlights,
   /// movies, TV and the ticker are downloaded from
   /// `<feedBase>/feed/<fixtures|highlights|movies|tv|ticker>.json`
