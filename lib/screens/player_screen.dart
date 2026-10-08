@@ -12,6 +12,7 @@ import '../config.dart';
 import '../models/movie.dart';
 import '../models/movie_info.dart';
 import '../services/ad_shield.dart';
+import '../services/background_playback.dart';
 import '../services/movie_library.dart';
 import '../services/player_html.dart';
 import '../services/settings_service.dart';
@@ -69,7 +70,8 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen> {
+class _PlayerScreenState extends State<PlayerScreen>
+    with WidgetsBindingObserver {
   late final WebViewController _wc;
   final GlobalKey _videoKey = GlobalKey();
 
@@ -127,16 +129,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void initState() {
     super.initState();
     WakelockPlus.enable();
+    WidgetsBinding.instance.addObserver(this);
+    BackgroundPlayback.start(widget.title, _onStopTapped);
 
     _wc = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
       ..setUserAgent(AppConfig.userAgent)
       ..setNavigationDelegate(NavigationDelegate(
-        onPageStarted: (_) => _killPopups(),
+        onPageStarted: (_) {
+          _keepVisible();
+          _killPopups();
+        },
         onProgress: (_) => _killPopups(),
         onPageFinished: (_) {
           _settled = true;
+          _keepVisible();
           _killPopups();
         },
         onWebResourceError: (e) {
@@ -180,8 +188,48 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  // ------------------------------------------------- background playback
+
+  /// "Stop" on the background-playback notification: close the player.
+  void _onStopTapped() {
+    if (!mounted) return;
+    _wc.runJavaScript(
+        "document.querySelectorAll('video').forEach(function(v){try{v.pause()}catch(e){}})")
+        .catchError((_) {});
+    Navigator.of(context).maybePop();
+  }
+
+  /// Stops the page from pausing itself because it thinks it is hidden.
+  void _keepVisible() {
+    _wc.runJavaScript(BackgroundPlayback.keepVisibleJs).catchError((_) {});
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.inactive) {
+      _wc.runJavaScript(BackgroundPlayback.rememberPlayingJs)
+          .catchError((_) {});
+      // If the page still paused its video, start it again.
+      for (final ms in const [400, 1500]) {
+        Future.delayed(Duration(milliseconds: ms), () {
+          if (mounted) {
+            _wc.runJavaScript(BackgroundPlayback.resumePlayingJs)
+                .catchError((_) {});
+          }
+        });
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      _wc.runJavaScript(BackgroundPlayback.resumePlayingJs)
+          .catchError((_) {});
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    BackgroundPlayback.stop(_onStopTapped);
     WakelockPlus.disable();
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
