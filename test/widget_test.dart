@@ -4,6 +4,7 @@ import 'package:footbolive/models/channel.dart';
 import 'package:footbolive/models/fixture.dart';
 import 'package:footbolive/models/highlight.dart';
 import 'package:footbolive/models/movie.dart';
+import 'package:footbolive/services/tmdb_service.dart';
 import 'package:footbolive/models/push_target.dart';
 import 'package:footbolive/utils/posted_at.dart';
 import 'package:footbolive/models/ticker.dart';
@@ -151,6 +152,43 @@ void main() {
       expect(m.hasDownload, isFalse);
       expect(m.date, DateTime(2026, 7, 4));
       expect(m.title, 'X');
+    });
+
+    test('a TMDB id alone builds the player and download links', () {
+      final m = Movie.tryParse({'tmdbId': 9319989, 'type': 'movie'})!;
+      expect(m.url, 'https://vsembed.su/embed/movie/9319989');
+      expect(m.downloadUrl, 'https://web.nxsha.app/dl/movie/9319989');
+      expect(m.needsDetails, isTrue);
+      final s = Movie.tryParse({'tmdbId': 1396, 'type': 'tv'})!;
+      expect(s.url, 'https://vsembed.su/embed/tv/1396');
+      expect(s.isSeries, isTrue);
+      expect(s.downloadUrl, 'https://web.nxsha.app/dl/tv/1396');
+    });
+
+    test('TMDB results become movies and series', () {
+      final m = TmdbService.fromJson({
+        'id': 603,
+        'title': 'The Matrix',
+        'release_date': '1999-03-30',
+        'vote_average': 8.2,
+        'poster_path': '/p.jpg',
+        'genre_ids': [28, 878],
+      })!;
+      expect(m.name, 'The Matrix (1999)');
+      expect(m.url, 'https://vsembed.su/embed/movie/603');
+      expect(m.downloadUrl, 'https://web.nxsha.app/dl/movie/603');
+      expect(m.rating, '8.2');
+      expect(m.genres, ['Action', 'Sci-Fi']);
+      expect(m.image, 'https://image.tmdb.org/t/p/w500/p.jpg');
+      final s = TmdbService.fromJson({
+        'id': 1396,
+        'media_type': 'tv',
+        'name': 'Breaking Bad',
+        'first_air_date': '2008-01-20',
+      })!;
+      expect(s.url, 'https://vsembed.su/embed/tv/1396');
+      expect(s.downloadUrl, 'https://web.nxsha.app/dl/tv/1396');
+      expect(TmdbService.fromJson({'id': 1, 'media_type': 'person'}), isNull);
     });
   });
 
