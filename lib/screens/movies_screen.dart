@@ -14,10 +14,10 @@ import '../theme/app_theme.dart';
 import '../widgets/app_refresh.dart';
 import '../utils/format.dart';
 import '../widgets/movie_card.dart';
-import '../services/download_manager.dart';
+import '../services/movie_library.dart';
+import '../utils/open_movie.dart';
 import 'browser_screen.dart';
-import 'downloads_screen.dart';
-import 'player_screen.dart';
+import 'library_screen.dart';
 
 class MoviesScreen extends StatefulWidget {
   const MoviesScreen({super.key});
@@ -38,6 +38,37 @@ class _MoviesScreenState extends State<MoviesScreen> {
   Timer? _debounce;
   final _search = TextEditingController();
 
+  // The front page order is shuffled once per day (local midnight).
+  Timer? _midnight;
+  int _dayKey = _today();
+
+  static int _today() {
+    final n = DateTime.now();
+    return n.year * 10000 + n.month * 100 + n.day;
+  }
+
+  /// Rebuilds the front page when the day changes while the app is open.
+  void _armMidnight() {
+    _midnight?.cancel();
+    final n = DateTime.now();
+    final next = DateTime(n.year, n.month, n.day + 1, 0, 0, 2);
+    _midnight = Timer(next.difference(n), () {
+      if (!mounted) return;
+      setState(() => _dayKey = _today());
+      _armMidnight();
+    });
+  }
+
+  /// Same title, same day -> same number, so the order holds all day and
+  /// changes tomorrow. New titles added meanwhile don't reshuffle the rest.
+  int _dayRank(Movie m) {
+    var h = 0x811C9DC5;
+    for (final c in '$_dayKey|${m.url}'.codeUnits) {
+      h = ((h ^ c) * 0x01000193) & 0xFFFFFFFF;
+    }
+    return h;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -46,9 +77,13 @@ class _MoviesScreenState extends State<MoviesScreen> {
     });
     PushService.instance.target.addListener(_onTarget);
     ContentSync.tick.addListener(_onSync);
+    MovieLibrary.instance.load();
+    _armMidnight();
   }
 
   void _onSync() {
+    // Coming back to the app after midnight: pick up the new day's order.
+    if (_dayKey != _today()) setState(() => _dayKey = _today());
     if (!_loading) _load(remote: true);
   }
 
@@ -84,6 +119,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
     PushService.instance.target.removeListener(_onTarget);
     ContentSync.tick.removeListener(_onSync);
     _debounce?.cancel();
+    _midnight?.cancel();
     _search.dispose();
     super.dispose();
   }
@@ -144,21 +180,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
     return keys.take(12).toList();
   }
 
-  void _play(Movie m) {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => PlayerScreen(
-        title: m.title,
-        subtitle: [
-          m.isSeries ? 'Series' : 'Movie',
-          if (m.year != null) m.year!,
-          if (m.rating != null) '★ ${m.rating}',
-        ].join(' · '),
-        url: m.url,
-        altUrl: m.altUrl,
-        movie: m,
-      ),
-    ));
-  }
+  void _play(Movie m) => openMoviePlayer(context, m);
 
   void _details(Movie m) {
     SupportGate.guard(context, () {
@@ -210,6 +232,12 @@ class _MoviesScreenState extends State<MoviesScreen> {
       for (final m in _discover[_genre] ?? const <Movie>[]) {
         addExtra(m, matchName: true);
       }
+    }
+    // Browsing (no search text): a fresh order every day. Searching keeps
+    // the best matches first.
+    if (q.isEmpty) {
+      final rank = {for (final m in filtered) m.url: _dayRank(m)};
+      filtered.sort((a, b) => rank[a.url]!.compareTo(rank[b.url]!));
     }
     final top = MediaQuery.of(context).padding.top;
 
@@ -280,7 +308,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                             ),
                           ),
                           const Spacer(),
-                          const _DownloadsButton(),
+                          const _LibraryButtons(),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -432,29 +460,41 @@ class _MoviesScreenState extends State<MoviesScreen> {
   }
 }
 
-/// Header button that opens the Downloads list; shows a badge with the number
-/// of downloads currently running.
-class _DownloadsButton extends StatelessWidget {
-  const _DownloadsButton();
+/// Header icons: Watch later (badge = saved titles) and Watch history.
+class _LibraryButtons extends StatelessWidget {
+  const _LibraryButtons();
+
+  void _open(BuildContext context, int tab) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => LibraryScreen(initialTab: tab),
+      ));
 
   @override
   Widget build(BuildContext context) {
-    final m = DownloadManager.instance;
+    final lib = MovieLibrary.instance;
     return ListenableBuilder(
-      listenable: m,
+      listenable: lib,
       builder: (context, _) {
-        final active = m.activeCount;
-        return IconButton(
-          tooltip: 'Downloads',
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-            builder: (_) => const DownloadsScreen(),
-          )),
-          icon: Badge(
-            isLabelVisible: active > 0,
-            label: Text('$active'),
-            backgroundColor: Ui.red,
-            child: const Icon(Icons.download_rounded),
-          ),
+        final saved = lib.watchLater.length;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: 'Save & watch later',
+              onPressed: () => _open(context, 0),
+              icon: Badge(
+                isLabelVisible: saved > 0,
+                label: Text('$saved'),
+                backgroundColor: Ui.red,
+                child: const Icon(Icons.bookmark_rounded),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Watch history',
+              onPressed: () => _open(context, 1),
+              icon: const Icon(Icons.history_rounded),
+            ),
+          ],
         );
       },
     );
@@ -569,6 +609,36 @@ class _MovieSheet extends StatelessWidget {
                     label: const Text('Play',
                         style: TextStyle(fontWeight: FontWeight.w800)),
                   ),
+                ),
+                const SizedBox(width: 10),
+                ListenableBuilder(
+                  listenable: MovieLibrary.instance,
+                  builder: (context, _) {
+                    final saved = MovieLibrary.instance.isSaved(movie);
+                    return IconButton.outlined(
+                      tooltip: saved ? 'Remove from Watch later' : 'Watch later',
+                      onPressed: () async {
+                        final now =
+                            await MovieLibrary.instance.toggleWatchLater(movie);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(SnackBar(
+                              content: Text(now
+                                  ? 'Saved to Watch later'
+                                  : 'Removed from Watch later')));
+                      },
+                      style: IconButton.styleFrom(
+                        side: BorderSide(color: saved ? Ui.red : Ui.line),
+                        minimumSize: const Size(52, 52),
+                      ),
+                      icon: Icon(
+                          saved
+                              ? Icons.bookmark_rounded
+                              : Icons.bookmark_add_outlined,
+                          color: saved ? Ui.red : null),
+                    );
+                  },
                 ),
                 if (movie.hasDownload) ...[
                   const SizedBox(width: 10),
