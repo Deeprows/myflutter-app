@@ -154,6 +154,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
           if (m.rating != null) '★ ${m.rating}',
         ].join(' · '),
         url: m.url,
+        altUrl: m.altUrl,
         movie: m,
       ),
     ));
