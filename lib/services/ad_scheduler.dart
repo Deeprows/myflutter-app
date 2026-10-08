@@ -11,7 +11,8 @@ import 'subscription_service.dart';
 import 'support_gate.dart';
 
 /// Free plan: shows the "We Need Your Support" page after every
-/// [AppConfig.adIntervalMinutes] minutes of use.
+/// [AppConfig.adIntervalMinutes] minutes of use (10). The very first tap on a
+/// fixture / highlight / channel / movie also shows it (see SupportGate).
 ///
 ///  * The clock only runs while the app is open and on screen, and the
 ///    count is saved, so many short visits add up like one long one.
@@ -35,11 +36,21 @@ class AdScheduler with WidgetsBindingObserver {
 
   int get _limit => AppConfig.adIntervalMinutes * 60;
 
-  bool get _adsOn =>
+  bool get adsOn =>
       AppConfig.plansEnabled &&
       AppConfig.adIntervalMinutes > 0 &&
       AppConfig.supportUrl.trim().isNotEmpty &&
       !SubscriptionService.instance.isPremium;
+
+  /// True while the overlay (from the timer) is on screen.
+  bool get isShowing => _showing;
+
+  /// Starts the next [AppConfig.adIntervalMinutes] countdown from zero (used
+  /// after the first-tap overlay has been completed).
+  void restartClock() {
+    _seconds = 0;
+    unawaited(_save());
+  }
 
   /// Seconds of use counted so far (for tests / debugging).
   int get secondsCounted => _seconds;
@@ -73,7 +84,13 @@ class AdScheduler with WidgetsBindingObserver {
   }
 
   void _onTick() {
-    if (!_foreground || _showing || _holds > 0 || !_adsOn) return;
+    if (!_foreground ||
+        _showing ||
+        SupportGate.showing ||
+        _holds > 0 ||
+        !adsOn) {
+      return;
+    }
     _seconds += _step.inSeconds;
     _unsaved += _step.inSeconds;
     if (_unsaved >= 30) unawaited(_save());
@@ -82,7 +99,7 @@ class AdScheduler with WidgetsBindingObserver {
 
   Future<void> _fire() async {
     final ctx = AppNav.overlayContext;
-    if (ctx == null || _showing) return; // try again on the next tick
+    if (ctx == null || _showing || SupportGate.showing) return; // retry next tick
     _showing = true;
     SupportChoice? choice;
     try {
