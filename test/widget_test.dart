@@ -176,6 +176,20 @@ void main() {
       expect(s.downloadUrl, 'https://web.nxsha.app/dl/tv/1396');
     });
 
+    test('backup player link for movies and series', () {
+      expect(Movie.tryParse({'tmdbId': 76341, 'type': 'movie'})!.altUrl,
+          'https://web.nxsha.app/embed/movie/76341');
+      expect(Movie.tryParse({'tmdbId': 76341, 'type': 'tv'})!.altUrl,
+          'https://web.nxsha.app/embed/tv/76341/1/1');
+      final old = Movie.tryParse({
+        'name': 'Old (2020)',
+        'url': 'https://vsembed.ru/embed/movie/tt27548557',
+      })!;
+      expect(old.altUrl, 'https://web.nxsha.app/embed/movie/tt27548557');
+      expect(
+          Movie.tryParse({'name': 'N', 'url': 'https://a.com/e'})!.altUrl, '');
+    });
+
     test('TMDB results become movies and series', () {
       final m = TmdbService.fromJson({
         'id': 603,
@@ -236,6 +250,7 @@ void main() {
       expect(i.cast.first.photo, 'https://image.tmdb.org/t/p/w185/x.jpg');
       expect(i.cast.last.hasPhoto, isFalse);
       expect(i.language, 'English');
+      expect(i.backdrop, '');
     });
 
     test('series use creators and season counts', () {
