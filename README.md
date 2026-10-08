@@ -52,6 +52,7 @@ Every title is keyed by its TMDB id (settings are in `lib/config.dart`):
 | --- | --- |
 | Movie player | `https://vsembed.su/embed/movie/<tmdb id>` |
 | Series player | `https://vsembed.su/embed/tv/<tmdb id>` |
+| Backup player (Switch button) | `https://web.nxsha.app/embed/movie/<id>` / `https://web.nxsha.app/embed/tv/<id>/1/1` |
 | Movie download | `https://web.nxsha.app/dl/movie/<tmdb id>` |
 | Series download | `https://web.nxsha.app/dl/tv/<tmdb id>` |
 
