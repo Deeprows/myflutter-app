@@ -54,22 +54,15 @@ class _SupportBrowserScreenState extends State<SupportBrowserScreen> {
       ..setBackgroundColor(Ui.bg)
       ..setUserAgent(AppConfig.userAgent)
       ..setNavigationDelegate(NavigationDelegate(
-        onNavigationRequest: (r) {
-          final scheme = Uri.tryParse(r.url)?.scheme.toLowerCase() ?? '';
-          // Stay inside the app: no intent://, market://, tel: ...
-          if (scheme == 'http' ||
-              scheme == 'https' ||
-              scheme == 'about' ||
-              scheme == 'data' ||
-              scheme == 'blob') {
-            return NavigationDecision.navigate;
-          }
-          return NavigationDecision.prevent;
-        },
+        onNavigationRequest: (r) => _route(r.url),
         onPageStarted: (_) {
           if (mounted && _error) setState(() => _error = false);
+          _makeClickable();
         },
-        onPageFinished: (_) => _startCountdown(),
+        onPageFinished: (_) {
+          _makeClickable();
+          _startCountdown();
+        },
         onWebResourceError: (e) {
           if (e.isForMainFrame == true && mounted && _end == null) {
             setState(() => _error = true);
@@ -90,6 +83,60 @@ class _SupportBrowserScreenState extends State<SupportBrowserScreen> {
     _fallback = Timer(const Duration(seconds: 8), () {
       if (!_error) _startCountdown();
     });
+  }
+
+  /// Links that ask for a new tab / window (target=_blank, window.open) would
+  /// otherwise do nothing inside the app, so open them in this same page.
+  static const _clickFix = '''
+(function(){
+  if (window.__spFix) return; window.__spFix = true;
+  window.open = function(u){ if (u) { location.href = u; } return window; };
+  document.addEventListener('click', function(e){
+    var a = e.target && e.target.closest ? e.target.closest('a[target]') : null;
+    if (a && a.target !== '_self') { a.target = '_self'; }
+  }, true);
+})();
+''';
+
+  void _makeClickable() {
+    try {
+      _wc.runJavaScript(_clickFix);
+    } catch (_) {}
+  }
+
+  /// Web links go through. App links (intent://, market://) are turned into
+  /// their web page so tapping them still goes somewhere; the rest is ignored.
+  NavigationDecision _route(String url) {
+    final uri = Uri.tryParse(url);
+    final scheme = uri?.scheme.toLowerCase() ?? '';
+    if (scheme == 'http' ||
+        scheme == 'https' ||
+        scheme == 'about' ||
+        scheme == 'data' ||
+        scheme == 'blob') {
+      return NavigationDecision.navigate;
+    }
+    String? web;
+    if (scheme == 'intent') {
+      final fb = RegExp(r'S\.browser_fallback_url=([^;]+)').firstMatch(url);
+      if (fb != null) {
+        web = Uri.decodeComponent(fb.group(1)!);
+      } else {
+        final sch = RegExp(r'scheme=(https?);').firstMatch(url)?.group(1);
+        final body = url.substring('intent://'.length).split('#Intent').first;
+        if (sch != null && body.isNotEmpty) web = '$sch://$body';
+      }
+    } else if (scheme == 'market') {
+      final id = uri?.queryParameters['id'];
+      if (id != null && id.isNotEmpty) {
+        web = 'https://play.google.com/store/apps/details?id=$id';
+      }
+    }
+    final target = web == null ? null : Uri.tryParse(web);
+    if (target != null && (target.scheme == 'http' || target.scheme == 'https')) {
+      _wc.loadRequest(target);
+    }
+    return NavigationDecision.prevent;
   }
 
   void _startCountdown() {
