@@ -42,3 +42,25 @@ flutter run
 After `flutter create`, run `python3 tool/patch_android_manifest.py` once. It adds INTERNET, notification and foreground-service permissions (needed for background downloads), cleartext `http://` support, the app label, and disables WorkManager's default initializer so `flutter_downloader` can start its own. The included GitHub workflow does this automatically and uploads the APK.
 
 Background downloads use [`flutter_downloader`](https://pub.dev/packages/flutter_downloader) (Android WorkManager). On Android 13+ the app asks for notification permission the first time you download.
+
+
+## TMDB movies and series
+
+Every title is keyed by its TMDB id (settings are in `lib/config.dart`):
+
+| What | Link |
+| --- | --- |
+| Movie player | `https://vsembed.su/embed/movie/<tmdb id>` |
+| Series player | `https://vsembed.su/embed/tv/<tmdb id>` |
+| Movie download | `https://web.nxsha.app/dl/movie/<tmdb id>` |
+| Series download | `https://web.nxsha.app/dl/tv/<tmdb id>` |
+
+* **Add a title by id only** in `assets/data/movies.json`; the app fetches the
+  name, poster, rating and genres from TMDB and builds the links:
+  `{ "tmdbId": 9319989, "type": "movie" }` or `{ "tmdbId": 1396, "type": "tv" }`.
+  Add `"date": "2026-10-08"` to place it in the newest-first order.
+* **Trending** TMDB movies and series are listed after your own titles
+  (`AppConfig.tmdbTrending`).
+* **Search** in the Movies tab also searches all of TMDB (`AppConfig.tmdbSearch`).
+* The v3 API key is `AppConfig.tmdbApiKey`; override it at build time with
+  `--dart-define=TMDB_API_KEY=...`.
