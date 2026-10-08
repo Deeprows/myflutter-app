@@ -3,15 +3,18 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 
 import '../config.dart';
+import '../screens/plans_screen.dart';
 import '../screens/support_browser_screen.dart';
+import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 
-enum SupportChoice { supported, released }
+enum SupportChoice { supported, released, premium }
 
 /// Shows the "We Need Your Support" overlay. Resolves to [SupportChoice.supported]
-/// once the support page has been viewed to the end, or [SupportChoice.released]
+/// once the support page has been viewed to the end, [SupportChoice.released]
 /// when the support page cannot load at all (so nobody is locked out by a
-/// dead link or no connection).
+/// dead link or no connection), or [SupportChoice.premium] when the person
+/// chose to remove the ads instead.
 Future<SupportChoice?> showSupportOverlay(BuildContext context) {
   return showGeneralDialog<SupportChoice>(
     context: context,
@@ -76,18 +79,28 @@ class _SupportOverlayState extends State<SupportOverlay>
     }
   }
 
+  Future<void> _goPremium() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const PlansScreen()),
+    );
+    if (!mounted) return;
+    if (SubscriptionService.instance.isPremium) {
+      Navigator.of(context).pop(SupportChoice.premium);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final hours = AppConfig.supportIntervalHours;
+    final mins = AppConfig.adIntervalMinutes; // minutes between ads
     final secs = AppConfig.supportViewSeconds;
-    final hLabel = hours == 1 ? 'hour' : 'hours';
+    final mLabel = mins == 1 ? 'minute' : 'minutes';
 
     final steps = <String>[
       'Click the button above ☝️',
       'Wait for the page to load 🥱',
       'Stay on the page for $secs seconds ❤️',
       'It will close automatically ☺️',
-      'Enjoy uninterrupted streaming for the next $hours $hLabel 📺',
+      'Enjoy uninterrupted streaming for the next $mins $mLabel 📺',
     ];
 
     return PopScope(
@@ -112,9 +125,13 @@ class _SupportOverlayState extends State<SupportOverlay>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _topCard(hours, hLabel, secs),
+                        _topCard(mins, mLabel, secs),
                         const SizedBox(height: 14),
                         _stepsCard(steps),
+                        if (SubscriptionService.instance.enabled) ...[
+                          const SizedBox(height: 10),
+                          _premiumButton(),
+                        ],
                       ],
                     ),
                   ),
@@ -129,7 +146,7 @@ class _SupportOverlayState extends State<SupportOverlay>
 
   // ------------------------------------------------------------ top card
 
-  Widget _topCard(int hours, String hLabel, int secs) {
+  Widget _topCard(int mins, String mLabel, int secs) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       decoration: BoxDecoration(
@@ -204,7 +221,7 @@ class _SupportOverlayState extends State<SupportOverlay>
               border: Border.all(color: Ui.line),
             ),
             child: Text(
-              'Wait time: ${secs}s  •  Trigger: every ${hours}h  •  Auto close: ON',
+              'Wait time: ${secs}s  •  Trigger: every $mins min  •  Auto close: ON',
               textAlign: TextAlign.center,
               style: TextStyle(
                   color: Ui.dim, fontSize: 10, fontWeight: FontWeight.w600),
@@ -213,7 +230,7 @@ class _SupportOverlayState extends State<SupportOverlay>
           const SizedBox(height: 10),
           Text(
             'Choose your experience — support us with a single visit and '
-            'enjoy $hours $hLabel of uninterrupted streaming.',
+            'enjoy $mins $mLabel of uninterrupted streaming.',
             textAlign: TextAlign.center,
             style: TextStyle(
                 color: Ui.muted,
@@ -222,13 +239,13 @@ class _SupportOverlayState extends State<SupportOverlay>
                 fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 12),
-          _button(hours),
+          _button(mins),
         ],
       ),
     );
   }
 
-  Widget _button(int hours) {
+  Widget _button(int mins) {
     return AnimatedBuilder(
       animation: _pulse,
       builder: (_, _) {
@@ -266,7 +283,7 @@ class _SupportOverlayState extends State<SupportOverlay>
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Open 1 AD per ${hours}h',
+                      'Open 1 AD per $mins min',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: .88),
                         fontSize: 12,
@@ -280,6 +297,25 @@ class _SupportOverlayState extends State<SupportOverlay>
           ),
         );
       },
+    );
+  }
+
+  Widget _premiumButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _goPremium,
+        icon: Icon(Icons.workspace_premium_rounded, color: Ui.redSoft),
+        label: Text('Remove ads — go Premium',
+            style: TextStyle(
+                color: Ui.redSoft, fontWeight: FontWeight.w800, fontSize: 14)),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          side: BorderSide(color: Ui.red.withValues(alpha: .6)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(22)),
+        ),
+      ),
     );
   }
 
