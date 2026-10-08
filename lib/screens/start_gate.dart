@@ -32,7 +32,7 @@ class _StartGateState extends State<StartGate> {
 
   Future<void> _decide() async {
     final sub = SubscriptionService.instance;
-    var show = sub.enabled && !sub.isPremium;
+    var show = sub.visible && !sub.isPremium;
     if (show && !AppConfig.showPlansEveryStart) {
       try {
         final prefs = await SharedPreferences.getInstance();
