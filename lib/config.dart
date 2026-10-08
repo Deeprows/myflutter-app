@@ -90,6 +90,11 @@ class AppConfig {
   /// no ads for anyone.
   static const plansEnabled = true;
 
+  /// false = the Premium / plans screens, the "Go Premium" menu item and the
+  /// "Remove ads - go Premium" button are hidden (everything is still built
+  /// and ready). Ads keep working. Set true to bring Premium back.
+  static const showSubscriptions = false;
+
   /// true: the plans page shows on every launch for people who are not
   /// premium. false: only on the first launch and after a premium ends.
   static const showPlansEveryStart = true;
@@ -118,15 +123,19 @@ class AppConfig {
   /// [supportUrl] empty = no ads at all.
   static const supportUrl =
       'https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60';
-  static const adIntervalMinutes = 15;
+  static const adIntervalMinutes = 10;
   static const supportViewSeconds = 13; // page auto-closes after this long
 
   /// If the support page cannot load (offline / dead link) nobody is locked
   /// out; the overlay comes back after this many minutes of use.
   static const adRetryMinutes = 3;
 
-  /// The OLD trigger (tap a fixture / highlight / movie card, once every
-  /// [supportIntervalHours]) is switched off. Set true to bring it back.
+  /// The FIRST tap on a fixture, highlight, TV channel or movie in each app
+  /// launch shows the overlay; after that it comes back every
+  /// [adIntervalMinutes] minutes of use. false = timer only.
+  static const supportOnFirstTap = true;
+
+  /// Old 12-hour card-tap rule (not used any more; kept for the unit test).
   static const supportOnCardTap = false;
   static const supportIntervalHours = 12;
   static const supportRetryHours =
