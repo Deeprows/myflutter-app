@@ -27,7 +27,12 @@
  *   GET  /sub/status   is this install premium?
  *   POST /sub/webhook  Paystack events (signature checked)
  *   POST /sub/restore  move a paid subscription to a new phone
- *   /sub/admin         grant / revoke manually (WhatsApp payers)
+ *   /sub/admin         grant / revoke manually (WhatsApp payers), make and
+ *                      hand out ad-free tokens, see token requests
+ *   POST /sub/token/request  a phone asks for an ad-free token
+ *   GET  /sub/token/mine     has my request been answered? (token ready?)
+ *   POST /sub/token/redeem   a phone turns a token into ad-free time
+ *   (the three token routes only need the DB binding, not Paystack)
  *   Settings: PAYSTACK_SECRET_KEY (secret), PAYSTACK_PLAN_CODE (optional),
  *             ADMIN_TOKEN (secret, falls back to STATS_TOKEN),
  *             PRICE_NGN (optional, default 2000), PRICE_NGN_YEAR (optional,
@@ -89,6 +94,8 @@ export default {
           env.STATS_TOKEN && env.CF_ACCOUNT_ID && env.CF_API_TOKEN
         ),
         subscriptions: Boolean(env.DB && env.PAYSTACK_SECRET_KEY),
+        // Ad-free tokens only need the D1 binding + an admin password.
+        tokens: Boolean(env.DB && (env.ADMIN_TOKEN || env.STATS_TOKEN)),
       });
     }
 
@@ -920,6 +927,12 @@ async function ensureSchema(env) {
     env.DB.prepare(
       "CREATE TABLE IF NOT EXISTS payments (reference TEXT PRIMARY KEY, install_id TEXT, email TEXT, amount INTEGER, created_at INTEGER NOT NULL DEFAULT 0)"
     ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS tokens (token TEXT PRIMARY KEY, days INTEGER NOT NULL, bound_to TEXT, note TEXT, created_at INTEGER NOT NULL DEFAULT 0, redeemed_by TEXT, redeemed_at INTEGER)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS token_requests (install_id TEXT PRIMARY KEY, contact TEXT, created_at INTEGER NOT NULL DEFAULT 0)"
+    ),
   ]);
   schemaReady = true;
 }
@@ -940,7 +953,13 @@ async function subscriptions(request, env, url) {
     return subConfig(url, env);
   }
 
-  if (!env.DB || !env.PAYSTACK_SECRET_KEY) {
+  // Status, the admin page and the token routes only need the database;
+  // everything else also needs the Paystack key.
+  const dbOnly =
+    path === "/sub/status" ||
+    path === "/sub/admin" ||
+    path.startsWith("/sub/token/");
+  if (!env.DB || (!env.PAYSTACK_SECRET_KEY && !dbOnly)) {
     return json({ error: "subscriptions are not set up on the server" }, 503);
   }
 
@@ -961,6 +980,15 @@ async function subscriptions(request, env, url) {
     }
     if (path === "/sub/restore" && request.method === "POST") {
       return subRestore(request, env);
+    }
+    if (path === "/sub/token/request" && request.method === "POST") {
+      return tokenRequest(request, env);
+    }
+    if (path === "/sub/token/mine" && request.method === "GET") {
+      return tokenMine(url, env);
+    }
+    if (path === "/sub/token/redeem" && request.method === "POST") {
+      return tokenRedeem(request, env);
     }
     if (path === "/sub/admin") {
       return subAdmin(request, env, url);
@@ -1307,26 +1335,207 @@ async function subRestore(request, env) {
   return json({ ok: true, active: true, expires_at: expires });
 }
 
+// ---- ad-free tokens ---------------------------------------------------------
+//
+// A phone asks for a token (/sub/token/request). You see the request on the
+// admin page and press "Create token" (or make tokens in advance). The phone
+// finds the token by itself (/sub/token/mine) or the person types it in; either
+// way /sub/token/redeem turns it into ad-free days on that phone's install id.
+// A token works once. A token made from a request only works on that phone.
+
+const TOKEN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0 O 1 I
+const TOKEN_LEN = 12;
+const MAX_TOKEN_DAYS = 3650;
+
+function makeToken() {
+  const bytes = new Uint8Array(TOKEN_LEN);
+  crypto.getRandomValues(bytes);
+  // 32 symbols and 256 byte values: "& 31" has no bias.
+  return Array.from(bytes, (b) => TOKEN_ALPHABET[b & 31]).join("");
+}
+
+/** "abcd-efgh ijkl" -> "ABCDEFGHIJKL" */
+const normToken = (t) =>
+  String(t || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+
+/** "ABCDEFGHJKLM" -> "ABCD-EFGH-JKLM" */
+const showToken = (t) => String(t).replace(/(.{4})(?=.)/g, "$1-");
+
+async function mintTokens(env, { days, count = 1, boundTo = null, note = "" }) {
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const token = makeToken();
+    await env.DB.prepare(
+      "INSERT INTO tokens (token, days, bound_to, note, created_at) VALUES (?, ?, ?, ?, ?)"
+    )
+      .bind(token, days, boundTo, note || null, Date.now())
+      .run();
+    out.push(token);
+  }
+  return out;
+}
+
+async function tokenRequest(request, env) {
+  let b;
+  try {
+    b = await request.json();
+  } catch {
+    return json({ error: "bad request" }, 400);
+  }
+  const installId = String(b.install_id || "");
+  if (!ID_RE.test(installId)) return json({ error: "bad install id" }, 400);
+  const contact = String(b.contact || "").trim().slice(0, 80);
+
+  if ((await expiryOf(env, installId)) > Date.now()) {
+    return json({ ok: true, state: "active" });
+  }
+  await env.DB.prepare(
+    "INSERT INTO token_requests (install_id, contact, created_at) VALUES (?, ?, ?) " +
+      "ON CONFLICT(install_id) DO UPDATE SET contact = COALESCE(NULLIF(excluded.contact, ''), token_requests.contact), created_at = excluded.created_at"
+  )
+    .bind(installId, contact, Date.now())
+    .run();
+  return json({ ok: true, state: "pending" });
+}
+
+/** Has the request been answered? Returns the token made for this phone. */
+async function tokenMine(url, env) {
+  const id = url.searchParams.get("install") || "";
+  if (!ID_RE.test(id)) return json({ error: "bad install id" }, 400);
+  const expires = await expiryOf(env, id);
+  if (expires > Date.now()) {
+    return json({ state: "active", expires_at: expires });
+  }
+  const t = await env.DB.prepare(
+    "SELECT token, days FROM tokens WHERE bound_to = ? AND redeemed_by IS NULL ORDER BY created_at DESC LIMIT 1"
+  )
+    .bind(id)
+    .first();
+  if (t) return json({ state: "ready", token: showToken(t.token), days: t.days });
+  const r = await env.DB.prepare(
+    "SELECT 1 AS x FROM token_requests WHERE install_id = ?"
+  )
+    .bind(id)
+    .first();
+  return json({ state: r ? "pending" : "none" });
+}
+
+async function tokenRedeem(request, env) {
+  let b;
+  try {
+    b = await request.json();
+  } catch {
+    return json({ error: "bad request" }, 400);
+  }
+  const installId = String(b.install_id || "");
+  const token = normToken(b.token);
+  if (!ID_RE.test(installId)) return json({ error: "bad install id" }, 400);
+  if (token.length !== TOKEN_LEN) {
+    return json({ error: "Enter the token exactly as you received it" }, 400);
+  }
+
+  const row = await env.DB.prepare(
+    "SELECT token, days, bound_to, redeemed_by FROM tokens WHERE token = ?"
+  )
+    .bind(token)
+    .first();
+  if (!row) return json({ error: "That token is not valid" }, 404);
+
+  if (row.redeemed_by) {
+    if (row.redeemed_by === installId) {
+      // Same phone pressing the button twice: just report the time it has.
+      const e = await expiryOf(env, installId);
+      return json({ ok: true, active: e > Date.now(), expires_at: e });
+    }
+    return json({ error: "That token has already been used" }, 409);
+  }
+  if (row.bound_to && row.bound_to !== installId) {
+    return json({ error: "That token was made for another phone" }, 403);
+  }
+
+  // Claim it first (only one phone can win), then add the time.
+  const claim = await env.DB.prepare(
+    "UPDATE tokens SET redeemed_by = ?, redeemed_at = ? WHERE token = ? AND redeemed_by IS NULL"
+  )
+    .bind(installId, Date.now(), token)
+    .run();
+  if (Number(claim?.meta?.changes) !== 1) {
+    return json({ error: "That token has already been used" }, 409);
+  }
+  const expires = await addDays(env, installId, {
+    email: null,
+    source: "token",
+    days: Number(row.days),
+  });
+  await env.DB.prepare("DELETE FROM token_requests WHERE install_id = ?")
+    .bind(installId)
+    .run();
+  return json({ ok: true, active: true, expires_at: expires });
+}
+
 /**
- * Phone-friendly page for manual (WhatsApp) payers:
+ * Phone-friendly admin page:
  *   /sub/admin?token=<ADMIN_TOKEN>
- * Paste the person's ID (it is in their WhatsApp message), choose the days
- * and press Grant. Use 0 days to switch someone off.
+ *  - Token requests: phones that pressed "Request token". Choose the days and
+ *    press "Create token"; the phone receives it by itself (or you send it).
+ *  - Make tokens in advance (for people you chat with on WhatsApp/Telegram).
+ *  - Grant days straight to an ID (0 days switches someone off).
  */
 async function subAdmin(request, env, url) {
   const secret = env.ADMIN_TOKEN || env.STATS_TOKEN;
-  const token =
-    request.method === "POST"
-      ? (await request.clone().formData()).get("token")
-      : url.searchParams.get("token");
+  const form = request.method === "POST" ? await request.formData() : null;
+  const token = form ? form.get("token") : url.searchParams.get("token");
   if (!secret || token !== secret) return json({ error: "forbidden" }, 403);
 
   let note = "";
-  if (request.method === "POST") {
-    const f = await request.formData();
-    const id = String(f.get("install_id") || "").trim();
-    const days = parseInt(String(f.get("days") || ""), 10);
-    if (!ID_RE.test(id) || !(days >= 0 && days <= 3650)) {
+  let made = [];
+  if (form) {
+    const action = String(form.get("action") || "grant");
+    const id = String(form.get("install_id") || "").trim();
+    const days = parseInt(String(form.get("days") || ""), 10);
+    const daysOk = days >= 0 && days <= MAX_TOKEN_DAYS;
+
+    if (action === "mint") {
+      const count = Math.min(
+        20,
+        Math.max(1, parseInt(String(form.get("count") || "1"), 10) || 1)
+      );
+      const label = String(form.get("note") || "").trim().slice(0, 60);
+      if (!(days >= 1 && days <= MAX_TOKEN_DAYS)) {
+        note = "Days must be 1-3650.";
+      } else {
+        made = await mintTokens(env, { days, count, note: label });
+        note = `${made.length} token(s) made, ${days} day(s) each. Each works once, on any phone.`;
+      }
+    } else if (action === "answer") {
+      if (!ID_RE.test(id) || !(days >= 1 && days <= MAX_TOKEN_DAYS)) {
+        note = "Check the ID and the days (1-3650).";
+      } else {
+        const req = await env.DB.prepare(
+          "SELECT contact FROM token_requests WHERE install_id = ?"
+        )
+          .bind(id)
+          .first();
+        made = await mintTokens(env, {
+          days,
+          boundTo: id,
+          note: req?.contact || "",
+        });
+        // Answered: take it out of the waiting list. The phone now finds
+        // the token through /sub/token/mine.
+        await env.DB.prepare("DELETE FROM token_requests WHERE install_id = ?")
+          .bind(id)
+          .run();
+        note = `Token made for ${id.slice(0, 12)}… (${days} days). The phone shows it by itself; you can also send it.`;
+      }
+    } else if (action === "dismiss") {
+      await env.DB.prepare("DELETE FROM token_requests WHERE install_id = ?")
+        .bind(id)
+        .run();
+      note = "Request removed.";
+    } else if (!ID_RE.test(id) || !daysOk) {
       note = "Check the ID (letters/numbers only) and the days (0-3650).";
     } else if (days === 0) {
       await env.DB.prepare(
@@ -1342,28 +1551,84 @@ async function subAdmin(request, env, url) {
     }
   }
 
+  const day = (ms) => new Date(Number(ms)).toISOString().slice(0, 10);
+  const tk = esc(String(token));
+  const btn = "padding:9px 12px;font-size:15px";
+  const box = "width:100%;padding:12px;box-sizing:border-box";
+
+  const reqs = (
+    await env.DB.prepare(
+      "SELECT install_id, contact, created_at FROM token_requests ORDER BY created_at DESC LIMIT 30"
+    ).all()
+  ).results || [];
+  const reqHtml = reqs.length
+    ? reqs
+        .map(
+          (r) => `<form method="post" style="background:#101722;padding:10px;border-radius:8px;margin:8px 0">
+<input type="hidden" name="token" value="${tk}"><input type="hidden" name="install_id" value="${esc(r.install_id)}">
+<div style="font-size:12.5px;margin-bottom:6px">${esc(String(r.install_id).slice(0, 12))}… &middot; ${esc(day(r.created_at))}${r.contact ? ` &middot; <b>${esc(r.contact)}</b>` : ""}</div>
+<input name="days" type="number" value="30" style="width:80px;padding:9px">
+<button name="action" value="answer" style="${btn}">Create token</button>
+<button name="action" value="dismiss" style="${btn}">Dismiss</button>
+</form>`
+        )
+        .join("")
+    : `<p style="color:#8d99ab;font-size:13px">No requests waiting.</p>`;
+
+  const unused = (
+    await env.DB.prepare(
+      "SELECT token, days, bound_to, note FROM tokens WHERE redeemed_by IS NULL ORDER BY created_at DESC LIMIT 25"
+    ).all()
+  ).results || [];
+  const unusedHtml = unused
+    .map(
+      (r) =>
+        `<tr><td style="font-family:monospace">${esc(showToken(r.token))}</td><td>${esc(r.days)}d</td><td>${r.bound_to ? esc(String(r.bound_to).slice(0, 8)) + "…" : "any"}</td><td>${esc(r.note || "")}</td></tr>`
+    )
+    .join("");
+
   const rows = await env.DB.prepare(
     "SELECT install_id, email, expires_at, source FROM subs WHERE expires_at > 0 ORDER BY updated_at DESC LIMIT 25"
   ).all();
   const list = (rows.results || [])
     .map(
       (r) =>
-        `<tr><td>${esc(String(r.install_id).slice(0, 12))}…</td><td>${esc(r.source)}</td><td>${esc(new Date(Number(r.expires_at)).toISOString().slice(0, 10))}</td><td>${esc(r.email || "")}</td></tr>`
+        `<tr><td>${esc(String(r.install_id).slice(0, 12))}…</td><td>${esc(r.source)}</td><td>${esc(day(r.expires_at))}</td><td>${esc(r.email || "")}</td></tr>`
     )
     .join("");
 
+  const madeHtml = made.length
+    ? `<div style="background:#12301f;padding:10px;border-radius:8px;font-family:monospace;font-size:17px;line-height:1.7">${made
+        .map((t) => esc(showToken(t)))
+        .join("<br>")}</div>`
+    : "";
+
   return html(
-    `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Premium admin</title>
+    `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ad-free admin</title>
 <body style="font-family:sans-serif;background:#080b10;color:#e8edf5;padding:18px;max-width:560px;margin:auto">
-<h2>Premium admin</h2>
+<h2>Ad-free admin</h2>
 ${note ? `<p style="background:#16202e;padding:10px;border-radius:8px">${esc(note)}</p>` : ""}
+${madeHtml}
+<h3>Token requests</h3>
+${reqHtml}
+<h3>Make tokens</h3>
 <form method="post">
-<input type="hidden" name="token" value="${esc(String(token))}">
-<p><input name="install_id" placeholder="Paste the person's ID" style="width:100%;padding:12px;box-sizing:border-box"></p>
-<p><input name="days" type="number" value="30" style="width:100%;padding:12px;box-sizing:border-box"></p>
-<p><button style="width:100%;padding:12px;font-size:16px">Grant days (0 = switch off)</button></p>
+<input type="hidden" name="token" value="${tk}"><input type="hidden" name="action" value="mint">
+<p><input name="days" type="number" value="30" placeholder="Days" style="${box}"></p>
+<p><input name="count" type="number" value="1" placeholder="How many (1-20)" style="${box}"></p>
+<p><input name="note" placeholder="Note (optional, e.g. a name)" style="${box}"></p>
+<p><button style="${box};font-size:16px">Make token(s)</button></p>
 </form>
-<h3>Active premium</h3>
+<h3>Grant days to an ID</h3>
+<form method="post">
+<input type="hidden" name="token" value="${tk}"><input type="hidden" name="action" value="grant">
+<p><input name="install_id" placeholder="Paste the person's ID" style="${box}"></p>
+<p><input name="days" type="number" value="30" style="${box}"></p>
+<p><button style="${box};font-size:16px">Grant days (0 = switch off)</button></p>
+</form>
+<h3>Unused tokens</h3>
+<table style="width:100%;font-size:12.5px"><tr><th align=left>Token<th align=left>Days<th align=left>For<th align=left>Note</tr>${unusedHtml}</table>
+<h3>Ad-free phones</h3>
 <table style="width:100%;font-size:12.5px"><tr><th align=left>ID<th align=left>Source<th align=left>Until<th align=left>E-mail</tr>${list}</table>
 </body>`
   );
