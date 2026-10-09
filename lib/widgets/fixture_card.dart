@@ -4,6 +4,12 @@ import '../models/fixture.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 
+/// Compact fixture card.
+///
+/// Layout:
+/// - Small league badge
+/// - Home team / kickoff information / away team
+/// - Compact countdown, live or ended status
 class FixtureCard extends StatelessWidget {
   final Fixture fixture;
   final DateTime now;
@@ -25,12 +31,21 @@ class FixtureCard extends StatelessWidget {
     final ended = phase == MatchPhase.ended;
     final kickoff = f.kickoff.toLocal();
 
+    // -------------------------------------------------------------------------
+    // STATUS
+    // -------------------------------------------------------------------------
+
     final String status;
+
     switch (phase) {
       case MatchPhase.upcoming:
-        status = 'Starts in ${countdownText(f.kickoff.difference(now))}';
+        status =
+            'Starts in ${countdownText(f.kickoff.difference(now))}';
+
       case MatchPhase.live:
-        status = 'Live · ${_ms(now.difference(f.kickoff))}';
+        status =
+            'Live · ${_ms(now.difference(f.kickoff))}';
+
       case MatchPhase.ended:
         status = 'Ended';
     }
@@ -41,43 +56,60 @@ class FixtureCard extends StatelessWidget {
             ? Ui.dim
             : Colors.white;
 
+    // -------------------------------------------------------------------------
+    // CARD
+    // -------------------------------------------------------------------------
+
+    final BoxDecoration deco = BoxDecoration(
+      color: Ui.cardDeep,
+      borderRadius: BorderRadius.circular(11),
+      border: Border.all(
+        color: live
+            ? Ui.red.withValues(alpha: .78)
+            : ended
+                ? Colors.white.withValues(alpha: .08)
+                : Ui.red.withValues(alpha: .34),
+        width: live ? 1.2 : 1,
+      ),
+      boxShadow: live
+          ? [
+              BoxShadow(
+                color: Ui.red.withValues(alpha: .14),
+                blurRadius: 9,
+                spreadRadius: .5,
+              ),
+            ]
+          : null,
+    );
+
     return Opacity(
       opacity: ended ? .72 : 1,
       child: Material(
         color: Colors.transparent,
         child: Ink(
-          decoration: BoxDecoration(
-            color: Ui.cardDeep,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(
-              color: live
-                  ? Ui.red.withValues(alpha: .78)
-                  : ended
-                      ? Colors.white.withValues(alpha: .08)
-                      : Ui.red.withValues(alpha: .34),
-              width: live ? 1.2 : 1,
-            ),
-            boxShadow: live
-                ? [
-                    BoxShadow(
-                      color: Ui.red.withValues(alpha: .14),
-                      blurRadius: 9,
-                      spreadRadius: .5,
-                    ),
-                  ]
-                : null,
-          ),
+          decoration: deco,
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(11),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
+              padding: const EdgeInsets.fromLTRB(
+                8,
+                5,
+                8,
+                5,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // -----------------------------------------------------------
+                  // LEAGUE
+                  // -----------------------------------------------------------
+
                   if (f.league.isNotEmpty)
                     Container(
-                      constraints: const BoxConstraints(maxWidth: 220),
+                      constraints: const BoxConstraints(
+                        maxWidth: 220,
+                      ),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
                         vertical: 1,
@@ -102,11 +134,16 @@ class FixtureCard extends StatelessWidget {
                   if (f.league.isNotEmpty)
                     const SizedBox(height: 3),
 
+                  // -----------------------------------------------------------
+                  // TEAMS + KICKOFF
+                  // -----------------------------------------------------------
+
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(
                         child: _Team(
+                          flag: f.homeFlag,
                           name: f.home,
                           muted: ended,
                           alignEnd: false,
@@ -121,22 +158,29 @@ class FixtureCard extends StatelessWidget {
                             Text(
                               fmtTime12(kickoff),
                               style: TextStyle(
-                                color: ended ? Ui.dim : Colors.white,
+                                color: ended
+                                    ? Ui.dim
+                                    : Colors.white,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
                                 height: 1.1,
                               ),
                             ),
+
                             const SizedBox(height: 1),
+
                             Text(
                               fmtDateNum(kickoff),
                               style: TextStyle(
-                                color: ended ? Ui.dim : Ui.redSoft,
+                                color: ended
+                                    ? Ui.dim
+                                    : Ui.redSoft,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                                 height: 1.1,
                               ),
                             ),
+
                             Text(
                               tzShort(kickoff),
                               style: TextStyle(
@@ -152,6 +196,7 @@ class FixtureCard extends StatelessWidget {
 
                       Expanded(
                         child: _Team(
+                          flag: f.awayFlag,
                           name: f.away,
                           muted: ended,
                           alignEnd: true,
@@ -162,14 +207,23 @@ class FixtureCard extends StatelessWidget {
 
                   const SizedBox(height: 2),
 
+                  // -----------------------------------------------------------
+                  // STATUS
+                  // -----------------------------------------------------------
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (live) ...[
-                        Icon(Icons.sensors_rounded, size: 11, color: Ui.red),
+                        Icon(
+                          Icons.sensors_rounded,
+                          size: 11,
+                          color: Ui.red,
+                        ),
                         const SizedBox(width: 3),
                       ],
+
                       Flexible(
                         child: Text(
                           status,
@@ -186,6 +240,7 @@ class FixtureCard extends StatelessWidget {
                           ),
                         ),
                       ),
+
                       if (!f.hasStream && !ended) ...[
                         const SizedBox(width: 6),
                         Text(
@@ -210,58 +265,49 @@ class FixtureCard extends StatelessWidget {
   }
 }
 
+// -----------------------------------------------------------------------------
+// LIVE TIMER
+// -----------------------------------------------------------------------------
+
 String _ms(Duration d) {
-  if (d.isNegative) d = Duration.zero;
+  if (d.isNegative) {
+    d = Duration.zero;
+  }
 
   String two(int n) => n.toString().padLeft(2, '0');
 
   return '${two(d.inMinutes)}:${two(d.inSeconds % 60)}';
 }
 
+// -----------------------------------------------------------------------------
+// TEAM
+// -----------------------------------------------------------------------------
+
 class _Team extends StatelessWidget {
+  final String flag;
   final String name;
   final bool muted;
   final bool alignEnd;
 
   const _Team({
+    required this.flag,
     required this.name,
     required this.muted,
     required this.alignEnd,
   });
 
-  String get _crestAsset {
-    switch (name.toLowerCase().trim()) {
-      case 'malaga':
-      case 'málaga':
-        return 'assets/clubs/malaga.png';
-      case 'espanyol':
-      case 'rcd espanyol':
-        return 'assets/clubs/espanyol.png';
-      case 'borussia dortmund':
-      case 'dortmund':
-        return 'assets/clubs/dortmund.png';
-      case 'werder bremen':
-        return 'assets/clubs/werder_bremen.png';
-      case 'lens':
-      case 'rc lens':
-        return 'assets/clubs/lens.png';
-      case 'lyon':
-      case 'olympique lyonnais':
-        return 'assets/clubs/lyon.png';
-      default:
-        return '';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final asset = _crestAsset;
-
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment:
-          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: alignEnd
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       children: [
+        // ---------------------------------------------------------------
+        // FLAG
+        // ---------------------------------------------------------------
+
         Container(
           width: 29,
           height: 29,
@@ -273,34 +319,31 @@ class _Team extends StatelessWidget {
               color: Colors.white.withValues(alpha: .08),
             ),
           ),
-          child: asset.isEmpty
-              ? const Icon(
-                  Icons.sports_soccer_rounded,
-                  size: 20,
-                  color: Colors.white70,
-                )
-              : Image.asset(
-                  asset,
-                  width: 23,
-                  height: 23,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => const Icon(
-                    Icons.sports_soccer_rounded,
-                    size: 20,
-                    color: Colors.white70,
-                  ),
-                ),
+          child: Text(
+            flag.isEmpty ? '⚽' : flag,
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.05,
+            ),
+          ),
         ),
 
         const SizedBox(height: 1),
 
+        // ---------------------------------------------------------------
+        // TEAM NAME
+        // ---------------------------------------------------------------
+
         Text(
           name,
           maxLines: 1,
-          textAlign: alignEnd ? TextAlign.end : TextAlign.start,
+          textAlign:
+              alignEnd ? TextAlign.end : TextAlign.start,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: muted ? const Color(0xFF858B95) : Colors.white,
+            color: muted
+                ? const Color(0xFF858B95)
+                : Colors.white,
             fontSize: 11.5,
             fontWeight: FontWeight.w700,
             height: 1.15,
