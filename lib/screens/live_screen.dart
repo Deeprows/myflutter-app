@@ -444,29 +444,44 @@ class _FixtureSupportCard extends StatelessWidget {
                     size: 105, color: const Color(0xFFFFC928).withValues(alpha: .12)),
               ),
               Center(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.favorite_rounded,
-                        color: Color(0xFFFFD21F), size: 28),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'SUPPORT ',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 25,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.0,
-                        fontStyle: FontStyle.italic,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.favorite_rounded,
+                            color: Color(0xFFFFD21F), size: 28),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'SUPPORT ',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 25,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.0,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                        const Text(
+                          'ME',
+                          style: TextStyle(
+                            color: Color(0xFFFFD21F),
+                            fontSize: 27,
+                            fontWeight: FontWeight.w900,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 2),
                     const Text(
-                      'ME',
+                      'with just a click',
                       style: TextStyle(
                         color: Color(0xFFFFD21F),
-                        fontSize: 27,
-                        fontWeight: FontWeight.w900,
-                        fontStyle: FontStyle.italic,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.4,
                       ),
                     ),
                   ],
