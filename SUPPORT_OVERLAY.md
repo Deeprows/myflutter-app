@@ -1,3 +1,20 @@
+# Ads are now YouTube-style (preloaded + Skip Ad)
+
+* The ad page is **loaded in the background** (`AdPreloader`) once when the app
+  starts and again `adPreloadLeadSeconds` (60) before each ad is due, so it
+  shows instantly. A copy older than `adPreloadMaxAgeSeconds` (240) is
+  reloaded.
+* The ad screen shows a yellow **Ad** badge, a yellow progress line and a
+  **"Skip in 5" -> "Skip Ad"** button (`supportSkipAfterSeconds`). It ends by
+  itself after `supportAfterLoadSeconds` (10). If the person taps the ad, the
+  automatic ending stops and the button becomes **Continue**.
+* If the page was not ready in time, the old "Ad support timeout: please
+  wait" message shows until it has loaded.
+* Set `adPreloadLeadSeconds = 0` and `adPreloadOnStart = false` to turn
+  preloading off.
+
+---
+
 # Ads for the free plan: "ad support" page (overlay temporarily hidden)
 
 **Current behaviour** (`AppConfig.supportOverlayVisible = false`): the "We Need
