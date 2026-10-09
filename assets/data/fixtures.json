@@ -2,9 +2,7 @@
   {
     "id": "1",
     "home": "Malaga",
-    "homeFlag": "🇪🇸",
     "away": "Espanyol",
-    "awayFlag": "🇪🇸",
     "league": "LaLiga",
     "kickoff": "2026-10-09T20:00:00+01:00",
     "duration": 130,
@@ -14,9 +12,7 @@
   {
     "id": "2",
     "home": "Borussia Dortmund",
-    "homeFlag": "🇩🇪",
     "away": "Werder Bremen",
-    "awayFlag": "🇩🇪",
     "league": "Bundesliga",
     "kickoff": "2026-10-09T19:30:00+01:00",
     "duration": 130,
@@ -26,9 +22,7 @@
   {
     "id": "3",
     "home": "Lens",
-    "homeFlag": "🇫🇷",
     "away": "Lyon",
-    "awayFlag": "🇫🇷",
     "league": "Ligue 1",
     "kickoff": "2026-10-09T19:45:00+01:00",
     "duration": 130,
