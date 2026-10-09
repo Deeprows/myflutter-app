@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -551,13 +553,7 @@ class VideoTile extends StatelessWidget {
                 children: [
                   Container(color: Ui.cardDeep),
                   if (entry.asset != null)
-                    AssetEntityImage(
-                      entry.asset!,
-                      isOriginal: false,
-                      thumbnailSize: const ThumbnailSize.square(360),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                    )
+                    _Thumb(entry.asset!)
                   else
                     Container(
                       decoration: BoxDecoration(
@@ -618,6 +614,32 @@ class VideoTile extends StatelessWidget {
                   fontSize: 13, fontWeight: FontWeight.w700, height: 1.2)),
         ],
       ),
+    );
+  }
+}
+
+/// Video thumbnail loaded from the phone (cached per tile).
+class _Thumb extends StatefulWidget {
+  final AssetEntity asset;
+  const _Thumb(this.asset);
+
+  @override
+  State<_Thumb> createState() => _ThumbState();
+}
+
+class _ThumbState extends State<_Thumb> {
+  late final Future<Uint8List?> _f =
+      widget.asset.thumbnailDataWithSize(const ThumbnailSize(360, 360));
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: _f,
+      builder: (_, snap) {
+        final d = snap.data;
+        if (d == null) return const SizedBox.shrink();
+        return Image.memory(d, fit: BoxFit.cover, gaplessPlayback: true);
+      },
     );
   }
 }
