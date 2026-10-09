@@ -6,6 +6,7 @@ import '../screens/browser_screen.dart';
 import '../screens/network_stream_screen.dart';
 import '../screens/playlists_screen.dart';
 import '../screens/plans_screen.dart';
+import '../screens/remove_ads_screen.dart';
 import '../services/notice_service.dart';
 import '../services/subscription_service.dart';
 import '../services/settings_service.dart';
@@ -98,6 +99,13 @@ class FootboliveDrawer extends StatelessWidget {
                           ? 'Premium (active)'
                           : 'Go Premium - no ads',
                       (c) => _push(c, const PlansScreen())),
+                if (SubscriptionService.instance.tokensVisible)
+                  item(
+                      Icons.block_rounded,
+                      SubscriptionService.instance.isPremium
+                          ? 'Ads removed'
+                          : 'Remove ads',
+                      (c) => _push(c, const RemoveAdsScreen())),
                 item(Icons.link_rounded, 'Network Stream',
                     (c) => _push(c, const NetworkStreamScreen())),
                 item(Icons.playlist_play_rounded, 'Playlists',
