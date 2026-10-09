@@ -1,38 +1,75 @@
+
 [
   {
     "id": "1",
-    "home": "Malaga",
-    "away": "Espanyol",
-    "league": "LaLiga",
-    "kickoff": "2026-10-09T20:00:00+01:00",
+    "home": "Arsenal",
+    "away": "Leeds United",
+    "league": "Premier League",
+    "kickoff": "2026-10-10T12:30:00+01:00",
     "duration": 130,
-    "url": "https://taifood-blog.asia/embed/laliga/2026-10-09/mcf-esp",
-    "altUrl": "https://abisnews.com/6trsant7-1421",
-    "homeLogo": "573",
-    "awayLogo": "540"
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "42",
+    "awayLogo": "63"
   },
   {
     "id": "2",
-    "home": "Borussia Dortmund",
-    "away": "Werder Bremen",
-    "league": "Bundesliga",
-    "kickoff": "2026-10-09T19:30:00+01:00",
+    "home": "Aston Villa",
+    "away": "Brentford",
+    "league": "Premier League",
+    "kickoff": "2026-10-10T15:00:00+01:00",
     "duration": 130,
-    "url": "https://streamtp-golden1.click/global1.php?stream=espn5",
-    "altUrl": "https://streamtp-golden1.click/global1.php?stream=disney6",
-    "homeLogo": "165",
-    "awayLogo": "162"
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "66",
+    "awayLogo": "94"
   },
   {
     "id": "3",
-    "home": "Lens",
-    "away": "Lyon",
-    "league": "Ligue 1",
-    "kickoff": "2026-10-09T19:45:00+01:00",
+    "home": "Chelsea",
+    "away": "AFC Bournemouth",
+    "league": "Premier League",
+    "kickoff": "2026-10-10T15:00:00+01:00",
     "duration": 130,
-    "url": "https://trend48.st/event/m-lens-vs-lyon-1009",
-    "altUrl": "https://trend48.st/event/ppv-lens-vs-lyon",
-    "homeLogo": "116",
-    "awayLogo": "80"
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "49",
+    "awayLogo": "35"
+  },
+  {
+    "id": "4",
+    "home": "Ipswich Town",
+    "away": "Fulham",
+    "league": "Premier League",
+    "kickoff": "2026-10-10T15:00:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "57",
+    "awayLogo": "36"
+  },
+  {
+    "id": "5",
+    "home": "Sunderland",
+    "away": "Brighton",
+    "league": "Premier League",
+    "kickoff": "2026-10-10T15:00:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "71",
+    "awayLogo": "51"
+  },
+  {
+    "id": "6",
+    "home": "Manchester United",
+    "away": "Tottenham Hotspur",
+    "league": "Premier League",
+    "kickoff": "2026-10-10T17:30:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "33",
+    "awayLogo": "47"
   }
 ]
