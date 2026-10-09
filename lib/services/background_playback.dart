@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// Keeps video/audio playing when the app is minimised or the screen is
 /// locked. Starts an Android foreground service (media notification) while a
@@ -71,18 +70,6 @@ class BackgroundPlayback {
     } catch (_) {
       return true;
     }
-  }
-
-  /// Asks once (per install) to be exempt from battery optimisation, which
-  /// many phones use to kill the music service when the screen is off.
-  static Future<void> askBatteryExemptionOnce() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (prefs.getBool('asked_battery_exempt') ?? false) return;
-      await prefs.setBool('asked_battery_exempt', true);
-      if (await Permission.ignoreBatteryOptimizations.isGranted) return;
-      await Permission.ignoreBatteryOptimizations.request();
-    } catch (_) {}
   }
 
   /// Call when a player page opens. [onStopRequested] runs when the user taps
