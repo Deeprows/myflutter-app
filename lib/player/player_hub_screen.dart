@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 
+import '../services/support_gate.dart';
 import '../theme/app_theme.dart';
 import 'local_media.dart';
 import 'local_video_screen.dart';
@@ -58,13 +59,19 @@ class _PlayerHubScreenState extends State<PlayerHubScreen> {
   // -------------------------------------------------------------- actions
 
   void _playVideos(List<MediaEntry> list, int i) {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => LocalVideoScreen(items: list, index: i),
-    ));
+    SupportGate.guard(context, () {
+      if (!mounted) return;
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => LocalVideoScreen(items: list, index: i),
+      ));
+    });
   }
 
   void _playSongs(List<MediaEntry> list, int i) {
-    MusicPlayer.instance.playQueue(list, i);
+    SupportGate.guard(context, () {
+      if (!mounted) return;
+      MusicPlayer.instance.playQueue(list, i);
+    });
   }
 
   void _playAny(List<MediaEntry> list, int i) {
