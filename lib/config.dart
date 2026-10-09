@@ -139,6 +139,27 @@ class AppConfig {
   /// [adIntervalMinutes] minutes of use. false = timer only.
   static const supportOnFirstTap = true;
 
+  /// false = the "We Need Your Support" overlay (Click Here + instructions) is
+  /// HIDDEN. Instead the ad page ([supportUrl]) opens straight away on the
+  /// first tap and shows only a short wait message. true = old overlay back.
+  static const supportOverlayVisible = false;
+
+  /// Message on the bar while the ad page is loading.
+  static const supportWaitText = 'Ad support timeout: please wait';
+
+  /// Seconds the ad page stays after it has FULLY loaded (people can use it),
+  /// then it closes by itself and the person is back where they were. They can
+  /// also tap Resume at any time after it has loaded.
+  static const supportAfterLoadSeconds = 5;
+
+  /// The ad page is never cut off while it is loading. Only if it is still
+  /// loading after this many seconds is it treated as loaded (so a page that
+  /// never reports "finished" can't hold anyone for ever).
+  static const supportMaxLoadSeconds = 40;
+
+  /// Show the "Thanks" banner after the ad page closes.
+  static const supportThanksBanner = false;
+
   /// Old 12-hour card-tap rule (not used any more; kept for the unit test).
   static const supportOnCardTap = false;
   static const supportIntervalHours = 12;
@@ -180,8 +201,8 @@ class AppConfig {
   /// e.g. `com.deeprows.browser`. Either empty = no pop-up, Download opens the
   /// phone's browser as before.
   static const partnerBrowserName = 'Deeprows Browser';
-  static const partnerBrowserApkUrl = '';
-  static const partnerBrowserPackage = '';
+  static const partnerBrowserApkUrl = 'https://github.com/Deeprows/Deeprowss-browser-updated-2/releases/download/v0.1.4/app-release.apk';
+  static const partnerBrowserPackage = 'com.deeprowss.browser';
   static const partnerOpenDirectIfInstalled = true;
 
   /// Download links:  <downloadBase>/movie/<tmdb id>  and
