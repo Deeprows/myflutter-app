@@ -29,11 +29,16 @@ perms = [
     "android.permission.FOREGROUND_SERVICE",
     "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
     "android.permission.REQUEST_INSTALL_PACKAGES",  # install Deeprows Browser
+    "android.permission.READ_MEDIA_VIDEO",  # Player tab: phone videos (Android 13+)
+    "android.permission.READ_MEDIA_AUDIO",  # Player tab: phone music (Android 13+)
 ]
 add = ""
 for p in perms:
     if p not in s:
         add += f'    <uses-permission android:name="{p}"/>\n'
+if "READ_EXTERNAL_STORAGE" not in s:
+    add += ('    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" '
+            'android:maxSdkVersion="32"/>\n')
 if "WRITE_EXTERNAL_STORAGE" not in s:
     add += ('    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" '
             'android:maxSdkVersion="28"/>\n')
