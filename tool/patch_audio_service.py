@@ -77,3 +77,29 @@ if not os.path.exists(icon_path):
 </vector>
 """)
 print("ensured", icon_path)
+
+# ---- keep the icon in release builds -----------------------------------
+# audio_service finds the notification icon by NAME at runtime
+# (getIdentifier("ic_stat_notify")). Nothing references it from code, so the
+# release build's resource shrinker deletes it, the media notification then
+# has no valid small icon, and Android silently refuses to show it (no card
+# in the notification bar or on the lock screen). This file tells the shrinker
+# to keep it.
+raw_dir = "android/app/src/main/res/raw"
+os.makedirs(raw_dir, exist_ok=True)
+keep_path = os.path.join(raw_dir, "keep.xml")
+with open(keep_path, "w", encoding="utf8") as f:
+    f.write("""<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_notify,@mipmap/ic_launcher*,@drawable/ic_launcher*"
+    tools:shrinkMode="lenient" />
+""")
+print("ensured", keep_path)
+
+# ---- make sure the service is declared with the media type ---------------
+m = open(mpath, encoding="utf8").read()
+if "android.permission.POST_NOTIFICATIONS" not in m:
+    m = m.replace("<application",
+        '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application', 1)
+    open(mpath, "w", encoding="utf8").write(m)
+    print("added POST_NOTIFICATIONS")
