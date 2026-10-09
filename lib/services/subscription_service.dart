@@ -94,6 +94,19 @@ class CheckoutStart {
 
 enum PaymentResult { active, pending, failed }
 
+/// Where this phone is in the ad-free token flow.
+///   none    - nothing requested yet
+///   pending - requested, waiting for an answer
+///   ready   - a token was made for this phone ([token] is filled in)
+///   active  - ads are already removed
+///   unknown - the Worker could not be reached
+class TokenState {
+  final String state;
+  final String? token;
+  final int days;
+  const TokenState(this.state, {this.token, this.days = 0});
+}
+
 /// Free or Premium. The phone only keeps a copy of "premium until <date>";
 /// the truth lives in the Cloudflare Worker (D1), filled in by Paystack.
 class SubscriptionService extends ChangeNotifier {
@@ -113,6 +126,9 @@ class SubscriptionService extends ChangeNotifier {
 
   /// Whether Premium is shown to people (AppConfig.showSubscriptions).
   bool get visible => enabled && AppConfig.showSubscriptions;
+
+  /// Whether the "Remove ads" (token) feature is shown to people.
+  bool get tokensVisible => enabled && AppConfig.showRemoveAds;
 
   bool get isPremium => _expires != null && _expires!.isAfter(DateTime.now());
   DateTime? get expiresAt => _expires;
@@ -288,6 +304,92 @@ class SubscriptionService extends ChangeNotifier {
         return null;
       }
       return (j['error'] ?? 'Could not restore').toString();
+    } catch (_) {
+      return 'No connection. Check your internet and try again.';
+    }
+  }
+
+  // ------------------------------------------------------------ ad-free tokens
+
+  String _errorOf(http.Response r, String fallback) {
+    try {
+      final j = jsonDecode(r.body) as Map<String, dynamic>;
+      final e = (j['error'] ?? '').toString();
+      if (e.isNotEmpty) return e;
+    } catch (_) {}
+    return fallback;
+  }
+
+  /// Asks the Worker whether the request was answered. A token made for this
+  /// phone comes back in [TokenState.token].
+  Future<TokenState> tokenStatus() async {
+    if (!enabled) return const TokenState('unknown');
+    try {
+      final id = await InstallId.get();
+      final r = await http
+          .get(_uri('/sub/token/mine', {'install': id}))
+          .timeout(const Duration(seconds: 12));
+      if (r.statusCode != 200) return const TokenState('unknown');
+      final j = jsonDecode(r.body) as Map<String, dynamic>;
+      final state = (j['state'] ?? 'none').toString();
+      if (state == 'active') {
+        await _setExpiresMs((j['expires_at'] as num?)?.toInt() ?? 0);
+      }
+      final t = (j['token'] ?? '').toString();
+      return TokenState(
+        state,
+        token: t.isEmpty ? null : t,
+        days: (j['days'] as num?)?.toInt() ?? 0,
+      );
+    } catch (_) {
+      return const TokenState('unknown');
+    }
+  }
+
+  /// Sends a token request. [contact] (name / WhatsApp number) is optional and
+  /// only shown to you on the admin page. Returns null on success or the
+  /// message to show.
+  Future<String?> requestToken({String contact = ''}) async {
+    try {
+      final id = await InstallId.get();
+      final r = await http
+          .post(
+            _uri('/sub/token/request'),
+            headers: {'content-type': 'application/json'},
+            body: jsonEncode({'install_id': id, 'contact': contact.trim()}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (r.statusCode == 200) {
+        // Already ad-free on the server (e.g. reinstall): pick that up.
+        unawaited(refresh(force: true));
+        return null;
+      }
+      return _errorOf(r, 'Could not send the request. Try again.');
+    } catch (_) {
+      return 'No connection. Check your internet and try again.';
+    }
+  }
+
+  /// Turns a token into ad-free days for this phone. Returns null on success
+  /// (ads are gone straight away) or the message to show.
+  Future<String?> redeemToken(String token) async {
+    final t = token.trim();
+    if (t.isEmpty) return 'Enter your token';
+    try {
+      final id = await InstallId.get();
+      final r = await http
+          .post(
+            _uri('/sub/token/redeem'),
+            headers: {'content-type': 'application/json'},
+            body: jsonEncode({'install_id': id, 'token': t}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (r.statusCode == 200) {
+        final j = jsonDecode(r.body) as Map<String, dynamic>;
+        await _setExpiresMs((j['expires_at'] as num?)?.toInt() ?? 0);
+        return isPremium ? null : 'That token has no time left';
+      }
+      return _errorOf(r, 'Could not use that token');
     } catch (_) {
       return 'No connection. Check your internet and try again.';
     }
