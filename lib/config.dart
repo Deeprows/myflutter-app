@@ -14,8 +14,12 @@ class AppConfig {
       'https://t.me/deeprows'; // Telegram / WhatsApp / Discord invite link
   static const updateUrl = ''; // release page or direct APK link
 
-  /// Optional remote notice (plain text, or JSON `{"title":"","message":""}`).
-  static const noticeUrl = '';
+  /// Notice you can change without a new APK: edit assets/data/notice.json in
+  /// your GitHub repo (see NOTICE.md). Shown in the menu's "Notice" item and,
+  /// when the file says "popup": true, once when the app opens.
+  /// Empty = only the bundled assets/data/notice.json is used.
+  static const noticeUrl =
+      'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/notice.json';
 
   /// Score pages opened in the in-app browser.
   static const footballScoreUrl =
@@ -176,8 +180,8 @@ class AppConfig {
   /// e.g. `com.deeprows.browser`. Either empty = no pop-up, Download opens the
   /// phone's browser as before.
   static const partnerBrowserName = 'Deeprows Browser';
-  static const partnerBrowserApkUrl = 'https://github.com/Deeprows/Deeprowss-browser-updated-2/releases/download/v0.1.4/app-release.apk';
-  static const partnerBrowserPackage = 'com.deeprows.browser';
+  static const partnerBrowserApkUrl = '';
+  static const partnerBrowserPackage = '';
   static const partnerOpenDirectIfInstalled = true;
 
   /// Download links:  <downloadBase>/movie/<tmdb id>  and
