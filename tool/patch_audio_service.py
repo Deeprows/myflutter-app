@@ -58,3 +58,22 @@ if "com.ryanheise.audioservice.AudioService" not in m:
     m = m.replace("</application>", block + "</application>", 1)
 open(mpath, "w", encoding="utf8").write(m)
 print("patched", mpath)
+
+# ---- notification small icon -------------------------------------------
+# AudioServiceConfig references drawable/ic_stat_notify. Flutter's launcher
+# icon generator does not create this Android status-bar resource, so add a
+# simple white vector icon explicitly; otherwise the media notification may
+# fail to render on Android devices.
+import os
+icon_dir = "android/app/src/main/res/drawable"
+os.makedirs(icon_dir, exist_ok=True)
+icon_path = os.path.join(icon_dir, "ic_stat_notify.xml")
+if not os.path.exists(icon_path):
+    with open(icon_path, "w", encoding="utf8") as f:
+        f.write("""<vector xmlns:android=\"http://schemas.android.com/apk/res/android\"
+    android:width=\"24dp\" android:height=\"24dp\"
+    android:viewportWidth=\"24\" android:viewportHeight=\"24\">
+    <path android:fillColor=\"#FFFFFFFF\" android:pathData=\"M12,3 L12,5 C8.13,5 5,8.13 5,12 C5,15.87 8.13,19 12,19 C15.87,19 19,15.87 19,12 L21,12 C21,16.97 16.97,21 12,21 C7.03,21 3,16.97 3,12 C3,7.03 7.03,3 12,3 Z M10,8 L16,12 L10,16 Z\"/>
+</vector>
+""")
+print("ensured", icon_path)
