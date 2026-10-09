@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../services/background_playback.dart';
+
 /// The real background player: ExoPlayer (just_audio) behind an Android media
 /// session (audio_service). This is what gives a lock-screen / notification
 /// player with play, pause, next, previous and a seek bar, and what keeps the
@@ -128,7 +130,13 @@ class AudioBridge {
   static AppAudioHandler? get current => _h;
 
   static Future<AppAudioHandler> handler() {
-    return _starting ??= AudioService.init(
+    return _starting ??= _init();
+  }
+
+  static Future<AppAudioHandler> _init() async {
+    // Android 13+: no permission = no media notification / lock-screen player.
+    await BackgroundPlayback.ensureNotificationPermission();
+    return AudioService.init(
       builder: () => AppAudioHandler(),
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.deeprows.footbolive.audio',
