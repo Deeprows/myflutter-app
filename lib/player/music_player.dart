@@ -109,10 +109,7 @@ class MusicPlayer extends ChangeNotifier {
   /// Say so, with a button straight to the right settings page.
   Future<void> _checkNotificationAccess() async {
     if (_warned) return;
-    if (await BackgroundPlayback.notificationsAllowed()) {
-      unawaited(BackgroundPlayback.askBatteryExemptionOnce());
-      return;
-    }
+    if (await BackgroundPlayback.notificationsAllowed()) return;
     _warned = true;
     final ctx = AppNav.overlayContext;
     if (ctx == null) return;
