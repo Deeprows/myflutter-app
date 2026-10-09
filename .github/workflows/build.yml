@@ -79,6 +79,9 @@ jobs:
       - name: Patch audio service (music / lock-screen controls)
         run: python3 tool/patch_audio_service.py
 
+      - name: Patch plugin compileSdk (Android API 36)
+        run: python3 tool/patch_compile_sdk.py
+
       - name: Configure Kotlin and Java JVM targets
         run: |
           {
