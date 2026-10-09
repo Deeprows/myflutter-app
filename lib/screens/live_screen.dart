@@ -418,76 +418,90 @@ class _FixtureSupportCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Every colour comes from the active theme (Ui.*), so the card follows
+    // Red / Ocean / Emerald exactly like the match cards above it.
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(13),
+      borderRadius: BorderRadius.circular(11),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(11),
         child: Container(
           height: 92,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: const Color(0xFF54D7F2), width: 1.4),
-            gradient: const LinearGradient(
-              colors: [Color(0xFF10151B), Color(0xFF24201A), Color(0xFF080B10)],
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(color: Ui.red.withValues(alpha: .78), width: 1.2),
+            gradient: LinearGradient(
+              colors: [
+                Ui.cardDeep,
+                Color.alphaBlend(Ui.red.withValues(alpha: .14), Ui.cardDeep),
+                Ui.cardDeep,
+              ],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ),
-          ),
-          child: Stack(
-            children: [
-              Positioned(
-                right: 10,
-                top: -15,
-                child: Icon(Icons.favorite_rounded,
-                    size: 105, color: const Color(0xFFFFC928).withValues(alpha: .12)),
-              ),
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.favorite_rounded,
-                            color: Color(0xFFFFD21F), size: 28),
-                        const SizedBox(width: 10),
-                        const Text(
-                          'SUPPORT ',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 25,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.0,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                        const Text(
-                          'ME',
-                          style: TextStyle(
-                            color: Color(0xFFFFD21F),
-                            fontSize: 27,
-                            fontWeight: FontWeight.w900,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'with just a click',
-                      style: TextStyle(
-                        color: Color(0xFFFFD21F),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ],
-                ),
+            boxShadow: [
+              BoxShadow(
+                color: Ui.red.withValues(alpha: .14),
+                blurRadius: 12,
               ),
             ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(11),
+            child: Stack(
+              children: [
+                Positioned(
+                  right: 10,
+                  top: -15,
+                  child: Icon(Icons.favorite_rounded,
+                      size: 105, color: Ui.red.withValues(alpha: .10)),
+                ),
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.favorite_rounded, color: Ui.red, size: 28),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'SUPPORT ',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 25,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.0,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                          Text(
+                            'ME',
+                            style: TextStyle(
+                              color: Ui.redSoft,
+                              fontSize: 27,
+                              fontWeight: FontWeight.w900,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'with just a click',
+                        style: TextStyle(
+                          color: Ui.muted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
