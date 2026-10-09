@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 /// Keeps video/audio playing when the app is minimised or the screen is
 /// locked. Starts an Android foreground service (media notification) while a
@@ -10,29 +11,85 @@ class BackgroundPlayback {
   static final List<VoidCallback> _stopHandlers = [];
   static bool _hooked = false;
 
+  // Handlers of the player page that is on screen (the latest one wins).
+  static VoidCallback? _onPlay;
+  static VoidCallback? _onPause;
+  static void Function(int seconds)? _onSeekBy;
+
   static void _hook() {
     if (_hooked) return;
     _hooked = true;
     _channel.setMethodCallHandler((call) async {
-      // "Stop" tapped in the notification.
-      if (call.method == 'stopRequested') {
-        for (final h in List.of(_stopHandlers)) {
-          h();
-        }
+      switch (call.method) {
+        case 'action':
+          switch (call.arguments) {
+            case 'play':
+              _onPlay?.call();
+            case 'pause':
+              _onPause?.call();
+            case 'rewind':
+              _onSeekBy?.call(-10);
+            case 'forward':
+              _onSeekBy?.call(10);
+            case 'stop':
+              _fireStop();
+          }
+        case 'stopRequested': // older native code
+          _fireStop();
       }
       return null;
     });
   }
 
+  static void _fireStop() {
+    for (final h in List.of(_stopHandlers)) {
+      h();
+    }
+  }
+
+  /// Android 13+ never shows a notification (media controls included) until
+  /// the person allows it. Without this the audio keeps playing in the
+  /// background but the tray / lock screen player is missing. Safe to call
+  /// often: it only asks while the permission is still undecided.
+  static Future<bool> ensureNotificationPermission() async {
+    try {
+      var s = await Permission.notification.status;
+      if (s.isDenied) s = await Permission.notification.request();
+      return s.isGranted || s.isProvisional;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Call when a player page opens. [onStopRequested] runs when the user taps
-  /// Stop on the notification.
-  static Future<void> start(String title, VoidCallback onStopRequested) async {
+  /// Stop on the notification. [onPlay] / [onPause] / [onSeekBy] handle the
+  /// other notification and lock-screen buttons (seek is +-10 seconds).
+  static Future<void> start(
+    String title,
+    VoidCallback onStopRequested, {
+    VoidCallback? onPlay,
+    VoidCallback? onPause,
+    void Function(int seconds)? onSeekBy,
+  }) async {
     _hook();
     if (!_stopHandlers.contains(onStopRequested)) {
       _stopHandlers.add(onStopRequested);
     }
+    _onPlay = onPlay;
+    _onPause = onPause;
+    _onSeekBy = onSeekBy;
+    await ensureNotificationPermission();
     try {
-      await _channel.invokeMethod<bool>('start', {'title': title});
+      await _channel
+          .invokeMethod<bool>('start', {'title': title, 'playing': true});
+    } catch (_) {}
+  }
+
+  /// Tells the notification whether the video is really playing, so the
+  /// button shows Pause or Play correctly.
+  static Future<void> setPlaying(bool playing) async {
+    try {
+      await _channel.invokeMethod<bool>('update', {'playing': playing});
     } catch (_) {}
   }
 
@@ -40,6 +97,9 @@ class BackgroundPlayback {
   static Future<void> stop(VoidCallback onStopRequested) async {
     _stopHandlers.remove(onStopRequested);
     if (_stopHandlers.isNotEmpty) return;
+    _onPlay = null;
+    _onPause = null;
+    _onSeekBy = null;
     try {
       await _channel.invokeMethod<bool>('stop');
     } catch (_) {}
