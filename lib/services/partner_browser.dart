@@ -88,16 +88,20 @@ class PartnerBrowser with WidgetsBindingObserver {
     final installed = await isInstalled();
     final choice = await showDialog<_Offer>(
       context: nav.context,
-      barrierDismissible: false,
+      // Let Android back (and tapping outside) dismiss the offer if the user
+      // decides not to continue. A dismissed dialog must not launch anything.
+      barrierDismissible: true,
       builder: (_) => _OfferDialog(installed: installed),
     );
     if (choice == _Offer.continueBrowser && installed) {
       if (!await _openInBrowser(movieUrl)) await phoneBrowser();
     } else if (choice == _Offer.getBrowser && !installed) {
       await _installThenOpen(nav, messenger, movieUrl, phoneBrowser);
-    } else {
+    } else if (choice == _Offer.phoneBrowser) {
       await phoneBrowser();
     }
+    // If the user presses Back or dismisses the card, choice is null; simply
+    // close the popup and return to the movie screen without opening a browser.
   }
 
   // ---------------------------------------------------------- install flow
