@@ -71,5 +71,53 @@
     "altUrl": "",
     "homeLogo": "33",
     "awayLogo": "47"
+  },
+  {
+    "id": "1",
+    "home": "Rayo Vallecano",
+    "away": "Athletic Club",
+    "league": "LaLiga",
+    "kickoff": "2026-10-10T13:00:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "726",
+    "awayLogo": "531"
+  },
+  {
+    "id": "2",
+    "home": "Deportivo Alaves",
+    "away": "Atletico Madrid",
+    "league": "LaLiga",
+    "kickoff": "2026-10-10T15:15:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "542",
+    "awayLogo": "530"
+  },
+  {
+    "id": "3",
+    "home": "Barcelona",
+    "away": "Getafe",
+    "league": "LaLiga",
+    "kickoff": "2026-10-10T17:30:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "529",
+    "awayLogo": "546"
+  },
+  {
+    "id": "4",
+    "home": "Real Madrid",
+    "away": "Villarreal",
+    "league": "LaLiga",
+    "kickoff": "2026-10-10T20:00:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "541",
+    "awayLogo": "533"
   }
 ]
