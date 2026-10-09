@@ -6,9 +6,10 @@ tool/patch_main_activity.py (the GitHub workflow does it):
 
     python3 tool/patch_background_playback.py
 
-  * android/.../PlaybackService.kt  - foreground service with a "Playing in
-    background" notification (Stop button) so playback survives minimising
-    the app and locking the screen
+  * android/.../PlaybackService.kt  - foreground service with a real MEDIA
+    notification (MediaSession + MediaStyle: rewind 10s, play/pause, forward
+    10s, stop) shown in the tray and on the lock screen, so playback survives
+    minimising the app and locking the screen
   * MainActivity.kt                 - `footbolive/playback` MethodChannel
     (start / stop) used by lib/services/background_playback.dart
   * AndroidManifest.xml             - service + FOREGROUND_SERVICE_MEDIA_PLAYBACK
@@ -36,25 +37,44 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.drawable.Icon
+import android.media.MediaMetadata
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Build
 import android.net.wifi.WifiManager
 import android.os.IBinder
 import android.os.PowerManager
 
-/** Keeps the process alive (and shows a notification) while a video plays. */
+/**
+ * Keeps the process alive while a video plays and shows a MEDIA notification
+ * (tray + lock screen) with rewind 10s / play-pause / forward 10s / stop.
+ * Button taps are sent to Flutter through [onAction].
+ */
 class PlaybackService : Service() {
     companion object {
-        const val CHANNEL = "playback"
+        const val CHANNEL = "playback_media"
         const val NOTIFICATION_ID = 4107
         const val ACTION_STOP = "__PKG__.STOP_PLAYBACK"
+        const val ACTION_PLAY = "__PKG__.PLAY_PLAYBACK"
+        const val ACTION_PAUSE = "__PKG__.PAUSE_PLAYBACK"
+        const val ACTION_REWIND = "__PKG__.REWIND_PLAYBACK"
+        const val ACTION_FORWARD = "__PKG__.FORWARD_PLAYBACK"
 
-        /** Set by MainActivity: tells Flutter that Stop was tapped. */
+        /** Set by MainActivity: forwards "play", "pause", "rewind", "forward", "stop" to Flutter. */
         @Volatile
-        var onStopRequested: (() -> Unit)? = null
+        var onAction: ((String) -> Unit)? = null
+
+        /** The running service, so Flutter can update the play/pause state. */
+        @Volatile
+        var instance: PlaybackService? = null
     }
 
     private var wake: PowerManager.WakeLock? = null
     private var wifi: WifiManager.WifiLock? = null
+    private var session: MediaSession? = null
+    private var title: String = "Deeprowss"
+    private var playing: Boolean = true
 
     /** Keeps the CPU and Wi-Fi awake while the screen is off, otherwise the stream stalls. */
     private fun lock() {
@@ -83,22 +103,114 @@ class PlaybackService : Service() {
         }
     }
 
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+        try {
+            val s = MediaSession(this, "deeprowss-playback")
+            @Suppress("DEPRECATION")
+            s.setFlags(
+                MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or
+                    MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
+            )
+            s.setCallback(object : MediaSession.Callback() {
+                override fun onPlay() = act("play")
+                override fun onPause() = act("pause")
+                override fun onFastForward() = act("forward")
+                override fun onRewind() = act("rewind")
+                override fun onSkipToNext() = act("forward")
+                override fun onSkipToPrevious() = act("rewind")
+                override fun onStop() = act("stop")
+            })
+            s.isActive = true
+            session = s
+        } catch (e: Exception) {
+        }
+    }
+
     override fun onDestroy() {
         unlock()
+        instance = null
+        try {
+            session?.isActive = false
+            session?.release()
+        } catch (e: Exception) {
+        }
+        session = null
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            onStopRequested?.invoke()
-            shutDown()
-            return START_NOT_STICKY
+    /** A button was pressed (notification, lock screen or headset). */
+    private fun act(name: String) {
+        when (name) {
+            "play" -> { playing = true; refresh() }
+            "pause" -> { playing = false; refresh() }
+            "stop" -> {
+                onAction?.invoke("stop")
+                shutDown()
+                return
+            }
         }
-        val title = intent?.getStringExtra("title") ?: "Deeprowss"
+        onAction?.invoke(name)
+    }
+
+    /** Called from Flutter when the real play/pause state changes. */
+    fun setPlaying(value: Boolean) {
+        if (playing == value) return
+        playing = value
+        refresh()
+    }
+
+    private fun refresh() {
+        updateSession()
+        try {
+            getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, build())
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun updateSession() {
+        val s = session ?: return
+        try {
+            s.setMetadata(
+                MediaMetadata.Builder()
+                    .putString(MediaMetadata.METADATA_KEY_TITLE, title)
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "Deeprowss")
+                    .build()
+            )
+            s.setPlaybackState(
+                PlaybackState.Builder()
+                    .setActions(
+                        PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or
+                            PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_FAST_FORWARD or
+                            PlaybackState.ACTION_REWIND or PlaybackState.ACTION_STOP
+                    )
+                    .setState(
+                        if (playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED,
+                        PlaybackState.PLAYBACK_POSITION_UNKNOWN,
+                        1f
+                    )
+                    .build()
+            )
+        } catch (e: Exception) {
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_STOP -> { act("stop"); return START_NOT_STICKY }
+            ACTION_PLAY -> { act("play"); return START_NOT_STICKY }
+            ACTION_PAUSE -> { act("pause"); return START_NOT_STICKY }
+            ACTION_REWIND -> { act("rewind"); return START_NOT_STICKY }
+            ACTION_FORWARD -> { act("forward"); return START_NOT_STICKY }
+        }
+        title = intent?.getStringExtra("title") ?: "Deeprowss"
+        playing = intent?.getBooleanExtra("playing", true) ?: true
         lock()
-        val notification = build(title)
+        updateSession()
+        val notification = build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID, notification,
@@ -110,12 +222,26 @@ class PlaybackService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun build(title: String): Notification {
+    private fun action(code: Int, icon: Int, label: String, act: String): Notification.Action {
+        val immutable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+        val pi = PendingIntent.getService(
+            this, code,
+            Intent(this, PlaybackService::class.java).setAction(act),
+            immutable or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        return Notification.Action.Builder(Icon.createWithResource(this, icon), label, pi).build()
+    }
+
+    private fun build(): Notification {
         val nm = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL, "Background playback", NotificationManager.IMPORTANCE_LOW)
-                    .apply { description = "Shown while a video keeps playing in the background" }
+                NotificationChannel(CHANNEL, "Playback controls", NotificationManager.IMPORTANCE_LOW)
+                    .apply {
+                        description = "Play, pause and seek controls while a video plays in the background"
+                        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                        setShowBadge(false)
+                    }
             )
         }
         val immutable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
@@ -123,23 +249,30 @@ class PlaybackService : Service() {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val open = PendingIntent.getActivity(this, 0, launch, immutable or PendingIntent.FLAG_UPDATE_CURRENT)
-        val stop = PendingIntent.getService(
-            this, 1,
-            Intent(this, PlaybackService::class.java).setAction(ACTION_STOP),
-            immutable or PendingIntent.FLAG_UPDATE_CURRENT
-        )
         val icon = resources.getIdentifier("ic_stat_notify", "drawable", packageName)
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             Notification.Builder(this, CHANNEL) else Notification.Builder(this)
+        val style = Notification.MediaStyle().setShowActionsInCompactView(0, 1, 2)
+        session?.let { style.setMediaSession(it.sessionToken) }
         @Suppress("DEPRECATION")
         return builder
             .setSmallIcon(if (icon != 0) icon else android.R.drawable.ic_media_play)
             .setContentTitle(title)
-            .setContentText("Playing in background")
+            .setContentText(if (playing) "Playing in background" else "Paused")
             .setContentIntent(open)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .addAction(android.R.drawable.ic_media_pause, "Stop", stop)
+            .setShowWhen(false)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setCategory(Notification.CATEGORY_TRANSPORT)
+            .addAction(action(10, android.R.drawable.ic_media_rew, "Back 10s", ACTION_REWIND))
+            .addAction(
+                if (playing) action(11, android.R.drawable.ic_media_pause, "Pause", ACTION_PAUSE)
+                else action(12, android.R.drawable.ic_media_play, "Play", ACTION_PLAY)
+            )
+            .addAction(action(13, android.R.drawable.ic_media_ff, "Forward 10s", ACTION_FORWARD))
+            .addAction(action(14, android.R.drawable.ic_menu_close_clear_cancel, "Stop", ACTION_STOP))
+            .setStyle(style)
             .build()
     }
 
@@ -175,8 +308,8 @@ if "setupPlayback" not in src:
     method = '''
     private fun setupPlayback(flutterEngine: FlutterEngine) {
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "footbolive/playback")
-        PlaybackService.onStopRequested = {
-            runOnUiThread { channel.invokeMethod("stopRequested", null) }
+        PlaybackService.onAction = { name ->
+            runOnUiThread { channel.invokeMethod("action", name) }
         }
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
@@ -185,12 +318,17 @@ if "setupPlayback" not in src:
                     try {
                         val i = Intent(this, PlaybackService::class.java)
                             .putExtra("title", call.argument<String>("title") ?: "Deeprowss")
+                            .putExtra("playing", call.argument<Boolean>("playing") ?: true)
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i)
                         else startService(i)
                     } catch (e: Exception) {
                         ok = false
                     }
                     result.success(ok)
+                }
+                "update" -> {
+                    PlaybackService.instance?.setPlaying(call.argument<Boolean>("playing") ?: true)
+                    result.success(true)
                 }
                 "stop" -> {
                     try {
