@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
 import '../widgets/support_overlay.dart';
+import 'ad_preloader.dart';
 import 'app_nav.dart';
 import 'subscription_service.dart';
 import 'support_gate.dart';
@@ -63,6 +64,8 @@ class AdScheduler with WidgetsBindingObserver {
       _seconds = prefs.getInt(_kSeconds) ?? 0;
     } catch (_) {}
     WidgetsBinding.instance.addObserver(this);
+    // Load the first ad page in the background so the first tap is instant.
+    if (AppConfig.adPreloadOnStart && adsOn) AdPreloader.instance.warmUp();
     _timer = Timer.periodic(_step, (_) => _onTick());
   }
 
@@ -94,6 +97,11 @@ class AdScheduler with WidgetsBindingObserver {
     _seconds += _step.inSeconds;
     _unsaved += _step.inSeconds;
     if (_unsaved >= 30) unawaited(_save());
+    // Shortly before the ad is due, load it in the background (YouTube style).
+    if (AppConfig.adPreloadLeadSeconds > 0 &&
+        _limit - _seconds <= AppConfig.adPreloadLeadSeconds) {
+      AdPreloader.instance.warmUp();
+    }
     if (_seconds >= _limit) unawaited(_fire());
   }
 
