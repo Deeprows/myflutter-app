@@ -5,21 +5,6 @@
     "category": "sports"
   },
   {
-    "name": "SETANTA SPORT 1",
-    "url": "https://abisnews.com/setantasport1georgia.php",
-    "category": "sports"
-  },
-  {
-    "name": "OKKO SPORT 2",
-    "url": "https://abisnews.com/okkosport2.php",
-    "category": "sports"
-  },
-  {
-    "name": "BEINSPORT 5",
-    "url": "https://abisnews.com/beinsport5ar.php",
-    "category": "sports"
-  },
-  {
     "name": "ARENA PREMIUM 5",
     "url": "https://abisnews.com/arena5premiumserbia.php",
     "category": "sports"
@@ -30,18 +15,8 @@
     "category": "sports"
   },
   {
-    "name": "espndeportes-usa",
-    "url": "https://epiembeds.online/embed/espndeportes-usa",
-    "category": "sports"
-  },
-  {
     "name": "ARENASPORTS 4",
     "url": "https://abisnews.com/beinsport2ar.php",
-    "category": "sports"
-  },
-  {
-    "name": "Aspor",
-    "url": "https://bharadwajpro.github.io/m3u8-player/player/#https://rnttwmjcin.turknet.ercdn.net/lcpmvefbyo/aspor/aspor_1080p.m3u8",
     "category": "sports"
   },
   {
@@ -57,11 +32,6 @@
   {
     "name": "Okkosport 2",
     "url": "https://abisnews.com/okkosport2.php",
-    "category": "sports"
-  },
-  {
-    "name": "Tennis Channel",
-    "url": "https://xyzstreams.st/247.html?streamid=tennischannel&proid=sling",
     "category": "sports"
   },
   {
@@ -131,28 +101,8 @@
     "category": "sports"
   },
   {
-    "name": "DSports 2",
-    "url": "https://streamtp-golden1.click/global1.php?stream=dsports2",
-    "category": "sports"
-  },
-  {
-    "name": "TyC Sports",
-    "url": "https://streamtp-golden1.click/global1.php?stream=tycsports",
-    "category": "sports"
-  },
-  {
     "name": "Sport TV BR 1",
     "url": "https://streamtp-golden1.click/global1.php?stream=sporttvbr1",
-    "category": "sports"
-  },
-  {
-    "name": "Sport TV BR 2",
-    "url": "https://streamtp-golden1.click/global1.php?stream=sporttvbr2",
-    "category": "sports"
-  },
-  {
-    "name": "Sport TV BR 3",
-    "url": "https://streamtp-golden1.click/global1.php?stream=sporttvbr3",
     "category": "sports"
   },
   {
@@ -168,11 +118,6 @@
   {
     "name": "Premiere 3",
     "url": "https://streamtp-golden1.click/global1.php?stream=premiere3",
-    "category": "sports"
-  },
-  {
-    "name": "Fox One",
-    "url": "https://streamtp-golden1.click/global1.php?stream=foxone",
     "category": "sports"
   }
 ]
