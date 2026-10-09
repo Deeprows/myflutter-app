@@ -211,17 +211,26 @@ jobs:
                   "::error::Could not find release { block."
               )
 
-          text = text.replace(
-              release_marker,
-              release_marker
-              + '\n            signingConfig = signingConfigs.getByName("release")',
-              1,
-          )
+          # Flutter's template points release builds at the DEBUG key
+          # (signingConfig = signingConfigs.getByName("debug")). Replace that
+          # line; adding a second one would let the debug line win.
+          debug_line = 'signingConfig = signingConfigs.getByName("debug")'
+          release_line = 'signingConfig = signingConfigs.getByName("release")'
+          if debug_line in text:
+              text = text.replace(debug_line, release_line)
+          else:
+              text = text.replace(
+                  release_marker,
+                  release_marker + "\n            " + release_line,
+                  1,
+              )
 
           path.write_text(text)
 
           print("Release signing configured successfully.")
           PY
+
+          grep -n "signingConfig" android/app/build.gradle.kts
 
       # ---------------------------------------------------------------
       # Code quality
