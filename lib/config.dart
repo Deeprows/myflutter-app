@@ -99,6 +99,21 @@ class AppConfig {
   /// and ready). Ads keep working. Set true to bring Premium back.
   static const showSubscriptions = false;
 
+  /// ---- Ad-free tokens ------------------------------------------------------
+  ///
+  /// true = the menu shows "Remove ads". The person taps "Request token", you
+  /// answer on the Worker admin page (`/sub/admin?token=<ADMIN_TOKEN>`), and
+  /// the token appears in their app (or you send it by chat). Entering a token
+  /// removes ALL ads on that phone for the days you chose. Works while
+  /// Premium/payments are hidden; needs [feedBase] and the Worker's D1 `DB`.
+  /// See TOKENS.md.
+  static const showRemoveAds = true;
+
+  /// Chat message that is pre-filled when the person messages you for a token
+  /// (their ID is added under it). Uses [whatsappUrl], or [joinUrl] if empty.
+  static const tokenRequestMessage =
+      'I need token to remove ads from deeprowss app';
+
   /// true: the plans page shows on every launch for people who are not
   /// premium. false: only on the first launch and after a premium ends.
   static const showPlansEveryStart = true;
@@ -113,7 +128,7 @@ class AppConfig {
   /// WhatsApp chat for people who cannot pay online (manual activation).
   /// Example: `https://wa.me/2348012345678`. Empty = the button tells the
   /// person it is coming soon. The app adds the person's ID to the message.
-  static const whatsappUrl = '';
+  static const whatsappUrl = 'https://wa.me/2348164887683';
   static const whatsappMessage =
       'Hello, I want to pay for Deeprowss Premium manually.';
 
