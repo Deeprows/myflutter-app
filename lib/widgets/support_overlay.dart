@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../screens/ad_support_screen.dart';
 import '../screens/plans_screen.dart';
+import '../screens/remove_ads_screen.dart';
 import '../screens/support_browser_screen.dart';
 import '../services/ad_preloader.dart';
 import '../services/subscription_service.dart';
@@ -156,6 +157,9 @@ class _SupportOverlayState extends State<SupportOverlay>
                         if (SubscriptionService.instance.visible) ...[
                           const SizedBox(height: 10),
                           _premiumButton(),
+                        ] else if (SubscriptionService.instance.tokensVisible) ...[
+                          const SizedBox(height: 10),
+                          _tokenButton(),
                         ],
                       ],
                     ),
@@ -332,6 +336,35 @@ class _SupportOverlayState extends State<SupportOverlay>
         onPressed: _goPremium,
         icon: Icon(Icons.workspace_premium_rounded, color: Ui.redSoft),
         label: Text('Remove ads — go Premium',
+            style: TextStyle(
+                color: Ui.redSoft, fontWeight: FontWeight.w800, fontSize: 14)),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          side: BorderSide(color: Ui.red.withValues(alpha: .6)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(22)),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _goRemoveAds() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const RemoveAdsScreen()),
+    );
+    if (!mounted) return;
+    if (SubscriptionService.instance.isPremium) {
+      Navigator.of(context).pop(SupportChoice.premium);
+    }
+  }
+
+  Widget _tokenButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _goRemoveAds,
+        icon: Icon(Icons.vpn_key_rounded, color: Ui.redSoft),
+        label: Text('Remove ads — use a token',
             style: TextStyle(
                 color: Ui.redSoft, fontWeight: FontWeight.w800, fontSize: 14)),
         style: OutlinedButton.styleFrom(
