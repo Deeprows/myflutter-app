@@ -1,14 +1,12 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 
 import '../config.dart';
 import '../screens/browser_screen.dart';
 import '../screens/network_stream_screen.dart';
 import '../screens/playlists_screen.dart';
 import '../screens/plans_screen.dart';
+import '../services/notice_service.dart';
 import '../services/subscription_service.dart';
 import '../services/settings_service.dart';
 import 'notification_settings.dart';
@@ -355,40 +353,5 @@ Future<void> showCopyrightDialog(BuildContext context) {
   );
 }
 
-Future<void> showNoticeDialog(BuildContext context) async {
-  var title = 'Notice';
-  var message = 'No new notices right now.';
-  if (AppConfig.noticeUrl.isNotEmpty) {
-    try {
-      final r = await http
-          .get(Uri.parse(AppConfig.noticeUrl))
-          .timeout(const Duration(seconds: 10));
-      if (r.statusCode == 200 && r.body.trim().isNotEmpty) {
-        try {
-          final j = jsonDecode(r.body);
-          if (j is Map) {
-            title = (j['title'] ?? title).toString();
-            message = (j['message'] ?? message).toString();
-          } else {
-            message = r.body.trim();
-          }
-        } catch (_) {
-          message = r.body.trim();
-        }
-      }
-    } catch (_) {}
-  }
-  if (!context.mounted) return;
-  await showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: Text(message,
-          style: const TextStyle(fontWeight: FontWeight.w700, height: 1.3)),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
-      ],
-    ),
-  );
-}
+Future<void> showNoticeDialog(BuildContext context) =>
+    NoticeService.instance.showFromMenu(context);
