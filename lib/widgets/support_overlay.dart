@@ -6,6 +6,7 @@ import '../config.dart';
 import '../screens/ad_support_screen.dart';
 import '../screens/plans_screen.dart';
 import '../screens/support_browser_screen.dart';
+import '../services/ad_preloader.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 
@@ -47,7 +48,10 @@ Future<SupportChoice?> _showAdPage(BuildContext context) async {
       .push<SupportResult>(
     MaterialPageRoute<SupportResult>(
       fullscreenDialog: true,
-      builder: (_) => AdSupportScreen(url: AppConfig.supportUrl),
+      builder: (_) => AdSupportScreen(
+        url: AppConfig.supportUrl,
+        preloaded: AdPreloader.instance.take(),
+      ),
     ),
   );
   return switch (r) {
