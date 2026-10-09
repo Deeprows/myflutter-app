@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/content_sync.dart';
+import '../services/notice_service.dart';
 import '../services/push_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
@@ -44,6 +45,11 @@ class _ShellScreenState extends State<ShellScreen>
       const Duration(minutes: 5),
       (_) => ContentSync.request(),
     );
+
+    // notice.json: pop up once per notice id, a moment after the app opens.
+    Future<void>.delayed(const Duration(seconds: 2), () {
+      if (mounted) NoticeService.instance.showOnStart(context);
+    });
   }
 
   @override
