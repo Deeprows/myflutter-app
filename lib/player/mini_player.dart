@@ -180,7 +180,11 @@ class _NowPlayingState extends State<_NowPlaying> {
               stops: const [0, .55, 1],
             ),
           ),
-          child: Column(
+          // Keep the controls above the phone's navigation bar / gesture area
+          // (the sheet only pads the top by itself).
+          child: SafeArea(
+            top: false,
+            child: Column(
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
@@ -362,6 +366,7 @@ class _NowPlayingState extends State<_NowPlaying> {
                 child: Watermark(),
               ),
             ],
+          ),
           ),
         );
       },
