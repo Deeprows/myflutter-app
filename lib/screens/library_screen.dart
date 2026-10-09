@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/movie.dart';
 import '../services/movie_library.dart';
+import '../services/support_gate.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import '../utils/open_movie.dart';
@@ -169,7 +170,9 @@ class _Grid extends StatelessWidget {
         return Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () => openMoviePlayer(context, m),
+            onTap: () => SupportGate.guard(context, () {
+              if (context.mounted) openMoviePlayer(context, m);
+            }),
             borderRadius: BorderRadius.circular(Ui.radius),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
