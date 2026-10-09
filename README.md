@@ -80,3 +80,37 @@ HLS / DASH / direct video channels in the TV tab play with the native player
 and the web player. Embed pages (like the `abisnews.com/*.php` links in
 `tv.json`) still use the web player. Turn it off with
 `AppConfig.nativeTvPlayer = false`.
+
+## Player tab (local video / music)
+
+The fifth bottom tab, **Player**, plays files stored on the phone:
+
+* Videos (mp4, mkv, webm, mov, m4v, 3gp ...) with resume position, +/-10 s double-tap, speed, fit/fill, landscape.
+* Music (mp3, m4a, flac, wav, ogg, opus ...) with a mini player + full "Now playing" sheet.
+* Folders view, "Open file..." and "Open folder..." pickers.
+* Music keeps playing in the background / with the screen off via the existing
+  foreground service (`tool/patch_background_playback.py`).
+
+Code: `lib/player/`. New packages: `photo_manager`, `file_picker`. New permissions
+(READ_MEDIA_VIDEO / READ_MEDIA_AUDIO / READ_EXTERNAL_STORAGE <= Android 12) are added by
+`tool/patch_android_manifest.py`. Playback uses Android ExoPlayer, so AVI / WMV / FLV may not play.
+
+### Background playback (Player tab)
+
+Music and the sound of local videos run through `audio_service` + `just_audio`
+(`lib/player/audio_handler.dart`): a real Android media session with notification and
+lock-screen controls (previous / play-pause / next / seek). When the app is minimised while a
+local video plays, its sound is handed to this service and handed back on return.
+`tool/patch_audio_service.py` (run by the build workflow) sets up the manifest and MainActivity.
+The older `PlaybackService` (live TV / web players) now also holds a CPU + Wi-Fi wake lock.
+
+### Playlists, lyrics, watermark (Player tab)
+
+* **Playlists** tab: create / rename / delete, add songs with the ⋮ menu on any song (or the
+  playlist-add button on the Now playing screen), reorder by dragging, play or shuffle.
+  Saved on the phone (`lib/player/playlist_store.dart`).
+* **Lyrics**: lyrics button on the Now playing screen. Order: lyrics you saved, an `.lrc` file
+  next to the song, then an online search on lrclib.net (needs internet; no key). Synced lyrics
+  follow the music and you can tap a line to jump. "Add / edit" lets you paste text or import `.lrc`.
+* A small "Deeprowss" watermark shows on the video player and the Now playing screen
+  (`lib/player/watermark.dart`).
