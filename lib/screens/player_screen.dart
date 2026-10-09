@@ -130,7 +130,16 @@ class _PlayerScreenState extends State<PlayerScreen>
     super.initState();
     WakelockPlus.enable();
     WidgetsBinding.instance.addObserver(this);
-    BackgroundPlayback.start(widget.title, _onStopTapped);
+    BackgroundPlayback.start(
+      widget.title,
+      _onStopTapped,
+      onPlay: () => _wc.runJavaScript(_videosJs('v.play()')).catchError((_) {}),
+      onPause: () => _wc.runJavaScript(_videosJs('v.pause()')).catchError((_) {}),
+      onSeekBy: (sec) => _wc
+          .runJavaScript(_videosJs(
+              'v.currentTime=Math.max(0,v.currentTime+($sec))'))
+          .catchError((_) {}),
+    );
 
     _wc = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -198,6 +207,10 @@ class _PlayerScreenState extends State<PlayerScreen>
         .catchError((_) {});
     Navigator.of(context).maybePop();
   }
+
+  /// JS that runs [action] on every <video> of the page (v = the video).
+  String _videosJs(String action) =>
+      "document.querySelectorAll('video').forEach(function(v){try{$action}catch(e){}})";
 
   /// Stops the page from pausing itself because it thinks it is hidden.
   void _keepVisible() {
