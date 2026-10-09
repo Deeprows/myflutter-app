@@ -40,7 +40,7 @@ class _LiveScreenState extends State<LiveScreen> {
   String _sig = '';
 
   static const String _supportCardUrl =
-      'https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60';
+      'https://fluffy-machine.com/q4hBpZ';
 
   @override
   void initState() {
