@@ -37,7 +37,9 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.net.wifi.WifiManager
 import android.os.IBinder
+import android.os.PowerManager
 
 /** Keeps the process alive (and shows a notification) while a video plays. */
 class PlaybackService : Service() {
@@ -51,6 +53,41 @@ class PlaybackService : Service() {
         var onStopRequested: (() -> Unit)? = null
     }
 
+    private var wake: PowerManager.WakeLock? = null
+    private var wifi: WifiManager.WifiLock? = null
+
+    /** Keeps the CPU and Wi-Fi awake while the screen is off, otherwise the stream stalls. */
+    private fun lock() {
+        try {
+            if (wake == null) {
+                wake = (getSystemService(POWER_SERVICE) as PowerManager)
+                    .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "deeprowss:playback")
+                    .apply { setReferenceCounted(false) }
+            }
+            if (wake?.isHeld != true) wake?.acquire(6 * 60 * 60 * 1000L)
+            if (wifi == null) {
+                wifi = (applicationContext.getSystemService(WIFI_SERVICE) as WifiManager)
+                    .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "deeprowss:playback")
+                    .apply { setReferenceCounted(false) }
+            }
+            if (wifi?.isHeld != true) wifi?.acquire()
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun unlock() {
+        try {
+            if (wake?.isHeld == true) wake?.release()
+            if (wifi?.isHeld == true) wifi?.release()
+        } catch (e: Exception) {
+        }
+    }
+
+    override fun onDestroy() {
+        unlock()
+        super.onDestroy()
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -60,6 +97,7 @@ class PlaybackService : Service() {
             return START_NOT_STICKY
         }
         val title = intent?.getStringExtra("title") ?: "Deeprowss"
+        lock()
         val notification = build(title)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
@@ -106,6 +144,7 @@ class PlaybackService : Service() {
     }
 
     private fun shutDown() {
+        unlock()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
