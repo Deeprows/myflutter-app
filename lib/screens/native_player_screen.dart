@@ -86,7 +86,13 @@ class _NativePlayerScreenState extends State<NativePlayerScreen>
     super.initState();
     WakelockPlus.enable();
     WidgetsBinding.instance.addObserver(this);
-    BackgroundPlayback.start(widget.title, _onStopTapped);
+    BackgroundPlayback.start(
+      widget.title,
+      _onStopTapped,
+      onPlay: _bgPlay,
+      onPause: _bgPause,
+      onSeekBy: _bgSeek,
+    );
     _start(0);
   }
 
@@ -96,6 +102,27 @@ class _NativePlayerScreenState extends State<NativePlayerScreen>
   }
 
   bool _wasPlaying = false;
+  bool _lastPlaying = true;
+
+  // Notification / lock-screen buttons.
+  void _bgPlay() {
+    _c?.play();
+  }
+
+  void _bgPause() {
+    _wasPlaying = false; // don't let the minimise-resume logic restart it
+    _c?.pause();
+  }
+
+  void _bgSeek(int seconds) {
+    final c = _c;
+    if (c == null || !c.value.isInitialized) return;
+    var t = c.value.position + Duration(seconds: seconds);
+    if (t < Duration.zero) t = Duration.zero;
+    final end = c.value.duration;
+    if (end > Duration.zero && t > end) t = end;
+    c.seekTo(t);
+  }
 
   /// Keeps the stream going when the app is minimised; if the player paused
   /// itself because the video surface went away, start it again.
@@ -217,6 +244,10 @@ class _NativePlayerScreenState extends State<NativePlayerScreen>
     }
     if (v.isBuffering != _buffering) {
       setState(() => _buffering = v.isBuffering);
+    }
+    if (v.isInitialized && v.isPlaying != _lastPlaying) {
+      _lastPlaying = v.isPlaying;
+      BackgroundPlayback.setPlaying(v.isPlaying);
     }
   }
 
