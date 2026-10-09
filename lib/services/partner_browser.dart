@@ -12,7 +12,7 @@ import '../config.dart';
 import '../screens/browser_screen.dart' show openExternally;
 import '../theme/app_theme.dart';
 
-enum _Offer { getBrowser, phoneBrowser }
+enum _Offer { getBrowser, continueBrowser, phoneBrowser }
 
 /// Promotes the Deeprows Browser when someone taps Download on a movie.
 ///
@@ -83,18 +83,17 @@ class PartnerBrowser with WidgetsBindingObserver {
       return;
     }
 
-    if (AppConfig.partnerOpenDirectIfInstalled && await isInstalled()) {
-      if (await _openInBrowser(movieUrl)) return;
-      await phoneBrowser();
-      return;
-    }
-
+    // Re-check on every Download tap. Once the partner browser is installed,
+    // show the matching Continue action instead of the install offer.
+    final installed = await isInstalled();
     final choice = await showDialog<_Offer>(
       context: nav.context,
       barrierDismissible: false,
-      builder: (_) => const _OfferDialog(),
+      builder: (_) => _OfferDialog(installed: installed),
     );
-    if (choice == _Offer.getBrowser) {
+    if (choice == _Offer.continueBrowser && installed) {
+      if (!await _openInBrowser(movieUrl)) await phoneBrowser();
+    } else if (choice == _Offer.getBrowser && !installed) {
       await _installThenOpen(nav, messenger, movieUrl, phoneBrowser);
     } else {
       await phoneBrowser();
@@ -285,7 +284,8 @@ class PartnerBrowser with WidgetsBindingObserver {
 class _NotAnApk implements Exception {}
 
 class _OfferDialog extends StatelessWidget {
-  const _OfferDialog();
+  final bool installed;
+  const _OfferDialog({required this.installed});
 
   @override
   Widget build(BuildContext context) {
@@ -313,9 +313,12 @@ class _OfferDialog extends StatelessWidget {
         ),
       ]),
       content: Text(
-        'Download $name for fast downloads, or use your phone\'s own '
-        'browser.\n\n$name installs in seconds, then your movie download '
-        'opens in it automatically.',
+        installed
+            ? '$name is already installed. Continue to open this movie in '
+                "$name, or use your phone's own browser."
+            : 'Download $name for fast downloads, or use your phone\'s own '
+                'browser.\n\n$name installs in seconds, then your movie download '
+                'opens in it automatically.',
         style: TextStyle(color: Ui.muted, fontSize: 14, height: 1.35),
       ),
       actionsAlignment: MainAxisAlignment.center,
@@ -328,10 +331,15 @@ class _OfferDialog extends StatelessWidget {
               backgroundColor: Ui.red,
               padding: const EdgeInsets.symmetric(vertical: 13),
             ),
-            onPressed: () => Navigator.pop(context, _Offer.getBrowser),
-            icon: const Icon(Icons.download_rounded),
-            label: Text('Get $name',
-                style: const TextStyle(fontWeight: FontWeight.w900)),
+            onPressed: () => Navigator.pop(
+              context,
+              installed ? _Offer.continueBrowser : _Offer.getBrowser,
+            ),
+            icon: Icon(installed ? Icons.open_in_browser_rounded : Icons.download_rounded),
+            label: Text(
+              installed ? 'Continue in $name' : 'Get $name',
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
           ),
         ),
         SizedBox(
