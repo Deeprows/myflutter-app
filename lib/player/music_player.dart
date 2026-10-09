@@ -3,6 +3,11 @@ import 'dart:math';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+import '../services/app_nav.dart';
+import '../services/background_playback.dart';
 
 import 'audio_handler.dart';
 import 'media_entry.dart';
@@ -92,9 +97,31 @@ class MusicPlayer extends ChangeNotifier {
       loading = false;
       playing = true;
       notifyListeners();
+      unawaited(_checkNotificationAccess());
     } catch (_) {
       _fail(gen);
     }
+  }
+
+  bool _warned = false;
+
+  /// If Android is hiding our notifications, the media card can never appear.
+  /// Say so, with a button straight to the right settings page.
+  Future<void> _checkNotificationAccess() async {
+    if (_warned) return;
+    if (await BackgroundPlayback.notificationsAllowed()) {
+      unawaited(BackgroundPlayback.askBatteryExemptionOnce());
+      return;
+    }
+    _warned = true;
+    final ctx = AppNav.overlayContext;
+    if (ctx == null) return;
+    ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(SnackBar(
+      duration: const Duration(seconds: 10),
+      content: const Text(
+          'Notifications are off, so the music card cannot show on the lock screen. Turn them on for Deeprowss.'),
+      action: SnackBarAction(label: 'SETTINGS', onPressed: openAppSettings),
+    ));
   }
 
   void _fail(int gen) {
