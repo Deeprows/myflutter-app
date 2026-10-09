@@ -35,7 +35,8 @@ if "xmlns:tools" not in m:
 add = ""
 for p in ("android.permission.WAKE_LOCK",
           "android.permission.FOREGROUND_SERVICE",
-          "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"):
+          "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+          "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"):
     if f'android:name="{p}"' not in m:
         add += f'    <uses-permission android:name="{p}"/>\n'
 if add:
