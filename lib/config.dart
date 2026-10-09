@@ -150,7 +150,21 @@ class AppConfig {
   /// Seconds the ad page stays after it has FULLY loaded (people can use it),
   /// then it closes by itself and the person is back where they were. They can
   /// also tap Resume at any time after it has loaded.
-  static const supportAfterLoadSeconds = 5;
+  /// YouTube style: the ad is shown for this long, then the person continues
+  /// by itself (or taps Skip Ad once [supportSkipAfterSeconds] has passed).
+  static const supportAfterLoadSeconds = 10;
+
+  /// Seconds before the "Skip Ad" button becomes tappable (like YouTube's 5s).
+  static const supportSkipAfterSeconds = 5;
+
+  /// The ad page is loaded in the BACKGROUND this many seconds before it is
+  /// due (and once when the app starts), so it appears instantly when shown.
+  /// 0 = no preloading (the page starts loading only when the ad is due).
+  static const adPreloadLeadSeconds = 60;
+  static const adPreloadOnStart = true;
+
+  /// A preloaded page older than this is thrown away and loaded again.
+  static const adPreloadMaxAgeSeconds = 240;
 
   /// The ad page is never cut off while it is loading. Only if it is still
   /// loading after this many seconds is it treated as loaded (so a page that
