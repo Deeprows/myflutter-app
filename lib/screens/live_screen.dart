@@ -18,6 +18,7 @@ import '../widgets/link_sheet.dart';
 import '../widgets/news_ticker.dart';
 import '../widgets/pitch_painter.dart';
 import 'player_screen.dart';
+import 'support_browser_screen.dart';
 
 enum _Filter { all, live, upcoming, ended }
 
@@ -37,6 +38,9 @@ class _LiveScreenState extends State<LiveScreen> {
   final ValueNotifier<DateTime> _now = ValueNotifier(DateTime.now());
   Timer? _timer;
   String _sig = '';
+
+  static const String _supportCardUrl =
+      'https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60';
 
   @override
   void initState() {
@@ -164,6 +168,17 @@ class _LiveScreenState extends State<LiveScreen> {
     );
   }
 
+  Future<void> _openSupportCard() async {
+    await Navigator.of(context).push<SupportResult>(
+      MaterialPageRoute<SupportResult>(
+        builder: (_) => const SupportBrowserScreen(
+          url: _supportCardUrl,
+          seconds: AppConfig.supportViewSeconds,
+        ),
+      ),
+    );
+  }
+
   void _open(Fixture f) {
     if (!f.hasStream) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -223,6 +238,7 @@ class _LiveScreenState extends State<LiveScreen> {
 
     final out = <Widget>[];
     String? last;
+    var fixtureCount = 0;
 
     for (final f in sorted) {
       final phase = f.phaseAt(now);
@@ -258,6 +274,21 @@ class _LiveScreenState extends State<LiveScreen> {
           ),
         ),
       );
+
+      fixtureCount++;
+      // Show the support card after the third fixture. With 1–3 fixtures,
+      // it appears below the available fixtures; with more than 3, it sits
+      // between the third and fourth fixture cards.
+      if (fixtureCount == 3) {
+        out.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            child: _FixtureSupportCard(
+              onTap: () => _openSupportCard(),
+            ),
+          ),
+        );
+      }
     }
 
     return out;
@@ -375,6 +406,75 @@ class _LiveScreenState extends State<LiveScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _FixtureSupportCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _FixtureSupportCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(13),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(13),
+        child: Container(
+          height: 92,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: const Color(0xFF54D7F2), width: 1.4),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF10151B), Color(0xFF24201A), Color(0xFF080B10)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                right: 10,
+                top: -15,
+                child: Icon(Icons.favorite_rounded,
+                    size: 105, color: const Color(0xFFFFC928).withValues(alpha: .12)),
+              ),
+              Center(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.favorite_rounded,
+                        color: Color(0xFFFFD21F), size: 28),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'SUPPORT ',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 25,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.0,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    const Text(
+                      'ME',
+                      style: TextStyle(
+                        color: Color(0xFFFFD21F),
+                        fontSize: 27,
+                        fontWeight: FontWeight.w900,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
