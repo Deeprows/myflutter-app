@@ -6,8 +6,8 @@ class Fixture {
   final String id;
   final String home;
   final String away;
-  final String homeFlag;
-  final String awayFlag;
+  final String homeLogo;
+  final String awayLogo;
   final String league;
   final DateTime kickoff;
   final int durationMin;
@@ -19,8 +19,8 @@ class Fixture {
     required this.home,
     required this.away,
     required this.kickoff,
-    this.homeFlag = '',
-    this.awayFlag = '',
+    this.homeLogo = '',
+    this.awayLogo = '',
     this.league = '',
     this.durationMin = AppConfig.defaultMatchMinutes,
     this.url = '',
@@ -58,8 +58,8 @@ class Fixture {
           : '${s('home')}-${s('away')}-${s('kickoff')}',
       home: s('home'),
       away: s('away'),
-      homeFlag: s('homeFlag'),
-      awayFlag: s('awayFlag'),
+      homeLogo: s('homeLogo'),
+      awayLogo: s('awayLogo'),
       league: s('league'),
       kickoff: kickoff,
       durationMin:
