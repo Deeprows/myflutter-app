@@ -5,31 +5,34 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../config.dart';
+import '../services/ad_preloader.dart';
 import '../theme/app_theme.dart';
 import 'support_browser_screen.dart' show SupportResult;
 
-/// The ad page that opens on the first tap (replaces the hidden "We Need Your
-/// Support" overlay).
+/// YouTube-style ad page (first tap, then every few minutes of use).
 ///
-///  1. [AppConfig.supportUrl] loads full screen under a slim bar that says
-///     [AppConfig.supportWaitText]. Nothing can close it while it is loading:
-///     no close button, and Back is ignored, so the page is never cut off
-///     halfway.
-///  2. Once the page has FULLY loaded (including redirects) the bar turns into
-///     "Ad loaded" with a Resume button and a short countdown
-///     ([AppConfig.supportAfterLoadSeconds]). The page can be used meanwhile.
-///  3. When the countdown ends, or Resume is tapped, the page closes and the
-///     person is back exactly where they were.
+///  1. The ad page is normally PRELOADED in the background shortly before it
+///     is due ([AdPreloader]), so it appears instantly. If it is not ready yet
+///     the screen shows "please wait" while it finishes loading; the ad is
+///     never cut off while loading and Back is ignored.
+///  2. Once loaded, the ad is shown with an "Ad" badge, a progress line and a
+///     "Skip in N" button that turns into "Skip Ad" after
+///     [AppConfig.supportSkipAfterSeconds], exactly like YouTube.
+///  3. The ad ends by itself after [AppConfig.supportAfterLoadSeconds], or when
+///     the person taps Skip Ad, and they are back where they were.
 ///
-/// If the person taps something in the page that opens another page, the wait
-/// message comes back and that page is allowed to finish loading too.
+/// If the person taps the ad, the automatic ending is switched off so they can
+/// look at the advertiser, and the button becomes "Continue".
 ///
 /// Pops [SupportResult.completed] when it was shown, or
 /// [SupportResult.failed] when it could not load at all (offline / dead link),
 /// so nobody is ever locked out.
 class AdSupportScreen extends StatefulWidget {
   final String url;
-  const AdSupportScreen({super.key, required this.url});
+
+  /// Page loaded in the background by [AdPreloader] (null = load it here).
+  final PreloadedAd? preloaded;
+  const AdSupportScreen({super.key, required this.url, this.preloaded});
 
   @override
   State<AdSupportScreen> createState() => _AdSupportScreenState();
@@ -42,24 +45,27 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
 
   _Phase _phase = _Phase.loading;
   final ValueNotifier<int> _progress = ValueNotifier<int>(0);
-  final ValueNotifier<double> _left = ValueNotifier<double>(0);
+  final ValueNotifier<double> _elapsed = ValueNotifier<double>(0);
 
   Timer? _settle; // waits a moment to be sure no redirect follows
   Timer? _maxLoad; // safety: a page that never says "finished"
   Timer? _tick;
-  DateTime? _end;
+  DateTime? _begin;
 
   bool _started = false; // the page has begun to load
   bool _everLoaded = false; // some page has finished loading at least once
   bool _forced = false; // max load time reached: stop going back to "loading"
   bool _done = false;
+  bool _engaged = false; // the person tapped the ad: no automatic ending
 
   static const _settleDelay = Duration(milliseconds: 1400);
 
   @override
   void initState() {
     super.initState();
-    _wc = WebViewController()
+    final pre = widget.preloaded;
+    _wc = pre?.controller ?? WebViewController();
+    _wc
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Ui.bg)
       ..setUserAgent(AppConfig.userAgent)
@@ -68,7 +74,7 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
         onPageStarted: (_) {
           _started = true;
           _makeClickable();
-          _backToLoading();
+          _onNewPage();
         },
         onProgress: (p) {
           _progress.value = p;
@@ -87,14 +93,25 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
         },
       ));
 
-    final p = _wc.platform;
-    if (p is AndroidWebViewController) {
-      final cookies = WebViewCookieManager().platform;
-      if (cookies is AndroidWebViewCookieManager) {
-        cookies.setAcceptThirdPartyCookies(p, true);
+    if (pre == null) {
+      final p = _wc.platform;
+      if (p is AndroidWebViewController) {
+        final cookies = WebViewCookieManager().platform;
+        if (cookies is AndroidWebViewCookieManager) {
+          cookies.setAcceptThirdPartyCookies(p, true);
+        }
+      }
+      _wc.loadRequest(Uri.parse(widget.url));
+    } else {
+      // Already loaded in the background: show it straight away.
+      _started = true;
+      _makeClickable();
+      if (pre.finished) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _markLoaded());
+      } else {
+        _scheduleSettle(); // still finishing: the navigation events continue
       }
     }
-    _wc.loadRequest(Uri.parse(widget.url));
 
     _armMaxLoad();
   }
@@ -119,15 +136,14 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
 
   // ------------------------------------------------------------ loading
 
-  void _backToLoading() {
+  /// A page started loading. After the ad is showing this means the person
+  /// tapped it (or it redirected): stop the automatic ending so they can look
+  /// at it, they leave with the Continue button.
+  void _onNewPage() {
     _settle?.cancel();
-    if (_forced || _done || !mounted) return;
-    if (_phase == _Phase.ready) {
-      // The person opened another page from the ad: let it load fully too.
-      _stopCountdown();
-      _progress.value = 0;
-      _armMaxLoad();
-      setState(() => _phase = _Phase.loading);
+    if (_done || !mounted) return;
+    if (_phase == _Phase.ready && !_engaged) {
+      setState(() => _engaged = true);
     }
   }
 
@@ -148,16 +164,15 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
 
   void _startCountdown() {
     _stopCountdown();
-    final secs = AppConfig.supportAfterLoadSeconds;
-    _end = DateTime.now().add(Duration(seconds: secs));
-    _left.value = secs.toDouble();
+    final total = AppConfig.supportAfterLoadSeconds;
+    _begin = DateTime.now();
+    _elapsed.value = 0;
     _tick = Timer.periodic(const Duration(milliseconds: 100), (t) {
-      final ms = _end!.difference(DateTime.now()).inMilliseconds;
-      if (ms <= 0) {
+      final e = DateTime.now().difference(_begin!).inMilliseconds / 1000;
+      _elapsed.value = e;
+      if (e >= total && !_engaged) {
         t.cancel();
         _finish();
-      } else {
-        _left.value = ms / 1000;
       }
     });
   }
@@ -165,7 +180,7 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
   void _stopCountdown() {
     _tick?.cancel();
     _tick = null;
-    _end = null;
+    _begin = null;
   }
 
   void _fail() {
@@ -177,7 +192,8 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
 
   // ------------------------------------------------------------- closing
 
-  /// Resume tapped, or the countdown ended: back to what the person was doing.
+  /// Skip Ad / Continue tapped, or the ad ended: back to what the person was
+  /// doing.
   void _finish() {
     if (_done || !mounted) return;
     _done = true;
@@ -195,6 +211,7 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
     _started = false;
     _everLoaded = false;
     _forced = false;
+    _engaged = false;
     _progress.value = 0;
     setState(() => _phase = _Phase.loading);
     _armMaxLoad();
@@ -207,7 +224,11 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
     _maxLoad?.cancel();
     _tick?.cancel();
     _progress.dispose();
-    _left.dispose();
+    _elapsed.dispose();
+    // Stop the ad's sound / scripts now that it is closed.
+    try {
+      _wc.loadRequest(Uri.parse('about:blank'));
+    } catch (_) {}
     super.dispose();
   }
 
@@ -269,15 +290,20 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
 
   // ---------------------------------------------------------------- UI
 
+  bool get _canSkip =>
+      _phase == _Phase.ready &&
+      _elapsed.value >= AppConfig.supportSkipAfterSeconds;
+
+  static const _yellow = Color(0xFFFFCC00);
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      // Back is ignored while the page is loading, so it is never cut off.
-      // Once loaded, Back = Resume. If it could not load, Back lets you in.
+      // Back is ignored while the ad is loading / before Skip is available.
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (_phase == _Phase.ready) _finish();
+        if (_phase == _Phase.ready && _canSkip) _finish();
         if (_phase == _Phase.error) _continueAnyway();
       },
       child: Scaffold(
@@ -289,12 +315,99 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
               Expanded(
                 child: _phase == _Phase.error
                     ? _ErrorView(onRetry: _retry, onContinue: _continueAnyway)
-                    : WebViewWidget(controller: _wc),
+                    : Stack(
+                        children: [
+                          Positioned.fill(child: WebViewWidget(controller: _wc)),
+                          // While the ad is still loading, hide the half-built
+                          // page and show a wait message instead.
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              ignoring: _phase != _Phase.loading,
+                              child: AnimatedOpacity(
+                                duration: const Duration(milliseconds: 250),
+                                opacity: _phase == _Phase.loading ? 1 : 0,
+                                child: Container(
+                                  color: Ui.bg,
+                                  alignment: Alignment.center,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        width: 30,
+                                        height: 30,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 3, color: Ui.red),
+                                      ),
+                                      const SizedBox(height: 14),
+                                      Text(
+                                        AppConfig.supportWaitText,
+                                        style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (_phase == _Phase.ready)
+                            Positioned(
+                              right: 0,
+                              bottom: 22,
+                              child: _skipButton(),
+                            ),
+                        ],
+                      ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  /// YouTube's "Skip in 5" -> "Skip Ad" button.
+  Widget _skipButton() {
+    return ValueListenableBuilder<double>(
+      valueListenable: _elapsed,
+      builder: (_, e, _) {
+        final wait = AppConfig.supportSkipAfterSeconds - e;
+        final ready = wait <= 0;
+        return Material(
+          color: Colors.black.withValues(alpha: .78),
+          shape: const RoundedRectangleBorder(
+            side: BorderSide(color: Colors.white70, width: 1),
+            borderRadius: BorderRadius.horizontal(left: Radius.circular(4)),
+          ),
+          child: InkWell(
+            onTap: ready ? _finish : null,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 11, 14, 11),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    ready
+                        ? (_engaged ? 'Continue' : 'Skip Ad')
+                        : 'Skip in ${wait.ceil()}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: ready ? Colors.white : Colors.white60,
+                    ),
+                  ),
+                  if (ready) ...[
+                    const SizedBox(width: 6),
+                    const Icon(Icons.skip_next_rounded,
+                        size: 22, color: Colors.white),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -306,18 +419,22 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+            padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
             child: Row(
               children: [
-                if (loading)
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2.2, color: Ui.red),
-                  )
-                else
-                  Icon(Icons.check_circle_rounded, size: 18, color: Ui.red),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _yellow,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: const Text('Ad',
+                      style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900)),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: loading
@@ -329,39 +446,50 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
                               fontSize: 13.5, fontWeight: FontWeight.w800),
                         )
                       : ValueListenableBuilder<double>(
-                          valueListenable: _left,
-                          builder: (_, v, _) => Text(
-                            'Ad loaded · back in ${v.ceil()}s',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 13.5, fontWeight: FontWeight.w800),
-                          ),
+                          valueListenable: _elapsed,
+                          builder: (_, e, _) {
+                            final left = (AppConfig.supportAfterLoadSeconds - e)
+                                .clamp(0.0, 999.0)
+                                .ceil();
+                            return Text(
+                              _engaged
+                                  ? 'Ad · tap Continue when you are done'
+                                  : 'Ad · ends in ${left}s',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 13.5, fontWeight: FontWeight.w800),
+                            );
+                          },
                         ),
                 ),
-                if (!loading)
-                  FilledButton(
-                    onPressed: _finish,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Ui.red,
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                    ),
-                    child: const Text('Resume',
-                        style: TextStyle(fontWeight: FontWeight.w800)),
-                  ),
               ],
             ),
           ),
-          ValueListenableBuilder<int>(
-            valueListenable: _progress,
-            builder: (_, p, _) => LinearProgressIndicator(
-              minHeight: 3,
-              value: loading ? (p <= 0 ? null : p / 100) : 1,
-              backgroundColor: Ui.line,
-              valueColor: AlwaysStoppedAnimation(Ui.red),
-            ),
-          ),
+          // Loading: page progress. Showing: yellow ad-progress line.
+          loading
+              ? ValueListenableBuilder<int>(
+                  valueListenable: _progress,
+                  builder: (_, p, _) => LinearProgressIndicator(
+                    minHeight: 3,
+                    value: p <= 0 ? null : p / 100,
+                    backgroundColor: Ui.line,
+                    valueColor: AlwaysStoppedAnimation(Ui.red),
+                  ),
+                )
+              : ValueListenableBuilder<double>(
+                  valueListenable: _elapsed,
+                  builder: (_, e, _) => LinearProgressIndicator(
+                    minHeight: 3,
+                    value: _engaged
+                        ? 1.0
+                        : (e / AppConfig.supportAfterLoadSeconds)
+                            .clamp(0.0, 1.0)
+                            .toDouble(),
+                    backgroundColor: Ui.line,
+                    valueColor: const AlwaysStoppedAnimation(_yellow),
+                  ),
+                ),
         ],
       ),
     );
