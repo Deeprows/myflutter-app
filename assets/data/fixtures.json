@@ -1,12 +1,9 @@
-
 [
   {
     "id": "1",
     "home": "Malaga",
-    "homeFlag": "🇪🇸",
     "homeLogo": "mal",
     "away": "Espanyol",
-    "awayFlag": "🇪🇸",
     "awayLogo": "esp",
     "league": "LaLiga",
     "kickoff": "2026-10-09T20:00:00+01:00",
@@ -17,10 +14,8 @@
   {
     "id": "2",
     "home": "Borussia Dortmund",
-    "homeFlag": "🇩🇪",
     "homeLogo": "borussia-dortmund",
     "away": "Werder Bremen",
-    "awayFlag": "🇩🇪",
     "awayLogo": "werder-bremen",
     "league": "Bundesliga",
     "kickoff": "2026-10-09T19:30:00+01:00",
@@ -31,10 +26,8 @@
   {
     "id": "3",
     "home": "Lens",
-    "homeFlag": "🇫🇷",
     "homeLogo": "lens",
     "away": "Lyon",
-    "awayFlag": "🇫🇷",
     "awayLogo": "lyon",
     "league": "Ligue 1",
     "kickoff": "2026-10-09T19:45:00+01:00",
@@ -45,10 +38,8 @@
   {
     "id": "4",
     "home": "PSV Eindhoven",
-    "homeFlag": "🇳🇱",
     "homeLogo": "psv",
     "away": "SC Heerenveen",
-    "awayFlag": "🇳🇱",
     "awayLogo": "heerenveen",
     "league": "Eredivisie",
     "kickoff": "2026-10-09T19:00:00+01:00",
@@ -59,10 +50,8 @@
   {
     "id": "5",
     "home": "West Ham United",
-    "homeFlag": "🏴",
     "homeLogo": "west-ham",
     "away": "QPR",
-    "awayFlag": "🏴",
     "awayLogo": "queens-park-rangers",
     "league": "Championship",
     "kickoff": "2026-10-09T20:00:00+01:00",
@@ -73,10 +62,8 @@
   {
     "id": "6",
     "home": "Sutton United",
-    "homeFlag": "🏴",
     "homeLogo": "sutton-united",
     "away": "Boreham Wood",
-    "awayFlag": "🏴",
     "awayLogo": "boreham-wood",
     "league": "National League",
     "kickoff": "2026-10-09T19:45:00+01:00",
