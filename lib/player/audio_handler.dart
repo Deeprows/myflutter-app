@@ -144,7 +144,7 @@ class AudioBridge {
         androidNotificationIcon: 'drawable/ic_stat_notify',
         // Keep the media notification visible while playback is active and
         // keep the service in the foreground when playback is temporarily paused.
-        androidNotificationOngoing: true,
+        androidNotificationOngoing: false,
         androidStopForegroundOnPause: false,
         androidNotificationClickStartsActivity: true,
       ),
