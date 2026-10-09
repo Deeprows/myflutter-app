@@ -25,6 +25,11 @@ class AppAudioHandler extends BaseAudioHandler with SeekHandler {
 
   AppAudioHandler() {
     player.playbackEventStream.listen((_) => _broadcast(), onError: (_) {});
+    // Play / pause changes must reach the notification straight away, even
+    // when no other playback event fires (this is what makes the card show up
+    // and switch its play/pause button while the app is minimised or locked).
+    player.playingStream.listen((_) => _broadcast(), onError: (_) {});
+    player.positionDiscontinuityStream.listen((_) => _broadcast(), onError: (_) {});
     player.processingStateStream.listen((s) {
       if (s == ProcessingState.completed && !_completedFired) {
         _completedFired = true;
@@ -77,8 +82,12 @@ class AppAudioHandler extends BaseAudioHandler with SeekHandler {
       AudioSource.uri(Uri.file(path)),
       initialPosition: start,
     );
-    _broadcast();
+    // Keep the card's duration / seek bar in step with the real file length.
+    if (item.duration == null && d != null) {
+      mediaItem.add(item.copyWith(duration: d));
+    }
     unawaited(player.play());
+    _broadcast();
     return d;
   }
 
