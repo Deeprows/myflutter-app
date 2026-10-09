@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/stream_resolver.dart';
+import '../services/support_gate.dart';
 import '../theme/app_theme.dart';
 import 'player_screen.dart';
 
@@ -35,14 +36,17 @@ class _NetworkStreamScreenState extends State<NetworkStreamScreen> {
       return;
     }
     setState(() => _error = null);
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => PlayerScreen(
-        title: 'Network Stream',
-        subtitle: s.label,
-        url: s.url,
-        isLive: true,
-      ),
-    ));
+    SupportGate.guard(context, () {
+      if (!mounted) return;
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => PlayerScreen(
+          title: 'Network Stream',
+          subtitle: s.label,
+          url: s.url,
+          isLive: true,
+        ),
+      ));
+    });
   }
 
   @override
