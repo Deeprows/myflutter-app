@@ -28,7 +28,9 @@ class BackgroundPlayback {
   /// Stop on the notification.
   static Future<void> start(String title, VoidCallback onStopRequested) async {
     _hook();
-    _stopHandlers.add(onStopRequested);
+    if (!_stopHandlers.contains(onStopRequested)) {
+      _stopHandlers.add(onStopRequested);
+    }
     try {
       await _channel.invokeMethod<bool>('start', {'title': title});
     } catch (_) {}
