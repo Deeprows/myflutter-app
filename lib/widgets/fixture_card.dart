@@ -143,7 +143,7 @@ class FixtureCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: _Team(
-                          flag: f.homeFlag,
+                          logo: f.homeLogo,
                           name: f.home,
                           muted: ended,
                           alignEnd: false,
@@ -196,7 +196,7 @@ class FixtureCard extends StatelessWidget {
 
                       Expanded(
                         child: _Team(
-                          flag: f.awayFlag,
+                          logo: f.awayLogo,
                           name: f.away,
                           muted: ended,
                           alignEnd: true,
@@ -283,14 +283,73 @@ String _ms(Duration d) {
 // TEAM
 // -----------------------------------------------------------------------------
 
+class _TeamLogo extends StatelessWidget {
+  final String logo;
+
+  const _TeamLogo({required this.logo});
+
+  String? get _imageUrl {
+    final value = logo.trim();
+    if (value.isEmpty) return null;
+    // Numeric API-Sports team IDs keep the JSON compact and consistent.
+    if (RegExp(r'^\d+$').hasMatch(value)) {
+      return 'https://media.api-sports.io/football/teams/$value.png';
+    }
+    // Backward-compatible support for an explicit image URL in a feed.
+    final uri = Uri.tryParse(value);
+    if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http') && uri.host.isNotEmpty) {
+      return value;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final url = _imageUrl;
+    if (url == null) return const _FallbackTeamLogo();
+    return ClipOval(
+      child: Image.network(
+        url,
+        width: 27,
+        height: 27,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, __, ___) => const _FallbackTeamLogo(),
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.5,
+              color: Colors.white38,
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _FallbackTeamLogo extends StatelessWidget {
+  const _FallbackTeamLogo();
+
+  @override
+  Widget build(BuildContext context) => const Icon(
+        Icons.sports_soccer_rounded,
+        size: 19,
+        color: Colors.white70,
+      );
+}
+
 class _Team extends StatelessWidget {
-  final String flag;
+  final String logo;
   final String name;
   final bool muted;
   final bool alignEnd;
 
   const _Team({
-    required this.flag,
+    required this.logo,
     required this.name,
     required this.muted,
     required this.alignEnd,
@@ -305,27 +364,24 @@ class _Team extends StatelessWidget {
           : CrossAxisAlignment.start,
       children: [
         // ---------------------------------------------------------------
-        // FLAG
+        // CLUB / NATIONAL TEAM CREST
+        // The feed stores a short team ID in homeLogo / awayLogo.
+        // Resolve IDs to API-Sports crest URLs here, not in the JSON feed.
         // ---------------------------------------------------------------
 
         Container(
-          width: 29,
-          height: 29,
+          width: 32,
+          height: 32,
+          padding: const EdgeInsets.all(2),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Colors.white.withValues(alpha: .05),
             border: Border.all(
-              color: Colors.white.withValues(alpha: .08),
+              color: Colors.white.withValues(alpha: .10),
             ),
           ),
-          child: Text(
-            flag.isEmpty ? '⚽' : flag,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.05,
-            ),
-          ),
+          child: _TeamLogo(logo: logo),
         ),
 
         const SizedBox(height: 1),
