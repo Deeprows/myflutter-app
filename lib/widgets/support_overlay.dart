@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 
 import '../config.dart';
+import '../screens/ad_support_screen.dart';
 import '../screens/plans_screen.dart';
 import '../screens/support_browser_screen.dart';
 import '../services/subscription_service.dart';
@@ -16,6 +17,9 @@ enum SupportChoice { supported, released, premium }
 /// dead link or no connection), or [SupportChoice.premium] when the person
 /// chose to remove the ads instead.
 Future<SupportChoice?> showSupportOverlay(BuildContext context) {
+  // The overlay is hidden (AppConfig.supportOverlayVisible = false): load the
+  // ad page directly, with only a short "please wait" bar on top of it.
+  if (!AppConfig.supportOverlayVisible) return _showAdPage(context);
   return showGeneralDialog<SupportChoice>(
     context: context,
     barrierDismissible: false,
@@ -34,6 +38,23 @@ Future<SupportChoice?> showSupportOverlay(BuildContext context) {
       );
     },
   );
+}
+
+/// Opens the ad page on top of whatever is showing. When it closes the person
+/// is back exactly where they were (and the tapped item opens).
+Future<SupportChoice?> _showAdPage(BuildContext context) async {
+  final r = await Navigator.of(context, rootNavigator: true)
+      .push<SupportResult>(
+    MaterialPageRoute<SupportResult>(
+      fullscreenDialog: true,
+      builder: (_) => AdSupportScreen(url: AppConfig.supportUrl),
+    ),
+  );
+  return switch (r) {
+    SupportResult.completed => SupportChoice.supported,
+    SupportResult.failed => SupportChoice.released,
+    _ => null,
+  };
 }
 
 class SupportOverlay extends StatefulWidget {
