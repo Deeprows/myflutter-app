@@ -75,6 +75,7 @@ class SupportGate {
 
   /// "Thanks 💗" banner, shown right after the support page closes.
   static void showThanks() {
+    if (!AppConfig.supportThanksBanner) return;
     final messenger = PushService.messengerKey.currentState;
     if (messenger == null) return;
     final m = AppConfig.adIntervalMinutes;
