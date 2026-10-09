@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../player/mini_player.dart';
+import '../player/player_hub_screen.dart';
 import '../services/content_sync.dart';
 import '../services/notice_service.dart';
 import '../services/push_service.dart';
@@ -107,14 +109,19 @@ class _ShellScreenState extends State<ShellScreen>
       extendBody: false,
       body: IndexedStack(
         index: _index,
-        children: const [
-          LiveScreen(),
-          HighlightsScreen(),
-          TvScreen(),
-          MoviesScreen(),
+        children: [
+          const LiveScreen(),
+          const HighlightsScreen(),
+          const TvScreen(),
+          const MoviesScreen(),
+          PlayerHubScreen(active: _index == 4),
         ],
       ),
-      bottomNavigationBar: DecoratedBox(
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const MiniPlayer(),
+          DecoratedBox(
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: Ui.line)),
         ),
@@ -141,8 +148,15 @@ class _ShellScreenState extends State<ShellScreen>
               selectedIcon: Icon(Icons.movie_rounded),
               label: 'Movies',
             ),
+            NavigationDestination(
+              icon: Icon(Icons.video_library_outlined),
+              selectedIcon: Icon(Icons.video_library_rounded),
+              label: 'Player',
+            ),
           ],
         ),
+      ),
+        ],
       ),
       ),
     );
