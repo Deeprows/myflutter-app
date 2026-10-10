@@ -5,8 +5,8 @@
   shows instantly. A copy older than `adPreloadMaxAgeSeconds` (240) is
   reloaded.
 * The ad screen shows a yellow **Ad** badge, a yellow progress line and a
-  **"Skip in 5" -> "Skip Ad"** button (`supportSkipAfterSeconds`). It ends by
-  itself after `supportAfterLoadSeconds` (10). If the person taps the ad, the
+  **"Skip in 6" -> "Skip Ad"** button (`supportSkipAfterSeconds`). It never
+  ends by itself: it stays until the person taps Skip Ad. If the person taps the ad, the
   automatic ending stops and the button becomes **Continue**.
 * If the page was not ready in time, the old "Ad support timeout: please
   wait" message shows until it has loaded.
@@ -26,9 +26,8 @@ videos / music), a network stream, or a movie in My Library - and then every
 
 * The page is **never cut off while it is loading** - no close button, Back is
   ignored.
-* When it has fully loaded (redirects included) the bar changes to "Ad loaded
-  · back in Ns" with a **Resume** button. The page can be used meanwhile.
-* After `supportAfterLoadSeconds` (5) it closes by itself, or earlier when
+* When it has fully loaded (redirects included) the bar counts "Skip in N" and then shows a **Skip Ad** button. The page can be used meanwhile.
+* It stays open until
   Resume / Back is tapped, and the person is back where they were; the tapped
   item then opens.
 * If the person opens another page from the ad, the wait message returns until
@@ -52,7 +51,7 @@ Shown to **Free** users:
 
 Completing the first-tap overlay restarts the 10-minute clock. Premium users
 never see it (see SUBSCRIPTIONS.md). Both use the same overlay: CLICK HERE
-opens the page in the in-app browser, it closes by itself after 13 s, then a
+opens the page in the in-app browser, after it loads, 6 s count and then a **Skip Ad** button appears (it never closes by itself), then a
 "Thanks" banner appears. Colours follow the selected app theme.
 
 The page opened by CLICK HERE is fully tappable: links that open a new
@@ -66,10 +65,10 @@ Settings (lib/config.dart):
 | `supportUrl`           | Page opened by CLICK HERE. **Empty = no ads at all**  |
 | `adIntervalMinutes`    | Minutes of use between overlays (10)                 |
 | `supportOnFirstTap`    | First tap of each launch shows the overlay (true)    |
-| `supportViewSeconds`   | Page auto-closes after this many seconds (13)        |
+| `supportViewSeconds`   | Seconds after load before Skip Ad appears (6)        |
 | `supportOverlayVisible`| false = overlay hidden, ad page opens directly       |
 | `supportWaitText`      | Message while the ad page loads                      |
-| `supportAfterLoadSeconds` | Seconds the page stays after it has fully loaded (5) |
+| `supportAfterLoadSeconds` | Unused: the ad no longer closes by itself |
 | `supportMaxLoadSeconds`| Safety cap for a page that never finishes loading (40)|
 | `supportThanksBanner`  | Show the "Thanks" banner afterwards (false)          |
 | `adRetryMinutes`       | If the page can't load, ask again after this (3)     |
