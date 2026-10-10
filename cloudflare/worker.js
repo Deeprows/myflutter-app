@@ -1556,6 +1556,14 @@ async function subAdmin(request, env, url) {
   const btn = "padding:9px 12px;font-size:15px";
   const box = "width:100%;padding:12px;box-sizing:border-box";
 
+  // Digits only go into the link, so nothing typed by a phone can break out.
+  const waLink = (c) => {
+    const d = String(c || "").replace(/\D/g, "");
+    return d.length >= 7 && d.length <= 15
+      ? ` &middot; <a href="https://wa.me/${d}" style="color:#22e07a">Open WhatsApp</a>`
+      : "";
+  };
+
   const reqs = (
     await env.DB.prepare(
       "SELECT install_id, contact, created_at FROM token_requests ORDER BY created_at DESC LIMIT 30"
@@ -1566,7 +1574,7 @@ async function subAdmin(request, env, url) {
         .map(
           (r) => `<form method="post" style="background:#101722;padding:10px;border-radius:8px;margin:8px 0">
 <input type="hidden" name="token" value="${tk}"><input type="hidden" name="install_id" value="${esc(r.install_id)}">
-<div style="font-size:12.5px;margin-bottom:6px">${esc(String(r.install_id).slice(0, 12))}… &middot; ${esc(day(r.created_at))}${r.contact ? ` &middot; <b>${esc(r.contact)}</b>` : ""}</div>
+<div style="font-size:12.5px;margin-bottom:6px">${esc(String(r.install_id).slice(0, 12))}… &middot; ${esc(day(r.created_at))}${r.contact ? ` &middot; <b>${esc(r.contact)}</b>` : ""}${waLink(r.contact)}</div>
 <input name="days" type="number" value="30" style="width:80px;padding:9px">
 <button name="action" value="answer" style="${btn}">Create token</button>
 <button name="action" value="dismiss" style="${btn}">Dismiss</button>
