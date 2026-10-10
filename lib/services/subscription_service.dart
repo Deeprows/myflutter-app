@@ -133,6 +133,22 @@ class SubscriptionService extends ChangeNotifier {
   bool get isPremium => _expires != null && _expires!.isAfter(DateTime.now());
   DateTime? get expiresAt => _expires;
 
+  /// "09/11/2026" while ad-free is active, else null.
+  String? get expiresLabel {
+    final d = _expires;
+    if (d == null || !isPremium) return null;
+    return '${d.day.toString().padLeft(2, '0')}/'
+        '${d.month.toString().padLeft(2, '0')}/${d.year}';
+  }
+
+  /// Whole days of ad-free time left (rounded up), or null when not active.
+  int? get daysLeft {
+    final d = _expires;
+    if (d == null || !isPremium) return null;
+    final hours = d.difference(DateTime.now()).inHours;
+    return hours <= 0 ? 1 : (hours / 24).ceil();
+  }
+
   /// Reads the saved copy (fast, offline-safe) and asks the Worker in the
   /// background.
   Future<void> init() async {
