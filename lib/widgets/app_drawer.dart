@@ -55,6 +55,30 @@ class FootboliveDrawer extends StatelessWidget {
           horizontalTitleGap: 12,
         );
 
+    // "Subscription: Active" + the end date and days left.
+    Widget subscriptionItem() {
+      final sub = SubscriptionService.instance;
+      final date = sub.expiresLabel;
+      final left = sub.daysLeft;
+      final detail = [
+        if (date != null) 'No ads until $date',
+        if (left != null && left <= 400) '$left day${left == 1 ? '' : 's'} left',
+      ].join(' · ');
+      return ListTile(
+        dense: true,
+        leading: Icon(Icons.verified_rounded, size: 21, color: Ui.green),
+        title: const Text('Subscription: Active',
+            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+        subtitle: detail.isEmpty
+            ? null
+            : Text(detail, style: TextStyle(color: Ui.muted, fontSize: 11.5)),
+        onTap: () => _go(context, (c) => _push(c, const RemoveAdsScreen())),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18),
+        minVerticalPadding: 6,
+        horizontalTitleGap: 12,
+      );
+    }
+
     return Drawer(
       backgroundColor: Ui.cardDeep,
       child: Column(
@@ -99,13 +123,17 @@ class FootboliveDrawer extends StatelessWidget {
                           ? 'Premium (active)'
                           : 'Go Premium - no ads',
                       (c) => _push(c, const PlansScreen())),
-                if (SubscriptionService.instance.tokensVisible)
-                  item(
-                      Icons.block_rounded,
-                      SubscriptionService.instance.isPremium
-                          ? 'Ads removed'
-                          : 'Remove ads',
-                      (c) => _push(c, const RemoveAdsScreen())),
+                // Token users: before = "Remove ads"; once ads are gone this
+                // becomes the subscription status. (Paystack Premium has its
+                // own item above, so it is not repeated.)
+                if (SubscriptionService.instance.tokensVisible &&
+                    !(SubscriptionService.instance.visible &&
+                        SubscriptionService.instance.isPremium))
+                  if (SubscriptionService.instance.isPremium)
+                    subscriptionItem()
+                  else
+                    item(Icons.block_rounded, 'Remove ads',
+                        (c) => _push(c, const RemoveAdsScreen())),
                 item(Icons.link_rounded, 'Network Stream',
                     (c) => _push(c, const NetworkStreamScreen())),
                 item(Icons.playlist_play_rounded, 'Playlists',
