@@ -43,7 +43,7 @@ const tokenIn = (htmlText) => /([A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4})/.exec(htmlT
 assert.equal((await (await call("/health")).json()).tokens, true);
 
 // 1. request -> pending; asking again is harmless
-let j = await (await post("/sub/token/request", { install_id: A, contact: "Ada, 0801" })).json();
+let j = await (await post("/sub/token/request", { install_id: A, contact: "+234 801 234 5678" })).json();
 assert.equal(j.state, "pending");
 await post("/sub/token/request", { install_id: A });
 assert.equal((await (await call(`/sub/token/mine?install=${A}`)).json()).state, "pending");
@@ -53,7 +53,7 @@ assert.equal((await post("/sub/token/request", { install_id: "x" })).status, 400
 // 2. admin page needs the password and shows the request (+ contact)
 assert.equal((await call("/sub/admin?token=nope")).status, 403);
 let page = await (await call("/sub/admin?token=adm")).text();
-assert.ok(page.includes("Ada, 0801") && page.includes('value="answer"'));
+assert.ok(page.includes("+234 801 234 5678") && page.includes("https://wa.me/2348012345678") && page.includes('value="answer"'));
 
 // 3. admin answers the request -> token bound to that phone; request leaves the list
 page = await (await admin({ action: "answer", install_id: A, days: 30 })).text();
