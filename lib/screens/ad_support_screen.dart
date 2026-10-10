@@ -18,11 +18,10 @@ import 'support_browser_screen.dart' show SupportResult;
 ///  2. Once loaded, the ad is shown with an "Ad" badge, a progress line and a
 ///     "Skip in N" button that turns into "Skip Ad" after
 ///     [AppConfig.supportSkipAfterSeconds], exactly like YouTube.
-///  3. The ad ends by itself after [AppConfig.supportAfterLoadSeconds], or when
-///     the person taps Skip Ad, and they are back where they were.
+///  3. The ad NEVER disappears by itself. It stays on screen until the person
+///     taps Skip Ad, and they are back where they were.
 ///
-/// If the person taps the ad, the automatic ending is switched off so they can
-/// look at the advertiser, and the button becomes "Continue".
+/// If the person taps the ad, the button becomes "Continue".
 ///
 /// Pops [SupportResult.completed] when it was shown, or
 /// [SupportResult.failed] when it could not load at all (offline / dead link),
@@ -157,22 +156,24 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
     if (_done || !mounted || _phase == _Phase.error) return;
     _everLoaded = true;
     _maxLoad?.cancel();
-    if (_phase == _Phase.ready && _tick != null) return;
+    if (_phase == _Phase.ready && _begin != null) return;
     setState(() => _phase = _Phase.ready);
     _startCountdown();
   }
 
   void _startCountdown() {
     _stopCountdown();
-    final total = AppConfig.supportAfterLoadSeconds;
     _begin = DateTime.now();
     _elapsed.value = 0;
     _tick = Timer.periodic(const Duration(milliseconds: 100), (t) {
       final e = DateTime.now().difference(_begin!).inMilliseconds / 1000;
       _elapsed.value = e;
-      if (e >= total && !_engaged) {
+      // No automatic ending: the ad stays until the person taps Skip Ad.
+      // Once the Skip button is available there is nothing left to count.
+      if (e >= AppConfig.supportSkipAfterSeconds) {
         t.cancel();
-        _finish();
+        _tick = null;
+        _elapsed.value = e;
       }
     });
   }
@@ -448,13 +449,14 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
                       : ValueListenableBuilder<double>(
                           valueListenable: _elapsed,
                           builder: (_, e, _) {
-                            final left = (AppConfig.supportAfterLoadSeconds - e)
-                                .clamp(0.0, 999.0)
-                                .ceil();
+                            final ready =
+                                e >= AppConfig.supportSkipAfterSeconds;
                             return Text(
                               _engaged
                                   ? 'Ad · tap Continue when you are done'
-                                  : 'Ad · ends in ${left}s',
+                                  : (ready
+                                      ? 'Ad · tap Skip Ad to continue'
+                                      : 'Ad'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -483,7 +485,7 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
                     minHeight: 3,
                     value: _engaged
                         ? 1.0
-                        : (e / AppConfig.supportAfterLoadSeconds)
+                        : (e / AppConfig.supportSkipAfterSeconds)
                             .clamp(0.0, 1.0)
                             .toDouble(),
                     backgroundColor: Ui.line,
