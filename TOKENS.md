@@ -8,13 +8,15 @@ Paystack stays hidden (`showSubscriptions = false`).
 
 Menu → **Remove ads** (also shown on the support overlay when it is visible).
 
-1. **Request token** (optionally typing a name / WhatsApp number so you know who
-   it is) – or **Message us for a token** to ask on WhatsApp / Telegram.
+1. **Request token** – they must type their WhatsApp number (with country code),
+   which is how you reach them to confirm payment – or **Buy token on WhatsApp**
+   to chat with you directly.
 2. The token appears on that screen by itself within about 20 seconds of you
    creating it. Tap **Remove ads now**.
 3. Got a token from a chat instead? Type it under **Already have a token?**.
 
-Ads stop immediately (the "We Need Your Support" page, its first-tap trigger
+Once ads are removed, the menu item shows **Subscription: Active** with the end
+date and days left. Ads stop immediately (the "We Need Your Support" page, its first-tap trigger
 and the timer all check the same Premium flag). Time stacks if a phone redeems
 more than one token.
 
@@ -22,8 +24,8 @@ more than one token.
 
 Open `https://deeprowss-feed.deeprows.workers.dev/sub/admin?token=<ADMIN_TOKEN>`
 
-* **Token requests** – every phone that pressed *Request token*, with the name /
-  number it typed. Choose the days, press **Create token**. That token only
+* **Token requests** – every phone that pressed *Request token*, with the WhatsApp
+  number it typed and an **Open WhatsApp** link. Choose the days, press **Create token**. That token only
   works on that phone, and the phone shows it by itself. **Dismiss** removes a
   request.
 * **Make tokens** – make 1-20 tokens in advance (e.g. to paste into a WhatsApp
