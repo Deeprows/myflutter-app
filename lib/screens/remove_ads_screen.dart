@@ -92,12 +92,21 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
 
   Future<void> _request() async {
     if (_busy) return;
+    // The WhatsApp number is the one required field: it is how you reach the
+    // person to confirm payment.
+    final number = _contact.text.trim();
+    final digits = number.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 7 || digits.length > 15) {
+      setState(() => _error =
+          'Enter your WhatsApp number with country code, e.g. +234 801 234 5678');
+      return;
+    }
     FocusScope.of(context).unfocus();
     setState(() {
       _busy = true;
       _error = null;
     });
-    final err = await _sub.requestToken(contact: _contact.text);
+    final err = await _sub.requestToken(contact: number);
     if (!mounted) return;
     if (err != null) {
       setState(() {
@@ -204,11 +213,12 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
       );
 
   Widget _activeCard() {
-    final d = _sub.expiresAt;
-    final date = d == null
-        ? ''
-        : '${d.day.toString().padLeft(2, '0')}/'
-            '${d.month.toString().padLeft(2, '0')}/${d.year}';
+    final date = _sub.expiresLabel;
+    final left = _sub.daysLeft;
+    final detail = [
+      if (date != null) 'No ads until $date',
+      if (left != null && left <= 400) '$left day${left == 1 ? '' : 's'} left',
+    ].join(' · ');
     return _box(
       highlight: true,
       child: Row(children: [
@@ -218,10 +228,10 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Ads are removed',
+              const Text('Subscription: Active',
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
               const SizedBox(height: 2),
-              Text(date.isEmpty ? 'Enjoy 💗' : 'No ads until $date',
+              Text(detail.isEmpty ? 'All ads are removed' : detail,
                   style: TextStyle(color: Ui.muted, fontSize: 13.5)),
             ],
           ),
@@ -329,10 +339,19 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
         children: [
           TextField(
             controller: _contact,
-            maxLength: 80,
+            maxLength: 20,
+            keyboardType: TextInputType.phone,
             textInputAction: TextInputAction.done,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9+\- ()]')),
+            ],
+            onChanged: (_) {
+              if (_error != null) setState(() => _error = null);
+            },
             decoration: const InputDecoration(
-              labelText: 'Your name or WhatsApp number (optional)',
+              labelText: 'Your WhatsApp number',
+              hintText: '+234 801 234 5678',
+              helperText: 'Required. We message you here to confirm payment.',
               counterText: '',
             ),
           ),
@@ -475,6 +494,7 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
           label: const Text('Buy token on WhatsApp',
               style: TextStyle(fontWeight: FontWeight.w800)),
           style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 12),
             side: BorderSide(color: Ui.green.withValues(alpha: .7)),
             shape: RoundedRectangleBorder(
