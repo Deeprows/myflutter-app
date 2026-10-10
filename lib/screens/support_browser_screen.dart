@@ -9,18 +9,20 @@ import '../theme/app_theme.dart';
 
 /// How the support page ended.
 enum SupportResult {
-  /// Stayed for the full time; it closed by itself.
+  /// The person waited for the countdown and tapped Skip Ad.
   completed,
 
-  /// Closed by the person before the time was up.
+  /// Closed by the person before the time was up (error screen only now).
   closed,
 
   /// The page could not be loaded (offline, dead link).
   failed,
 }
 
-/// In-app browser for the support page. It closes by itself after
-/// [seconds] and pops [SupportResult.completed].
+/// In-app browser for the support page. It NEVER closes by itself: after the
+/// page has loaded, [seconds] count down, then a "Skip Ad" button appears and
+/// the person taps it to leave (pops [SupportResult.completed]). Until then
+/// they can use the page normally and interact with the ad.
 ///
 /// The countdown starts when the page has loaded (or after a short fallback
 /// if the page never reports "loaded"), so a slow page doesn't eat the time.
@@ -147,8 +149,9 @@ class _SupportBrowserScreenState extends State<SupportBrowserScreen> {
     _tick = Timer.periodic(const Duration(milliseconds: 100), (t) {
       final ms = _end!.difference(DateTime.now()).inMilliseconds;
       if (ms <= 0) {
+        // Countdown over: Skip Ad is now available. Nothing closes by itself.
         t.cancel();
-        _finish();
+        _left.value = 0;
       } else {
         _left.value = ms / 1000;
       }
@@ -159,6 +162,17 @@ class _SupportBrowserScreenState extends State<SupportBrowserScreen> {
     if (_done || !mounted) return;
     _done = true;
     Navigator.of(context).pop(SupportResult.completed);
+  }
+
+  bool get _canSkip => _left.value == 0;
+
+  /// Back / close: only once Skip Ad is available (or on the error screen).
+  void _backOrClose() {
+    if (_error) {
+      _closeEarly();
+    } else if (_canSkip) {
+      _finish();
+    }
   }
 
   void _closeEarly() {
@@ -182,7 +196,7 @@ class _SupportBrowserScreenState extends State<SupportBrowserScreen> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _closeEarly();
+        if (!didPop) _backOrClose();
       },
       child: Scaffold(
         backgroundColor: Ui.bg,
@@ -197,12 +211,7 @@ class _SupportBrowserScreenState extends State<SupportBrowserScreen> {
                   children: [
                     Row(
                       children: [
-                        IconButton(
-                          tooltip: 'Close',
-                          visualDensity: VisualDensity.compact,
-                          icon: Icon(Icons.close_rounded, color: Ui.muted),
-                          onPressed: _closeEarly,
-                        ),
+                        const SizedBox(width: 8),
                         Icon(Icons.favorite_rounded, size: 16, color: Ui.red),
                         const SizedBox(width: 8),
                         const Expanded(
@@ -216,23 +225,49 @@ class _SupportBrowserScreenState extends State<SupportBrowserScreen> {
                         ),
                         ValueListenableBuilder<double>(
                           valueListenable: _left,
-                          builder: (_, v, _) => Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Ui.red.withValues(alpha: .14),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                  color: Ui.red.withValues(alpha: .45)),
-                            ),
-                            child: Text(
-                              v < 0 ? 'Loading…' : 'Closing in ${v.ceil()}s',
-                              style: TextStyle(
-                                  color: Ui.redSoft,
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w800),
-                            ),
-                          ),
+                          builder: (_, v, _) {
+                            final ready = v == 0;
+                            return Material(
+                              color: ready
+                                  ? Ui.red
+                                  : Ui.red.withValues(alpha: .14),
+                              shape: StadiumBorder(
+                                side: BorderSide(
+                                    color: Ui.red.withValues(alpha: .45)),
+                              ),
+                              child: InkWell(
+                                customBorder: const StadiumBorder(),
+                                onTap: ready ? _finish : null,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        v < 0
+                                            ? 'Loading…'
+                                            : (ready
+                                                ? 'Skip Ad'
+                                                : 'Skip in ${v.ceil()}'),
+                                        style: TextStyle(
+                                            color: ready
+                                                ? Colors.white
+                                                : Ui.redSoft,
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w800),
+                                      ),
+                                      if (ready) ...[
+                                        const SizedBox(width: 4),
+                                        const Icon(Icons.skip_next_rounded,
+                                            size: 18, color: Colors.white),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
