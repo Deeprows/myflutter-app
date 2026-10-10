@@ -137,13 +137,13 @@ class AppConfig {
   /// Appears after [adIntervalMinutes] minutes of real use (the clock only
   /// runs while the app is open on screen and keeps counting across
   /// launches). Premium people never see it. The person opens
-  /// [supportUrl] (your ad / smart link) and the page closes by itself after
-  /// [supportViewSeconds].
+  /// [supportUrl] (your ad / smart link); once it has loaded, [supportViewSeconds]
+  /// count down and then "Skip Ad" appears. The page never closes by itself.
   /// [supportUrl] empty = no ads at all.
   static const supportUrl =
       'https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60';
   static const adIntervalMinutes = 10;
-  static const supportViewSeconds = 13; // page auto-closes after this long
+  static const supportViewSeconds = 6; // seconds after load before Skip Ad appears (never auto-closes)
 
   /// If the support page cannot load (offline / dead link) nobody is locked
   /// out; the overlay comes back after this many minutes of use.
@@ -162,15 +162,13 @@ class AppConfig {
   /// Message on the bar while the ad page is loading.
   static const supportWaitText = 'Ad support timeout: please wait';
 
-  /// Seconds the ad page stays after it has FULLY loaded (people can use it),
-  /// then it closes by itself and the person is back where they were. They can
-  /// also tap Resume at any time after it has loaded.
-  /// YouTube style: the ad is shown for this long, then the person continues
-  /// by itself (or taps Skip Ad once [supportSkipAfterSeconds] has passed).
+  /// NOT USED any more by the ad page: once it has fully loaded it stays on
+  /// screen until the person taps Skip Ad (it never closes by itself).
+  /// Kept only so older references still compile.
   static const supportAfterLoadSeconds = 10;
 
-  /// Seconds before the "Skip Ad" button becomes tappable (like YouTube's 5s).
-  static const supportSkipAfterSeconds = 5;
+  /// Seconds after the ad has fully loaded before "Skip Ad" becomes tappable.
+  static const supportSkipAfterSeconds = 6;
 
   /// The ad page is loaded in the BACKGROUND this many seconds before it is
   /// due (and once when the app starts), so it appears instantly when shown.
