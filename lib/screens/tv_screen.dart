@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../config.dart';
@@ -29,8 +31,8 @@ const _categoryOrder = [
 ];
 
 const _rowPreview = 14; // cards per category row before "See all"
-const _cardHeight = 156.0;
-const _rowCardWidth = 148.0;
+const _cardHeight = 54.0; // wide pill buttons: round logo + channel name
+const _rowCardWidth = 184.0;
 
 class TvScreen extends StatefulWidget {
   const TvScreen({super.key});
@@ -480,15 +482,6 @@ class _ChannelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final quality = channel.qualityLabel;
-    final meta = [
-      if (channel.flag.isNotEmpty) channel.flag,
-      if (channel.country != null && channel.flag.isNotEmpty)
-        channel.country!
-      else
-        channel.category.label,
-    ].join(' ');
-
     return SizedBox(
       width: width,
       height: _cardHeight,
@@ -496,78 +489,22 @@ class _ChannelCard extends StatelessWidget {
         color: Colors.transparent,
         child: Ink(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Ui.card, Ui.cardDeep],
-            ),
+            color: Ui.card,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Ui.red.withValues(alpha: .20)),
+            border: Border.all(color: Ui.red.withValues(alpha: .8), width: 1.4),
           ),
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Logo area.
-                SizedBox(
-                  height: 92,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(15)),
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Ui.red.withValues(alpha: .20),
-                              Ui.red.withValues(alpha: .04),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Center(child: _Logo(channel: channel)),
-                      const Positioned(top: 8, left: 8, child: _LivePill()),
-                      if (quality.isNotEmpty)
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: _Badge(quality),
-                        ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(channel.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 13.5,
-                                height: 1.15,
-                                fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 3),
-                        Text(meta,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: Ui.muted,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 10, 0),
+              child: Row(
+                children: [
+                  _Logo(channel: channel),
+                  const SizedBox(width: 8),
+                  Expanded(child: _MarqueeText(channel.name)),
+                ],
+              ),
             ),
           ),
         ),
@@ -576,97 +513,135 @@ class _ChannelCard extends StatelessWidget {
   }
 }
 
-/// Channel logo on a light tile (most logos are made for light backgrounds),
-/// or a category icon / initial when there is no logo or it fails to load.
+/// Round channel logo with an accent ring (like the reference design), or a
+/// category icon when there is no logo or it fails to load.
 class _Logo extends StatelessWidget {
   final Channel channel;
   const _Logo({required this.channel});
 
+  static const _size = 38.0;
+
   @override
   Widget build(BuildContext context) {
     final url = channel.logo ?? '';
-    final fallback = Container(
-      width: 54,
-      height: 54,
-      decoration: BoxDecoration(
-        color: Ui.red.withValues(alpha: .16),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Ui.red.withValues(alpha: .3)),
-      ),
-      child: Icon(channel.category.icon, color: Ui.redSoft, size: 26),
-    );
-    if (url.isEmpty) return fallback;
+    final icon = Icon(channel.category.icon, color: Ui.redSoft, size: 20);
     return Container(
-      width: 74,
-      height: 54,
-      padding: const EdgeInsets.all(6),
+      width: _size,
+      height: _size,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .94),
-        borderRadius: BorderRadius.circular(14),
+        shape: BoxShape.circle,
+        color: url.isEmpty ? Ui.red.withValues(alpha: .16) : Colors.white,
+        border: Border.all(color: Ui.red, width: 1.5),
       ),
-      child: Image.network(
-        url,
-        fit: BoxFit.contain,
-        cacheWidth: 160,
-        filterQuality: FilterQuality.medium,
-        errorBuilder: (_, __, ___) => Icon(channel.category.icon,
-            color: Colors.black45, size: 24),
-      ),
+      child: url.isEmpty
+          ? Center(child: icon)
+          : ClipOval(
+              child: Padding(
+                padding: const EdgeInsets.all(3),
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  cacheWidth: 120,
+                  filterQuality: FilterQuality.medium,
+                  errorBuilder: (_, __, ___) => Center(child: icon),
+                ),
+              ),
+            ),
     );
   }
 }
 
-class _LivePill extends StatelessWidget {
-  const _LivePill();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: .55),
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: Ui.red, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 4),
-          const Text('LIVE',
-              style: TextStyle(
-                  fontSize: 8.5,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: .8,
-                  color: Colors.white)),
-        ],
-      ),
-    );
-  }
-}
-
-class _Badge extends StatelessWidget {
+/// Channel name, centred. A name too long for the button slowly scrolls
+/// sideways (with soft faded edges) so it can still be read in full.
+class _MarqueeText extends StatefulWidget {
   final String text;
-  const _Badge(this.text);
+  const _MarqueeText(this.text);
+
+  @override
+  State<_MarqueeText> createState() => _MarqueeTextState();
+}
+
+class _MarqueeTextState extends State<_MarqueeText> {
+  static const _style =
+      TextStyle(fontSize: 15, height: 1.1, fontWeight: FontWeight.w800);
+
+  final _scroll = ScrollController();
+  bool _alive = true;
+  bool _running = false;
+
+  @override
+  void dispose() {
+    _alive = false;
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loop() async {
+    if (_running) return;
+    _running = true;
+    while (_alive) {
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      if (!_alive || !_scroll.hasClients) break;
+      final max = _scroll.position.maxScrollExtent;
+      if (max <= 0) break;
+      await _scroll.animateTo(
+        max,
+        duration: Duration(milliseconds: (max * 28).round().clamp(900, 9000)),
+        curve: Curves.linear,
+      );
+      if (!_alive || !_scroll.hasClients) break;
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      if (!_alive || !_scroll.hasClients) break;
+      _scroll.jumpTo(0);
+    }
+    _running = false;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: .55),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: Colors.white24),
-      ),
-      child: Text(text,
-          style: const TextStyle(
-              fontSize: 8.5,
-              fontWeight: FontWeight.w900,
-              letterSpacing: .6,
-              color: Colors.white)),
+    return LayoutBuilder(
+      builder: (context, box) {
+        final painter = TextPainter(
+          text: TextSpan(text: widget.text, style: _style),
+          maxLines: 1,
+          textDirection: TextDirection.ltr,
+        )..layout();
+        final overflows = painter.width > box.maxWidth;
+        if (!overflows) {
+          return Center(
+            child: Text(widget.text,
+                maxLines: 1, softWrap: false, style: _style),
+          );
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_loop());
+        });
+        return ShaderMask(
+          shaderCallback: (r) => const LinearGradient(
+            colors: [
+              Color(0x00FFFFFF),
+              Colors.white,
+              Colors.white,
+              Color(0x00FFFFFF),
+            ],
+            stops: [0, .08, .92, 1],
+          ).createShader(r),
+          blendMode: BlendMode.dstIn,
+          child: SingleChildScrollView(
+            controller: _scroll,
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Center(
+                heightFactor: 1,
+                child: Text(widget.text,
+                    maxLines: 1, softWrap: false, style: _style),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -681,7 +656,7 @@ class _SeeAllCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 112,
+      width: 132,
       height: _cardHeight,
       child: Material(
         color: Ui.red.withValues(alpha: .10),
@@ -690,20 +665,21 @@ class _SeeAllCard extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
           child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Ui.red.withValues(alpha: .3)),
+              border: Border.all(color: Ui.red.withValues(alpha: .5), width: 1.4),
             ),
-            child: Column(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.arrow_circle_right_rounded,
-                    size: 32, color: Ui.redSoft),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                    size: 24, color: Ui.redSoft),
+                const SizedBox(width: 6),
+                Flexible(
                   child: Text(label,
-                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           color: Ui.redSoft,
                           fontSize: 12.5,
