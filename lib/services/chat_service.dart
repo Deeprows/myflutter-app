@@ -12,6 +12,8 @@ class ChatMessage {
   const ChatMessage(this.id, this.username, this.text, this.at);
 }
 
+enum NameClaim { ok, taken, unchecked }
+
 /// Match chat shared with the Footbolive website.
 ///
 /// Same Firestore data the website uses:
@@ -141,6 +143,60 @@ class ChatService {
           : 'Could not send your comment (${res.statusCode}).';
     } catch (_) {
       return 'Could not send your comment. Check your connection.';
+    }
+  }
+
+  /// Reserves [name] so nobody else can use it (`chat_names/<slug>` in the
+  /// same Firestore). Returns:
+  ///  * [NameClaim.ok]    - the name is yours now (or already was yours)
+  ///  * [NameClaim.taken] - someone else already owns it
+  ///  * [NameClaim.unchecked] - the check could not run (offline, or your
+  ///    Firestore rules do not allow `chat_names` writes): the name is
+  ///    accepted without a uniqueness check so nobody is blocked.
+  static Future<NameClaim> claimName(String name, String installId) async {
+    final slug = slugify(name);
+    if (slug.isEmpty) return NameClaim.unchecked; // e.g. only emoji / non-Latin
+    final id = slug.length > 60 ? slug.substring(0, 60) : slug;
+    final docName =
+        'projects/$_project/databases/(default)/documents/chat_names/$id';
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$_base:commit?key=$_apiKey'),
+            headers: _headers,
+            body: jsonEncode({
+              'writes': [
+                {
+                  'update': {
+                    'name': docName,
+                    'fields': {
+                      'name': {'stringValue': name},
+                      'owner': {'stringValue': installId},
+                    },
+                  },
+                  'currentDocument': {'exists': false},
+                }
+              ]
+            }),
+          )
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode == 200) return NameClaim.ok;
+      // Already exists: fine if it is this phone's own claim.
+      if (res.statusCode == 409 || res.statusCode == 400) {
+        final get = await http
+            .get(Uri.parse('$_base/chat_names/$id?key=$_apiKey'),
+                headers: _headers)
+            .timeout(const Duration(seconds: 12));
+        if (get.statusCode == 200) {
+          final f = (jsonDecode(get.body) as Map)['fields'] as Map? ?? const {};
+          final owner = ((f['owner'] as Map?)?['stringValue'] ?? '').toString();
+          return owner == installId ? NameClaim.ok : NameClaim.taken;
+        }
+        return NameClaim.taken;
+      }
+      return NameClaim.unchecked;
+    } catch (_) {
+      return NameClaim.unchecked;
     }
   }
 
