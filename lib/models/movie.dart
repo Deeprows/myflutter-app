@@ -1,4 +1,4 @@
-import '../config.dart';
+import '../services/remote_config.dart';
 import '../utils/posted_at.dart';
 class Movie {
   final String name;
@@ -25,13 +25,13 @@ class Movie {
 
   /// Player link for a TMDB id.
   static String embedUrlFor(int tmdbId, {bool tv = false}) =>
-      '${AppConfig.embedBase}/${tv ? 'tv' : 'movie'}/$tmdbId';
+      '${RemoteConfig.instance.embedBase}/${tv ? 'tv' : 'movie'}/$tmdbId';
 
   /// Backup player link (Switch button): movies `<altEmbedBase>/movie/<id>`,
   /// series `<altEmbedBase>/tv/<id>/1/1`.
   static String altEmbedUrlFor(String id, {bool tv = false}) => tv
-      ? '${AppConfig.altEmbedBase}/tv/$id/1/1'
-      : '${AppConfig.altEmbedBase}/movie/$id';
+      ? '${RemoteConfig.instance.altEmbedBase}/tv/$id/1/1'
+      : '${RemoteConfig.instance.altEmbedBase}/movie/$id';
 
   /// Backup player for this title, or '' when its id is unknown. The id is
   /// the TMDB id, or the id inside the row's own embed link (older rows).
@@ -44,7 +44,7 @@ class Movie {
   /// Download link for a TMDB id: `<downloadBase>/movie/<id>` or
   /// `<downloadBase>/tv/<id>`.
   static String downloadUrlFor(int tmdbId, {bool tv = false}) =>
-      '${AppConfig.downloadBase}/${tv ? 'tv' : 'movie'}/$tmdbId';
+      '${RemoteConfig.instance.downloadBase}/${tv ? 'tv' : 'movie'}/$tmdbId';
 
   /// Genre labels in one spelling, so your own rows and TMDB titles land in
   /// the same category pill ("Science Fiction" / "Sci-fi" -> "Sci-Fi";
@@ -98,7 +98,8 @@ class Movie {
         'type': isSeries ? 'tv' : 'movie',
       };
 
-  bool get isSeries => url.contains('/embed/tv/');
+  bool get isSeries =>
+      url.contains('/embed/tv/') || url.contains('/tv/');
   bool get hasDownload => downloadUrl.startsWith('http');
   bool get hasImage => image.startsWith('http');
 
@@ -130,6 +131,7 @@ class Movie {
     }
     if (!url.startsWith('http')) return null;
     if (name.isEmpty && tmdbId == null) return null;
+    url = _swapHost(url);
 
     var date = s('date');
     var dl = s('downloadUrl');
@@ -139,9 +141,9 @@ class Movie {
       dl = '';
     }
     if (dl.isEmpty && tmdbId != null) {
-      if (url.contains('/embed/tv/')) {
+      if (url.contains('/embed/tv/') || url.contains('/tv/')) {
         dl = downloadUrlFor(tmdbId, tv: true);
-      } else if (url.contains('/embed/movie/')) {
+      } else if (url.contains('/embed/movie/') || url.contains('/movie/')) {
         dl = downloadUrlFor(tmdbId);
       }
     }
@@ -160,6 +162,19 @@ class Movie {
       image: s('image'),
       tmdbId: tmdbId,
     );
+  }
+
+  /// A row with a full link on an old player host (app_config.json
+  /// `movies.replaceHosts`, e.g. vsembed.ru) is moved to the current
+  /// `movies.embedBase`, so changing the player link fixes your own rows too.
+  static String _swapHost(String url) {
+    final m = RegExp(r'^https?://([^/]+)/embed/(movie|tv)/(.*)$',
+            caseSensitive: false)
+        .firstMatch(url);
+    if (m == null) return url;
+    final host = m.group(1)!.toLowerCase();
+    if (!RemoteConfig.instance.replaceHosts.contains(host)) return url;
+    return '${RemoteConfig.instance.embedBase}/${m.group(2)!.toLowerCase()}/${m.group(3)}';
   }
 
   /// "IMDb 5.1/10", "7.0/10 ⭐", "68/100 TMDB ⭐", "Action | Drama - 8.0/10 ⭐"
