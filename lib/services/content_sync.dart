@@ -7,10 +7,10 @@ class ContentSync {
   static final ValueNotifier<int> tick = ValueNotifier<int>(0);
   static DateTime _last = DateTime.fromMillisecondsSinceEpoch(0);
 
-  /// [force] skips the 30 second throttle (used for push notifications).
+  /// [force] skips the 10 second throttle (used for push notifications).
   static void request({bool force = false}) {
     final now = DateTime.now();
-    if (!force && now.difference(_last) < const Duration(seconds: 30)) return;
+    if (!force && now.difference(_last) < const Duration(seconds: 10)) return;
     _last = now;
     tick.value++;
   }
