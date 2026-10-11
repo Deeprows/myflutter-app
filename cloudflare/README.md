@@ -69,6 +69,6 @@ higher traffic.
   and "android". Cloudflare derives the country from the connection and also
   sees IP addresses in its own logs. Mention analytics in your privacy policy
   (and in Google Play's Data safety form if you publish there).
-* **Freshness:** new items reach phones within about 30 seconds
-  (`FEED_TTL` variable, in seconds, changes it).
+* **Freshness:** new items reach phones within about 10-60 seconds
+  (`FEED_TTL` variable, in seconds, changes it; default 10, `0` = no edge cache).
 * Tests: `node cloudflare/worker.test.mjs`.
