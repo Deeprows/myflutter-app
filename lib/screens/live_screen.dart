@@ -73,9 +73,14 @@ class _LiveScreenState extends State<LiveScreen> {
   }
 
   void _onSync() {
-    if (!_loading) {
-      _load(remote: true);
+    if (_loading) {
+      // First load still running: try again shortly instead of skipping.
+      Future<void>.delayed(const Duration(seconds: 2), () {
+        if (mounted && !_loading) _load(remote: true);
+      });
+      return;
     }
+    _load(remote: true);
   }
 
   // ---- A tapped notification that points at one match ----------------------
