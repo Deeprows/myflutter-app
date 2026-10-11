@@ -176,11 +176,21 @@ Future<void> showThemeSheet(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: Ui.panel,
+    // Lets the sheet grow to the screen height; the list scrolls inside it.
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+    ),
     builder: (ctx) => SafeArea(
+      top: false,
       child: ValueListenableBuilder<int>(
         valueListenable: ThemeController.index,
-        builder: (_, selected, _) => Padding(
-          padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+        builder: (_, selected, _) => SingleChildScrollView(
+          // Extra room at the bottom so the phone's navigation bar never
+          // covers the last theme.
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
