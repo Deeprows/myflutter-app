@@ -8,6 +8,7 @@ import '../screens/playlists_screen.dart';
 import '../screens/plans_screen.dart';
 import '../screens/remove_ads_screen.dart';
 import '../services/notice_service.dart';
+import '../services/app_sharer.dart';
 import '../services/app_updater.dart';
 import '../services/subscription_service.dart';
 import '../services/settings_service.dart';
@@ -18,7 +19,7 @@ void _toast(BuildContext c, String msg) =>
     ScaffoldMessenger.of(c).showSnackBar(SnackBar(content: Text(msg)));
 
 /// Side menu: Network Stream, Playlists, Floating Player, Video Quality
-/// Setting, scores, Notice, Join Us, Copyright, Update App, Exit.
+/// Setting, scores, Notice, Join Us, Copyright, Share App, Update App, Exit.
 class FootboliveDrawer extends StatelessWidget {
   const FootboliveDrawer({super.key});
 
@@ -157,6 +158,8 @@ class FootboliveDrawer extends StatelessWidget {
                     (c) => _openLink(c, AppConfig.joinUrl, 'Join Us')),
                 item(Icons.copyright_rounded, 'Copyright',
                     showCopyrightDialog),
+                item(Icons.share_rounded, 'Share App',
+                    (c) => AppSharer.instance.share(c)),
                 item(Icons.sync_rounded, 'Update App',
                     (c) => AppUpdater.instance.update(c)),
                 item(Icons.exit_to_app_rounded, 'Exit',
