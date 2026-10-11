@@ -8,6 +8,7 @@ import '../screens/playlists_screen.dart';
 import '../screens/plans_screen.dart';
 import '../screens/remove_ads_screen.dart';
 import '../services/notice_service.dart';
+import '../services/app_updater.dart';
 import '../services/subscription_service.dart';
 import '../services/settings_service.dart';
 import 'notification_settings.dart';
@@ -157,7 +158,7 @@ class FootboliveDrawer extends StatelessWidget {
                 item(Icons.copyright_rounded, 'Copyright',
                     showCopyrightDialog),
                 item(Icons.sync_rounded, 'Update App',
-                    (c) => _openLink(c, AppConfig.updateUrl, 'Update')),
+                    (c) => AppUpdater.instance.update(c)),
                 item(Icons.exit_to_app_rounded, 'Exit',
                     (c) async => SystemNavigator.pop()),
               ],
