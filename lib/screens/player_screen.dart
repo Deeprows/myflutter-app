@@ -21,6 +21,7 @@ import '../services/tmdb_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/live_dot.dart';
 import '../widgets/match_chat.dart';
+import '../services/remote_config.dart';
 import '../widgets/movie_card.dart' show MoviePoster;
 import '../widgets/movie_info_panel.dart';
 import 'browser_screen.dart' show siteOf;
@@ -644,7 +645,9 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   Widget _portraitBody(Widget video) {
     final s = _stream;
-    final match = widget.chatMatch != null;
+    // Live chat can be switched off in app_config.json (chat.enabled).
+    final match =
+        widget.chatMatch != null && RemoteConfig.instance.chatEnabled;
     return SafeArea(
       child: Column(
         children: [
