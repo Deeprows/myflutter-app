@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/chat_service.dart';
+import '../services/install_id.dart';
 import '../services/settings_service.dart';
 import '../theme/app_theme.dart';
 
@@ -28,6 +29,7 @@ class _MatchChatState extends State<MatchChat> {
   bool _loaded = false; // first fetch finished
   bool _failed = false;
   bool _sending = false;
+  bool _joining = false;
   Timer? _poll;
 
   @override
@@ -92,12 +94,59 @@ class _MatchChatState extends State<MatchChat> {
     });
   }
 
+  /// The name is chosen once and then locked: it cannot be changed later.
   Future<void> _join() async {
+    if (_joining) return;
     final n = _nameInput.text.trim();
-    if (n.isEmpty) return;
     final name = n.length > 30 ? n.substring(0, 30) : n;
+    if (name.length < 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pick a name with at least 3 characters.')),
+      );
+      return;
+    }
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Ui.panel,
+        title: const Text('Use this name?',
+            style: TextStyle(fontWeight: FontWeight.w900)),
+        content: Text(
+          '"$name" will be your name in the live chat. You can\'t change it '
+          'later.',
+          style: TextStyle(color: Ui.muted, height: 1.35),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Change')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Ui.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Use this name'),
+          ),
+        ],
+      ),
+    );
+    if (sure != true || !mounted) return;
+
+    setState(() => _joining = true);
+    final claim = await ChatService.claimName(name, await InstallId.get());
+    if (!mounted) return;
+    if (claim == NameClaim.taken) {
+      setState(() => _joining = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('That name is already taken. Try another.')),
+      );
+      return;
+    }
     await Settings.setChatName(name);
-    if (mounted) setState(() => _username = name);
+    if (mounted) {
+      setState(() {
+        _username = name;
+        _joining = false;
+      });
+    }
   }
 
   Future<void> _send() async {
@@ -164,33 +213,26 @@ class _MatchChatState extends State<MatchChat> {
             ),
           const Spacer(),
           if (_username.isNotEmpty)
-            InkWell(
-              borderRadius: BorderRadius.circular(99),
-              onTap: () => setState(() {
-                _nameInput.text = _username;
-                _username = '';
-              }),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.person_rounded, size: 14, color: Ui.muted),
-                    const SizedBox(width: 4),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 120),
-                      child: Text(_username,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: Ui.muted,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                    const SizedBox(width: 3),
-                    Icon(Icons.edit_rounded, size: 12, color: Ui.dim),
-                  ],
-                ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.person_rounded, size: 14, color: Ui.muted),
+                  const SizedBox(width: 4),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 120),
+                    child: Text(_username,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: Ui.muted,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(width: 3),
+                  Icon(Icons.lock_rounded, size: 12, color: Ui.dim),
+                ],
               ),
             ),
         ],
@@ -250,7 +292,7 @@ class _MatchChatState extends State<MatchChat> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Pick a name to join the chat  ·  18+',
+        Text('Pick a unique name  ·  you can\'t change it later  ·  18+',
             style: TextStyle(
                 color: Ui.muted, fontSize: 11.5, fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
@@ -275,7 +317,7 @@ class _MatchChatState extends State<MatchChat> {
             IconButton.filled(
               tooltip: 'Join',
               style: IconButton.styleFrom(backgroundColor: Ui.red),
-              onPressed: _join,
+              onPressed: _joining ? null : _join,
               icon: const Icon(Icons.login_rounded, size: 20),
             ),
           ],
