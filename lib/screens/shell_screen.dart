@@ -44,7 +44,7 @@ class _ShellScreenState extends State<ShellScreen>
     // Keep every list current without the person having to pull down.
     WidgetsBinding.instance.addObserver(this);
     _autoRefresh = Timer.periodic(
-      const Duration(minutes: 5),
+      const Duration(seconds: 60),
       (_) => ContentSync.request(),
     );
 
@@ -56,7 +56,7 @@ class _ShellScreenState extends State<ShellScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) ContentSync.request();
+    if (state == AppLifecycleState.resumed) ContentSync.request(force: true);
   }
 
   @override
