@@ -15,6 +15,8 @@ import 'package:footbolive/services/download_manager.dart';
 import 'package:footbolive/utils/format.dart';
 import 'package:footbolive/services/player_html.dart';
 import 'package:footbolive/services/push_service.dart';
+import 'package:footbolive/services/remote_config.dart';
+import 'package:footbolive/theme/app_theme.dart';
 import 'package:footbolive/services/support_gate.dart';
 import 'package:footbolive/services/subscription_service.dart';
 import 'package:footbolive/screens/plans_screen.dart';
@@ -576,6 +578,77 @@ void main() {
       expect(u.path, '/2348012345678');
       expect(u.queryParameters['text'], contains('abc123'));
       expect(u.queryParameters['text'], startsWith('Hi'));
+    });
+  });
+  group('RemoteConfig (app_config.json)', () {
+    tearDown(() => RemoteConfig.instance.reset());
+
+    test('missing keys fall back to the defaults', () {
+      RemoteConfig.instance.reset();
+      expect(RemoteConfig.instance.chatEnabled, isTrue);
+      expect(RemoteConfig.instance.embedBase, 'https://vsembed.su/embed');
+      expect(RemoteConfig.instance.updateApkUrl, '');
+    });
+
+    test('ads, movies, update and chat can be changed', () {
+      expect(
+        RemoteConfig.instance.apply({
+          'ads': {'supportUrl': 'https://ads.example/x', 'intervalMinutes': 5},
+          'movies': {
+            'embedBase': 'https://player.example/embed/',
+            'downloadBase': 'https://dl.example/get',
+          },
+          'update': {'apkUrl': 'https://x.example/app.apk'},
+          'chat': {'enabled': false},
+        }),
+        isTrue,
+      );
+      final c = RemoteConfig.instance;
+      expect(c.supportUrl, 'https://ads.example/x');
+      expect(c.adIntervalMinutes, 5);
+      expect(c.updateApkUrl, 'https://x.example/app.apk');
+      expect(c.chatEnabled, isFalse);
+      expect(Movie.embedUrlFor(603), 'https://player.example/embed/movie/603');
+      expect(Movie.downloadUrlFor(1396, tv: true), 'https://dl.example/get/tv/1396');
+    });
+
+    test('ads.enabled false or empty supportUrl turns ads off', () {
+      RemoteConfig.instance.apply({'ads': {'enabled': false}});
+      expect(RemoteConfig.instance.supportUrl, '');
+      RemoteConfig.instance.apply({'ads': {'supportUrl': ''}});
+      expect(RemoteConfig.instance.supportUrl, '');
+    });
+
+    test('old player host in a row is moved to the new embedBase', () {
+      RemoteConfig.instance.apply({
+        'movies': {'embedBase': 'https://player.example/embed'},
+      });
+      final m = Movie.tryParse({
+        'name': 'Old row',
+        'url': 'https://vsembed.ru/embed/movie/tt1',
+      })!;
+      expect(m.url, 'https://player.example/embed/movie/tt1');
+      final other = Movie.tryParse({
+        'name': 'Other host',
+        'url': 'https://vidsrc.sbs/embed/tv/95350/1/1/',
+      })!;
+      expect(other.url, 'https://vidsrc.sbs/embed/tv/95350/1/1/');
+    });
+
+    test('broken JSON keeps the current values', () {
+      RemoteConfig.instance.apply({'chat': {'enabled': false}});
+      expect(RemoteConfig.instance.apply('not json'), isFalse);
+      expect(RemoteConfig.instance.chatEnabled, isFalse);
+    });
+  });
+
+  group('Themes', () {
+    test('only the football-icon themes carry a watermark', () {
+      expect(Palettes.messi.watermark, 'MESSI 10');
+      expect(Palettes.cr7.watermark, 'CR7');
+      expect(Palettes.red.watermark, isNull);
+      expect(Palettes.rose.watermark, isNull);
+      expect(Palettes.all.length, 6);
     });
   });
 }
