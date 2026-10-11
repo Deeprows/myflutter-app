@@ -19,6 +19,13 @@ class Palette {
   final Color line;
   final Color green;
 
+  /// Text / icon colour on top of [accent] (dark for light accents).
+  final Color onAccent;
+
+  /// Big faint mark drawn over the whole app while this theme is selected
+  /// (null = none). Used by the football-icon themes.
+  final String? watermark;
+
   const Palette({
     required this.name,
     required this.tagline,
@@ -32,6 +39,8 @@ class Palette {
     required this.dim,
     this.line = const Color(0x1FFFFFFF),
     this.green = const Color(0xFF22E07A),
+    this.onAccent = Colors.white,
+    this.watermark,
   });
 }
 
@@ -76,7 +85,52 @@ class Palettes {
     dim: Color(0xFF72877B),
   );
 
-  static const all = [red, ocean, emerald];
+  static const rose = Palette(
+    name: 'Rose',
+    tagline: 'Soft pink glow on deep plum',
+    bg: Color(0xFF12060E),
+    panel: Color(0xFF1B0C16),
+    card: Color(0xFF211019),
+    cardDeep: Color(0xFF160912),
+    accent: Color(0xFFFF4D8D),
+    accentSoft: Color(0xFFFF9EC4),
+    muted: Color(0xFFD1B3C2),
+    dim: Color(0xFF93707F),
+  );
+
+  /// Argentina sky-blue with a touch of the golden sun.
+  static const messi = Palette(
+    name: 'Messi 10',
+    tagline: 'Celeste sky blue, the Albiceleste spirit',
+    bg: Color(0xFF060F1A),
+    panel: Color(0xFF0C1A2A),
+    card: Color(0xFF102235),
+    cardDeep: Color(0xFF09141F),
+    accent: Color(0xFF6CB4EE),
+    accentSoft: Color(0xFFF6C85F),
+    muted: Color(0xFFB4C6D8),
+    dim: Color(0xFF74899E),
+    onAccent: Color(0xFF06121E),
+    watermark: 'MESSI 10',
+  );
+
+  /// Gold and crimson on near-black, the CR7 look.
+  static const cr7 = Palette(
+    name: 'CR7',
+    tagline: 'Champion gold on dark crimson',
+    bg: Color(0xFF0D0506),
+    panel: Color(0xFF170A0C),
+    card: Color(0xFF1E0E10),
+    cardDeep: Color(0xFF120708),
+    accent: Color(0xFFFFC62B),
+    accentSoft: Color(0xFFE53950),
+    muted: Color(0xFFCDB9B3),
+    dim: Color(0xFF8C7570),
+    onAccent: Color(0xFF1A0C00),
+    watermark: 'CR7',
+  );
+
+  static const all = [red, ocean, emerald, rose, messi, cr7];
 }
 
 /// Design tokens. Values follow the active [Palette], so they are getters.
@@ -135,7 +189,7 @@ class ThemeController {
 ThemeData buildTheme() {
   final scheme = ColorScheme.dark(
     primary: Ui.red,
-    onPrimary: Colors.white,
+    onPrimary: Ui.palette.onAccent,
     secondary: Ui.redSoft,
     surface: Ui.panel,
     onSurface: Colors.white,
