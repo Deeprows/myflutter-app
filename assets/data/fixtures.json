@@ -1,17 +1,5 @@
 [
   {
-    "id": "1",
-    "home": "Crystal Palace",
-    "away": "Nottingham Forest",
-    "league": "Premier League",
-    "kickoff": "2026-10-11T14:00:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/global1.php?stream=espn",
-    "altUrl": "https://streamtp99a.sbs/global1.php?stream=universo_usa",
-    "homeLogo": "52",
-    "awayLogo": "65"
-  },
-  {
     "id": "2",
     "home": "Hull City",
     "away": "Everton",
@@ -24,90 +12,6 @@
     "awayLogo": "45"
   },
   {
-    "id": "3",
-    "home": "Liverpool",
-    "away": "Manchester City",
-    "league": "Premier League",
-    "kickoff": "2026-10-11T16:30:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/global1.php?stream=espn",
-    "altUrl": "https://realembeds.xyz/embed/01a12b71-1fd1-763b-a926-117a0d6118ec",
-    "homeLogo": "40",
-    "awayLogo": "50"
-  },
-  {
-    "id": "4",
-    "home": "FC Cologne",
-    "away": "Borussia M'gladbach",
-    "league": "Bundesliga",
-    "kickoff": "2026-10-11T14:30:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/global1.php?stream=disney11",
-    "altUrl": "",
-    "homeLogo": "192",
-    "awayLogo": "163"
-  },
-  {
-    "id": "5",
-    "home": "Freiburg",
-    "away": "Schalke 04",
-    "league": "Bundesliga",
-    "kickoff": "2026-10-11T16:30:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/global1.php?stream=disney15",
-    "altUrl": "",
-    "homeLogo": "160",
-    "awayLogo": "174"
-  },
-  {
-    "id": "6",
-    "home": "Como 1907",
-    "away": "AS Roma",
-    "league": "Serie A",
-    "kickoff": "2026-10-11T11:30:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/global1.php?stream=telemundo_deportes",
-    "altUrl": "https://realembeds.xyz/embed/01a12a6b-3a79-7709-84fd-2d954ec2a32b",
-    "homeLogo": "895",
-    "awayLogo": "497"
-  },
-  {
-    "id": "7",
-    "home": "Lazio",
-    "away": "Monza",
-    "league": "Serie A",
-    "kickoff": "2026-10-11T14:00:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/global1.php?stream=disney8",
-    "altUrl": "",
-    "homeLogo": "487",
-    "awayLogo": "1579"
-  },
-  {
-    "id": "8",
-    "home": "Lecce",
-    "away": "Bologna",
-    "league": "Serie A",
-    "kickoff": "2026-10-11T14:00:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/global1.php?stream=disney9",
-    "altUrl": "",
-    "homeLogo": "867",
-    "awayLogo": "500"
-  },
-  {
-    "id": "9",
-    "home": "Sassuolo",
-    "away": "AC Milan",
-    "league": "Serie A",
-    "kickoff": "2026-10-11T17:00:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/global1.php?stream=disney16",
-    "altUrl": "https://streamtp99a.sbs/global1.php?stream=espn2",
-    "homeLogo": "488",
-    "awayLogo": "489"
-  },
-  {
     "id": "10",
     "home": "Cagliari",
     "away": "Juventus",
@@ -118,42 +22,6 @@
     "altUrl": "https://streamtp99a.sbs/global1.php?stream=telemundo",
     "homeLogo": "490",
     "awayLogo": "496"
-  },
-  {
-    "id": "11",
-    "home": "Elche",
-    "away": "Celta Vigo",
-    "league": "LaLiga",
-    "kickoff": "2026-10-11T13:00:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/global1.php?stream=dsports",
-    "altUrl": "https://streamtp99a.sbs/global1.php?stream=espnplus1",
-    "homeLogo": "797",
-    "awayLogo": "538"
-  },
-  {
-    "id": "12",
-    "home": "Real Sociedad",
-    "away": "Deportivo A Coruna",
-    "league": "LaLiga",
-    "kickoff": "2026-10-11T15:15:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/global1.php?stream=dsports",
-    "altUrl": "https://streamtp99a.sbs/global1.php?stream=espnplus2",
-    "homeLogo": "548",
-    "awayLogo": "542"
-  },
-  {
-    "id": "13",
-    "home": "Real Betis",
-    "away": "Osasuna",
-    "league": "LaLiga",
-    "kickoff": "2026-10-11T17:30:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/global1.php?stream=dsports",
-    "altUrl": "https://streamtp99a.sbs/global1.php?stream=espndeportes",
-    "homeLogo": "543",
-    "awayLogo": "727"
   },
   {
     "id": "14",
