@@ -189,6 +189,23 @@ class RemoteConfig with WidgetsBindingObserver {
   String get updateVersion => _str('update', 'version', '');
   String get updateNotes => _str('update', 'notes', '');
 
+  // --------------------------------------------------------------- share
+
+  /// Text sent with the APK when someone taps Share App.
+  String get shareMessage => _str('share', 'message',
+      'Get ${AppConfig.appName} - live football, highlights, TV and movies');
+
+  /// Your download page / website, added after the message. Empty = no link.
+  String get shareLink => _str('share', 'link', AppConfig.websiteUrl);
+
+  /// The full text: "message: link" (or just the message when no link).
+  String get shareText {
+    final m = shareMessage;
+    final l = shareLink;
+    if (l.isEmpty) return m;
+    return m.isEmpty ? l : '$m: $l';
+  }
+
   // ---------------------------------------------------------------- chat
 
   bool get chatEnabled => _bool('chat', 'enabled', true);
