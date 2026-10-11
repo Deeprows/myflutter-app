@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../config.dart';
 import '../services/ad_scheduler.dart';
 import '../services/install_id.dart';
+import '../services/remote_config.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 import 'browser_screen.dart' show openExternally;
@@ -671,7 +672,7 @@ class _PlansScreenState extends State<PlansScreen> {
   }
 
   Widget _freeCard() {
-    final m = AppConfig.adIntervalMinutes;
+    final m = RemoteConfig.instance.adIntervalMinutes;
     return _box(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
