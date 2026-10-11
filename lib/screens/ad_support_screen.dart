@@ -6,6 +6,7 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../config.dart';
 import '../services/ad_preloader.dart';
+import '../services/remote_config.dart';
 import '../theme/app_theme.dart';
 import 'support_browser_screen.dart' show SupportResult;
 
@@ -17,7 +18,7 @@ import 'support_browser_screen.dart' show SupportResult;
 ///     never cut off while loading and Back is ignored.
 ///  2. Once loaded, the ad is shown with an "Ad" badge, a progress line and a
 ///     "Skip in N" button that turns into "Skip Ad" after
-///     [AppConfig.supportSkipAfterSeconds], exactly like YouTube.
+///     [RemoteConfig.instance.supportSkipAfterSeconds], exactly like YouTube.
 ///  3. The ad NEVER disappears by itself. It stays on screen until the person
 ///     taps Skip Ad, and they are back where they were.
 ///
@@ -170,7 +171,7 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
       _elapsed.value = e;
       // No automatic ending: the ad stays until the person taps Skip Ad.
       // Once the Skip button is available there is nothing left to count.
-      if (e >= AppConfig.supportSkipAfterSeconds) {
+      if (e >= RemoteConfig.instance.supportSkipAfterSeconds) {
         t.cancel();
         _tick = null;
         _elapsed.value = e;
@@ -293,7 +294,7 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
 
   bool get _canSkip =>
       _phase == _Phase.ready &&
-      _elapsed.value >= AppConfig.supportSkipAfterSeconds;
+      _elapsed.value >= RemoteConfig.instance.supportSkipAfterSeconds;
 
   static const _yellow = Color(0xFFFFCC00);
 
@@ -373,7 +374,7 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
     return ValueListenableBuilder<double>(
       valueListenable: _elapsed,
       builder: (_, e, _) {
-        final wait = AppConfig.supportSkipAfterSeconds - e;
+        final wait = RemoteConfig.instance.supportSkipAfterSeconds - e;
         final ready = wait <= 0;
         return Material(
           color: Colors.black.withValues(alpha: .78),
@@ -450,7 +451,7 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
                           valueListenable: _elapsed,
                           builder: (_, e, _) {
                             final ready =
-                                e >= AppConfig.supportSkipAfterSeconds;
+                                e >= RemoteConfig.instance.supportSkipAfterSeconds;
                             return Text(
                               _engaged
                                   ? 'Ad · tap Continue when you are done'
@@ -485,7 +486,7 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
                     minHeight: 3,
                     value: _engaged
                         ? 1.0
-                        : (e / AppConfig.supportSkipAfterSeconds)
+                        : (e / RemoteConfig.instance.supportSkipAfterSeconds)
                             .clamp(0.0, 1.0)
                             .toDouble(),
                     backgroundColor: Ui.line,
