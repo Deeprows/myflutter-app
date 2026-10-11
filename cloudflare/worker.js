@@ -14,7 +14,7 @@
  *
  * Settings:
  *   GITHUB_RAW_BASE  optional
- *   FEED_TTL         optional, default 30
+ *   FEED_TTL         optional, default 10 (seconds; 0 = no edge cache)
  *   STATS_TOKEN      secret
  *   CF_ACCOUNT_ID    secret
  *   CF_API_TOKEN     secret
@@ -218,8 +218,11 @@ async function analytics(request, env) {
 // ------------------------------------------------------------------ feed
 
 async function feed(request, env, ctx, file) {
+  // Short edge cache (default 10 s) so a new post shows up almost at once.
+  // FEED_TTL=0 is allowed and turns the edge cache off completely.
+  const parsedTtl = parseInt(env.FEED_TTL ?? "10", 10);
   const ttl = clamp(
-    parseInt(env.FEED_TTL ?? "30", 10) || 30,
+    Number.isNaN(parsedTtl) ? 10 : parsedTtl,
     0,
     600
   );
@@ -229,7 +232,11 @@ async function feed(request, env, ctx, file) {
     DEFAULT_RAW_BASE
   ).replace(/\/+$/, "");
 
-  const origin = `${base}/${FILES[file]}`;
+  // raw.githubusercontent.com keeps every URL cached for ~5 minutes, which
+  // is why new posts used to appear late. A unique query string makes GitHub
+  // treat each Worker fetch as a new request, so it always returns the file
+  // as it is right now.
+  const origin = `${base}/${FILES[file]}?cb=${Date.now()}`;
 
   // Ignore query parameters for edge-cache purposes.
   const cacheKey = new Request(
@@ -258,6 +265,9 @@ async function feed(request, env, ctx, file) {
               "deeprowss-feed-worker",
             accept:
               "application/json",
+            "cache-control":
+              "no-cache, no-store, max-age=0",
+            pragma: "no-cache",
           },
 
           cf: {
