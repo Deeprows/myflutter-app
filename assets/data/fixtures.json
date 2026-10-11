@@ -1,41 +1,5 @@
 [
   {
-    "id": "2",
-    "home": "Hull City",
-    "away": "Everton",
-    "league": "Premier League",
-    "kickoff": "2026-10-11T14:00:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/global1.php?stream=disney6",
-    "altUrl": "https://forprivateuse.sbs/embedextra/tv/1.php",
-    "homeLogo": "64",
-    "awayLogo": "45"
-  },
-  {
-    "id": "10",
-    "home": "Cagliari",
-    "away": "Juventus",
-    "league": "Serie A",
-    "kickoff": "2026-10-11T19:45:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/global1.php?stream=espn",
-    "altUrl": "https://forprivateuse.sbs/embedextra/tv/1.php",
-    "homeLogo": "490",
-    "awayLogo": "496"
-  },
-  {
-    "id": "14",
-    "home": "Racing Santander",
-    "away": "Valencia",
-    "league": "LaLiga",
-    "kickoff": "2026-10-11T20:00:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/global1.php?stream=disney1",
-    "altUrl": "https://streamtp99a.sbs/global1.php?stream=espnplus4",
-    "homeLogo": "545",
-    "awayLogo": "532"
-  },
-  {
   "id": "2",
   "home": "Atalanta",
   "away": "Venezia",
@@ -69,6 +33,18 @@
   "url": "",
   "altUrl": "",
   "homeLogo": "",
+  "awayLogo": ""
+},
+{
+  "id": "7",
+  "home": "Coventry City",
+  "away": "Newcastle United",
+  "league": "Premier League",
+  "kickoff": "2026-10-12T20:00:00+01:00",
+  "duration": 130,
+  "url": "",
+  "altUrl": "",
+  "homeLogo": "64",
   "awayLogo": ""
 },
 {
