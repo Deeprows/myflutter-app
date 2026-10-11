@@ -5,6 +5,7 @@ import 'screens/start_gate.dart';
 import 'services/app_nav.dart';
 import 'services/push_service.dart';
 import 'theme/app_theme.dart';
+import 'theme/theme_watermark.dart';
 
 class FootboliveApp extends StatelessWidget {
   const FootboliveApp({super.key});
@@ -19,6 +20,13 @@ class FootboliveApp extends StatelessWidget {
         navigatorKey: AppNav.key,
         scaffoldMessengerKey: PushService.messengerKey,
         theme: buildTheme(),
+        builder: (context, child) => Stack(
+          fit: StackFit.expand,
+          children: [
+            child ?? const SizedBox.shrink(),
+            const ThemeWatermark(),
+          ],
+        ),
         home: const StartGate(),
       ),
     );
