@@ -8,6 +8,7 @@ import '../config.dart';
 import '../widgets/support_overlay.dart';
 import 'ad_preloader.dart';
 import 'app_nav.dart';
+import 'remote_config.dart';
 import 'subscription_service.dart';
 import 'support_gate.dart';
 
@@ -35,12 +36,12 @@ class AdScheduler with WidgetsBindingObserver {
   bool _showing = false;
   bool _started = false;
 
-  int get _limit => AppConfig.adIntervalMinutes * 60;
+  int get _limit => RemoteConfig.instance.adIntervalMinutes * 60;
 
   bool get adsOn =>
       AppConfig.plansEnabled &&
-      AppConfig.adIntervalMinutes > 0 &&
-      AppConfig.supportUrl.trim().isNotEmpty &&
+      RemoteConfig.instance.adIntervalMinutes > 0 &&
+      RemoteConfig.instance.supportUrl.trim().isNotEmpty &&
       !SubscriptionService.instance.isPremium;
 
   /// True while the overlay (from the timer) is on screen.
