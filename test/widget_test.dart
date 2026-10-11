@@ -635,6 +635,18 @@ void main() {
       expect(other.url, 'https://vidsrc.sbs/embed/tv/95350/1/1/');
     });
 
+    test('share text uses message and link from the file', () {
+      expect(RemoteConfig.instance.shareText,
+          'Get Deeprowss - live football, highlights, TV and movies: https://deeprowss.com');
+      RemoteConfig.instance.apply({
+        'share': {'message': 'Get the app', 'link': 'https://deeprowss.com/download'},
+      });
+      expect(RemoteConfig.instance.shareText,
+          'Get the app: https://deeprowss.com/download');
+      RemoteConfig.instance.apply({'share': {'link': ''}});
+      expect(RemoteConfig.instance.shareText.contains('http'), isFalse);
+    });
+
     test('broken JSON keeps the current values', () {
       RemoteConfig.instance.apply({'chat': {'enabled': false}});
       expect(RemoteConfig.instance.apply('not json'), isFalse);
