@@ -14,7 +14,9 @@ default, so you can never break the app by leaving something out.
               "downloadBase": "https://web.nxsha.app/dl",
               "replaceHosts": ["vsembed.ru", "vsembed.su"] },
   "update": { "apkUrl": "", "version": "", "notes": "" },
-  "chat":   { "enabled": true }
+  "chat":   { "enabled": true },
+  "share":  { "message": "Get Deeprowss - live football, highlights, TV and movies",
+              "link": "https://deeprowss.com" }
 }
 ```
 
@@ -41,6 +43,12 @@ in the menu the download starts right away with a progress bar, then Android's
 installer opens. `version` and `notes` are optional labels for you. Empty
 `apkUrl` = the button says "No update available right now". The new APK must be
 signed with the same key as the installed one or Android refuses to install it.
+
+## Share App
+The menu's **Share App** sends the app's own APK file through the phone's share
+sheet (Xender, SHAREit, WhatsApp...). `message` and `link` make the text that
+goes with it: `message: link`. Put your download page in `link`. Empty `link`
+= message only. Some apps (e.g. Xender) send only the file and ignore the text.
 
 ## Live chat
 `"chat": { "enabled": false }` hides the match chat on football pages. Set
