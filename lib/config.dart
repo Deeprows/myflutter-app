@@ -12,7 +12,14 @@ class AppConfig {
   static const websiteUrl = 'https://deeprowss.com';
   static const joinUrl =
       'https://t.me/deeprows'; // Telegram / WhatsApp / Discord invite link
-  static const updateUrl = ''; // release page or direct APK link
+  static const updateUrl = ''; // direct APK link (app_config.json "update.apkUrl" wins)
+
+  /// Settings you can change any time without a new APK (support-ad link,
+  /// movie player / download links, app update link, live-chat switch):
+  /// edit assets/data/app_config.json in your GitHub repo (see
+  /// REMOTE_CONFIG.md). Empty = only the bundled copy and the defaults below.
+  static const remoteConfigUrl =
+      'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/app_config.json';
 
   /// Notice you can change without a new APK: edit assets/data/notice.json in
   /// your GitHub repo (see NOTICE.md). Shown in the menu's "Notice" item and,
