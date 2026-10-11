@@ -23,5 +23,10 @@
 
   "chat": {
     "enabled": false
+  },
+
+  "share": {
+    "message": "Get Deeprowss - live football, highlights, TV and movies",
+    "link": "https://deeprowss.com/download.html"
   }
 }
