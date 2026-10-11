@@ -6,8 +6,8 @@
     "league": "Premier League",
     "kickoff": "2026-10-11T14:00:00+01:00",
     "duration": 130,
-    "url": "",
-    "altUrl": "",
+    "url": "https://abisnews.com/sky8nz.php",
+    "altUrl": "https://abisnews.com/skymain.php",
     "homeLogo": "52",
     "awayLogo": "65"
   },
@@ -18,8 +18,8 @@
     "league": "Premier League",
     "kickoff": "2026-10-11T14:00:00+01:00",
     "duration": 130,
-    "url": "",
-    "altUrl": "",
+    "url": "https://abisnews.com/sky5nz.php",
+    "altUrl": "https://abisnews.com/abc32.php?p=k",
     "homeLogo": "64",
     "awayLogo": "45"
   },
@@ -30,8 +30,8 @@
     "league": "Premier League",
     "kickoff": "2026-10-11T16:30:00+01:00",
     "duration": 130,
-    "url": "",
-    "altUrl": "",
+    "url": "https://abisnews.com/skymain.php",
+    "altUrl": "https://abisnews.com/bein.php",
     "homeLogo": "40",
     "awayLogo": "50"
   },
@@ -42,8 +42,8 @@
     "league": "Bundesliga",
     "kickoff": "2026-10-11T14:30:00+01:00",
     "duration": 130,
-    "url": "",
-    "altUrl": "",
+    "url": "https://abisnews.com/setantapremium.php",
+    "altUrl": "https://abisnews.com/novasportstart.php",
     "homeLogo": "192",
     "awayLogo": "163"
   },
@@ -54,8 +54,8 @@
     "league": "Bundesliga",
     "kickoff": "2026-10-11T16:30:00+01:00",
     "duration": 130,
-    "url": "",
-    "altUrl": "",
+    "url": "https://abisnews.com/okkofutbol.php",
+    "altUrl": "https://abisnews.com/sporttv2.php",
     "homeLogo": "160",
     "awayLogo": "174"
   },
@@ -66,8 +66,8 @@
     "league": "Serie A",
     "kickoff": "2026-10-11T11:30:00+01:00",
     "duration": 130,
-    "url": "",
-    "altUrl": "",
+    "url": "https://abisnews.com/novasportstart.php",
+    "altUrl": "https://abisnews.com/timst-embed.php?url=https%3A%2F%2Fgrandemx.org%2Fdbo09jwh-5404",
     "homeLogo": "895",
     "awayLogo": "497"
   },
@@ -78,8 +78,8 @@
     "league": "Serie A",
     "kickoff": "2026-10-11T14:00:00+01:00",
     "duration": 130,
-    "url": "",
-    "altUrl": "",
+    "url": "https://abisnews.com/setantasport2latvia.php",
+    "altUrl": "https://abisnews.com/abc47.php?p=k",
     "homeLogo": "487",
     "awayLogo": "1579"
   },
@@ -90,8 +90,8 @@
     "league": "Serie A",
     "kickoff": "2026-10-11T14:00:00+01:00",
     "duration": 130,
-    "url": "",
-    "altUrl": "",
+    "url": "https://abisnews.com/arenasport8hr.php",
+    "altUrl": "https://abisnews.com/cbssports.php",
     "homeLogo": "867",
     "awayLogo": "500"
   },
@@ -102,8 +102,8 @@
     "league": "Serie A",
     "kickoff": "2026-10-11T17:00:00+01:00",
     "duration": 130,
-    "url": "",
-    "altUrl": "",
+    "url": "https://abisnews.com/sportbelarus.php",
+    "altUrl": "https://abisnews.com/onesport.php",
     "homeLogo": "488",
     "awayLogo": "489"
   },
@@ -114,8 +114,8 @@
     "league": "Serie A",
     "kickoff": "2026-10-11T19:45:00+01:00",
     "duration": 130,
-    "url": "",
-    "altUrl": "",
+    "url": "https://abisnews.com/match.php",
+    "altUrl": "https://abisnews.com/match1.php",
     "homeLogo": "490",
     "awayLogo": "496"
   },
@@ -126,8 +126,8 @@
     "league": "LaLiga",
     "kickoff": "2026-10-11T13:00:00+01:00",
     "duration": 130,
-    "url": "",
-    "altUrl": "",
+    "url": "https://abisnews.com/match2.php",
+    "altUrl": "https://abisnews.com/belarus5.php",
     "homeLogo": "797",
     "awayLogo": "538"
   },
@@ -166,17 +166,5 @@
     "altUrl": "",
     "homeLogo": "545",
     "awayLogo": "532"
-  },
-  {
-    "id": "15",
-    "home": "Real Madrid",
-    "away": "Villarreal",
-    "league": "LaLiga",
-    "kickoff": "2026-10-10T20:00:00+01:00",
-    "duration": 130,
-    "url": "https://streamtp99a.sbs/return/dsports-fullHD-recomendado.html",
-    "altUrl": "https://streamtp99a.sbs/global1.php?stream=dsports",
-    "homeLogo": "541",
-    "awayLogo": "533"
   }
 ]
