@@ -8,6 +8,7 @@ import '../screens/plans_screen.dart';
 import '../screens/remove_ads_screen.dart';
 import '../screens/support_browser_screen.dart';
 import '../services/ad_preloader.dart';
+import '../services/remote_config.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 
@@ -50,7 +51,7 @@ Future<SupportChoice?> _showAdPage(BuildContext context) async {
     MaterialPageRoute<SupportResult>(
       fullscreenDialog: true,
       builder: (_) => AdSupportScreen(
-        url: AppConfig.supportUrl,
+        url: RemoteConfig.instance.supportUrl,
         preloaded: AdPreloader.instance.take(),
       ),
     ),
@@ -90,7 +91,7 @@ class _SupportOverlayState extends State<SupportOverlay>
       MaterialPageRoute<SupportResult>(
         fullscreenDialog: true,
         builder: (_) => SupportBrowserScreen(
-          url: AppConfig.supportUrl,
+          url: RemoteConfig.instance.supportUrl,
           seconds: AppConfig.supportViewSeconds,
         ),
       ),
@@ -117,7 +118,7 @@ class _SupportOverlayState extends State<SupportOverlay>
 
   @override
   Widget build(BuildContext context) {
-    final mins = AppConfig.adIntervalMinutes; // minutes between ads
+    final mins = RemoteConfig.instance.adIntervalMinutes; // minutes between ads
     final secs = AppConfig.supportViewSeconds;
     final mLabel = mins == 1 ? 'minute' : 'minutes';
 
