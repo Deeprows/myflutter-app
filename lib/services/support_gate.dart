@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import '../widgets/support_overlay.dart';
 import 'ad_scheduler.dart';
 import 'push_service.dart';
+import 'remote_config.dart';
 
 /// First-tap trigger for the "We Need Your Support" overlay. Call [guard]
 /// from a card's tap handler:
@@ -78,7 +79,7 @@ class SupportGate {
     if (!AppConfig.supportThanksBanner) return;
     final messenger = PushService.messengerKey.currentState;
     if (messenger == null) return;
-    final m = AppConfig.adIntervalMinutes;
+    final m = RemoteConfig.instance.adIntervalMinutes;
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
