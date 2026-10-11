@@ -4,6 +4,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../config.dart';
+import 'remote_config.dart';
 
 /// An ad page that was loaded in the background and is ready to be shown.
 class PreloadedAd {
@@ -33,6 +34,7 @@ class AdPreloader {
   static const _settleDelay = Duration(milliseconds: 1400);
 
   WebViewController? _wc;
+  String? _loadedUrl;
   DateTime? _startedAt;
   bool _finished = false;
   bool _failed = false;
@@ -49,7 +51,10 @@ class AdPreloader {
 
   /// Starts loading the ad page in the background (if not already done).
   void warmUp() {
-    if (AppConfig.supportUrl.trim().isEmpty) return;
+    final url = RemoteConfig.instance.supportUrl;
+    if (url.trim().isEmpty) return;
+    // The link was changed in app_config.json: drop the old preloaded page.
+    if (_wc != null && _loadedUrl != url) _discard();
     if (_wc != null && !_failed && !_isStale) return;
     _discard();
 
@@ -88,7 +93,8 @@ class AdPreloader {
     _wc = wc;
     _startedAt = DateTime.now();
     try {
-      unawaited(wc.loadRequest(Uri.parse(AppConfig.supportUrl)));
+      _loadedUrl = url;
+      unawaited(wc.loadRequest(Uri.parse(url)));
     } catch (_) {
       _failed = true;
     }
@@ -103,7 +109,10 @@ class AdPreloader {
   /// ad screen then loads the page itself (the old behaviour).
   PreloadedAd? take() {
     final wc = _wc;
-    if (wc == null || _failed || _isStale) {
+    if (wc == null ||
+        _failed ||
+        _isStale ||
+        _loadedUrl != RemoteConfig.instance.supportUrl) {
       _discard();
       return null;
     }
