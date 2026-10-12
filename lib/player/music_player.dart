@@ -98,7 +98,6 @@ class MusicPlayer extends ChangeNotifier {
       playing = true;
       notifyListeners();
       unawaited(_checkNotificationAccess());
-      unawaited(BackgroundPlayback.askToStayAlive());
     } catch (_) {
       _fail(gen);
     }
