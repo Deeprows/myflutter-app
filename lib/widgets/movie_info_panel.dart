@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/movie.dart';
 import '../models/movie_info.dart';
 import '../theme/app_theme.dart';
+import '../utils/l10n.dart';
 
 /// Genres, key facts, overview, director and cast of a movie / series page.
 /// Everything except the genres comes from TMDB, so while it loads (or when
