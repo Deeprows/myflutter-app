@@ -14,6 +14,10 @@ class Fixture {
   final String url;
   final String altUrl;
 
+  /// Optional ESPN league code (e.g. `eng.1`) used to find the live score if
+  /// the general feed does not list this match.
+  final String scoreLeague;
+
   const Fixture({
     required this.id,
     required this.home,
@@ -25,6 +29,7 @@ class Fixture {
     this.durationMin = AppConfig.defaultMatchMinutes,
     this.url = '',
     this.altUrl = '',
+    this.scoreLeague = '',
   });
 
   String get title => '$home vs $away';
@@ -66,6 +71,7 @@ class Fixture {
           int.tryParse(s('duration')) ?? AppConfig.defaultMatchMinutes,
       url: s('url'),
       altUrl: s('altUrl'),
+      scoreLeague: s('scoreLeague'),
     );
   }
 }
