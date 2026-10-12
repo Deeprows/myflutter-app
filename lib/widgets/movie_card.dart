@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../models/highlight.dart' show initialsOf;
@@ -106,15 +107,20 @@ class MoviePoster extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (movie.hasImage)
-            Image.network(
-              movie.image,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _fallback(),
-              loadingBuilder: (_, child, p) =>
-                  p == null ? child : Stack(fit: StackFit.expand, children: [
-                    _fallback(),
-                  ]),
-            )
+            movie.image.startsWith('data:image')
+                ? Image.memory(
+                    UriData.parse(movie.image).contentAsBytes(),
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    errorBuilder: (_, _, _) => _fallback(),
+                  )
+                : CachedNetworkImage(
+                    imageUrl: movie.image,
+                    fit: BoxFit.cover,
+                    fadeInDuration: const Duration(milliseconds: 150),
+                    placeholder: (_, _) => _fallback(),
+                    errorWidget: (_, _, _) => _fallback(),
+                  )
           else
             _fallback(),
           DecoratedBox(
