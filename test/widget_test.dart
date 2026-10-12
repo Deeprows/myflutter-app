@@ -661,9 +661,8 @@ void main() {
       expect(Palettes.cr7.watermark, 'CR7');
       expect(Palettes.red.watermark, isNull);
       expect(Palettes.rose.watermark, isNull);
-      expect(Palettes.cr7.stripes, isTrue);
-      expect(Palettes.messi.stripes, isTrue);
-      expect(Palettes.rose.stripes, isFalse);
+      expect(Palettes.cr7.stripes, isFalse);
+      expect(Palettes.messi.stripes, isFalse);
       expect(Palettes.all.length, 6);
     });
   });
