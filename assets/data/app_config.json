@@ -16,9 +16,9 @@
   },
 
   "update": {
-    "apkUrl": "",
-    "version": "",
-    "notes": ""
+    "apkUrl": "https://files.catbox.moe/ngacnv.apk",
+    "version": "v1.0.685",
+    "notes": "Latest Update!"
   },
 
   "chat": {
