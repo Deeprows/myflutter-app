@@ -1,11 +1,11 @@
 {
-  "enabled": false,
+  "enabled": true,
   "id": "App Update",
   "title": "App Update",
-  "message": "Kindly update to enjoy latest features!",
+  "message": "Kindly update to get latet features. Ignore if you're currently using v 1.0.685",
   "popup": true,
   "button_text": "Update App",
-  "button_url": "https://files.catbox.moe/8a1yor.apk",
+  "button_url": "https://files.catbox.moe/ngacnv.apk",
   "ok_text": "OK",
   "expires": ""
 }
