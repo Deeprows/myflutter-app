@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../services/background_playback.dart';
@@ -66,6 +67,17 @@ class AppAudioHandler extends BaseAudioHandler with SeekHandler {
       speed: player.speed,
       queueIndex: 0,
     ));
+  }
+
+  /// Posts the notification card again (same track, same state). Used when
+  /// the app is minimised or comes back, so the card shows up on the
+  /// notification tray and lock screen even if the system dropped it.
+  void refreshCard() {
+    if (player.processingState == ProcessingState.idle) return;
+    final item = mediaItem.value;
+    if (item == null) return;
+    mediaItem.add(item);
+    _broadcast();
   }
 
   /// Loads one local file and starts playing it. Returns its duration.
@@ -157,8 +169,14 @@ class AudioBridge {
         androidStopForegroundOnPause: false,
         androidNotificationClickStartsActivity: true,
       ),
-    ).then((h) => _h = h);
+    ).then((h) {
+      _h = h;
+      _keeper ??= _CardKeeper(h);
+      return h;
+    });
   }
+
+  static _CardKeeper? _keeper;
 
   /// Video went to the background: keep its sound going from [position].
   static Future<bool> startVideoAudio(
@@ -194,5 +212,24 @@ class AudioBridge {
     h.onStop = null;
     await h.release();
     return r;
+  }
+}
+
+
+/// Re-posts the media card whenever the app goes to the background or comes
+/// back (e.g. after the person turned notifications on in Settings).
+class _CardKeeper with WidgetsBindingObserver {
+  final AppAudioHandler handler;
+  _CardKeeper(this.handler) {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.resumed) {
+      handler.refreshCard();
+    }
   }
 }
