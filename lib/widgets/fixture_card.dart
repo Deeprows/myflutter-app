@@ -4,6 +4,7 @@ import '../models/fixture.dart';
 import '../models/live_score.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
+import '../utils/l10n.dart';
 
 /// Compact fixture card.
 ///
@@ -45,19 +46,21 @@ class FixtureCard extends StatelessWidget {
     final String status;
 
     if (sc != null) {
-      status = sc.live ? 'Live · ${sc.statusLabel}' : sc.statusLabel;
+      status = sc.live
+          ? 'Live · {t}'.trArgs({'t': sc.statusLabel.tr})
+          : sc.statusLabel.tr;
     } else {
       switch (phase) {
       case MatchPhase.upcoming:
-        status =
-            'Starts in ${countdownText(f.kickoff.difference(now))}';
+        status = 'Starts in {t}'
+            .trArgs({'t': countdownText(f.kickoff.difference(now))});
 
       case MatchPhase.live:
-        status =
-            'Live · ${_ms(now.difference(f.kickoff))}';
+        status = 'Live · {t}'
+            .trArgs({'t': _ms(now.difference(f.kickoff))});
 
       case MatchPhase.ended:
-        status = 'Ended';
+        status = 'Ended'.tr;
       }
     }
 
@@ -130,7 +133,7 @@ class FixtureCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(7),
                       ),
                       child: Text(
-                        f.league,
+                        f.league.tr,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -281,7 +284,7 @@ class FixtureCard extends StatelessWidget {
                       if (!f.hasStream && !ended) ...[
                         const SizedBox(width: 6),
                         Text(
-                          '· Stream soon',
+                          '· Stream soon'.tr,
                           style: TextStyle(
                             color: Ui.dim,
                             fontSize: 9,
