@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../config.dart';
 import '../models/fixture.dart';
+import '../models/live_score.dart';
 import '../models/push_target.dart';
 import '../models/ticker.dart';
 import '../services/feed_service.dart';
 import '../services/push_service.dart';
+import '../services/remote_config.dart';
+import '../services/score_service.dart';
 import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_refresh.dart';
@@ -37,6 +40,7 @@ class _LiveScreenState extends State<LiveScreen> {
 
   final ValueNotifier<DateTime> _now = ValueNotifier(DateTime.now());
   Timer? _timer;
+  Timer? _scoreTimer;
   String _sig = '';
 
   static const String _supportCardUrl =
@@ -55,6 +59,12 @@ class _LiveScreenState extends State<LiveScreen> {
         setState(() => _sig = s);
       }
     });
+
+    // Real live scores for the fixture cards.
+    _scoreTimer = Timer.periodic(
+      Duration(seconds: RemoteConfig.instance.scoresPollSeconds),
+      (_) => _pollScores(),
+    );
 
     _load().then((_) {
       if (AppConfig.fixturesUrl.isNotEmpty) {
@@ -137,9 +147,15 @@ class _LiveScreenState extends State<LiveScreen> {
     ContentSync.tick.removeListener(_onSync);
 
     _timer?.cancel();
+    _scoreTimer?.cancel();
     _now.dispose();
 
     super.dispose();
+  }
+
+  Future<void> _pollScores() async {
+    if (!mounted || _fixtures.isEmpty) return;
+    await ScoreService.instance.refresh(_fixtures);
   }
 
   String _signature(DateTime n) =>
@@ -167,6 +183,8 @@ class _LiveScreenState extends State<LiveScreen> {
       _loading = false;
       _sig = _signature(DateTime.now());
     });
+
+    unawaited(_pollScores());
 
     _afterLoad(
       last: remote || AppConfig.fixturesUrl.isEmpty,
@@ -269,12 +287,16 @@ class _LiveScreenState extends State<LiveScreen> {
       out.add(
         Padding(
           padding: const EdgeInsets.only(bottom: 5),
-          child: ValueListenableBuilder<DateTime>(
-            valueListenable: _now,
-            builder: (_, n, _) => FixtureCard(
-              fixture: f,
-              now: n,
-              onTap: () => _open(f),
+          child: ValueListenableBuilder<Map<String, LiveScore>>(
+            valueListenable: ScoreService.instance.scores,
+            builder: (_, scores, _) => ValueListenableBuilder<DateTime>(
+              valueListenable: _now,
+              builder: (_, n, _) => FixtureCard(
+                fixture: f,
+                now: n,
+                score: scores[f.id],
+                onTap: () => _open(f),
+              ),
             ),
           ),
         ),
