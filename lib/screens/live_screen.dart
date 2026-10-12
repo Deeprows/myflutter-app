@@ -327,10 +327,10 @@ class _LiveScreenState extends State<LiveScreen> {
       final day = dayLabel(f.kickoff.toLocal(), now);
 
       final key = phase == MatchPhase.live
-          ? 'LIVE NOW'
+          ? 'LIVE NOW'.tr
           : phase == MatchPhase.upcoming
-              ? 'UPCOMING · $day'
-              : 'FINISHED · $day';
+              ? 'UPCOMING · {day}'.trArgs({'day': day})
+              : 'FINISHED · {day}'.trArgs({'day': day});
 
       if (key != last) {
         out.add(
@@ -440,20 +440,20 @@ class _LiveScreenState extends State<LiveScreen> {
                     () => setState(() => _filter = _Filter.all),
                   ),
                   _FilterChip(
-                    'Live',
+                    'Live'.tr,
                     live,
                     _filter == _Filter.live,
                     () => setState(() => _filter = _Filter.live),
                     accent: true,
                   ),
                   _FilterChip(
-                    'Upcoming',
+                    'Upcoming'.tr,
                     upcoming,
                     _filter == _Filter.upcoming,
                     () => setState(() => _filter = _Filter.upcoming),
                   ),
                   _FilterChip(
-                    'Ended',
+                    'Ended'.tr,
                     ended,
                     _filter == _Filter.ended,
                     () => setState(() => _filter = _Filter.ended),
@@ -473,11 +473,11 @@ class _LiveScreenState extends State<LiveScreen> {
               ),
             )
           else if (items.isEmpty)
-            const SliverFillRemaining(
+            SliverFillRemaining(
               hasScrollBody: false,
               child: _Empty(
                 icon: Icons.sports_soccer_rounded,
-                text: 'No matches here right now',
+                text: 'No matches here right now'.tr,
               ),
             )
           else
@@ -553,30 +553,41 @@ class _FixtureSupportCard extends StatelessWidget {
                         children: [
                           Icon(Icons.favorite_rounded, color: Ui.red, size: 28),
                           const SizedBox(width: 10),
-                          const Text(
-                            'SUPPORT ',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 25,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.0,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                          Text(
-                            'ME',
-                            style: TextStyle(
-                              color: Ui.redSoft,
-                              fontSize: 27,
-                              fontWeight: FontWeight.w900,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
+                          Flexible(child: Builder(builder: (_) {
+                            final words = 'SUPPORT ME'.tr.trim().split(' ');
+                            final last = words.removeLast();
+                            return Text.rich(
+                              TextSpan(
+                                children: [
+                                  if (words.isNotEmpty)
+                                    TextSpan(
+                                      text: '${words.join(' ')} ',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 25,
+                                      ),
+                                    ),
+                                  TextSpan(
+                                    text: last,
+                                    style: TextStyle(
+                                      color: Ui.redSoft,
+                                      fontSize: 27,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.0,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            );
+                          })),
                         ],
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'with just a click',
+                        'with just a click'.tr,
                         style: TextStyle(
                           color: Ui.muted,
                           fontSize: 11,
@@ -693,7 +704,7 @@ class _Header extends StatelessWidget {
                   Builder(
                     builder: (ctx) => round(
                       Icons.menu_rounded,
-                      'Menu',
+                      'Menu'.tr,
                       () => Scaffold.of(ctx).openDrawer(),
                     ),
                   ),
@@ -713,13 +724,13 @@ class _Header extends StatelessWidget {
 
                   round(
                     Icons.add_link_rounded,
-                    'Play a link',
+                    'Play a link'.tr,
                     onLink,
                   ),
 
                   round(
                     Icons.refresh_rounded,
-                    'Refresh',
+                    'Refresh'.tr,
                     onRefresh,
                   ),
                 ],
@@ -752,7 +763,7 @@ class _Header extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     const Text(
-                      'Live Events',
+                      'Live Events'.tr,
                       style: TextStyle(
                         fontSize: 18,
                         height: 1.1,
@@ -807,7 +818,7 @@ class _Header extends StatelessWidget {
                         ),
                       ),
                       child: Text(
-                        'Times in $zone',
+                        'Times in {zone}'.trArgs({'zone': zone}),
                         style: TextStyle(
                           color: Ui.muted,
                           fontSize: 9,
