@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../models/ticker.dart';
+import '../services/locale_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/l10n.dart';
 
 /// Slim, continuously scrolling message bar. Content comes from
 /// assets/data/ticker.json (or AppConfig.tickerUrl).
@@ -23,11 +25,13 @@ class _NewsTickerState extends State<NewsTicker>
   String _key = '';
   double _unit = 0; // width of one full pass of all messages
 
-  String get _text => widget.data.items.join('   •   ');
+  // Messages that have a translation entry follow the app language.
+  String get _text => widget.data.items.map((i) => i.tr).join('   •   ');
 
   /// Measures the text, then (re)starts the loop at the right speed.
   void _prepare(double viewport) {
-    final key = '${widget.data.items.join('|')}@${widget.data.speed}';
+    final key =
+        '${widget.data.items.join('|')}@${widget.data.speed}@${AppLocale.code}';
     if (key == _key) return;
     _key = key;
     final tp = TextPainter(
