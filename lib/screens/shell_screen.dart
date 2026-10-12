@@ -11,6 +11,7 @@ import '../services/notice_service.dart';
 import '../services/push_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/brand_tag.dart';
 import 'highlights_screen.dart';
 import 'live_screen.dart';
 import 'movies_screen.dart';
@@ -109,14 +110,25 @@ class _ShellScreenState extends State<ShellScreen>
       key: _scaffoldKey,
       drawer: const FootboliveDrawer(),
       extendBody: false,
-      body: IndexedStack(
-        index: _index,
+      body: Stack(
         children: [
-          const LiveScreen(),
-          const HighlightsScreen(),
-          const TvScreen(),
-          const MoviesScreen(),
-          PlayerHubScreen(active: _index == 4),
+          IndexedStack(
+            index: _index,
+            children: [
+              const LiveScreen(),
+              const HighlightsScreen(),
+              const TvScreen(),
+              const MoviesScreen(),
+              PlayerHubScreen(active: _index == 4),
+            ],
+          ),
+          // Small brand mark, bottom right, on the Live and Movies screens.
+          if (_index == 0 || _index == 3)
+            const Positioned(
+              right: 8,
+              bottom: 6,
+              child: BrandTag(),
+            ),
         ],
       ),
       bottomNavigationBar: Column(
