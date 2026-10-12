@@ -44,6 +44,10 @@ class _LiveScreenState extends State<LiveScreen> {
   Timer? _scoreTimer;
   String _sig = '';
   bool _fresh = false; // a network copy has been applied
+  int _reqId = 0; // id of the newest remote request started
+  int _appliedId = 0; // id of the newest remote request applied
+  int _retries = 0;
+  Timer? _retryTimer;
   bool _tickerFresh = false;
 
   static const String _supportCardUrl =
@@ -94,6 +98,9 @@ class _LiveScreenState extends State<LiveScreen> {
   }
 
   void _onSync() {
+    // Back in the app / periodic sync: always ask the network again, and let
+    // the next answer count as the fresh one.
+    _retries = 0;
     if (_loading) {
       // First load still running: try again shortly instead of skipping.
       Future<void>.delayed(const Duration(seconds: 2), () {
@@ -159,6 +166,7 @@ class _LiveScreenState extends State<LiveScreen> {
 
     _timer?.cancel();
     _scoreTimer?.cancel();
+    _retryTimer?.cancel();
     _now.dispose();
 
     super.dispose();
@@ -188,11 +196,26 @@ class _LiveScreenState extends State<LiveScreen> {
       unawaited(_loadTicker(remote: true));
     }
 
+    // Every network request gets a number. A slow, older answer can never
+    // overwrite a newer one that already arrived.
+    final id = remote ? ++_reqId : 0;
+
     final list = await feed.loadFixtures(remote: remote);
 
     if (!mounted) return;
     if (!remote && _fresh) return;
-    if (remote) _fresh = true;
+
+    var gotFresh = false;
+    if (remote) {
+      if (id < _appliedId) return; // a newer answer is already on screen
+      _appliedId = id;
+      gotFresh = !feed.remoteFailedFor('fixtures');
+      // A failed download must never replace fresher content already shown.
+      if (!gotFresh && _fresh) return;
+      // Only a real download counts as "fresh". If the network failed, the
+      // saved copy is shown for now and we keep trying (below).
+      if (gotFresh) _fresh = true;
+    }
 
     setState(() {
       _fixtures = list;
@@ -205,6 +228,26 @@ class _LiveScreenState extends State<LiveScreen> {
     _afterLoad(
       last: remote || AppConfig.fixturesUrl.isEmpty,
     );
+
+    if (remote && AppConfig.fixturesUrl.isNotEmpty) {
+      if (gotFresh) {
+        _retries = 0;
+        _retryTimer?.cancel();
+      } else {
+        _scheduleRetry();
+      }
+    }
+  }
+
+  /// The network did not answer: try again by itself (3s, 6s, 9s, ...) so the
+  /// person never has to pull down several times to get the latest matches.
+  void _scheduleRetry() {
+    if (_retries >= 6) return;
+    _retries++;
+    _retryTimer?.cancel();
+    _retryTimer = Timer(Duration(seconds: 3 * _retries), () {
+      if (mounted && !_fresh) _load(remote: true);
+    });
   }
 
   Future<void> _openSupportCard() async {
@@ -355,8 +398,9 @@ class _LiveScreenState extends State<LiveScreen> {
 
     return AppRefresh(
       onRefresh: () async {
+        _retries = 0;
         await _load(remote: true);
-        return !feed.lastRemoteFailed;
+        return !feed.remoteFailedFor('fixtures');
       },
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
