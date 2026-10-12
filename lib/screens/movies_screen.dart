@@ -12,6 +12,7 @@ import '../services/partner_browser.dart';
 import '../services/push_service.dart';
 import '../services/support_gate.dart';
 import '../services/tmdb_service.dart';
+import '../services/locale_service.dart';
 import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_refresh.dart';
@@ -174,6 +175,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
     });
     PushService.instance.target.addListener(_onTarget);
     ContentSync.tick.addListener(_onSync);
+    AppLocale.notifier.addListener(_onLanguage);
     MovieLibrary.instance.load();
     _armMidnight();
   }
@@ -193,6 +195,14 @@ class _MoviesScreenState extends State<MoviesScreen> {
       return;
     }
     _load(remote: true);
+  }
+
+  /// New app language: reload so titles and descriptions follow it.
+  void _onLanguage() {
+    _discover.clear();
+    if (_genre != null) _fetchDiscover();
+    if (_query.trim().length >= 2) _onQuery(_query);
+    _load().then((_) => _load(remote: true));
   }
 
   // ---- a tapped notification that points at one movie -----------------------
@@ -226,6 +236,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
   void dispose() {
     PushService.instance.target.removeListener(_onTarget);
     ContentSync.tick.removeListener(_onSync);
+    AppLocale.notifier.removeListener(_onLanguage);
     _debounce?.cancel();
     _midnight?.cancel();
     _search.dispose();
@@ -510,7 +521,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                   _Pill('Series', _type == 'tv',
                       () => setState(() => _type = _type == 'tv' ? null : 'tv')),
                   for (final g in _genres)
-                    _Pill(g, _genre == g, () => _pickGenre(g)),
+                    _Pill(g.tr, _genre == g, () => _pickGenre(g)),
                 ],
               ),
             ),
@@ -671,7 +682,7 @@ class _MovieSheet extends StatelessWidget {
                       ),
                       if (movie.genres.isNotEmpty) ...[
                         const SizedBox(height: 10),
-                        Text(movie.genres.join(' · '),
+                        Text(movie.genres.map((g) => g.tr).join(' · '),
                             style: TextStyle(
                                 color: Ui.muted,
                                 fontSize: 13,
