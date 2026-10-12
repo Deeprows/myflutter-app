@@ -149,6 +149,19 @@ class FeedService {
           .whereType<Movie>());
     }
 
+    // Rows with no poster: look it up on TMDB (saved copy when offline).
+    if (TmdbService.enabled) {
+      for (var i = 0; i < filled.length; i += 8) {
+        final end = i + 8 > filled.length ? filled.length : i + 8;
+        final part = await Future.wait(filled.sublist(i, end).map((m) async {
+          if (m.hasImage) return m;
+          final p = await tmdb.posterFor(m, fetch: fetch);
+          return p.isEmpty ? m : m.withImage(p);
+        }));
+        filled.replaceRange(i, end, part);
+      }
+    }
+
     final seen = <String>{};
     final list = filled.where((m) => seen.add(m.url)).toList();
 
