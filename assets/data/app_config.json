@@ -22,11 +22,17 @@
   },
 
   "chat": {
-    "enabled": false
+    "enabled": true
+  },
+
+  "scores": {
+    "enabled": true,
+    "pollSeconds": 45,
+    "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
   },
 
   "share": {
     "message": "Get Deeprowss - live football, highlights, TV and movies",
-    "link": "https://deeprowss.com/download.html"
+    "link": "https://deeprowss.com"
   }
 }
