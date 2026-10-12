@@ -101,7 +101,7 @@ class Movie {
   bool get isSeries =>
       url.contains('/embed/tv/') || url.contains('/tv/');
   bool get hasDownload => downloadUrl.startsWith('http');
-  bool get hasImage => image.startsWith('http');
+  bool get hasImage => image.startsWith('http') || image.startsWith('data:image');
 
   /// Name without a trailing/parenthesised year: "Dhamaal (2026)" -> "Dhamaal".
   String get title => name
@@ -159,9 +159,33 @@ class Movie {
           .expand(genreNames)
           .toSet()
           .toList(),
-      image: s('image'),
+      image: normalizeImage(s('image')),
       tmdbId: tmdbId,
     );
+  }
+
+  /// Same movie with another poster.
+  Movie withImage(String img) => Movie(
+        name: name,
+        url: url,
+        downloadUrl: downloadUrl,
+        date: date,
+        rating: rating,
+        genres: genres,
+        image: img,
+        tmdbId: tmdbId,
+      );
+
+  /// TMDB website image links (www./media.themoviedb.org, sizes such as
+  /// `w600_and_h900_face`) are page assets, not the image CDN, and often fail
+  /// or get blocked in apps. They are moved to image.tmdb.org (w500).
+  static String normalizeImage(String raw) {
+    final m = RegExp(
+            r'^https?://(?:www\.|media\.)?themoviedb\.org/t/p/[^/]+/(.+)$',
+            caseSensitive: false)
+        .firstMatch(raw);
+    if (m != null) return 'https://image.tmdb.org/t/p/w500/${m.group(1)}';
+    return raw;
   }
 
   /// A row with a full link on an old player host (app_config.json
