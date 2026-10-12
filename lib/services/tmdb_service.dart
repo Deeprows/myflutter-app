@@ -17,6 +17,7 @@ class TmdbService {
 
   static const _detailsKey = 'cache_tmdb_details';
   static const _trendingKey = 'cache_tmdb_trending';
+  static const _postersKey = 'cache_tmdb_posters';
 
   static const _genres = <int, String>{
     28: 'Action',
@@ -113,6 +114,52 @@ class TmdbService {
       image: poster.isEmpty ? '' : 'https://image.tmdb.org/t/p/w500$poster',
       tmdbId: id,
     );
+  }
+
+
+  /// Poster for rows that have no image. The id comes from the row's player
+  /// link (`/movie/<id>`, `/tv/<id>`, `?imdb=tt...`). Found posters are saved,
+  /// so later loads (and offline) need no request. Returns '' when unknown.
+  Future<String> posterFor(Movie m, {bool fetch = true}) async {
+    final match = RegExp(r'(?:imdb=|/(?:movie|tv)/)(tt\d+|\d+)')
+        .firstMatch(m.url);
+    if (match == null) return '';
+    var id = match.group(1)!;
+    final isImdb = id.startsWith('tt') || m.url.contains('imdb=');
+    if (isImdb && !id.startsWith('tt')) id = 'tt${id.padLeft(7, '0')}';
+    final tv = m.isSeries;
+    final key = '${tv ? 'tv' : 'movie'}:$id';
+
+    final prefs = await SharedPreferences.getInstance();
+    Map<String, dynamic> cache = {};
+    try {
+      final c = prefs.getString(_postersKey);
+      if (c != null) cache = Map<String, dynamic>.from(jsonDecode(c) as Map);
+    } catch (_) {}
+
+    var path = (cache[key] ?? '').toString();
+    if (path.isEmpty && fetch) {
+      dynamic d;
+      if (id.startsWith('tt')) {
+        d = await _get('/find/$id', {'external_source': 'imdb_id'});
+        if (d is Map) {
+          final list = (tv ? d['tv_results'] : d['movie_results']) ??
+              d['movie_results'] ??
+              d['tv_results'];
+          d = (list is List && list.isNotEmpty) ? list.first : null;
+        }
+      } else {
+        d = await _get('/${tv ? 'tv' : 'movie'}/$id');
+      }
+      if (d is Map) {
+        path = (d['poster_path'] ?? '').toString();
+        if (path.isNotEmpty) {
+          cache[key] = path;
+          await prefs.setString(_postersKey, jsonEncode(cache));
+        }
+      }
+    }
+    return path.isEmpty ? '' : 'https://image.tmdb.org/t/p/w500$path';
   }
 
   /// Fills in a row that only has a TMDB id. Uses the saved copy when
