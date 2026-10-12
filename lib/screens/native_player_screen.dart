@@ -9,6 +9,7 @@ import '../config.dart';
 import '../services/background_playback.dart';
 import '../services/stream_resolver.dart';
 import '../theme/app_theme.dart';
+import '../theme/theme_watermark.dart';
 import 'player_screen.dart';
 
 /// One playable stream with the headers its host may require.
@@ -84,6 +85,7 @@ class _NativePlayerScreenState extends State<NativePlayerScreen>
   @override
   void initState() {
     super.initState();
+    ThemeDecor.hold();
     WakelockPlus.enable();
     WidgetsBinding.instance.addObserver(this);
     BackgroundPlayback.start(
@@ -160,6 +162,7 @@ class _NativePlayerScreenState extends State<NativePlayerScreen>
     WakelockPlus.disable();
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    ThemeDecor.release();
     super.dispose();
   }
 
