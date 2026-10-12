@@ -15,6 +15,8 @@ default, so you can never break the app by leaving something out.
               "replaceHosts": ["vsembed.ru", "vsembed.su"] },
   "update": { "apkUrl": "", "version": "", "notes": "" },
   "chat":   { "enabled": true },
+  "scores": { "enabled": true, "pollSeconds": 45,
+              "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard" },
   "share":  { "message": "Get Deeprowss - live football, highlights, TV and movies",
               "link": "https://deeprowss.com" }
 }
@@ -43,6 +45,19 @@ in the menu the download starts right away with a progress bar, then Android's
 installer opens. `version` and `notes` are optional labels for you. Empty
 `apkUrl` = the button says "No update available right now". The new APK must be
 signed with the same key as the installed one or Android refuses to install it.
+
+## Live scores
+Every match in `fixtures.json` is looked up by team names and kick-off time in
+a free public football scoreboard (ESPN, no key). While the Live screen is open
+the app checks every `pollSeconds` seconds; a found match shows the real score
+and clock (`72'`, Half-time, Full-time) on its card. Matches not found keep the
+normal countdown / timer. `"enabled": false` switches it off. `url` can point
+to your own proxy as long as it returns ESPN-style JSON (`{"events": [...]}`).
+Tips: write team names normally ("Manchester City" or "Man City" both work).
+If a match never gets a score, add `"scoreLeague": "eng.1"` (ESPN's league
+code) to that fixture so the app also asks that league's scoreboard. Make
+`duration` long enough for the whole match, because the Live list sections are
+still sorted by it.
 
 ## Share App
 The menu's **Share App** sends the app's own APK file through the phone's share
