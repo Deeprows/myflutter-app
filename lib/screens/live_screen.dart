@@ -22,6 +22,7 @@ import '../widgets/news_ticker.dart';
 import '../widgets/pitch_painter.dart';
 import 'player_screen.dart';
 import 'support_browser_screen.dart';
+import '../utils/l10n.dart';
 
 enum _Filter { all, live, upcoming, ended }
 
@@ -205,8 +206,8 @@ class _LiveScreenState extends State<LiveScreen> {
   void _open(Fixture f) {
     if (!f.hasStream) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No stream for this match yet'),
+        SnackBar(
+          content: Text('No stream for this match yet'.tr),
         ),
       );
       return;
@@ -357,8 +358,8 @@ class _LiveScreenState extends State<LiveScreen> {
                 if (!context.mounted) return;
 
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Fixtures updated'),
+                  SnackBar(
+                    content: Text('Fixtures updated'.tr),
                   ),
                 );
               },
@@ -374,7 +375,7 @@ class _LiveScreenState extends State<LiveScreen> {
                 padding: const EdgeInsets.fromLTRB(14, 3, 14, 5),
                 children: [
                   _FilterChip(
-                    'All',
+                    'All'.tr,
                     _fixtures.length,
                     _filter == _Filter.all,
                     () => setState(() => _filter = _Filter.all),
@@ -769,7 +770,7 @@ class _Header extends StatelessWidget {
                   Expanded(
                     child: _Stat(
                       icon: Icons.sensors_rounded,
-                      label: 'Live now',
+                      label: 'Live now'.tr,
                       value: live,
                       accent: live > 0,
                     ),
@@ -780,7 +781,7 @@ class _Header extends StatelessWidget {
                   Expanded(
                     child: _Stat(
                       icon: Icons.schedule_rounded,
-                      label: 'Coming up',
+                      label: 'Coming up'.tr,
                       value: upcoming,
                       accent: false,
                     ),
