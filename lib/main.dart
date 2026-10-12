@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'app.dart';
 import 'services/analytics_service.dart';
 import 'services/download_manager.dart';
+import 'services/locale_service.dart';
 import 'services/push_service.dart';
 import 'services/remote_config.dart';
 import 'services/subscription_service.dart';
@@ -19,6 +20,9 @@ Future<void> main() async {
   ]);
 
   await ThemeController.load();
+
+  // Phone language (or the language picked in the menu).
+  await AppLocale.load();
 
   // Ad / movie / update / chat settings: saved copy now, fresh copy in the
   // background (never blocks start-up).
