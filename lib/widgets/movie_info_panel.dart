@@ -179,7 +179,7 @@ class _MovieInfoPanelState extends State<MovieInfoPanel> {
                 borderRadius: BorderRadius.circular(99),
                 border: Border.all(color: Ui.red.withValues(alpha: .35)),
               ),
-              child: Text(g,
+              child: Text(g.tr,
                   style: TextStyle(
                       color: Ui.redSoft,
                       fontSize: 12,
