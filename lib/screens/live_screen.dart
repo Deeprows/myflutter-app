@@ -43,6 +43,8 @@ class _LiveScreenState extends State<LiveScreen> {
   Timer? _timer;
   Timer? _scoreTimer;
   String _sig = '';
+  bool _fresh = false; // a network copy has been applied
+  bool _tickerFresh = false;
 
   static const String _supportCardUrl =
       'https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60';
@@ -67,17 +69,25 @@ class _LiveScreenState extends State<LiveScreen> {
       (_) => _pollScores(),
     );
 
-    _load().then((_) {
-      if (AppConfig.fixturesUrl.isNotEmpty) {
-        _load(remote: true);
-      }
-    });
+    // Fresh first: ask the network straight away. The saved copy is only
+    // shown if the network has not answered within a few seconds.
+    if (AppConfig.fixturesUrl.isNotEmpty) {
+      _load(remote: true);
+      Future<void>.delayed(const Duration(seconds: 4), () {
+        if (mounted && _loading) _load();
+      });
+    } else {
+      _load();
+    }
 
-    _loadTicker().then((_) {
-      if (AppConfig.tickerUrl.isNotEmpty) {
-        _loadTicker(remote: true);
-      }
-    });
+    if (AppConfig.tickerUrl.isNotEmpty) {
+      _loadTicker(remote: true);
+      Future<void>.delayed(const Duration(seconds: 4), () {
+        if (mounted && !_tickerFresh) _loadTicker();
+      });
+    } else {
+      _loadTicker();
+    }
 
     PushService.instance.target.addListener(_onTarget);
     ContentSync.tick.addListener(_onSync);
@@ -166,6 +176,9 @@ class _LiveScreenState extends State<LiveScreen> {
     final t = await feed.loadTicker(remote: remote);
 
     if (!mounted) return;
+    // A saved copy must never overwrite a fresher network copy.
+    if (!remote && _tickerFresh) return;
+    if (remote) _tickerFresh = true;
 
     setState(() => _ticker = t);
   }
@@ -178,6 +191,8 @@ class _LiveScreenState extends State<LiveScreen> {
     final list = await feed.loadFixtures(remote: remote);
 
     if (!mounted) return;
+    if (!remote && _fresh) return;
+    if (remote) _fresh = true;
 
     setState(() {
       _fixtures = list;
