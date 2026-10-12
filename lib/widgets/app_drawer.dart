@@ -12,6 +12,8 @@ import '../services/app_sharer.dart';
 import '../services/app_updater.dart';
 import '../services/subscription_service.dart';
 import '../services/settings_service.dart';
+import '../utils/l10n.dart';
+import 'language_sheet.dart';
 import 'notification_settings.dart';
 import '../theme/app_theme.dart';
 
@@ -34,11 +36,11 @@ class FootboliveDrawer extends StatelessWidget {
 
   Future<void> _openLink(BuildContext c, String url, String label) async {
     if (url.isEmpty) {
-      _toast(c, '$label link is not set up yet');
+      _toast(c, '{label} link is not set up yet'.trArgs({'label': label}));
       return;
     }
     if (!await openExternally(url) && c.mounted) {
-      _toast(c, 'Could not open the link');
+      _toast(c, 'Could not open the link'.tr);
     }
   }
 
@@ -63,14 +65,16 @@ class FootboliveDrawer extends StatelessWidget {
       final date = sub.expiresLabel;
       final left = sub.daysLeft;
       final detail = [
-        if (date != null) 'No ads until $date',
-        if (left != null && left <= 400) '$left day${left == 1 ? '' : 's'} left',
+        if (date != null) 'No ads until {date}'.trArgs({'date': date}),
+        if (left != null && left <= 400)
+          (left == 1 ? '{n} day left' : '{n} days left').trArgs({'n': left}),
       ].join(' · ');
       return ListTile(
         dense: true,
         leading: Icon(Icons.verified_rounded, size: 21, color: Ui.green),
-        title: const Text('Subscription: Active',
-            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+        title: Text('Subscription: Active'.tr,
+            style: const TextStyle(
+                fontSize: 13.5, fontWeight: FontWeight.w700)),
         subtitle: detail.isEmpty
             ? null
             : Text(detail, style: TextStyle(color: Ui.muted, fontSize: 11.5)),
@@ -107,7 +111,7 @@ class FootboliveDrawer extends StatelessWidget {
                   fit: BoxFit.contain,
                 ),
                 const SizedBox(height: 4),
-                Text('Version: ${AppConfig.appVersion}',
+                Text('${'Version'.tr}: ${AppConfig.appVersion}',
                     style: TextStyle(color: Ui.muted, fontSize: 11.5)),
               ],
             ),
@@ -122,8 +126,8 @@ class FootboliveDrawer extends StatelessWidget {
                   item(
                       Icons.workspace_premium_rounded,
                       SubscriptionService.instance.isPremium
-                          ? 'Premium (active)'
-                          : 'Go Premium - no ads',
+                          ? 'Premium (active)'.tr
+                          : 'Go Premium - no ads'.tr,
                       (c) => _push(c, const PlansScreen())),
                 // Token users: before = "Remove ads"; once ads are gone this
                 // becomes the subscription status. (Paystack Premium has its
@@ -134,35 +138,36 @@ class FootboliveDrawer extends StatelessWidget {
                   if (SubscriptionService.instance.isPremium)
                     subscriptionItem()
                   else
-                    item(Icons.block_rounded, 'Remove ads',
+                    item(Icons.block_rounded, 'Remove ads'.tr,
                         (c) => _push(c, const RemoveAdsScreen())),
-                item(Icons.link_rounded, 'Network Stream',
+                item(Icons.link_rounded, 'Network Stream'.tr,
                     (c) => _push(c, const NetworkStreamScreen())),
-                item(Icons.playlist_play_rounded, 'Playlists',
+                item(Icons.playlist_play_rounded, 'Playlists'.tr,
                     (c) => _push(c, const PlaylistsScreen())),
-                item(Icons.picture_in_picture_alt_rounded, 'Floating Player',
+                item(Icons.picture_in_picture_alt_rounded, 'Floating Player'.tr,
                     showFloatingPlayerDialog),
-                item(Icons.settings_rounded, 'Video Quality Setting',
+                item(Icons.settings_rounded, 'Video Quality Setting'.tr,
                     showLowQualityDialog),
-                item(Icons.palette_rounded, 'Themes', showThemeSheet),
-                item(Icons.sports_cricket_rounded, 'Cricket Score',
+                item(Icons.palette_rounded, 'Themes'.tr, showThemeSheet),
+                item(Icons.language_rounded, 'Language'.tr, showLanguageSheet),
+                item(Icons.sports_cricket_rounded, 'Cricket Score'.tr,
                     (c) => openInApp(c, AppConfig.cricketScoreUrl,
-                        title: 'Cricket Score')),
-                item(Icons.sports_soccer_rounded, 'Football Score',
+                        title: 'Cricket Score'.tr)),
+                item(Icons.sports_soccer_rounded, 'Football Score'.tr,
                     (c) => openInApp(c, AppConfig.footballScoreUrl,
-                        title: 'Football Score')),
-                item(Icons.notifications_active_rounded, 'Notifications',
+                        title: 'Football Score'.tr)),
+                item(Icons.notifications_active_rounded, 'Notifications'.tr,
                     showNotificationSettings),
-                item(Icons.campaign_rounded, 'Notice', showNoticeDialog),
-                item(Icons.chat_rounded, 'Join Us',
-                    (c) => _openLink(c, AppConfig.joinUrl, 'Join Us')),
-                item(Icons.copyright_rounded, 'Copyright',
+                item(Icons.campaign_rounded, 'Notice'.tr, showNoticeDialog),
+                item(Icons.chat_rounded, 'Join Us'.tr,
+                    (c) => _openLink(c, AppConfig.joinUrl, 'Join Us'.tr)),
+                item(Icons.copyright_rounded, 'Copyright'.tr,
                     showCopyrightDialog),
-                item(Icons.share_rounded, 'Share App',
+                item(Icons.share_rounded, 'Share App'.tr,
                     (c) => AppSharer.instance.share(c)),
-                item(Icons.sync_rounded, 'Update App',
+                item(Icons.sync_rounded, 'Update App'.tr,
                     (c) => AppUpdater.instance.update(c)),
-                item(Icons.exit_to_app_rounded, 'Exit',
+                item(Icons.exit_to_app_rounded, 'Exit'.tr,
                     (c) async => SystemNavigator.pop()),
               ],
             ),
@@ -198,8 +203,9 @@ Future<void> showThemeSheet(BuildContext context) {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Choose a theme',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              Text('Choose a theme'.tr,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w900)),
               const SizedBox(height: 14),
               for (var i = 0; i < Palettes.all.length; i++)
                 _ThemeTile(
@@ -302,21 +308,22 @@ Future<void> showLowQualityDialog(BuildContext context) async {
     context: context,
     builder: (_) => StatefulBuilder(
       builder: (ctx, set) => AlertDialog(
-        title: const Text('Force To Low Video Quality'),
+        title: Text('Force To Low Video Quality'.tr),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
                 'Enable this option to reduce buffering on slow connections. '
-                'This will reduce video quality but improve playback stability.',
-                style: TextStyle(fontWeight: FontWeight.w700, height: 1.3)),
+                        'This will reduce video quality but improve playback stability.'
+                    .tr,
+                style: const TextStyle(fontWeight: FontWeight.w700, height: 1.3)),
             const SizedBox(height: 16),
             Row(
               children: [
-                const Expanded(
-                  child: Text('Force to Low Quality',
-                      style: TextStyle(
+                Expanded(
+                  child: Text('Force to Low Quality'.tr,
+                      style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w800)),
                 ),
                 Switch(
@@ -332,7 +339,7 @@ Future<void> showLowQualityDialog(BuildContext context) async {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('CLOSE')),
+              onPressed: () => Navigator.pop(ctx), child: Text('CLOSE'.tr)),
         ],
       ),
     ),
@@ -346,22 +353,23 @@ Future<void> showFloatingPlayerDialog(BuildContext context) async {
     context: context,
     builder: (_) => StatefulBuilder(
       builder: (ctx, set) => AlertDialog(
-        title: const Text('Floating Player'),
+        title: Text('Floating Player'.tr),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
                 'Adds a button to the player that shrinks the video into a '
-                'small floating window (picture-in-picture) so you can keep '
-                'watching while using other apps.',
-                style: TextStyle(fontWeight: FontWeight.w700, height: 1.3)),
+                        'small floating window (picture-in-picture) so you can keep '
+                        'watching while using other apps.'
+                    .tr,
+                style: const TextStyle(fontWeight: FontWeight.w700, height: 1.3)),
             const SizedBox(height: 16),
             Row(
               children: [
-                const Expanded(
-                  child: Text('Enable Floating Player',
-                      style: TextStyle(
+                Expanded(
+                  child: Text('Enable Floating Player'.tr,
+                      style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w800)),
                 ),
                 Switch(
@@ -377,7 +385,7 @@ Future<void> showFloatingPlayerDialog(BuildContext context) async {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('CLOSE')),
+              onPressed: () => Navigator.pop(ctx), child: Text('CLOSE'.tr)),
         ],
       ),
     ),
@@ -388,16 +396,17 @@ Future<void> showCopyrightDialog(BuildContext context) {
   return showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Copyright Alert'),
-      content: const Text(
+      title: Text('Copyright Alert'.tr),
+      content: Text(
           'Deeprowss does not host, upload or own any of the channels, '
-          'matches or videos shown in this application. All content is the '
-          'copyright of its respective owners, and you are responsible for '
-          'making sure you have the right to watch what you play.',
-          style: TextStyle(fontWeight: FontWeight.w700, height: 1.3)),
+                  'matches or videos shown in this application. All content is the '
+                  'copyright of its respective owners, and you are responsible for '
+                  'making sure you have the right to watch what you play.'
+              .tr,
+          style: const TextStyle(fontWeight: FontWeight.w700, height: 1.3)),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+            onPressed: () => Navigator.pop(ctx), child: Text('OK'.tr)),
       ],
     ),
   );
