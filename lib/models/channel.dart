@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../utils/l10n.dart';
+
 enum ChannelCategory {
   sports,
   movies,
@@ -18,27 +20,27 @@ extension ChannelCategoryX on ChannelCategory {
   String get label {
     switch (this) {
       case ChannelCategory.sports:
-        return 'Sports';
+        return 'Sports'.tr;
       case ChannelCategory.movies:
-        return 'Movies';
+        return 'Movies'.tr;
       case ChannelCategory.music:
-        return 'Music';
+        return 'Music'.tr;
       case ChannelCategory.news:
-        return 'News';
+        return 'News'.tr;
       case ChannelCategory.kids:
-        return 'Kids';
+        return 'Kids'.tr;
       case ChannelCategory.entertainment:
-        return 'Entertainment';
+        return 'Entertainment'.tr;
       case ChannelCategory.documentary:
-        return 'Documentary';
+        return 'Documentary'.tr;
       case ChannelCategory.lifestyle:
-        return 'Lifestyle';
+        return 'Lifestyle'.tr;
       case ChannelCategory.religious:
-        return 'Religious';
+        return 'Religious'.tr;
       case ChannelCategory.general:
-        return 'General';
+        return 'General'.tr;
       case ChannelCategory.other:
-        return 'Other';
+        return 'Other'.tr;
     }
   }
 
