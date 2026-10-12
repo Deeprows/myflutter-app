@@ -189,6 +189,20 @@ class RemoteConfig with WidgetsBindingObserver {
   String get updateVersion => _str('update', 'version', '');
   String get updateNotes => _str('update', 'notes', '');
 
+  // -------------------------------------------------------------- scores
+
+  /// Real live scores on the fixture cards.
+  bool get scoresEnabled => _bool('scores', 'enabled', true);
+
+  /// Seconds between score lookups while the Live screen is open (20-300).
+  int get scoresPollSeconds =>
+      _int('scores', 'pollSeconds', 45).clamp(20, 300);
+
+  /// Scoreboard feed. Must return ESPN-style JSON (`{"events":[...]}`); the
+  /// app adds `?dates=YYYYMMDD`.
+  String get scoresUrl => _str('scores', 'url',
+      'https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard');
+
   // --------------------------------------------------------------- share
 
   /// Text sent with the APK when someone taps Share App.
