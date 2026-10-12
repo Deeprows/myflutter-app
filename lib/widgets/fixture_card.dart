@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/fixture.dart';
+import '../models/live_score.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 
@@ -15,11 +16,15 @@ class FixtureCard extends StatelessWidget {
   final DateTime now;
   final VoidCallback onTap;
 
+  /// Real score from the score feed, when this match was found there.
+  final LiveScore? score;
+
   const FixtureCard({
     super.key,
     required this.fixture,
     required this.now,
     required this.onTap,
+    this.score,
   });
 
   @override
@@ -27,8 +32,10 @@ class FixtureCard extends StatelessWidget {
     final f = fixture;
     final phase = f.phaseAt(now);
 
-    final live = phase == MatchPhase.live;
-    final ended = phase == MatchPhase.ended;
+    // A real score from the feed decides live / ended; otherwise the clock does.
+    final sc = score;
+    final live = sc != null ? sc.live : phase == MatchPhase.live;
+    final ended = sc != null ? sc.finished : phase == MatchPhase.ended;
     final kickoff = f.kickoff.toLocal();
 
     // -------------------------------------------------------------------------
@@ -37,7 +44,10 @@ class FixtureCard extends StatelessWidget {
 
     final String status;
 
-    switch (phase) {
+    if (sc != null) {
+      status = sc.live ? 'Live · ${sc.statusLabel}' : sc.statusLabel;
+    } else {
+      switch (phase) {
       case MatchPhase.upcoming:
         status =
             'Starts in ${countdownText(f.kickoff.difference(now))}';
@@ -48,6 +58,7 @@ class FixtureCard extends StatelessWidget {
 
       case MatchPhase.ended:
         status = 'Ended';
+      }
     }
 
     final statusColor = live
@@ -154,7 +165,33 @@ class FixtureCard extends StatelessWidget {
                         width: 86,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
-                          children: [
+                          children: sc != null
+                              ? [
+                                  Text(
+                                    sc.scoreText,
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      color: ended ? Ui.dim : Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w900,
+                                      height: 1.1,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    fmtTime12(kickoff),
+                                    style: TextStyle(
+                                      color: Ui.dim,
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                ]
+                              : [
                             Text(
                               fmtTime12(kickoff),
                               style: TextStyle(
