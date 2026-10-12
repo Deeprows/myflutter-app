@@ -280,7 +280,12 @@ jobs:
         run: |
           # --build-number grows with every run so a new APK always installs
           # over the old one as an update.
+          # Size: ship only the two ABIs real phones use (32-bit + 64-bit ARM).
+          # The default also bundles x86_64 (emulators only) which adds ~20 MB.
+          # --split-debug-info strips debug symbols from the Dart code.
           flutter build apk --release \
+            --target-platform android-arm,android-arm64 \
+            --split-debug-info=build/symbols \
             --build-name="${{ steps.ver.outputs.version }}" \
             --build-number="${{ github.run_number }}" \
             --dart-define=FIREBASE_ANDROID_APP_ID="$FIREBASE_ANDROID_APP_ID" \
