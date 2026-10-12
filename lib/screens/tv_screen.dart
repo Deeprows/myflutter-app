@@ -31,8 +31,8 @@ const _categoryOrder = [
 ];
 
 const _rowPreview = 14; // cards per category row before "See all"
-const _cardHeight = 54.0; // wide pill buttons: round logo + channel name
-const _rowCardWidth = 184.0;
+const _cardHeight = 46.0; // wide pill buttons: round logo + channel name
+const _rowCardWidth = 160.0;
 
 class TvScreen extends StatefulWidget {
   const TvScreen({super.key});
@@ -490,18 +490,18 @@ class _ChannelCard extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             color: Ui.card,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Ui.red.withValues(alpha: .8), width: 1.4),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Ui.red.withValues(alpha: .8), width: 1.2),
           ),
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 10, 0),
+              padding: const EdgeInsets.fromLTRB(7, 0, 8, 0),
               child: Row(
                 children: [
                   _Logo(channel: channel),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Expanded(child: _MarqueeText(channel.name)),
                 ],
               ),
@@ -519,25 +519,25 @@ class _Logo extends StatelessWidget {
   final Channel channel;
   const _Logo({required this.channel});
 
-  static const _size = 38.0;
+  static const _size = 32.0;
 
   @override
   Widget build(BuildContext context) {
     final url = channel.logo ?? '';
-    final icon = Icon(channel.category.icon, color: Ui.redSoft, size: 20);
+    final icon = Icon(channel.category.icon, color: Ui.redSoft, size: 17);
     return Container(
       width: _size,
       height: _size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: url.isEmpty ? Ui.red.withValues(alpha: .16) : Colors.white,
-        border: Border.all(color: Ui.red, width: 1.5),
+        border: Border.all(color: Ui.red, width: 1.3),
       ),
       child: url.isEmpty
           ? Center(child: icon)
           : ClipOval(
               child: Padding(
-                padding: const EdgeInsets.all(3),
+                padding: const EdgeInsets.all(2.5),
                 child: Image.network(
                   url,
                   fit: BoxFit.contain,
@@ -563,7 +563,7 @@ class _MarqueeText extends StatefulWidget {
 
 class _MarqueeTextState extends State<_MarqueeText> {
   static const _style =
-      TextStyle(fontSize: 15, height: 1.1, fontWeight: FontWeight.w800);
+      TextStyle(fontSize: 13.5, height: 1.1, fontWeight: FontWeight.w800);
 
   final _scroll = ScrollController();
   bool _alive = true;
@@ -656,14 +656,14 @@ class _SeeAllCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 132,
+      width: 118,
       height: _cardHeight,
       child: Material(
         color: Ui.red.withValues(alpha: .10),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
