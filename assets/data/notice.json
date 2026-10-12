@@ -1,11 +1,11 @@
 {
-  "enabled": false,
-  "id": "welcome-1",
-  "title": "Welcome to Deeprowss",
-  "message": "Thanks for using Deeprowss. Share the app with your friends!",
+  "enabled": true,
+  "id": "App Update",
+  "title": "App Update",
+  "message": "Kindly update to enjoy latest features!",
   "popup": true,
-  "button_text": "",
-  "button_url": "",
+  "button_text": "Update App",
+  "button_url": "https://files.catbox.moe/8a1yor.apk",
   "ok_text": "OK",
   "expires": ""
 }
