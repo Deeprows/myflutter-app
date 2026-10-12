@@ -14,6 +14,7 @@ import '../widgets/link_sheet.dart';
 import '../widgets/pitch_painter.dart';
 import 'native_player_screen.dart';
 import 'player_screen.dart';
+import '../utils/l10n.dart';
 
 /// Display order of the category rows / pills.
 const _categoryOrder = [
@@ -159,7 +160,7 @@ class _TvScreenState extends State<TvScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.public_rounded),
-              title: const Text('All countries'),
+              title: Text('All countries'.tr),
               selected: _country == null,
               onTap: () => Navigator.pop(ctx, ''),
             ),
@@ -231,7 +232,7 @@ class _TvScreenState extends State<TvScreen> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
                 children: [
-                  _Pill('All', base.length, _cat == null,
+                  _Pill('All'.tr, base.length, _cat == null,
                       () => _selectCat(null)),
                   for (final c in cats)
                     _Pill(c.label, counts[c]!, _cat == c,
@@ -277,7 +278,7 @@ class _TvScreenState extends State<TvScreen> {
                 children: [
                   Icon(Icons.search_off_rounded, size: 44, color: Ui.dim),
                   const SizedBox(height: 10),
-                  Text('No channels found',
+                  Text('No channels found'.tr,
                       style: TextStyle(
                           color: Ui.muted,
                           fontSize: 14,
@@ -328,9 +329,9 @@ class _TvScreenState extends State<TvScreen> {
             children: [
               Row(
                 children: [
-                  const Expanded(
-                    child: Text('TV Channels',
-                        style: TextStyle(
+                  Expanded(
+                    child: Text('TV Channels'.tr,
+                        style: const TextStyle(
                             fontSize: 26,
                             height: 1.1,
                             fontWeight: FontWeight.w900)),
@@ -358,7 +359,7 @@ class _TvScreenState extends State<TvScreen> {
                   onChanged: (v) => setState(() => _query = v),
                   textInputAction: TextInputAction.search,
                   decoration: InputDecoration(
-                    hintText: 'Search channels',
+                    hintText: 'Search channels'.tr,
                     hintStyle: TextStyle(color: Ui.dim),
                     prefixIcon: Icon(Icons.search_rounded, color: Ui.muted),
                     suffixIcon: _query.isEmpty
