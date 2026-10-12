@@ -31,9 +31,6 @@ perms = [
     "android.permission.REQUEST_INSTALL_PACKAGES",  # install Deeprows Browser
     "android.permission.READ_MEDIA_VIDEO",  # Player tab: phone videos (Android 13+)
     "android.permission.READ_MEDIA_AUDIO",  # Player tab: phone music (Android 13+)
-    # Lets the app ask "allow to run in background" so phone makers' battery savers
-    # do not kill the music and its notification card.
-    "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
 ]
 add = ""
 for p in perms:
