@@ -19,6 +19,7 @@ import '../services/settings_service.dart';
 import '../services/stream_resolver.dart';
 import '../services/tmdb_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/theme_watermark.dart';
 import '../widgets/live_dot.dart';
 import '../widgets/match_chat.dart';
 import '../services/remote_config.dart';
@@ -129,6 +130,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   @override
   void initState() {
     super.initState();
+    ThemeDecor.hold();
     WakelockPlus.enable();
     WidgetsBinding.instance.addObserver(this);
     BackgroundPlayback.start(
@@ -247,6 +249,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     WakelockPlus.disable();
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    ThemeDecor.release();
     super.dispose();
   }
 
