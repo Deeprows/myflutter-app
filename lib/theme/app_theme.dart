@@ -125,15 +125,13 @@ class Palettes {
     dim: Color(0xFF74899E),
     onAccent: Color(0xFF06121E),
     watermark: 'MESSI 10',
-    stripes: true,
-    stripeColor: Color(0xFF6CB4EE),
     backdropAsset: 'assets/themes/messi.png',
   );
 
   /// Black-and-white striped jersey look with CR7 gold.
   static const cr7 = Palette(
     name: 'CR7',
-    tagline: 'Black & white stripes with champion gold',
+    tagline: 'Jet black with champion gold',
     bg: Color(0xFF050505),
     panel: Color(0xFF0F0F0F),
     card: Color(0xFF171717),
@@ -144,7 +142,6 @@ class Palettes {
     dim: Color(0xFF7E7E7E),
     onAccent: Color(0xFF1A0C00),
     watermark: 'CR7',
-    stripes: true,
     backdropAsset: 'assets/themes/cr7.png',
   );
 
