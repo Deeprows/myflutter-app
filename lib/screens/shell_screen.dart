@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
 import 'package:flutter/services.dart';
 
 import '../player/mini_player.dart';
@@ -14,6 +15,7 @@ import 'highlights_screen.dart';
 import 'live_screen.dart';
 import 'movies_screen.dart';
 import 'tv_screen.dart';
+import '../utils/l10n.dart';
 
 /// The whole app: Football Live, Highlights, TV channels and Movies.
 class ShellScreen extends StatefulWidget {
@@ -89,9 +91,9 @@ class _ShellScreenState extends State<ShellScreen>
     _lastBack = now;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(
-        content: Text('Tap back more to exit'),
-        duration: Duration(seconds: 2),
+      ..showSnackBar(SnackBar(
+        content: Text('Tap back more to exit'.tr),
+        duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
       ));
   }
@@ -128,30 +130,30 @@ class _ShellScreenState extends State<ShellScreen>
         child: NavigationBar(
           selectedIndex: _index,
           onDestinationSelected: (i) => setState(() => _index = i),
-          destinations: const [
+          destinations: [
             NavigationDestination(
-              icon: Icon(Icons.sensors_rounded),
-              label: 'Live',
+              icon: const Icon(Icons.sensors_rounded),
+              label: 'Live'.tr,
             ),
             NavigationDestination(
-              icon: Icon(Icons.play_circle_outline_rounded),
-              selectedIcon: Icon(Icons.play_circle_rounded),
-              label: 'Highlights',
+              icon: const Icon(Icons.play_circle_outline_rounded),
+              selectedIcon: const Icon(Icons.play_circle_rounded),
+              label: 'Highlights'.tr,
             ),
             NavigationDestination(
-              icon: Icon(Icons.live_tv_outlined),
-              selectedIcon: Icon(Icons.live_tv_rounded),
-              label: 'TV',
+              icon: const Icon(Icons.live_tv_outlined),
+              selectedIcon: const Icon(Icons.live_tv_rounded),
+              label: 'TV'.tr,
             ),
             NavigationDestination(
-              icon: Icon(Icons.movie_outlined),
-              selectedIcon: Icon(Icons.movie_rounded),
-              label: 'Movies',
+              icon: const Icon(Icons.movie_outlined),
+              selectedIcon: const Icon(Icons.movie_rounded),
+              label: 'Movies'.tr,
             ),
             NavigationDestination(
-              icon: Icon(Icons.video_library_outlined),
-              selectedIcon: Icon(Icons.video_library_rounded),
-              label: 'Player',
+              icon: const Icon(Icons.video_library_outlined),
+              selectedIcon: const Icon(Icons.video_library_rounded),
+              label: 'Player'.tr,
             ),
           ],
         ),
