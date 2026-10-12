@@ -220,12 +220,18 @@ async function analytics(request, env) {
 async function feed(request, env, ctx, file) {
   // Short edge cache (default 10 s) so a new post shows up almost at once.
   // FEED_TTL=0 is allowed and turns the edge cache off completely.
-  const parsedTtl = parseInt(env.FEED_TTL ?? "10", 10);
-  const ttl = clamp(
-    Number.isNaN(parsedTtl) ? 10 : parsedTtl,
-    0,
-    600
-  );
+  // The live-screen feeds (fixtures, ticker) are never edge-cached: every
+  // open/refresh must see the file as it is right now.
+  const noCache = file === "fixtures.json" || file === "ticker.json";
+  const defaultTtl = noCache ? "0" : "10";
+  const parsedTtl = parseInt(env.FEED_TTL ?? defaultTtl, 10);
+  const ttl = noCache
+    ? 0
+    : clamp(
+        Number.isNaN(parsedTtl) ? 10 : parsedTtl,
+        0,
+        600
+      );
 
   const base = (
     env.GITHUB_RAW_BASE ||
@@ -300,7 +306,7 @@ async function feed(request, env, ctx, file) {
                 "application/json; charset=utf-8",
 
               "cache-control":
-                `public, max-age=${ttl}`,
+                ttl > 0 ? `public, max-age=${ttl}` : "no-store",
             },
           }
         );
