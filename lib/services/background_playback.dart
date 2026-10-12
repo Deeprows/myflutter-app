@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Keeps video/audio playing when the app is minimised or the screen is
 /// locked. Starts an Android foreground service (media notification) while a
@@ -59,6 +60,20 @@ class BackgroundPlayback {
     } catch (_) {
       return true;
     }
+  }
+
+  /// Phone makers' battery savers (Xiaomi, Huawei, Oppo, Vivo, Samsung...)
+  /// often kill background music together with its notification card. Asks
+  /// Android's own "allow to run in the background" question, once, the first
+  /// time music plays. Never throws.
+  static Future<void> askToStayAlive() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('asked_battery_opt') ?? false) return;
+      if (await Permission.ignoreBatteryOptimizations.isGranted) return;
+      await prefs.setBool('asked_battery_opt', true);
+      await Permission.ignoreBatteryOptimizations.request();
+    } catch (_) {}
   }
 
   /// True when the system will actually show our notifications. Android 13+
