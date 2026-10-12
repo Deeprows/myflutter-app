@@ -13,6 +13,7 @@ import '../utils/format.dart';
 import '../widgets/highlight_card.dart';
 import '../widgets/pitch_painter.dart';
 import 'player_screen.dart';
+import '../utils/l10n.dart';
 
 class HighlightsScreen extends StatefulWidget {
   const HighlightsScreen({super.key});
@@ -165,8 +166,8 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Football Highlights',
-                          style: TextStyle(
+                      Text('Football Highlights'.tr,
+                          style: const TextStyle(
                               fontSize: 26,
                               height: 1.1,
                               fontWeight: FontWeight.w900)),
@@ -186,7 +187,7 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
                         onChanged: (v) => setState(() => _query = v),
                         textInputAction: TextInputAction.search,
                         decoration: InputDecoration(
-                          hintText: 'Search teams or competitions',
+                          hintText: 'Search teams or competitions'.tr,
                           hintStyle: TextStyle(color: Ui.dim),
                           prefixIcon:
                               Icon(Icons.search_rounded, color: Ui.muted),
@@ -231,7 +232,7 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
                 children: [
-                  _Pill('All', _comp == null, () => setState(() => _comp = null)),
+                  _Pill('All'.tr, _comp == null, () => setState(() => _comp = null)),
                   for (final c in _competitions)
                     _Pill(c, _comp == c, () => setState(() => _comp = c)),
                 ],
@@ -251,7 +252,7 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
                 children: [
                   Icon(Icons.search_off_rounded, size: 44, color: Ui.dim),
                   SizedBox(height: 10),
-                  Text('No highlights found',
+                  Text('No highlights found'.tr,
                       style: TextStyle(
                           color: Ui.muted,
                           fontSize: 14,
