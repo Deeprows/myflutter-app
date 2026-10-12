@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/theme_watermark.dart';
 import 'audio_handler.dart';
 import 'media_entry.dart';
 import 'music_player.dart';
@@ -49,6 +50,7 @@ class _LocalVideoScreenState extends State<LocalVideoScreen>
   @override
   void initState() {
     super.initState();
+    ThemeDecor.hold();
     _i = widget.index.clamp(0, widget.items.length - 1);
     MusicPlayer.instance.stop();
     WakelockPlus.enable();
@@ -125,6 +127,7 @@ class _LocalVideoScreenState extends State<LocalVideoScreen>
     WakelockPlus.disable();
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    ThemeDecor.release();
     super.dispose();
   }
 
