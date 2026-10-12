@@ -98,6 +98,7 @@ class MusicPlayer extends ChangeNotifier {
       playing = true;
       notifyListeners();
       unawaited(_checkNotificationAccess());
+      unawaited(BackgroundPlayback.askToStayAlive());
     } catch (_) {
       _fail(gen);
     }
@@ -113,11 +114,26 @@ class MusicPlayer extends ChangeNotifier {
     _warned = true;
     final ctx = AppNav.overlayContext;
     if (ctx == null) return;
-    ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(SnackBar(
-      duration: const Duration(seconds: 10),
-      content: const Text(
-          'Notifications are off, so the music card cannot show on the lock screen. Turn them on for Deeprowss.'),
-      action: SnackBarAction(label: 'SETTINGS', onPressed: openAppSettings),
+    unawaited(showDialog<void>(
+      context: ctx,
+      builder: (d) => AlertDialog(
+        title: const Text('Turn on notifications'),
+        content: const Text(
+            'Notifications are off for Deeprowss, so the music player card '
+            'cannot show in the notification bar or on the lock screen. '
+            'Turn them on, then come back.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(d), child: const Text('Later')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(d);
+              openAppSettings();
+            },
+            child: const Text('Open settings'),
+          ),
+        ],
+      ),
     ));
   }
 
