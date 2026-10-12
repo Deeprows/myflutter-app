@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../config.dart';
 import '../models/channel.dart';
+import '../services/favorites_service.dart';
 import '../services/feed_service.dart';
 import '../services/support_gate.dart';
 import '../services/content_sync.dart';
@@ -47,6 +48,7 @@ class _TvScreenState extends State<TvScreen> {
   bool _loading = true;
   String _query = '';
   ChannelCategory? _cat;
+  bool _favOnly = false; // showing only the starred channels
   String? _country; // ISO code filter, null = all
   final _search = TextEditingController();
 
@@ -59,6 +61,25 @@ class _TvScreenState extends State<TvScreen> {
       }
     });
     ContentSync.tick.addListener(_onSync);
+    FavoriteChannels.instance.keys.addListener(_onFav);
+    FavoriteChannels.instance.load();
+  }
+
+  void _onFav() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _toggleFav(Channel c) async {
+    final added = await FavoriteChannels.instance.toggle(c);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(milliseconds: 1400),
+        content: Text(
+            added ? 'Added to favourites'.tr : 'Removed from favourites'.tr),
+      ));
   }
 
   void _onSync() {
@@ -75,6 +96,7 @@ class _TvScreenState extends State<TvScreen> {
   @override
   void dispose() {
     ContentSync.tick.removeListener(_onSync);
+    FavoriteChannels.instance.keys.removeListener(_onFav);
     _search.dispose();
     super.dispose();
   }
@@ -183,7 +205,10 @@ class _TvScreenState extends State<TvScreen> {
   }
 
   void _selectCat(ChannelCategory? c) {
-    setState(() => _cat = c);
+    setState(() {
+      _cat = c;
+      _favOnly = false;
+    });
   }
 
   @override
@@ -201,10 +226,21 @@ class _TvScreenState extends State<TvScreen> {
     }
     final cats = _categoryOrder.where(counts.containsKey).toList();
 
-    final filtered = base.where((c) {
-      if (_cat != null && c.category != _cat) return false;
-      return q.isEmpty || c.name.toLowerCase().contains(q);
-    }).toList();
+    // Starred channels (from every country / category), filtered by search.
+    final favKeys = FavoriteChannels.instance.keys.value;
+    final allFavs = _all
+        .where((c) => favKeys.contains(FavoriteChannels.keyOf(c)))
+        .toList();
+    final favs = allFavs
+        .where((c) => q.isEmpty || c.name.toLowerCase().contains(q))
+        .toList();
+
+    final filtered = _favOnly
+        ? favs
+        : base.where((c) {
+            if (_cat != null && c.category != _cat) return false;
+            return q.isEmpty || c.name.toLowerCase().contains(q);
+          }).toList();
 
     final groups = <ChannelCategory, List<Channel>>{};
     for (final c in filtered) {
@@ -213,7 +249,7 @@ class _TvScreenState extends State<TvScreen> {
 
     // Rows (Netflix style) when browsing everything; a grid when a category
     // is picked or the user is searching.
-    final showRows = _cat == null && q.isEmpty;
+    final showRows = !_favOnly && _cat == null && q.isEmpty;
     final top = MediaQuery.of(context).padding.top;
 
     return AppRefresh(
@@ -232,8 +268,15 @@ class _TvScreenState extends State<TvScreen> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
                 children: [
-                  _Pill('All'.tr, base.length, _cat == null,
+                  _Pill('All'.tr, base.length, _cat == null && !_favOnly,
                       () => _selectCat(null)),
+                  if (allFavs.isNotEmpty || _favOnly)
+                    _Pill('Favourites'.tr, allFavs.length, _favOnly,
+                        () => setState(() {
+                              _favOnly = true;
+                              _cat = null;
+                            }),
+                        icon: Icons.star_rounded),
                   for (final c in cats)
                     _Pill(c.label, counts[c]!, _cat == c,
                         () => _selectCat(c),
@@ -278,16 +321,24 @@ class _TvScreenState extends State<TvScreen> {
                 children: [
                   Icon(Icons.search_off_rounded, size: 44, color: Ui.dim),
                   const SizedBox(height: 10),
-                  Text('No channels found'.tr,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      _favOnly && q.isEmpty
+                          ? 'No favourite channels yet. Tap the star on any channel to save it here.'
+                              .tr
+                          : 'No channels found'.tr,
+                      textAlign: TextAlign.center,
                       style: TextStyle(
                           color: Ui.muted,
                           fontSize: 14,
                           fontWeight: FontWeight.w700)),
+                  ),
                 ],
               ),
             )
           else if (showRows)
-            ..._rows(groups)
+            ..._rows(groups, favs)
           else
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
@@ -302,6 +353,8 @@ class _TvScreenState extends State<TvScreen> {
                 itemBuilder: (_, i) => _ChannelCard(
                   channel: filtered[i],
                   onTap: () => _open(filtered[i]),
+                  fav: favKeys.contains(FavoriteChannels.keyOf(filtered[i])),
+                  onFav: () => _toggleFav(filtered[i]),
                 ),
               ),
             ),
@@ -397,20 +450,40 @@ class _TvScreenState extends State<TvScreen> {
     );
   }
 
-  List<Widget> _rows(Map<ChannelCategory, List<Channel>> groups) => [
+  List<Widget> _rows(
+          Map<ChannelCategory, List<Channel>> groups, List<Channel> favs) =>
+      [
+        if (favs.isNotEmpty)
+          ..._row(
+            null,
+            favs,
+            title: 'Favourites'.tr,
+            icon: Icons.star_rounded,
+            onMore: () => setState(() => _favOnly = true),
+          ),
         for (final cat in _categoryOrder)
           if (groups.containsKey(cat)) ..._row(cat, groups[cat]!),
       ];
 
   /// One category: header (tap = open the whole category) + a horizontal
   /// strip of cards ending with a "See all" tile.
-  List<Widget> _row(ChannelCategory cat, List<Channel> list) {
+  List<Widget> _row(
+    ChannelCategory? cat,
+    List<Channel> list, {
+    String? title,
+    IconData? icon,
+    VoidCallback? onMore,
+  }) {
+    final rowTitle = title ?? cat!.label;
+    final rowIcon = icon ?? cat!.icon;
+    final seeAll = onMore ?? () => _selectCat(cat);
+    final favKeys = FavoriteChannels.instance.keys.value;
     final shown = list.length > _rowPreview ? _rowPreview : list.length;
     final more = list.length > shown;
     return [
       SliverToBoxAdapter(
         child: InkWell(
-          onTap: more ? () => _selectCat(cat) : null,
+          onTap: more ? seeAll : null,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(18, 14, 14, 10),
             child: Row(
@@ -422,11 +495,11 @@ class _TvScreenState extends State<TvScreen> {
                     color: Ui.red.withValues(alpha: .14),
                     borderRadius: BorderRadius.circular(9),
                   ),
-                  child: Icon(cat.icon, size: 17, color: Ui.redSoft),
+                  child: Icon(rowIcon, size: 17, color: Ui.redSoft),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(cat.label,
+                  child: Text(rowTitle,
                       style: const TextStyle(
                           fontSize: 16.5, fontWeight: FontWeight.w900)),
                 ),
@@ -456,14 +529,16 @@ class _TvScreenState extends State<TvScreen> {
               if (i == shown) {
                 return _SeeAllCard(
                   label: 'See all ${list.length}',
-                  icon: cat.icon,
-                  onTap: () => _selectCat(cat),
+                  icon: rowIcon,
+                  onTap: seeAll,
                 );
               }
               return _ChannelCard(
                 width: _rowCardWidth,
                 channel: list[i],
                 onTap: () => _open(list[i]),
+                fav: favKeys.contains(FavoriteChannels.keyOf(list[i])),
+                onFav: () => _toggleFav(list[i]),
               );
             },
           ),
@@ -479,7 +554,15 @@ class _ChannelCard extends StatelessWidget {
   final Channel channel;
   final VoidCallback onTap;
   final double? width;
-  const _ChannelCard({required this.channel, required this.onTap, this.width});
+  final bool fav;
+  final VoidCallback onFav;
+  const _ChannelCard({
+    required this.channel,
+    required this.onTap,
+    required this.onFav,
+    this.fav = false,
+    this.width,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -498,12 +581,30 @@ class _ChannelCard extends StatelessWidget {
             onTap: onTap,
             borderRadius: BorderRadius.circular(14),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(7, 0, 8, 0),
+              padding: const EdgeInsets.fromLTRB(7, 0, 2, 0),
               child: Row(
                 children: [
                   _Logo(channel: channel),
                   const SizedBox(width: 6),
                   Expanded(child: _MarqueeText(channel.name)),
+                  // Star: bookmark / un-bookmark this channel.
+                  SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      iconSize: 20,
+                      splashRadius: 16,
+                      tooltip: fav
+                          ? 'Remove from favourites'.tr
+                          : 'Add to favourites'.tr,
+                      onPressed: onFav,
+                      icon: Icon(
+                        fav ? Icons.star_rounded : Icons.star_border_rounded,
+                        color: fav ? const Color(0xFFFFC107) : Ui.muted,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
