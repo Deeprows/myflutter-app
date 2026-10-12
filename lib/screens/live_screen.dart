@@ -2,1091 +2,177 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../config.dart';
-import '../models/fixture.dart';
-import '../models/live_score.dart';
-import '../models/push_target.dart';
-import '../models/ticker.dart';
-import '../services/feed_service.dart';
-import '../services/push_service.dart';
-import '../services/remote_config.dart';
-import '../services/score_service.dart';
+import 'package:flutter/services.dart';
+
+import '../player/mini_player.dart';
+import '../player/player_hub_screen.dart';
 import '../services/content_sync.dart';
+import '../services/notice_service.dart';
+import '../services/push_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_refresh.dart';
-import '../utils/format.dart';
-import '../widgets/fixture_card.dart';
-import '../services/support_gate.dart';
-import '../widgets/link_sheet.dart';
-import '../widgets/news_ticker.dart';
-import '../widgets/pitch_painter.dart';
-import 'player_screen.dart';
-import 'support_browser_screen.dart';
+import '../widgets/app_drawer.dart';
+import '../widgets/brand_tag.dart';
+import 'highlights_screen.dart';
+import 'live_screen.dart';
+import 'movies_screen.dart';
+import 'tv_screen.dart';
 import '../utils/l10n.dart';
 
-enum _Filter { all, live, upcoming, ended }
-
-class LiveScreen extends StatefulWidget {
-  const LiveScreen({super.key});
+/// The whole app: Football Live, Highlights, TV channels and Movies.
+class ShellScreen extends StatefulWidget {
+  const ShellScreen({super.key});
 
   @override
-  State<LiveScreen> createState() => _LiveScreenState();
+  State<ShellScreen> createState() => _ShellScreenState();
 }
 
-class _LiveScreenState extends State<LiveScreen> {
-  List<Fixture> _fixtures = const [];
-  bool _loading = true;
-  _Filter _filter = _Filter.all;
-  TickerData _ticker = TickerData.empty;
-
-  final ValueNotifier<DateTime> _now = ValueNotifier(DateTime.now());
-  Timer? _timer;
-  Timer? _scoreTimer;
-  String _sig = '';
-  bool _fresh = false; // a network copy has been applied
-  int _reqId = 0; // id of the newest remote request started
-  int _appliedId = 0; // id of the newest remote request applied
-  int _retries = 0;
-  Timer? _retryTimer;
-  bool _tickerFresh = false;
-
-  static const String _supportCardUrl =
-      'https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60';
+class _ShellScreenState extends State<ShellScreen>
+    with WidgetsBindingObserver {
+  int _index = 0;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  DateTime? _lastBack;
+  Timer? _autoRefresh;
 
   @override
   void initState() {
     super.initState();
+    // A notification tap that launched the app, or one tapped while open.
+    final pending = PushService.instance.tabRequest.value;
+    if (pending != null) {
+      _index = pending;
+      PushService.instance.tabRequest.value = null;
+    }
+    PushService.instance.tabRequest.addListener(_openRequestedTab);
 
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      final n = DateTime.now();
-      _now.value = n;
-
-      final s = _signature(n);
-      if (s != _sig && mounted) {
-        setState(() => _sig = s);
-      }
-    });
-
-    // Real live scores for the fixture cards.
-    _scoreTimer = Timer.periodic(
-      Duration(seconds: RemoteConfig.instance.scoresPollSeconds),
-      (_) => _pollScores(),
+    // Keep every list current without the person having to pull down.
+    WidgetsBinding.instance.addObserver(this);
+    _autoRefresh = Timer.periodic(
+      const Duration(seconds: 60),
+      (_) => ContentSync.request(),
     );
 
-    // Fresh first: ask the network straight away. The saved copy is only
-    // shown if the network has not answered within a few seconds.
-    if (AppConfig.fixturesUrl.isNotEmpty) {
-      _load(remote: true);
-      Future<void>.delayed(const Duration(seconds: 4), () {
-        if (mounted && _loading) _load();
-      });
-    } else {
-      _load();
-    }
-
-    if (AppConfig.tickerUrl.isNotEmpty) {
-      _loadTicker(remote: true);
-      Future<void>.delayed(const Duration(seconds: 4), () {
-        if (mounted && !_tickerFresh) _loadTicker();
-      });
-    } else {
-      _loadTicker();
-    }
-
-    PushService.instance.target.addListener(_onTarget);
-    ContentSync.tick.addListener(_onSync);
+    // notice.json: pop up once per notice id, a moment after the app opens.
+    Future<void>.delayed(const Duration(seconds: 2), () {
+      if (mounted) NoticeService.instance.showOnStart(context);
+    });
   }
 
-  void _onSync() {
-    // Back in the app / periodic sync: always ask the network again, and let
-    // the next answer count as the fresh one.
-    _retries = 0;
-    if (_loading) {
-      // First load still running: try again shortly instead of skipping.
-      Future<void>.delayed(const Duration(seconds: 2), () {
-        if (mounted && !_loading) _load(remote: true);
-      });
-      return;
-    }
-    _load(remote: true);
-  }
-
-  // ---- A tapped notification that points at one match ----------------------
-
-  void _onTarget() {
-    final t = PushService.instance.target.value;
-
-    if (t == null || t.kind != 'kickoff' || _loading) {
-      return;
-    }
-
-    if (!_openTarget(t)) {
-      _load(remote: true);
-    }
-  }
-
-  bool _openTarget(PushTarget t) {
-    for (final f in _fixtures) {
-      if (t.matchesFixture(
-        f.home,
-        f.away,
-        f.kickoff.millisecondsSinceEpoch,
-      )) {
-        PushService.instance.target.value = null;
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _open(f);
-          }
-        });
-
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  void _afterLoad({required bool last}) {
-    final t = PushService.instance.target.value;
-
-    if (t == null || t.kind != 'kickoff') {
-      return;
-    }
-
-    if (!_openTarget(t) && last) {
-      PushService.instance.target.value = null;
-    }
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) ContentSync.request(force: true);
   }
 
   @override
   void dispose() {
-    PushService.instance.target.removeListener(_onTarget);
-    ContentSync.tick.removeListener(_onSync);
-
-    _timer?.cancel();
-    _scoreTimer?.cancel();
-    _retryTimer?.cancel();
-    _now.dispose();
-
+    _autoRefresh?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    PushService.instance.tabRequest.removeListener(_openRequestedTab);
     super.dispose();
   }
 
-  Future<void> _pollScores() async {
-    if (!mounted || _fixtures.isEmpty) return;
-    await ScoreService.instance.refresh(_fixtures);
+  void _openRequestedTab() {
+    final tab = PushService.instance.tabRequest.value;
+    if (tab == null) return;
+    PushService.instance.tabRequest.value = null;
+    if (mounted && tab != _index) setState(() => _index = tab);
   }
 
-  String _signature(DateTime n) =>
-      _fixtures.map((f) => f.phaseAt(n).index).join();
-
-  Future<void> _loadTicker({bool remote = false}) async {
-    final t = await feed.loadTicker(remote: remote);
-
-    if (!mounted) return;
-    // A saved copy must never overwrite a fresher network copy.
-    if (!remote && _tickerFresh) return;
-    if (remote) _tickerFresh = true;
-
-    setState(() => _ticker = t);
-  }
-
-  Future<void> _load({bool remote = false}) async {
-    if (remote) {
-      unawaited(_loadTicker(remote: true));
-    }
-
-    // Every network request gets a number. A slow, older answer can never
-    // overwrite a newer one that already arrived.
-    final id = remote ? ++_reqId : 0;
-
-    final list = await feed.loadFixtures(remote: remote);
-
-    if (!mounted) return;
-    if (!remote && _fresh) return;
-
-    var gotFresh = false;
-    if (remote) {
-      if (id < _appliedId) return; // a newer answer is already on screen
-      _appliedId = id;
-      gotFresh = !feed.remoteFailedFor('fixtures');
-      // A failed download must never replace fresher content already shown.
-      if (!gotFresh && _fresh) return;
-      // Only a real download counts as "fresh". If the network failed, the
-      // saved copy is shown for now and we keep trying (below).
-      if (gotFresh) _fresh = true;
-    }
-
-    setState(() {
-      _fixtures = list;
-      _loading = false;
-      _sig = _signature(DateTime.now());
-    });
-
-    unawaited(_pollScores());
-
-    _afterLoad(
-      last: remote || AppConfig.fixturesUrl.isEmpty,
-    );
-
-    if (remote && AppConfig.fixturesUrl.isNotEmpty) {
-      if (gotFresh) {
-        _retries = 0;
-        _retryTimer?.cancel();
-      } else {
-        _scheduleRetry();
-      }
-    }
-  }
-
-  /// The network did not answer: try again by itself (3s, 6s, 9s, ...) so the
-  /// person never has to pull down several times to get the latest matches.
-  void _scheduleRetry() {
-    if (_retries >= 6) return;
-    _retries++;
-    _retryTimer?.cancel();
-    _retryTimer = Timer(Duration(seconds: 3 * _retries), () {
-      if (mounted && !_fresh) _load(remote: true);
-    });
-  }
-
-  Future<void> _openSupportCard() async {
-    await Navigator.of(context).push<SupportResult>(
-      MaterialPageRoute<SupportResult>(
-        builder: (_) => const SupportBrowserScreen(
-          url: _supportCardUrl,
-          seconds: AppConfig.supportViewSeconds,
-        ),
-      ),
-    );
-  }
-
-  void _open(Fixture f) {
-    if (!f.hasStream) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('No stream for this match yet'.tr),
-        ),
-      );
+  void _onBack() {
+    final state = _scaffoldKey.currentState;
+    if (state != null && state.isDrawerOpen) {
+      state.closeDrawer();
       return;
     }
-
-    SupportGate.guard(context, () {
-      if (!mounted) return;
-
-      final now = DateTime.now();
-      final phase = f.phaseAt(now);
-
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => PlayerScreen(
-            title: f.title,
-            subtitle:
-                '${longDate(f.kickoff.toLocal())} · '
-                '${fmtTime(f.kickoff.toLocal())} '
-                '${tzShort(f.kickoff.toLocal())}'
-                '${f.league.isEmpty ? '' : ' · ${f.league}'}',
-            url: f.url,
-            altUrl: f.hasAlt ? f.altUrl : null,
-            isLive: phase == MatchPhase.live,
-            chatMatch: f.title,
-          ),
-        ),
-      );
-    });
-  }
-
-  bool _passes(Fixture f, DateTime now) {
-    switch (_filter) {
-      case _Filter.all:
-        return true;
-
-      case _Filter.live:
-        return f.phaseAt(now) == MatchPhase.live;
-
-      case _Filter.upcoming:
-        return f.phaseAt(now) == MatchPhase.upcoming;
-
-      case _Filter.ended:
-        return f.phaseAt(now) == MatchPhase.ended;
+    final now = DateTime.now();
+    if (_lastBack != null &&
+        now.difference(_lastBack!) < const Duration(seconds: 2)) {
+      SystemNavigator.pop();
+      return;
     }
-  }
-
-  List<Widget> _items(DateTime now) {
-    final sorted = sortFixtures(
-      _fixtures,
-      now,
-    ).where((f) => _passes(f, now));
-
-    final out = <Widget>[];
-    String? last;
-    var fixtureCount = 0;
-
-    for (final f in sorted) {
-      final phase = f.phaseAt(now);
-      final day = dayLabel(f.kickoff.toLocal(), now);
-
-      final key = phase == MatchPhase.live
-          ? 'LIVE NOW'
-          : phase == MatchPhase.upcoming
-              ? 'UPCOMING · $day'
-              : 'FINISHED · $day';
-
-      if (key != last) {
-        out.add(
-          _SectionLabel(
-            text: key,
-            live: phase == MatchPhase.live,
-          ),
-        );
-
-        last = key;
-      }
-
-      out.add(
-        Padding(
-          padding: const EdgeInsets.only(bottom: 5),
-          child: ValueListenableBuilder<Map<String, LiveScore>>(
-            valueListenable: ScoreService.instance.scores,
-            builder: (_, scores, _) => ValueListenableBuilder<DateTime>(
-              valueListenable: _now,
-              builder: (_, n, _) => FixtureCard(
-                fixture: f,
-                now: n,
-                score: scores[f.id],
-                onTap: () => _open(f),
-              ),
-            ),
-          ),
-        ),
-      );
-
-      fixtureCount++;
-      // Show the support card after the third fixture. With 1–3 fixtures,
-      // it appears below the available fixtures; with more than 3, it sits
-      // between the third and fourth fixture cards.
-      if (fixtureCount == 3) {
-        out.add(
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 7),
-            child: _FixtureSupportCard(
-              onTap: () => _openSupportCard(),
-            ),
-          ),
-        );
-      }
-    }
-
-    return out;
+    _lastBack = now;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text('Tap back more to exit'.tr),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ));
   }
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-
-    final live = _fixtures
-        .where((f) => f.phaseAt(now) == MatchPhase.live)
-        .length;
-
-    final upcoming = _fixtures
-        .where((f) => f.phaseAt(now) == MatchPhase.upcoming)
-        .length;
-
-    final ended = _fixtures.length - live - upcoming;
-
-    final items = _items(now);
-
-    return AppRefresh(
-      onRefresh: () async {
-        _retries = 0;
-        await _load(remote: true);
-        return !feed.remoteFailedFor('fixtures');
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _onBack();
       },
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverToBoxAdapter(
-            child: _Header(
-              ticker: _ticker,
-              live: live,
-              upcoming: upcoming,
-              onLink: () => showLinkSheet(context),
-              onRefresh: () async {
-                await _load(remote: true);
-
-                if (!context.mounted) return;
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Fixtures updated'.tr),
-                  ),
-                );
-              },
-            ),
+      child: Scaffold(
+      key: _scaffoldKey,
+      drawer: const FootboliveDrawer(),
+      extendBody: false,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: _index,
+            children: [
+              const LiveScreen(),
+              const HighlightsScreen(),
+              const TvScreen(),
+              const MoviesScreen(),
+              PlayerHubScreen(active: _index == 4),
+            ],
           ),
-
-          // Compact filters
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 39,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(14, 3, 14, 5),
-                children: [
-                  _FilterChip(
-                    'All'.tr,
-                    _fixtures.length,
-                    _filter == _Filter.all,
-                    () => setState(() => _filter = _Filter.all),
-                  ),
-                  _FilterChip(
-                    'Live',
-                    live,
-                    _filter == _Filter.live,
-                    () => setState(() => _filter = _Filter.live),
-                    accent: true,
-                  ),
-                  _FilterChip(
-                    'Upcoming',
-                    upcoming,
-                    _filter == _Filter.upcoming,
-                    () => setState(() => _filter = _Filter.upcoming),
-                  ),
-                  _FilterChip(
-                    'Ended',
-                    ended,
-                    _filter == _Filter.ended,
-                    () => setState(() => _filter = _Filter.ended),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          if (_loading)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: CircularProgressIndicator(
-                  color: Ui.red,
-                ),
-              ),
-            )
-          else if (items.isEmpty)
-            const SliverFillRemaining(
-              hasScrollBody: false,
-              child: _Empty(
-                icon: Icons.sports_soccer_rounded,
-                text: 'No matches here right now',
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                14,
-                2,
-                14,
-                18,
-              ),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate(items),
-              ),
+          // Small brand mark, bottom right, on the Live and Movies screens.
+          if (_index == 0 || _index == 3)
+            const Positioned(
+              right: 8,
+              bottom: 6,
+              child: BrandTag(),
             ),
         ],
       ),
-    );
-  }
-}
-
-class _FixtureSupportCard extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _FixtureSupportCard({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    // Every colour comes from the active theme (Ui.*), so the card follows
-    // Red / Ocean / Emerald exactly like the match cards above it.
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(11),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(11),
-        child: Container(
-          height: 92,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: Ui.red.withValues(alpha: .78), width: 1.2),
-            gradient: LinearGradient(
-              colors: [
-                Ui.cardDeep,
-                Color.alphaBlend(Ui.red.withValues(alpha: .14), Ui.cardDeep),
-                Ui.cardDeep,
-              ],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Ui.red.withValues(alpha: .14),
-                blurRadius: 12,
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(11),
-            child: Stack(
-              children: [
-                Positioned(
-                  right: 10,
-                  top: -15,
-                  child: Icon(Icons.favorite_rounded,
-                      size: 105, color: Ui.red.withValues(alpha: .10)),
-                ),
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.favorite_rounded, color: Ui.red, size: 28),
-                          const SizedBox(width: 10),
-                          const Text(
-                            'SUPPORT ',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 25,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.0,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                          Text(
-                            'ME',
-                            style: TextStyle(
-                              color: Ui.redSoft,
-                              fontSize: 27,
-                              fontWeight: FontWeight.w900,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'with just a click',
-                        style: TextStyle(
-                          color: Ui.muted,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const MiniPlayer(),
+          DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: Ui.line)),
         ),
-      ),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// HEADER
-// -----------------------------------------------------------------------------
-
-class _Header extends StatelessWidget {
-  final TickerData ticker;
-  final int live;
-  final int upcoming;
-  final VoidCallback onLink;
-  final VoidCallback onRefresh;
-
-  const _Header({
-    required this.ticker,
-    required this.live,
-    required this.upcoming,
-    required this.onLink,
-    required this.onRefresh,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final top = MediaQuery.of(context).padding.top;
-
-    final now = DateTime.now();
-    final today = longDate(now);
-    final zone = '${tzShort(now)} · ${gmtOffset(now)}';
-
-    Widget round(
-      IconData icon,
-      String tip,
-      VoidCallback onTap,
-    ) {
-      return Padding(
-        padding: const EdgeInsets.only(left: 5),
-        child: SizedBox(
-          width: 38,
-          height: 38,
-          child: Material(
-            color: Colors.white.withValues(alpha: .06),
-            shape: const CircleBorder(),
-            child: IconButton(
-              tooltip: tip,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(
-                minWidth: 38,
-                minHeight: 38,
-              ),
-              onPressed: onTap,
-              icon: Icon(
-                icon,
-                size: 19,
-              ),
+        child: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (i) => setState(() => _index = i),
+          destinations: [
+            NavigationDestination(
+              icon: const Icon(Icons.sensors_rounded),
+              label: 'Live'.tr,
             ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        14,
-        top + 6,
-        14,
-        10,
-      ),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Ui.red.withValues(alpha: .20),
-            Ui.bg,
+            NavigationDestination(
+              icon: const Icon(Icons.play_circle_outline_rounded),
+              selectedIcon: const Icon(Icons.play_circle_rounded),
+              label: 'Highlights'.tr,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.live_tv_outlined),
+              selectedIcon: const Icon(Icons.live_tv_rounded),
+              label: 'TV'.tr,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.movie_outlined),
+              selectedIcon: const Icon(Icons.movie_rounded),
+              label: 'Movies'.tr,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.video_library_outlined),
+              selectedIcon: const Icon(Icons.video_library_rounded),
+              label: 'Player'.tr,
+            ),
           ],
         ),
       ),
-      child: Stack(
-        children: [
-          const Positioned.fill(
-            child: Opacity(
-              opacity: 1,
-              child: CustomPaint(
-                painter: PitchPainter(),
-              ),
-            ),
-          ),
-
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ----------------------------------------------------------------
-              // APP BAR
-              // ----------------------------------------------------------------
-              Row(
-                children: [
-                  Builder(
-                    builder: (ctx) => round(
-                      Icons.menu_rounded,
-                      'Menu',
-                      () => Scaffold.of(ctx).openDrawer(),
-                    ),
-                  ),
-
-                  const SizedBox(width: 8),
-
-                  const Expanded(
-                    child: Text(
-                      'DEEPROWSS',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.4,
-                      ),
-                    ),
-                  ),
-
-                  round(
-                    Icons.add_link_rounded,
-                    'Play a link',
-                    onLink,
-                  ),
-
-                  round(
-                    Icons.refresh_rounded,
-                    'Refresh',
-                    onRefresh,
-                  ),
-                ],
-              ),
-
-              // ----------------------------------------------------------------
-              // NEWS TICKER
-              // ----------------------------------------------------------------
-              if (ticker.visible) ...[
-                const SizedBox(height: 8),
-                NewsTicker(data: ticker),
-                const SizedBox(height: 9),
-              ] else
-                const SizedBox(height: 10),
-
-              // ----------------------------------------------------------------
-              // LIVE EVENTS TITLE
-              // ----------------------------------------------------------------
-              Padding(
-                padding: const EdgeInsets.only(left: 4),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 4,
-                      height: 19,
-                      decoration: BoxDecoration(
-                        color: Ui.red,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Live Events',
-                      style: TextStyle(
-                        fontSize: 18,
-                        height: 1.1,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 6),
-
-              // ----------------------------------------------------------------
-              // DATE + TIMEZONE
-              // ----------------------------------------------------------------
-              Padding(
-                padding: const EdgeInsets.only(left: 4),
-                child: Wrap(
-                  spacing: 7,
-                  runSpacing: 5,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.calendar_today_rounded,
-                          size: 10,
-                          color: Ui.muted,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          today,
-                          style: TextStyle(
-                            color: Ui.muted,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(7),
-                        border: Border.all(
-                          color: Ui.line,
-                        ),
-                      ),
-                      child: Text(
-                        'Times in $zone',
-                        style: TextStyle(
-                          color: Ui.muted,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // ----------------------------------------------------------------
-              // LIVE / UPCOMING STATS
-              // ----------------------------------------------------------------
-              Row(
-                children: [
-                  Expanded(
-                    child: _Stat(
-                      icon: Icons.sensors_rounded,
-                      label: 'Live now'.tr,
-                      value: live,
-                      accent: live > 0,
-                    ),
-                  ),
-
-                  const SizedBox(width: 8),
-
-                  Expanded(
-                    child: _Stat(
-                      icon: Icons.schedule_rounded,
-                      label: 'Coming up'.tr,
-                      value: upcoming,
-                      accent: false,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
         ],
       ),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// STAT CARD
-// -----------------------------------------------------------------------------
-
-class _Stat extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final int value;
-  final bool accent;
-
-  const _Stat({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.accent,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
       ),
-      decoration: BoxDecoration(
-        color: accent
-            ? Ui.red.withValues(alpha: .13)
-            : Ui.card,
-        borderRadius: BorderRadius.circular(11),
-        border: Border.all(
-          color: accent
-              ? Ui.red.withValues(alpha: .65)
-              : Ui.line,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: 18,
-            color: accent ? Ui.redSoft : Ui.muted,
-          ),
-
-          const SizedBox(width: 7),
-
-          Text(
-            '$value',
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-
-          const SizedBox(width: 6),
-
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Ui.muted,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// SECTION LABEL
-// -----------------------------------------------------------------------------
-
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  final bool live;
-
-  const _SectionLabel({
-    required this.text,
-    required this.live,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        2,
-        7,
-        2,
-        6,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 3,
-            height: 13,
-            decoration: BoxDecoration(
-              color: live ? Ui.red : Ui.dim,
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
-
-          const SizedBox(width: 7),
-
-          Text(
-            text,
-            style: TextStyle(
-              color: live ? Colors.white : Ui.muted,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.0,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// FILTER CHIP
-// -----------------------------------------------------------------------------
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final int count;
-  final bool selected;
-  final VoidCallback onTap;
-  final bool accent;
-
-  const _FilterChip(
-    this.label,
-    this.count,
-    this.selected,
-    this.onTap, {
-    this.accent = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: Material(
-        color: selected
-            ? Ui.red.withValues(alpha: .16)
-            : Ui.card,
-        borderRadius: BorderRadius.circular(9),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(9),
-          child: Container(
-            height: 29,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 9,
-            ),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(
-                color: selected || (accent && count > 0)
-                    ? Ui.red
-                    : Ui.line,
-                width: 1.0,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (selected) ...[
-                  const Icon(
-                    Icons.check_rounded,
-                    size: 14,
-                  ),
-                  const SizedBox(width: 3),
-                ],
-
-                Text(
-                  '$label ($count)',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: selected
-                        ? Colors.white
-                        : Ui.muted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// EMPTY STATE
-// -----------------------------------------------------------------------------
-
-class _Empty extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _Empty({
-    required this.icon,
-    required this.text,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          icon,
-          size: 40,
-          color: Ui.dim,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          text,
-          style: TextStyle(
-            color: Ui.muted,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
     );
   }
 }
