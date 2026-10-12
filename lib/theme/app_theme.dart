@@ -26,6 +26,16 @@ class Palette {
   /// (null = none). Used by the football-icon themes.
   final String? watermark;
 
+  /// Faint black-and-white jersey stripes over the whole app.
+  final bool stripes;
+
+  /// Colour of those stripes (white for CR7, celeste for Messi).
+  final Color stripeColor;
+
+  /// Optional picture (an asset path) drawn faintly at the bottom of the
+  /// screen. Nothing is shown when the file is missing.
+  final String? backdropAsset;
+
   const Palette({
     required this.name,
     required this.tagline,
@@ -41,6 +51,9 @@ class Palette {
     this.green = const Color(0xFF22E07A),
     this.onAccent = Colors.white,
     this.watermark,
+    this.stripes = false,
+    this.stripeColor = Colors.white,
+    this.backdropAsset,
   });
 }
 
@@ -112,22 +125,27 @@ class Palettes {
     dim: Color(0xFF74899E),
     onAccent: Color(0xFF06121E),
     watermark: 'MESSI 10',
+    stripes: true,
+    stripeColor: Color(0xFF6CB4EE),
+    backdropAsset: 'assets/themes/messi.png',
   );
 
-  /// Gold and crimson on near-black, the CR7 look.
+  /// Black-and-white striped jersey look with CR7 gold.
   static const cr7 = Palette(
     name: 'CR7',
-    tagline: 'Champion gold on dark crimson',
-    bg: Color(0xFF0D0506),
-    panel: Color(0xFF170A0C),
-    card: Color(0xFF1E0E10),
-    cardDeep: Color(0xFF120708),
+    tagline: 'Black & white stripes with champion gold',
+    bg: Color(0xFF050505),
+    panel: Color(0xFF0F0F0F),
+    card: Color(0xFF171717),
+    cardDeep: Color(0xFF0B0B0B),
     accent: Color(0xFFFFC62B),
-    accentSoft: Color(0xFFE53950),
-    muted: Color(0xFFCDB9B3),
-    dim: Color(0xFF8C7570),
+    accentSoft: Color(0xFFF2F2F2),
+    muted: Color(0xFFC9C9C9),
+    dim: Color(0xFF7E7E7E),
     onAccent: Color(0xFF1A0C00),
     watermark: 'CR7',
+    stripes: true,
+    backdropAsset: 'assets/themes/cr7.png',
   );
 
   static const all = [red, ocean, emerald, rose, messi, cr7];
