@@ -21,6 +21,7 @@ import '../services/movie_library.dart';
 import '../utils/open_movie.dart';
 import 'browser_screen.dart';
 import 'library_screen.dart';
+import '../utils/l10n.dart';
 
 class MoviesScreen extends StatefulWidget {
   const MoviesScreen({super.key});
@@ -387,7 +388,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                                 Icon(Icons.local_fire_department_rounded,
                                     size: 14, color: Ui.redSoft),
                                 const SizedBox(width: 5),
-                                Text('TRENDING NOW',
+                                Text('TRENDING NOW'.tr,
                                     style: TextStyle(
                                         fontSize: 11,
                                         letterSpacing: 1,
@@ -410,8 +411,8 @@ class _MoviesScreenState extends State<MoviesScreen> {
                         shaderCallback: (r) => LinearGradient(
                                 colors: [Colors.white, Ui.redSoft])
                             .createShader(r),
-                        child: const Text('Top Movies & Series\nDatabase',
-                            style: TextStyle(
+                        child: Text('Top Movies & Series\nDatabase'.tr,
+                            style: const TextStyle(
                                 fontSize: 29,
                                 height: 1.1,
                                 fontWeight: FontWeight.w900,
@@ -423,7 +424,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                           Icon(Icons.play_circle_fill_rounded,
                               size: 17, color: Ui.red),
                           const SizedBox(width: 6),
-                          Text('Search any movie and watch.',
+                          Text('Search any movie and watch.'.tr,
                               style: TextStyle(
                                   color: Colors.white.withValues(alpha: .88),
                                   fontSize: 14,
@@ -450,7 +451,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                           onChanged: _onQuery,
                           textInputAction: TextInputAction.search,
                           decoration: InputDecoration(
-                            hintText: 'Search any movie or series…',
+                            hintText: 'Search any movie or series…'.tr,
                             hintStyle: TextStyle(color: Ui.dim),
                             prefixIcon:
                                 Icon(Icons.search_rounded, color: Ui.muted),
@@ -498,7 +499,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
                 children: [
-                  _Pill('All', _genre == null && _type == null,
+                  _Pill('All'.tr, _genre == null && _type == null,
                       () => setState(() {
                             _genre = null;
                             _type = null;
@@ -527,7 +528,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                 children: [
                   Icon(Icons.search_off_rounded, size: 44, color: Ui.dim),
                   SizedBox(height: 10),
-                  Text('Nothing found',
+                  Text('Nothing found'.tr,
                       style: TextStyle(
                           color: Ui.muted,
                           fontSize: 14,
@@ -700,8 +701,8 @@ class _MovieSheet extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     icon: const Icon(Icons.play_arrow_rounded),
-                    label: const Text('Play',
-                        style: TextStyle(fontWeight: FontWeight.w800)),
+                    label: Text('Play'.tr,
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -744,8 +745,8 @@ class _MovieSheet extends StatelessWidget {
                         side: BorderSide(color: Ui.line),
                       ),
                       icon: const Icon(Icons.download_rounded),
-                      label: const Text('Download',
-                          style: TextStyle(fontWeight: FontWeight.w800)),
+                      label: Text('Download'.tr,
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
                     ),
                   ),
                 ],
