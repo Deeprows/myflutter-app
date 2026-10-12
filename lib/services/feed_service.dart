@@ -22,6 +22,12 @@ class FeedService {
   /// used instead. Read right after a load; the screens show it after a pull.
   bool lastRemoteFailed = false;
 
+  /// Per-feed result of the last remote download (true = failed and a saved
+  /// or bundled copy was used). Lets one screen know whether ITS feed was
+  /// fresh, even while other screens load their own feeds at the same time.
+  final Map<String, bool> _failed = {};
+  bool remoteFailedFor(String name) => _failed[name] ?? false;
+
   Future<List<Fixture>> loadFixtures({bool remote = false}) async {
     final raw = await _list(
       name: 'fixtures',
@@ -187,6 +193,7 @@ class FeedService {
   }) async {
     if (remote && remoteUrl.isNotEmpty) {
       lastRemoteFailed = true; // until a download succeeds below
+      _failed[name] = true;
       try {
         final res = await _download(name, remoteUrl);
 
@@ -202,6 +209,7 @@ class FeedService {
             );
 
             lastRemoteFailed = false;
+            _failed[name] = false;
             return data;
           }
         }
@@ -210,6 +218,7 @@ class FeedService {
       }
     } else if (remote) {
       lastRemoteFailed = false; // bundled-only mode: nothing to download
+      _failed[name] = false;
     }
 
     try {
@@ -252,7 +261,7 @@ class FeedService {
             'X-Platform': 'android',
           },
         );
-        if (res.statusCode == 200) return res;
+        if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) return res;
       } catch (_) {
         // Worker down / blocked: use the direct link below.
       }
@@ -292,7 +301,7 @@ class FeedService {
           },
         )
         .timeout(
-          const Duration(seconds: 10),
+          const Duration(seconds: 7),
         );
   }
 
