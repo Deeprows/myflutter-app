@@ -70,5 +70,5 @@ higher traffic.
   sees IP addresses in its own logs. Mention analytics in your privacy policy
   (and in Google Play's Data safety form if you publish there).
 * **Freshness:** new items reach phones within about 10-60 seconds
-  (`FEED_TTL` variable, in seconds, changes it; default 10, `0` = no edge cache).
+  (`FEED_TTL` variable, in seconds, changes it; default 10, `0` = no edge cache). `fixtures` and `ticker` are never edge-cached, so the Live screen is always fresh.
 * Tests: `node cloudflare/worker.test.mjs`.
