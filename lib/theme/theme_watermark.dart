@@ -65,7 +65,7 @@ class ThemeWatermark extends StatelessWidget {
                   child: FractionallySizedBox(
                     heightFactor: .52,
                     child: Opacity(
-                      opacity: .2,
+                      opacity: .12,
                       child: Image.asset(
                         asset,
                         fit: BoxFit.contain,
@@ -92,7 +92,7 @@ class ThemeWatermark extends StatelessWidget {
                             fontWeight: FontWeight.w900,
                             letterSpacing: 6,
                             decoration: TextDecoration.none,
-                            color: Ui.red.withValues(alpha: .08),
+                            color: Ui.red.withValues(alpha: .06),
                           ),
                         ),
                       ),
