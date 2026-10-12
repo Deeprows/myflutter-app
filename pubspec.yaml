@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   webview_flutter: ^4.10.0
   webview_flutter_android: ^4.5.0
   wakelock_plus: ^1.2.10
