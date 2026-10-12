@@ -16,6 +16,7 @@ import 'package:footbolive/utils/format.dart';
 import 'package:footbolive/services/player_html.dart';
 import 'package:footbolive/services/push_service.dart';
 import 'package:footbolive/services/remote_config.dart';
+import 'package:footbolive/services/score_service.dart';
 import 'package:footbolive/theme/app_theme.dart';
 import 'package:footbolive/services/support_gate.dart';
 import 'package:footbolive/services/subscription_service.dart';
@@ -660,7 +661,108 @@ void main() {
       expect(Palettes.cr7.watermark, 'CR7');
       expect(Palettes.red.watermark, isNull);
       expect(Palettes.rose.watermark, isNull);
+      expect(Palettes.cr7.stripes, isTrue);
+      expect(Palettes.messi.stripes, isTrue);
+      expect(Palettes.rose.stripes, isFalse);
       expect(Palettes.all.length, 6);
+    });
+  });
+
+  group('Live scores', () {
+    Map<String, dynamic> event(String home, String away, String state,
+            {String name = 'STATUS_IN_PROGRESS',
+            String clock = "72'",
+            String hs = '2',
+            String as = '1',
+            String date = '2026-10-11T13:00Z'}) =>
+        {
+          'date': date,
+          'competitions': [
+            {
+              'status': {
+                'displayClock': clock,
+                'type': {'state': state, 'name': name, 'shortDetail': clock},
+              },
+              'competitors': [
+                {'homeAway': 'home', 'score': hs, 'team': {'displayName': home}},
+                {'homeAway': 'away', 'score': as, 'team': {'displayName': away}},
+              ],
+            }
+          ],
+        };
+
+    Fixture fx(String id, String h, String a, String ko) => Fixture(
+          id: id,
+          home: h,
+          away: a,
+          kickoff: DateTime.parse(ko),
+        );
+
+    test('matches live games by team names, even short names', () {
+      final events = ScoreService.parseEvents({
+        'events': [
+          event('Manchester City', 'Liverpool', 'in'),
+          event('Crystal Palace', 'Nottingham Forest', 'post',
+              name: 'STATUS_FULL_TIME', clock: 'FT', hs: '0', as: '3'),
+        ]
+      });
+      final found = ScoreService.match([
+        fx('a', 'Man City', 'Liverpool', '2026-10-11T13:00:00Z'),
+        fx('b', 'Crystal Palace', 'Nottm Forest', '2026-10-11T13:00:00Z'),
+      ], events);
+      expect(found['a']!.scoreText, '2 - 1');
+      expect(found['a']!.live, isTrue);
+      expect(found['b']!.scoreText, '0 - 3');
+      expect(found['b']!.finished, isTrue);
+      expect(found['b']!.statusLabel, 'Full-time');
+    });
+
+    test('flips the score when the feed lists the teams the other way', () {
+      final events = ScoreService.parseEvents({
+        'events': [event('Liverpool', 'Manchester City', 'in')]
+      });
+      final found = ScoreService.match(
+          [fx('a', 'Manchester City', 'Liverpool', '2026-10-11T13:00:00Z')],
+          events);
+      expect(found['a']!.scoreText, '1 - 2');
+    });
+
+    test('ignores other games, far-off dates and unstarted matches', () {
+      final events = ScoreService.parseEvents({
+        'events': [
+          event('Manchester City', 'Liverpool', 'in',
+              date: '2026-10-01T13:00Z'),
+          event('Arsenal', 'Chelsea', 'pre'),
+          event('Everton', 'Hull City', 'post',
+              name: 'STATUS_POSTPONED', clock: 'PPD'),
+        ]
+      });
+      expect(events.length, 1); // "pre" and postponed are dropped
+      final found = ScoreService.match([
+        fx('a', 'Manchester City', 'Liverpool', '2026-10-11T13:00:00Z'),
+        fx('b', 'Manchester United', 'Liverpool', '2026-10-11T13:00:00Z'),
+      ], events);
+      expect(found, isEmpty);
+    });
+
+    test('halftime shows HT; women/youth teams do not match senior sides', () {
+      final ht = ScoreService.parseEvents({
+        'events': [
+          event('Arsenal', 'Chelsea', 'in',
+              name: 'STATUS_HALFTIME', clock: "45'")
+        ]
+      });
+      final found = ScoreService.match(
+          [fx('a', 'Arsenal', 'Chelsea', '2026-10-11T13:00:00Z')], ht);
+      expect(found['a']!.statusLabel, 'Half-time');
+
+      final women = ScoreService.parseEvents({
+        'events': [event('Arsenal W', 'Chelsea W', 'in')]
+      });
+      expect(
+          ScoreService.match(
+              [fx('a', 'Arsenal', 'Chelsea', '2026-10-11T13:00:00Z')], women),
+          isEmpty);
     });
   });
 }
