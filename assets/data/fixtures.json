@@ -94,29 +94,5 @@
     "altUrl": "",
     "homeLogo": "533",
     "awayLogo": "492"
-  },
-   {
-    "id": "10",
-    "home": "Al-Sadd",
-    "away": "Al Hilal",
-    "league": "AFC Champions League Elite",
-    "kickoff": "2026-10-13T17:00:00+01:00",
-    "duration": 130,
-    "url": "",
-    "altUrl": "",
-    "homeLogo": "101895",
-    "awayLogo": "2529"
-  },
-  {
-    "id": "11",
-    "home": "Al Ittihad",
-    "away": "Shabab Al-Ahli Dubai FC",
-    "league": "AFC Champions League Elite",
-    "kickoff": "2026-10-13T19:15:00+01:00",
-    "duration": 130,
-    "url": "",
-    "altUrl": "",
-    "homeLogo": "8577",
-    "awayLogo": "102119"
   }
 ]
