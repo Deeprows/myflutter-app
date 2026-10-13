@@ -16,6 +16,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_refresh.dart';
 import '../utils/format.dart';
 import '../widgets/fixture_card.dart';
+import '../widgets/fixture_skeleton.dart';
 import '../services/support_gate.dart';
 import '../widgets/link_sheet.dart';
 import '../widgets/news_ticker.dart';
@@ -49,6 +50,7 @@ class _LiveScreenState extends State<LiveScreen> {
   int _retries = 0;
   Timer? _retryTimer;
   bool _tickerFresh = false;
+  static const int _quickRetries = 2; // extra tries before saved copy is used
 
   static const String _supportCardUrl =
       'https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60';
@@ -73,22 +75,17 @@ class _LiveScreenState extends State<LiveScreen> {
       (_) => _pollScores(),
     );
 
-    // Fresh first: ask the network straight away. The saved copy is only
-    // shown if the network has not answered within a few seconds.
+    // Fresh only: ask the network straight away and show loading cards until
+    // it answers. Saved (old) matches are never shown while a download is in
+    // progress. They are used only if the network keeps failing (offline).
     if (AppConfig.fixturesUrl.isNotEmpty) {
       _load(remote: true);
-      Future<void>.delayed(const Duration(seconds: 4), () {
-        if (mounted && _loading) _load();
-      });
     } else {
       _load();
     }
 
     if (AppConfig.tickerUrl.isNotEmpty) {
       _loadTicker(remote: true);
-      Future<void>.delayed(const Duration(seconds: 4), () {
-        if (mounted && !_tickerFresh) _loadTicker();
-      });
     } else {
       _loadTicker();
     }
@@ -217,6 +214,14 @@ class _LiveScreenState extends State<LiveScreen> {
       if (gotFresh) _fresh = true;
     }
 
+    // First load of this session and the download failed: keep the loading
+    // cards and try again quickly instead of showing the saved (old) list.
+    // After a couple of quick retries (really offline) the saved copy is used.
+    if (remote && !gotFresh && _loading && _retries < _quickRetries) {
+      _scheduleRetry();
+      return;
+    }
+
     setState(() {
       _fixtures = list;
       _loading = false;
@@ -245,7 +250,11 @@ class _LiveScreenState extends State<LiveScreen> {
     if (_retries >= 6) return;
     _retries++;
     _retryTimer?.cancel();
-    _retryTimer = Timer(Duration(seconds: 3 * _retries), () {
+    // Quick retries while the first load is still showing loading cards.
+    final wait = _loading
+        ? Duration(milliseconds: 700 * _retries)
+        : Duration(seconds: 3 * _retries);
+    _retryTimer = Timer(wait, () {
       if (mounted && !_fresh) _load(remote: true);
     });
   }
@@ -464,12 +473,10 @@ class _LiveScreenState extends State<LiveScreen> {
           ),
 
           if (_loading)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: CircularProgressIndicator(
-                  color: Ui.red,
-                ),
+            const SliverPadding(
+              padding: EdgeInsets.fromLTRB(14, 6, 14, 18),
+              sliver: SliverToBoxAdapter(
+                child: FixtureSkeletonList(),
               ),
             )
           else if (items.isEmpty)
