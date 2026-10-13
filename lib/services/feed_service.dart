@@ -28,7 +28,30 @@ class FeedService {
   final Map<String, bool> _failed = {};
   bool remoteFailedFor(String name) => _failed[name] ?? false;
 
-  Future<List<Fixture>> loadFixtures({bool remote = false}) async {
+  Future<List<Fixture>>? _early;
+  DateTime _earlyAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Starts the fixtures download at app start (from main), so it runs while
+  /// the rest of the app is starting. The Live screen picks it up.
+  void prefetchFixtures() {
+    if (AppConfig.fixturesUrl.isEmpty) return;
+    _early = loadFixtures(remote: true, prefetch: true);
+    _earlyAt = DateTime.now();
+  }
+
+  Future<List<Fixture>> loadFixtures({
+    bool remote = false,
+    bool prefetch = false,
+  }) async {
+    // Use the download started at app start, if it is still recent.
+    final early = _early;
+    if (remote && !prefetch && early != null) {
+      _early = null;
+      if (DateTime.now().difference(_earlyAt) < const Duration(seconds: 20)) {
+        return early;
+      }
+    }
+
     final raw = await _list(
       name: 'fixtures',
       asset: 'assets/data/fixtures.json',
@@ -255,6 +278,7 @@ class FeedService {
       try {
         final res = await _getFresh(
           '$base/feed/$name.json',
+          timeout: const Duration(seconds: 4),
           headers: {
             'X-Install-Id': await InstallId.get(),
             'X-App-Version': AppConfig.appVersion,
@@ -281,6 +305,7 @@ class FeedService {
   Future<http.Response> _getFresh(
     String url, {
     Map<String, String> headers = const {},
+    Duration timeout = const Duration(seconds: 7),
   }) {
     final original = Uri.parse(url);
 
@@ -300,9 +325,7 @@ class FeedService {
             ...headers,
           },
         )
-        .timeout(
-          const Duration(seconds: 7),
-        );
+        .timeout(timeout);
   }
 
   List<dynamic> _decode(String body) {
