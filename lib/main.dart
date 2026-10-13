@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'app.dart';
 import 'services/analytics_service.dart';
 import 'services/download_manager.dart';
+import 'services/feed_service.dart';
 import 'services/locale_service.dart';
 import 'services/push_service.dart';
 import 'services/remote_config.dart';
@@ -14,6 +15,9 @@ import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Start downloading the latest matches right away, while the app starts.
+  feed.prefetchFixtures();
 
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
