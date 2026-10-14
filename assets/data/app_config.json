@@ -22,7 +22,7 @@
   },
 
   "chat": {
-    "enabled": true
+    "enabled": false
   },
 
   "scores": {
