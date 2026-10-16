@@ -1,53 +1,5 @@
 [
   {
-    "id": "3",
-    "home": "Eintracht Frankfurt",
-    "away": "FC Cologne",
-    "league": "Bundesliga",
-    "kickoff": "2026-10-16T19:30:00+01:00",
-    "duration": 130,
-    "url": "https://matchora.to/embed/match/2508382",
-    "altUrl": "",
-    "homeLogo": "169",
-    "awayLogo": "65"
-  },
-  {
-    "id": "4",
-    "home": "Frosinone",
-    "away": "Sassuolo",
-    "league": "Serie A",
-    "kickoff": "2026-10-16T19:45:00+01:00",
-    "duration": 130,
-    "url": "https://matchora.to/embed/match/2482204",
-    "altUrl": "",
-    "homeLogo": "",
-    "awayLogo": "488"
-  },
-  {
-    "id": "5",
-    "home": "Le Mans",
-    "away": "Toulouse",
-    "league": "Ligue 1",
-    "kickoff": "2026-10-16T19:45:00+01:00",
-    "duration": 130,
-    "url": "https://matchora.to/embed/match/2489524",
-    "altUrl": "",
-    "homeLogo": "",
-    "awayLogo": "96"
-  },
-  {
-    "id": "6",
-    "home": "Deportivo A Coruna",
-    "away": "Levante",
-    "league": "LaLiga",
-    "kickoff": "2026-10-16T20:00:00+01:00",
-    "duration": 130,
-    "url": "https://matchora.to/embed/match/2506256",
-    "altUrl": "",
-    "homeLogo": "560",
-    "awayLogo": "539"
-  },
-  {
     "id": "1",
     "home": "Everton",
     "away": "Chelsea",
