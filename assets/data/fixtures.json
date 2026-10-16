@@ -56,8 +56,8 @@
     "duration": 130,
     "url": "",
     "altUrl": "",
-    "homeLogo": "368",
-    "awayLogo": "363"
+    "homeLogo": "45",
+    "awayLogo": "49"
   },
   {
     "id": "2",
@@ -68,8 +68,8 @@
     "duration": 130,
     "url": "",
     "altUrl": "",
-    "homeLogo": "337",
-    "awayLogo": "364"
+    "homeLogo": "55",
+    "awayLogo": "40"
   },
   {
     "id": "3",
@@ -80,8 +80,8 @@
     "duration": 130,
     "url": "",
     "altUrl": "",
-    "homeLogo": "370",
-    "awayLogo": "306"
+    "homeLogo": "36",
+    "awayLogo": "64"
   },
   {
     "id": "4",
@@ -92,8 +92,8 @@
     "duration": 130,
     "url": "",
     "altUrl": "",
-    "homeLogo": "382",
-    "awayLogo": "373"
+    "homeLogo": "50",
+    "awayLogo": "57"
   },
   {
     "id": "5",
@@ -104,8 +104,8 @@
     "duration": 130,
     "url": "",
     "altUrl": "",
-    "homeLogo": "361",
-    "awayLogo": "362"
+    "homeLogo": "34",
+    "awayLogo": "66"
   },
   {
     "id": "6",
@@ -116,8 +116,8 @@
     "duration": 130,
     "url": "",
     "altUrl": "",
-    "homeLogo": "88",
-    "awayLogo": "1068"
+    "homeLogo": "540",
+    "awayLogo": "530"
   },
   {
     "id": "7",
@@ -128,8 +128,8 @@
     "duration": 130,
     "url": "",
     "altUrl": "",
-    "homeLogo": "102",
-    "awayLogo": "3751"
+    "homeLogo": "533",
+    "awayLogo": "547"
   },
   {
     "id": "8",
@@ -140,8 +140,8 @@
     "duration": 130,
     "url": "",
     "altUrl": "",
-    "homeLogo": "244",
-    "awayLogo": "83"
+    "homeLogo": "543",
+    "awayLogo": "529"
   },
   {
     "id": "9",
@@ -152,7 +152,7 @@
     "duration": 130,
     "url": "",
     "altUrl": "",
-    "homeLogo": "94",
-    "awayLogo": "93"
+    "homeLogo": "532",
+    "awayLogo": "531"
   }
 ]
