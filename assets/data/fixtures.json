@@ -46,5 +46,113 @@
     "altUrl": "",
     "homeLogo": "560",
     "awayLogo": "539"
+  },
+  {
+    "id": "1",
+    "home": "Everton",
+    "away": "Chelsea",
+    "league": "Premier League",
+    "kickoff": "2026-10-17T12:30:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "368",
+    "awayLogo": "363"
+  },
+  {
+    "id": "2",
+    "home": "Brentford",
+    "away": "Liverpool",
+    "league": "Premier League",
+    "kickoff": "2026-10-17T15:00:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "337",
+    "awayLogo": "364"
+  },
+  {
+    "id": "3",
+    "home": "Fulham",
+    "away": "Hull City",
+    "league": "Premier League",
+    "kickoff": "2026-10-17T15:00:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "370",
+    "awayLogo": "306"
+  },
+  {
+    "id": "4",
+    "home": "Manchester City",
+    "away": "Ipswich Town",
+    "league": "Premier League",
+    "kickoff": "2026-10-17T15:00:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "382",
+    "awayLogo": "373"
+  },
+  {
+    "id": "5",
+    "home": "Newcastle United",
+    "away": "Aston Villa",
+    "league": "Premier League",
+    "kickoff": "2026-10-17T17:30:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "361",
+    "awayLogo": "362"
+  },
+  {
+    "id": "6",
+    "home": "Espanyol",
+    "away": "Atletico Madrid",
+    "league": "LaLiga",
+    "kickoff": "2026-10-17T13:00:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "88",
+    "awayLogo": "1068"
+  },
+  {
+    "id": "7",
+    "home": "Villarreal",
+    "away": "Elche",
+    "league": "LaLiga",
+    "kickoff": "2026-10-17T15:15:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "102",
+    "awayLogo": "3751"
+  },
+  {
+    "id": "8",
+    "home": "Real Betis",
+    "away": "Barcelona",
+    "league": "LaLiga",
+    "kickoff": "2026-10-17T17:30:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "244",
+    "awayLogo": "83"
+  },
+  {
+    "id": "9",
+    "home": "Valencia",
+    "away": "Athletic Club",
+    "league": "LaLiga",
+    "kickoff": "2026-10-17T20:00:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "94",
+    "awayLogo": "93"
   }
 ]
