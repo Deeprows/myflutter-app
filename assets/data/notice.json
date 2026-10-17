@@ -1,5 +1,5 @@
 {
-  "enabled": true,
+  "enabled": false,
   "id": "App Update",
   "title": "App Update",
   "message": "Kindly update to get latest features. Ignore if you're currently using v 1.0.685",
