@@ -1,111 +1,38 @@
-
 [
   {
     "id": "1",
-    "home": "Como 1907",
-    "away": "Manchester United",
-    "league": "Champions League",
-    "kickoff": "2026-10-21T17:45:00+01:00",
+    "home": "Juventus",
+    "away": "Rennes",
+    "league": "Europa League",
+    "kickoff": "2026-10-22T17:45:00+01:00",
     "duration": 130,
-    "url": "https://matchora.to/embed/match/2594667",
+    "url": "",
     "altUrl": "",
-    "homeLogo": "",
-    "awayLogo": "33"
+    "homeLogo": "496",
+    "awayLogo": "94"
   },
   {
     "id": "2",
-    "home": "Lille",
-    "away": "Galatasaray",
-    "league": "Champions League",
-    "kickoff": "2026-10-21T17:45:00+01:00",
+    "home": "AFC Bournemouth",
+    "away": "AC Milan",
+    "league": "Europa League",
+    "kickoff": "2026-10-22T20:00:00+01:00",
     "duration": 130,
-    "url": "https://matchora.to/embed/match/2594557",
+    "url": "",
     "altUrl": "",
-    "homeLogo": "79",
-    "awayLogo": "645"
+    "homeLogo": "35",
+    "awayLogo": "489"
   },
   {
     "id": "3",
-    "home": "Aston Villa",
-    "away": "Viking",
-    "league": "Champions League",
-    "kickoff": "2026-10-21T20:00:00+01:00",
+    "home": "Beşiktaş",
+    "away": "Crystal Palace",
+    "league": "Europa League",
+    "kickoff": "2026-10-22T20:00:00+01:00",
     "duration": 130,
-    "url": "https://matchora.to/embed/match/2594554",
+    "url": "",
     "altUrl": "",
-    "homeLogo": "66",
-    "awayLogo": ""
-  },
-  {
-    "id": "4",
-    "home": "Bayern Munich",
-    "away": "Arsenal",
-    "league": "Champions League",
-    "kickoff": "2026-10-21T20:00:00+01:00",
-    "duration": 130,
-    "url": "https://matchora.to/embed/match/2594567",
-    "altUrl": "https://forprivateuse.sbs/embedextra/tv/1.php",
-    "homeLogo": "157",
-    "awayLogo": "42"
-  },
-  {
-    "id": "5",
-    "home": "Club Brugge",
-    "away": "Lens",
-    "league": "Champions League",
-    "kickoff": "2026-10-21T20:00:00+01:00",
-    "duration": 130,
-    "url": "https://matchora.to/embed/match/2594645",
-    "altUrl": "",
-    "homeLogo": "569",
-    "awayLogo": "116"
-  },
-  {
-    "id": "6",
-    "home": "Inter",
-    "away": "Shakhtar Donetsk",
-    "league": "Champions League",
-    "kickoff": "2026-10-21T20:00:00+01:00",
-    "duration": 130,
-    "url": "https://matchora.to/embed/match/2594613",
-    "altUrl": "",
-    "homeLogo": "505",
-    "awayLogo": "550"
-  },
-  {
-    "id": "7",
-    "home": "Real Betis",
-    "away": "Feyenoord",
-    "league": "Champions League",
-    "kickoff": "2026-10-21T20:00:00+01:00",
-    "duration": 130,
-    "url": "https://matchora.to/embed/match/2594632",
-    "altUrl": "",
-    "homeLogo": "543",
-    "awayLogo": "209"
-  },
-  {
-    "id": "8",
-    "home": "Real Madrid",
-    "away": "RB Leipzig",
-    "league": "Champions League",
-    "kickoff": "2026-10-21T20:00:00+01:00",
-    "duration": 130,
-    "url": "https://matchora.to/embed/match/2594627",
-    "altUrl": "https://forprivateuse.sbs/embedextra/tv/4.php",
-    "homeLogo": "541",
-    "awayLogo": "173"
-  },
-  {
-    "id": "9",
-    "home": "Sporting CP",
-    "away": "LASK",
-    "league": "Champions League",
-    "kickoff": "2026-10-21T20:00:00+01:00",
-    "duration": 130,
-    "url": "https://matchora.to/embed/match/2594627",
-    "altUrl": "",
-    "homeLogo": "228",
-    "awayLogo": ""
+    "homeLogo": "549",
+    "awayLogo": "52"
   }
 ]
