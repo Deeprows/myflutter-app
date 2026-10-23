@@ -59,17 +59,5 @@
     "altUrl": "",
     "homeLogo": "106",
     "awayLogo": "84"
-  },
-  {
-    "id": "6",
-    "home": "Go Ahead Eagles",
-    "away": "Telstar",
-    "league": "Eredivisie",
-    "kickoff": "2026-10-23T19:00:00+01:00",
-    "duration": 130,
-    "url": "",
-    "altUrl": "",
-    "homeLogo": "193",
-    "awayLogo": "197"
   }
 ]
