@@ -8,6 +8,7 @@ import '../services/fan_zone_service.dart';
 import '../services/feed_service.dart';
 import '../theme/app_theme.dart';
 import 'highlights_screen.dart';
+import 'fan_posts_feed.dart';
 
 String _error(Object e) => e.toString().replaceFirst('Exception: ', '');
 String _date(DateTime value) {
@@ -474,42 +475,15 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     );
   }
 
-  Widget _banter() => ListView(
-    padding: const EdgeInsets.all(16),
-    children: [
-      _panel(
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'The Deeprowss fan lounge',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Football gist, friendly rivalries and match reactions. Keep it respectful. Report abuse and block fans from a message menu.',
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: () => _discussion('lounge', 'Fan lounge'),
-              icon: const Icon(Icons.groups_outlined),
-              label: const Text('Join the conversation'),
-            ),
-          ],
-        ),
-      ),
-      const Text(
-        'Match discussions',
-        style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
-      ),
-      for (final f in _fixtures)
-        ListTile(
-          title: Text(f.title),
-          subtitle: Text(f.league),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => _discussion(FanZoneService.matchKey(f), f.title),
-        ),
-    ],
+  Widget _banter() => FanPostsFeed(
+    active: widget.active,
+    onJoin: () async {
+      if ((_data['name'] ?? '').toString().isNotEmpty) return true;
+      return _profile();
+    },
+    onOpenLounge: () => _discussion('lounge', 'Fan lounge'),
+    fixtures: _fixtures,
+    onOpenMatch: (f) => _discussion(FanZoneService.matchKey(f), f.title),
   );
 }
 
