@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -58,6 +59,43 @@ class FanZoneService {
       return data;
     } on FormatException {
       throw Exception('Fan Zone needs the updated Cloudflare Worker.');
+    }
+  }
+
+  static String imageUrl(String postId) =>
+      '${AppConfig.feedBase}/fan/image/${Uri.encodeComponent(postId)}';
+
+  static Future<void> publish({
+    required String kind,
+    required String text,
+    Uint8List? image,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('${AppConfig.feedBase}/fan/post'),
+    );
+    request.headers['authorization'] = 'Bearer ${await _token()}';
+    request.fields.addAll({'kind': kind, 'text': text.trim()});
+    if (image != null) {
+      if (image.length > 4 * 1024 * 1024) {
+        throw Exception('Choose an image smaller than 4 MB.');
+      }
+      request.files.add(
+        http.MultipartFile.fromBytes('image', image, filename: 'fan-image'),
+      );
+    }
+    final response = await request.send().timeout(const Duration(seconds: 45));
+    final body = await response.stream.bytesToString().timeout(
+      const Duration(seconds: 20),
+    );
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(body) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception('Uploads need the updated Cloudflare Worker.');
+    }
+    if (response.statusCode != 200) {
+      throw Exception(data['error'] ?? 'Could not publish your post.');
     }
   }
 
