@@ -61,7 +61,7 @@ const CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET,HEAD,POST,OPTIONS",
   "access-control-allow-headers":
-    "content-type, x-install-id, x-app-version, x-platform",
+    "content-type, authorization, x-install-id, x-app-version, x-platform",
 };
 
 export default {
@@ -119,6 +119,8 @@ export default {
     if (url.pathname.startsWith("/sub/")) {
       return subscriptions(request, env, url);
     }
+
+    if (url.pathname.startsWith("/fan/")) return fanZone(request, env, url);
 
     // Feed routes.
     const m = /^\/feed\/([a-z0-9_-]+\.json)$/i.exec(url.pathname);
@@ -1656,4 +1658,304 @@ ${reqHtml}
 <table style="width:100%;font-size:12.5px"><tr><th align=left>ID<th align=left>Source<th align=left>Until<th align=left>E-mail</tr>${list}</table>
 </body>`
   );
+}
+
+// Fan Zone: all scores, cutoffs and rankings are controlled by the server.
+export function fanKey(f) {
+  return `${f.id}|${new Date(f.kickoff).getTime()}`;
+}
+export function fanWeek(now = new Date()) {
+  const d = new Date(now);
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7);
+  return d.getTime();
+}
+export function fanPoints(h, a, rh, ra) {
+  return h === rh && a === ra ? 3 : Math.sign(h - a) === Math.sign(rh - ra) ? 1 : 0;
+}
+const FAN_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS fan_users (id TEXT PRIMARY KEY, name TEXT NOT NULL, last_post INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS fan_picks (user_id TEXT NOT NULL, match_key TEXT NOT NULL, title TEXT NOT NULL, kickoff INTEGER NOT NULL, home INTEGER NOT NULL, away INTEGER NOT NULL, PRIMARY KEY(user_id, match_key))`,
+  `CREATE TABLE IF NOT EXISTS fan_results (match_key TEXT PRIMARY KEY, home INTEGER NOT NULL, away INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS fan_messages (id TEXT PRIMARY KEY, room TEXT NOT NULL, user_id TEXT NOT NULL, text TEXT NOT NULL, at INTEGER NOT NULL, hidden INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE INDEX IF NOT EXISTS fan_room_time ON fan_messages(room, at)`,
+  `CREATE TABLE IF NOT EXISTS fan_reports (message_id TEXT NOT NULL, user_id TEXT NOT NULL, reason TEXT NOT NULL, PRIMARY KEY(message_id,user_id))`,
+  `CREATE TABLE IF NOT EXISTS fan_posts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL, image_key TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL, hidden INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE INDEX IF NOT EXISTS fan_post_time ON fan_posts(at DESC,id DESC)`,
+  `CREATE TABLE IF NOT EXISTS fan_post_reports (post_id TEXT NOT NULL, user_id TEXT NOT NULL, reason TEXT NOT NULL, PRIMARY KEY(post_id,user_id))`,
+  `CREATE TABLE IF NOT EXISTS fan_limits (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL)`
+];
+const fanReady = new WeakMap();
+async function fanInit(db) {
+  if (!fanReady.has(db)) {
+    fanReady.set(db, db.batch(FAN_SCHEMA.map(sql => db.prepare(sql))).catch(e => {
+      fanReady.delete(db); throw e;
+    }));
+  }
+  await fanReady.get(db);
+}
+async function fanHash(s) {
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map(n => n.toString(16).padStart(2, '0')).join('');
+}
+async function fanFixtures(env) {
+  const base = (env.GITHUB_RAW_BASE || DEFAULT_RAW_BASE).replace(/\/$/, '');
+  const res = await fetch(`${base}/fixtures.json`, {signal: AbortSignal.timeout(10000), cache: 'no-store'});
+  if (!res.ok) throw new Error('Fixtures unavailable. Try again shortly.');
+  const raw = await res.json();
+  const list = Array.isArray(raw) ? raw : raw.fixtures;
+  if (!Array.isArray(list)) throw new Error('Fixtures unavailable.');
+  return list.map(f => {
+    let k = String(f.kickoff || '');
+    if (!/(Z|[+-]\d{2}:?\d{2})$/i.test(k)) k += '+01:00';
+    return {...f, kickoff:k};
+  }).filter(f => f.id && Number.isFinite(new Date(f.kickoff).getTime()));
+}
+async function fanZone(request, env, url) {
+  const fail = (message, status = 400) => json({error:message}, status);
+  if (!env.DB) return fail('Fan Zone needs the Worker DB binding. See FAN_ZONE_SETUP.md.', 503);
+  try {
+    await fanInit(env.DB);
+    const db = env.DB;
+    if(request.method==='GET' && url.pathname.startsWith('/fan/image/')) {
+      const imageId=url.pathname.slice('/fan/image/'.length);
+      if(!/^[a-f0-9-]{36}$/.test(imageId))return fail('Image not found',404);
+      const post=await db.prepare('SELECT image_key FROM fan_posts WHERE id=? AND hidden=0').bind(imageId).first();
+      if(!post?.image_key || !env.FAN_MEDIA)return fail('Image not found',404);
+      const image=await env.FAN_MEDIA.get(post.image_key);
+      if(!image)return fail('Image not found',404);
+      const headers=new Headers(CORS);
+      image.writeHttpMetadata(headers);
+      headers.set('cache-control','no-store');
+      headers.set('x-content-type-options','nosniff');
+      headers.set('content-security-policy',"default-src 'none'; sandbox");
+      return new Response(image.body,{headers});
+    }
+    // Admin routes use a secret in the header, never a URL or the app.
+    if (url.pathname.startsWith('/fan/admin/')) {
+      const secret = env.ADMIN_TOKEN || env.STATS_TOKEN;
+      if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) return fail('Unauthorized', 401);
+      if (url.pathname === '/fan/admin/matches' && request.method === 'GET') {
+        const rows = await db.prepare('SELECT match_key,title,kickoff,COUNT(*) AS picks FROM fan_picks GROUP BY match_key ORDER BY kickoff DESC LIMIT 300').all();
+        return json({matches:rows.results});
+      }
+      if (url.pathname === '/fan/admin/reports' && request.method === 'GET') {
+        const rows = await db.prepare(`SELECT r.message_id,r.reason,m.text,m.room,u.name,COUNT(*) AS reports FROM fan_reports r JOIN fan_messages m ON m.id=r.message_id JOIN fan_users u ON u.id=m.user_id WHERE m.hidden=0 GROUP BY r.message_id ORDER BY reports DESC LIMIT 100`).all();
+        const posts = await db.prepare(`SELECT r.post_id,p.text,p.kind,p.image_key,u.name,COUNT(*) AS reports FROM fan_post_reports r JOIN fan_posts p ON p.id=r.post_id JOIN fan_users u ON u.id=p.user_id WHERE p.hidden=0 GROUP BY r.post_id ORDER BY reports DESC LIMIT 100`).all();
+        return json({reports:rows.results,post_reports:posts.results});
+      }
+      if (request.method !== 'POST') return fail('Method not allowed',405);
+      const b = await request.json();
+      if (url.pathname === '/fan/admin/hide-post') {
+        if(typeof b.id!=='string' || b.id.length>100)return fail('Invalid post');
+        const post=await db.prepare('SELECT image_key FROM fan_posts WHERE id=?').bind(b.id).first();
+        if(!post)return fail('Post not found',404);
+        await db.prepare('UPDATE fan_posts SET hidden=1 WHERE id=?').bind(b.id).run();
+        if(post.image_key && env.FAN_MEDIA)await env.FAN_MEDIA.delete(post.image_key).catch(e=>console.error('Image cleanup failed',e));
+        return json({ok:true});
+      }
+      if (url.pathname === '/fan/admin/hide') {
+        if (typeof b.id !== 'string' || b.id.length > 100) return fail('Invalid message');
+        await db.prepare('UPDATE fan_messages SET hidden=1 WHERE id=?').bind(b.id).run();
+        return json({ok:true});
+      }
+      if (url.pathname === '/fan/admin/result') {
+        if (!Number.isInteger(b.home) || !Number.isInteger(b.away) || b.home<0 || b.away<0 || b.home>50 || b.away>50) return fail('Invalid final score');
+        const pick = await db.prepare('SELECT kickoff FROM fan_picks WHERE match_key=? LIMIT 1').bind(String(b.key)).first();
+        if (!pick || pick.kickoff > Date.now()) return fail('No started prediction match for this key');
+        await db.prepare('INSERT INTO fan_results(match_key,home,away) VALUES(?,?,?) ON CONFLICT(match_key) DO UPDATE SET home=excluded.home,away=excluded.away').bind(b.key,b.home,b.away).run();
+        return json({ok:true});
+      }
+      return fail('Not found',404);
+    }
+    const token = (request.headers.get('authorization') || '').replace(/^Bearer /, '');
+    if (!/^[a-f0-9]{64}$/.test(token)) return fail('Invalid fan identity',401);
+    const id = await fanHash(token);
+    const user = await db.prepare('SELECT * FROM fan_users WHERE id=?').bind(id).first();
+    if(url.pathname==='/fan/posts' || url.pathname==='/fan/post' || url.pathname.startsWith('/fan/post/')) {
+      return await fanPosts(request,env,url,user,id);
+    }
+    if (request.method === 'GET' && url.pathname === '/fan/state') {
+      const picks = await db.prepare(`SELECT p.*,r.home AS result_home,r.away AS result_away FROM fan_picks p LEFT JOIN fan_results r ON r.match_key=p.match_key WHERE p.user_id=? ORDER BY p.kickoff DESC LIMIT 300`).bind(id).all();
+      const week = fanWeek();
+      const board = await db.prepare(`SELECT u.id,u.name, SUM(CASE WHEN p.home=r.home AND p.away=r.away THEN 3 WHEN (p.home>p.away AND r.home>r.away) OR (p.home<p.away AND r.home<r.away) OR (p.home=p.away AND r.home=r.away) THEN 1 ELSE 0 END) AS points,COUNT(*) AS played FROM fan_picks p JOIN fan_results r ON r.match_key=p.match_key JOIN fan_users u ON u.id=p.user_id WHERE p.kickoff>=? AND p.kickoff<? GROUP BY u.id ORDER BY points DESC,played ASC,u.id ASC LIMIT 100`).bind(week,week+604800000).all();
+      return json({id,name:user?.name || '',week,leaderboard:board.results,picks:picks.results});
+    }
+    if (request.method === 'GET' && url.pathname === '/fan/messages') {
+      const room = url.searchParams.get('room') || '';
+      if (!room || room.length>200) return fail('Invalid room');
+      const messages = await db.prepare(`SELECT m.id,m.user_id,u.name,m.text,m.at FROM fan_messages m JOIN fan_users u ON u.id=m.user_id WHERE m.room=? AND m.hidden=0 ORDER BY m.at DESC LIMIT 80`).bind(room).all();
+      return json({messages:messages.results.reverse()});
+    }
+    if (request.method !== 'POST') return fail('Not found',404);
+    const bodyText = await request.text();
+    if (bodyText.length>4096) return fail('Request too large',413);
+    const b = JSON.parse(bodyText);
+    if (url.pathname === '/fan/profile') {
+      const name = typeof b.name==='string' ? b.name.trim() : '';
+      if (name.length<3 || name.length>30 || /[\u0000-\u001f<>]/.test(name)) return fail('Choose a name of 3–30 characters');
+      if (!user) {
+        const ip = request.headers.get('CF-Connecting-IP') || 'local';
+        const bucket = `${await fanHash(ip)}:${Math.floor(Date.now()/3600000)}`;
+        const count = await db.prepare(`INSERT INTO fan_limits(bucket,count) VALUES(?,1) ON CONFLICT(bucket) DO UPDATE SET count=count+1 RETURNING count`).bind(bucket).first();
+        if (count.count>10) return fail('Too many new profiles. Try later.',429);
+        await db.prepare('DELETE FROM fan_limits WHERE bucket NOT LIKE ?').bind(`%:${Math.floor(Date.now()/3600000)}`).run();
+      }
+      await db.prepare('INSERT INTO fan_users(id,name) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name').bind(id,name).run();
+      return json({ok:true});
+    }
+    if (!user) return fail('Choose your Fan Zone nickname first.',403);
+    if (url.pathname === '/fan/pick') {
+      if (!Number.isInteger(b.home) || !Number.isInteger(b.away) || b.home<0 || b.away<0 || b.home>20 || b.away>20) return fail('Scores must be between 0 and 20');
+      const fixtures = await fanFixtures(env);
+      const f = fixtures.find(f => fanKey(f)===b.key);
+      if (!f) return fail('Match is no longer available. Refresh the fixtures.');
+      const kickoff = new Date(f.kickoff).getTime();
+      if (Date.now()>=kickoff) return fail('Predictions are locked at kickoff.',409);
+      // The final cutoff check runs in the same statement as the write.
+      const saved = await db.prepare(`INSERT INTO fan_picks(user_id,match_key,title,kickoff,home,away) SELECT ?,?,?,?,?,? WHERE (unixepoch('now')*1000)<? ON CONFLICT(user_id,match_key) DO UPDATE SET home=excluded.home,away=excluded.away WHERE (unixepoch('now')*1000)<fan_picks.kickoff`).bind(id,b.key,`${f.home} vs ${f.away}`,kickoff,b.home,b.away,kickoff).run();
+      if ((saved.meta?.changes ?? saved.changes ?? 0) === 0) return fail('Predictions are locked at kickoff.',409);
+      return json({ok:true});
+    }
+    if (url.pathname === '/fan/message') {
+      const text = typeof b.text==='string' ? b.text.trim() : '';
+      if (!text || text.length>300) return fail('Write 1–300 characters');
+      if (typeof b.room!=='string' || b.room.length>200) return fail('Invalid room');
+      if (b.room!=='lounge') {
+        const fixtures = await fanFixtures(env);
+        if (!fixtures.some(f=>fanKey(f)===b.room)) return fail('This match discussion is closed.');
+      }
+      const now = Date.now();
+      const limit = await db.prepare('UPDATE fan_users SET last_post=? WHERE id=? AND last_post<? RETURNING id').bind(now,id,now-10000).first();
+      if (!limit) return fail('Please wait 10 seconds between posts.',429);
+      await db.prepare('INSERT INTO fan_messages(id,room,user_id,text,at) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),b.room,id,text,now).run();
+      return json({ok:true});
+    }
+    if (url.pathname === '/fan/report') {
+      const message = await db.prepare('SELECT id FROM fan_messages WHERE id=?').bind(String(b.id)).first();
+      if (!message) return fail('Message not found',404);
+      await db.prepare('INSERT OR IGNORE INTO fan_reports(message_id,user_id,reason) VALUES(?,?,?)').bind(b.id,id,String(b.reason || 'Inappropriate content').slice(0,200)).run();
+      return json({ok:true});
+    }
+    return fail('Not found',404);
+  } catch (e) {
+    console.error('Fan Zone request failed', e);
+    return fail('Fan Zone is unavailable. Check the Worker setup and try again.',503);
+  }
+}
+
+const FAN_IMAGE_LIMIT = 4 * 1024 * 1024;
+export function fanImageType(bytes) {
+  let width = 0, height = 0, type = '';
+  if (bytes.length >= 33 && [137,80,78,71,13,10,26,10].every((b,i)=>bytes[i]===b) &&
+      String.fromCharCode(...bytes.slice(12,16))==='IHDR') {
+    const view = new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+    width=view.getUint32(16);height=view.getUint32(20);type='image/png';
+  } else if (bytes.length>=4 && bytes[0]===255 && bytes[1]===216) {
+    let pos=2;
+    while(pos+3<bytes.length) {
+      if(bytes[pos++]!==255) break;
+      while(bytes[pos]===255) pos++;
+      const marker=bytes[pos++];
+      if(marker===217 || marker===218) break;
+      if(marker===1 || (marker>=208 && marker<=215)) continue;
+      if(pos+1>=bytes.length) break;
+      const length=bytes[pos]*256+bytes[pos+1];
+      if(length<2 || pos+length>bytes.length) break;
+      if([192,193,194,195,197,198,199,201,202,203,205,206,207].includes(marker) && length>=8) {
+        height=bytes[pos+3]*256+bytes[pos+4];width=bytes[pos+5]*256+bytes[pos+6];type='image/jpeg';break;
+      }
+      pos+=length;
+    }
+  }
+  return type && width>0 && height>0 && width<=6000 && height<=6000 && width*height<=16000000 ? type : null;
+}
+async function fanReadForm(request) {
+  const max=FAN_IMAGE_LIMIT+65536;
+  if(Number(request.headers.get('content-length') || 0)>max) return null;
+  if(!request.body) return null;
+  const reader=request.body.getReader(), chunks=[];
+  let size=0;
+  while(true) {
+    const {done,value}=await reader.read();
+    if(done)break;
+    size+=value.byteLength;
+    if(size>max){await reader.cancel();return null;}
+    chunks.push(value);
+  }
+  const bytes=new Uint8Array(size);let offset=0;
+  for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+  try {
+    return await new Response(bytes,{headers:{'content-type':request.headers.get('content-type') || ''}}).formData();
+  } catch (_) {return null;}
+}
+async function fanPosts(request,env,url,user,id) {
+  const db=env.DB;
+  const fail=(error,status=400)=>json({error},status);
+  if(request.method==='GET' && url.pathname==='/fan/posts') {
+    const kind=url.searchParams.get('kind') || 'all';
+    if(!['all','prediction','betslip','banter'].includes(kind)) return fail('Invalid post filter');
+    const before=url.searchParams.get('before') || '';
+    const cursor=before ? /^(\d+):([a-f0-9-]{36})$/.exec(before) : null;
+    if(before && !cursor)return fail('Invalid page cursor');
+    const rows=await db.prepare(`SELECT p.id,p.user_id,u.name,p.kind,p.text,p.at,CASE WHEN p.image_key<>'' THEN 1 ELSE 0 END AS has_image FROM fan_posts p JOIN fan_users u ON u.id=p.user_id WHERE p.hidden=0 AND (?='all' OR p.kind=?) AND (p.at<? OR (p.at=? AND p.id<?)) ORDER BY p.at DESC,p.id DESC LIMIT 41`)
+      .bind(kind,kind,cursor?Number(cursor[1]):Number.MAX_SAFE_INTEGER,cursor?Number(cursor[1]):Number.MAX_SAFE_INTEGER,cursor?cursor[2]:'~').all();
+    const posts=rows.results.slice(0,40);
+    const last=posts.at(-1);
+    return json({posts,next:rows.results.length>40?`${last.at}:${last.id}`:null,id,uploads_enabled:Boolean(env.FAN_MEDIA)});
+  }
+  if(!user) return fail('Choose your Fan Zone nickname first.',403);
+  if(request.method==='POST' && url.pathname==='/fan/post') {
+    if(!(request.headers.get('content-type') || '').startsWith('multipart/form-data'))return fail('Use a photo/text form');
+    const form=await fanReadForm(request);
+    if(!form)return fail('Invalid upload or image exceeds 4 MB.',413);
+    const kind=String(form.get('kind') || 'banter');
+    const text=String(form.get('text') || '').trim();
+    if(!['prediction','betslip','banter'].includes(kind) || text.length>1000)return fail('Choose a post type and keep text within 1,000 characters');
+    const file=form.get('image');
+    const hasImage=file && typeof file!=='string' && file.size>0;
+    if(!text && !hasImage)return fail('Write something or attach a photo');
+    if(kind==='prediction' && !text)return fail('Write your prediction before posting');
+    if(kind==='betslip' && !hasImage)return fail('Attach your bet-slip image');
+    let bytes,type;
+    if(hasImage) {
+      if(!env.FAN_MEDIA)return fail('Image uploads need the FAN_MEDIA R2 binding. Text posts still work.',503);
+      if(file.size>FAN_IMAGE_LIMIT)return fail('Choose an image smaller than 4 MB.',413);
+      bytes=new Uint8Array(await file.arrayBuffer());
+      type=fanImageType(bytes);
+      if(!type)return fail('Choose a JPG or PNG image, up to 6,000 pixels per side and 16 megapixels.');
+    }
+    const now=Date.now();
+    // A shared per-profile cooldown also applies across lounge and feed posts.
+    const allowed=await db.prepare('UPDATE fan_users SET last_post=? WHERE id=? AND last_post<? RETURNING id').bind(now,id,now-10000).first();
+    if(!allowed)return fail('Please wait 10 seconds between posts.',429);
+    const postId=crypto.randomUUID();
+    const imageKey=hasImage?`fan-posts/${postId}`:'';
+    try {
+      if(hasImage)await env.FAN_MEDIA.put(imageKey,bytes,{httpMetadata:{contentType:type}});
+      await db.prepare('INSERT INTO fan_posts(id,user_id,kind,text,image_key,at) VALUES(?,?,?,?,?,?)').bind(postId,id,kind,text,imageKey,now).run();
+    } catch(e) {
+      if(imageKey)await env.FAN_MEDIA.delete(imageKey).catch(()=>{});
+      throw e;
+    }
+    return json({ok:true,id:postId});
+  }
+  if(request.method==='POST' && ['/fan/post/report','/fan/post/delete'].includes(url.pathname)) {
+    const raw=await request.text();
+    if(raw.length>4096)return fail('Request too large',413);
+    let b;try{b=JSON.parse(raw);}catch(_){return fail('Invalid request');}
+    if(typeof b.id!=='string' || b.id.length>100)return fail('Invalid post');
+    const post=await db.prepare('SELECT user_id,image_key FROM fan_posts WHERE id=? AND hidden=0').bind(b.id).first();
+    if(!post)return fail('Post not found',404);
+    if(url.pathname==='/fan/post/delete') {
+      if(post.user_id!==id)return fail('You can only delete your own posts.',403);
+      await db.prepare('UPDATE fan_posts SET hidden=1 WHERE id=?').bind(b.id).run();
+      // Access is denied immediately by the DB flag, even if object cleanup fails.
+      if(post.image_key && env.FAN_MEDIA)await env.FAN_MEDIA.delete(post.image_key).catch(e=>console.error('Image cleanup failed',e));
+    } else {
+      await db.prepare('INSERT OR IGNORE INTO fan_post_reports(post_id,user_id,reason) VALUES(?,?,?)').bind(b.id,id,String(b.reason || 'Inappropriate content').slice(0,200)).run();
+    }
+    return json({ok:true});
+  }
+  return fail('Not found',404);
 }
