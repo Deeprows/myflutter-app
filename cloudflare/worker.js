@@ -1683,6 +1683,8 @@ const FAN_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS fan_posts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL, image_key TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL, hidden INTEGER NOT NULL DEFAULT 0)`,
   `CREATE INDEX IF NOT EXISTS fan_post_time ON fan_posts(at DESC,id DESC)`,
   `CREATE TABLE IF NOT EXISTS fan_post_reports (post_id TEXT NOT NULL, user_id TEXT NOT NULL, reason TEXT NOT NULL, PRIMARY KEY(post_id,user_id))`,
+  `CREATE TABLE IF NOT EXISTS fan_accounts (id TEXT PRIMARY KEY, google_sub TEXT NOT NULL UNIQUE, email TEXT NOT NULL, name TEXT NOT NULL, photo TEXT NOT NULL, created_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS fan_legacy_claims (legacy_id TEXT PRIMARY KEY, account_id TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_limits (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL)`
 ];
 const fanReady = new WeakMap();
@@ -1717,6 +1719,7 @@ async function fanZone(request, env, url) {
   try {
     await fanInit(env.DB);
     const db = env.DB;
+    if(url.pathname==='/fan/auth')return await fanAccountAuth(request,env);
     if(request.method==='GET' && url.pathname.startsWith('/fan/image/')) {
       const imageId=url.pathname.slice('/fan/image/'.length);
       if(!/^[a-f0-9-]{36}$/.test(imageId))return fail('Image not found',404);
@@ -1769,8 +1772,17 @@ async function fanZone(request, env, url) {
       return fail('Not found',404);
     }
     const token = (request.headers.get('authorization') || '').replace(/^Bearer /, '');
-    if (!/^[a-f0-9]{64}$/.test(token)) return fail('Invalid fan identity',401);
-    const id = await fanHash(token);
+    let id;
+    if(env.GOOGLE_WEB_CLIENT_ID) {
+      const identity=await verifyFanGoogleToken(token,env);
+      if(!identity)return fail('Please log in to Deeprowss again.',401);
+      id=await fanHash('google:'+identity.sub);
+      if(!await db.prepare('SELECT id FROM fan_accounts WHERE id=?').bind(id).first())return fail('Please register your Deeprowss account first.',403);
+    } else {
+      // Legacy compatibility until the Google client ID is configured.
+      if (!/^[a-f0-9]{64}$/.test(token)) return fail('Invalid fan identity',401);
+      id = await fanHash(token);
+    }
     const user = await db.prepare('SELECT * FROM fan_users WHERE id=?').bind(id).first();
     if(url.pathname==='/fan/posts' || url.pathname==='/fan/post' || url.pathname.startsWith('/fan/post/')) {
       return await fanPosts(request,env,url,user,id);
@@ -1958,4 +1970,92 @@ async function fanPosts(request,env,url,user,id) {
     return json({ok:true});
   }
   return fail('Not found',404);
+}
+
+// Google authentication for Deeprowss. Tokens are verified with Google's
+// rotating public keys; private client secrets are never embedded in the APK.
+let googleKeys = [], googleKeysUntil = 0, googleKeysFetched = 0;
+function googleDecode(part) {
+  const padded = part.replace(/-/g,'+').replace(/_/g,'/');
+  return Uint8Array.from(atob(padded.padEnd(Math.ceil(padded.length/4)*4,'=')),c=>c.charCodeAt(0));
+}
+export async function verifyFanGoogleToken(token, env) {
+  if(typeof token!=='string' || token.length>8192 || !env.GOOGLE_WEB_CLIENT_ID)return null;
+  let header,claims,signature,parts;
+  try {
+    parts=token.split('.');if(parts.length!==3)return null;
+    header=JSON.parse(new TextDecoder().decode(googleDecode(parts[0])));
+    claims=JSON.parse(new TextDecoder().decode(googleDecode(parts[1])));
+    signature=googleDecode(parts[2]);
+  } catch (_) {return null;}
+  const now=Math.floor(Date.now()/1000);
+  if(header.alg!=='RS256' || typeof header.kid!=='string' || header.kid.length>200 ||
+    !['accounts.google.com','https://accounts.google.com'].includes(claims.iss) ||
+    claims.aud!==env.GOOGLE_WEB_CLIENT_ID || !Number.isFinite(claims.exp) || claims.exp<=now ||
+    !Number.isFinite(claims.iat) || claims.iat>now+60 || claims.iat>=claims.exp ||
+    typeof claims.sub!=='string' || !claims.sub || claims.sub.length>255 ||
+    (claims.email_verified!==true && claims.email_verified!=='true') ||
+    typeof claims.email!=='string' || !/@(gmail|googlemail)\.com$/i.test(claims.email))return null;
+  if(Date.now()>=googleKeysUntil || (!googleKeys.some(k=>k.kid===header.kid) && Date.now()-googleKeysFetched>60000)) {
+    const response=await fetch('https://www.googleapis.com/oauth2/v3/certs',{signal:AbortSignal.timeout(10000)});
+    if(!response.ok)throw new Error('Google verification keys unavailable');
+    const data=await response.json();
+    if(!Array.isArray(data.keys))throw new Error('Google verification keys unavailable');
+    googleKeys=data.keys;googleKeysFetched=Date.now();
+    const maxAge=Number(/max-age=(\d+)/.exec(response.headers.get('cache-control') || '')?.[1] || 3600);
+    googleKeysUntil=Date.now()+Math.min(maxAge,86400)*1000;
+  }
+  const jwk=googleKeys.find(k=>k.kid===header.kid && k.kty==='RSA');
+  if(!jwk)return null;
+  try {
+    const key=await crypto.subtle.importKey('jwk',jwk,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['verify']);
+    if(!await crypto.subtle.verify('RSASSA-PKCS1-v1_5',key,signature,new TextEncoder().encode(parts[0]+'.'+parts[1])))return null;
+  } catch (_) {return null;}
+  return {sub:claims.sub,email:claims.email.toLowerCase(),name:String(claims.name || 'Football Fan').slice(0,100),
+    photo:typeof claims.picture==='string' && claims.picture.startsWith('https://')?claims.picture:''};
+}
+async function fanMigrateInstall(db,legacyToken,id,isNew) {
+  if(typeof legacyToken!=='string' || !/^[a-f0-9]{64}$/.test(legacyToken))return;
+  const legacy=await fanHash(legacyToken);
+  if(legacy===id)return;
+  const guard='EXISTS(SELECT 1 FROM fan_legacy_claims WHERE legacy_id=? AND account_id=?)';
+  await db.batch([
+    db.prepare('INSERT OR IGNORE INTO fan_legacy_claims(legacy_id,account_id) SELECT ?,? WHERE EXISTS(SELECT 1 FROM fan_users WHERE id=?)').bind(legacy,id,legacy),
+    db.prepare(`UPDATE fan_users SET name=(SELECT name FROM fan_users WHERE id=?) WHERE id=? AND ?=1 AND ${guard}`).bind(legacy,id,isNew?1:0,legacy,id),
+    db.prepare(`INSERT OR IGNORE INTO fan_picks(user_id,match_key,title,kickoff,home,away) SELECT ?,match_key,title,kickoff,home,away FROM fan_picks WHERE user_id=? AND ${guard}`).bind(id,legacy,legacy,id),
+    db.prepare(`DELETE FROM fan_picks WHERE user_id=? AND ${guard}`).bind(legacy,legacy,id),
+    db.prepare(`UPDATE fan_messages SET user_id=? WHERE user_id=? AND ${guard}`).bind(id,legacy,legacy,id),
+    db.prepare(`UPDATE fan_posts SET user_id=? WHERE user_id=? AND ${guard}`).bind(id,legacy,legacy,id),
+    db.prepare(`UPDATE OR IGNORE fan_reports SET user_id=? WHERE user_id=? AND ${guard}`).bind(id,legacy,legacy,id),
+    db.prepare(`DELETE FROM fan_reports WHERE user_id=? AND ${guard}`).bind(legacy,legacy,id),
+    db.prepare(`UPDATE OR IGNORE fan_post_reports SET user_id=? WHERE user_id=? AND ${guard}`).bind(id,legacy,legacy,id),
+    db.prepare(`DELETE FROM fan_post_reports WHERE user_id=? AND ${guard}`).bind(legacy,legacy,id),
+    db.prepare(`DELETE FROM fan_users WHERE id=? AND ${guard}`).bind(legacy,legacy,id),
+  ]);
+}
+async function fanAccountAuth(request,env) {
+  const fail=(error,status=400,switchTo)=>json({error,...(switchTo?{switchTo}:{})},status);
+  if(request.method!=='POST')return fail('Method not allowed',405);
+  if(!env.GOOGLE_WEB_CLIENT_ID)return fail('Set GOOGLE_WEB_CLIENT_ID on this Worker before enabling Google sign-in.',503);
+  const raw=await request.text();if(raw.length>12000)return fail('Request too large',413);
+  let body;try{body=JSON.parse(raw);}catch(_){return fail('Invalid request');}
+  if(!['signup','login'].includes(body.mode))return fail('Choose sign up or log in');
+  const identity=await verifyFanGoogleToken(body.idToken,env);
+  if(!identity)return fail('Could not verify this Gmail account. Please sign in again.',401);
+  const id=await fanHash('google:'+identity.sub), db=env.DB;
+  let account=await db.prepare('SELECT id FROM fan_accounts WHERE id=?').bind(id).first();
+  const isNew=body.mode==='signup';
+  if(isNew && account)return fail('This Gmail already has a Deeprowss account. Please log in.',409,'login');
+  if(!isNew && !account)return fail('This Gmail has not registered for Deeprowss yet. Please sign up.',404,'signup');
+  if(isNew) {
+    const results=await db.batch([
+      db.prepare('INSERT OR IGNORE INTO fan_accounts(id,google_sub,email,name,photo,created_at) VALUES(?,?,?,?,?,?)').bind(id,identity.sub,identity.email,identity.name,identity.photo,Date.now()),
+      db.prepare('INSERT OR IGNORE INTO fan_users(id,name) VALUES(?,?)').bind(id,identity.name.slice(0,30)),
+    ]);
+    if((results[0].meta?.changes ?? results[0].changes ?? 0)!==1)return fail('This Gmail already has an account. Please log in.',409,'login');
+  } else {
+    await db.prepare('UPDATE fan_accounts SET email=?,name=?,photo=? WHERE id=?').bind(identity.email,identity.name,identity.photo,id).run();
+  }
+  await fanMigrateInstall(db,body.legacyToken,id,isNew);
+  return json({ok:true,user:{id,email:identity.email,name:identity.name,photo:identity.photo}});
 }
