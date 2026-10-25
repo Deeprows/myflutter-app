@@ -46,6 +46,8 @@ class _FanZoneScreenState extends State<FanZoneScreen>
   bool _openOnly = false;
   bool _showAllHistory = false;
   String _league = '';
+  String _day = '';
+  int _rankShown = 20;
   Timer? _timer;
 
   @override
@@ -239,7 +241,29 @@ class _FanZoneScreenState extends State<FanZoneScreen>
         elevation: 0,
         scrolledUnderElevation: 0,
         titleSpacing: 16,
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        toolbarHeight: 62,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+            ),
+            Text(
+              switch (widget.page) {
+                FanZonePage.predict => 'Predict scores. Earn points. Level up.',
+                FanZonePage.ranks => 'This week\'s best fans',
+                FanZonePage.banter => 'Gist, bet slips and live chat',
+              },
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Ui.muted,
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: shortcut,
@@ -332,19 +356,34 @@ class _FanZoneScreenState extends State<FanZoneScreen>
       for (final f in _fixtures)
         if (f.league.isNotEmpty) f.league,
     }.toList()..sort();
-    final shown = _fixtures
+    final byLeague = _fixtures
         .where((f) => _league.isEmpty || f.league == _league)
         .toList();
-    final open = shown.where((f) => now.isBefore(f.kickoff)).toList()
+
+    // Open matches, grouped by day (the day strip lets the fan jump to one).
+    final openAll = byLeague.where((f) => now.isBefore(f.kickoff)).toList()
       ..sort((a, b) => a.kickoff.compareTo(b.kickoff));
+    final dayCounts = <String, int>{};
+    for (final f in openAll) {
+      final label = fanDayLabel(f.kickoff, now);
+      dayCounts[label] = (dayCounts[label] ?? 0) + 1;
+    }
+    final activeDay = dayCounts.containsKey(_day) ? _day : '';
+    final open = openAll
+        .where(
+          (f) => activeDay.isEmpty || fanDayLabel(f.kickoff, now) == activeDay,
+        )
+        .toList();
     final started = _openOnly
         ? <Fixture>[]
-        : shown.where((f) => !now.isBefore(f.kickoff)).toList();
+        : byLeague.where((f) => !now.isBefore(f.kickoff)).toList();
     final groups = <String, List<Fixture>>{};
     for (final f in open) {
       groups.putIfAbsent(fanDayLabel(f.kickoff, now), () => []).add(f);
     }
     final history = _showAllHistory ? picks : picks.take(5).toList();
+    final pending = picks.where((p) => fanPickPoints(p) == null).length;
+    final nextUp = openAll.firstOrNull;
 
     return RefreshIndicator(
       onRefresh: _refresh,
@@ -352,18 +391,39 @@ class _FanZoneScreenState extends State<FanZoneScreen>
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
         children: [
-          _hero(stats),
-          const SizedBox(height: 10),
+          _hero(stats, pending),
+          const SizedBox(height: 14),
           _rules(),
-          if (leagues.length > 1 || _fixtures.isNotEmpty) _filters(leagues),
+          if (_name.isNotEmpty) ...[
+            const FanSectionTitle('Achievements', icon: Icons.military_tech_rounded),
+            SizedBox(
+              height: 92,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final b in fanBadgesFor(stats)) FanBadgeTile(b),
+                ],
+              ),
+            ),
+          ],
+          if (nextUp != null && picks.every((p) => p['match_key'] != FanZoneService.matchKey(nextUp))) ...[
+            const FanSectionTitle('Next up', icon: Icons.bolt_rounded),
+            _nextUpCard(nextUp, now),
+          ],
+          if (_fixtures.isNotEmpty) ...[
+            const FanSectionTitle('Fixtures', icon: Icons.sports_soccer_rounded),
+            _days(dayCounts, activeDay, openAll.length),
+            const SizedBox(height: 10),
+            _filters(leagues),
+          ],
           if (!_loadedOnce && _fixtures.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 12),
               child: Column(
-                children: [FanSkeleton(height: 170), FanSkeleton(height: 170)],
+                children: [FanSkeleton(height: 190), FanSkeleton(height: 190)],
               ),
             ),
-          if (_loadedOnce && shown.isEmpty)
+          if (_loadedOnce && byLeague.isEmpty)
             FanEmpty(
               icon: Icons.event_busy_rounded,
               title: 'No fixtures to predict',
@@ -377,11 +437,12 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                       child: const Text('Show all leagues'),
                     ),
             ),
+          const SizedBox(height: 12),
           for (final entry in groups.entries) ...[
-            FanSectionTitle(entry.key),
+            _dayHeader(entry.key, entry.value.length),
             for (final f in entry.value) _fixture(f, picks, now),
           ],
-          if (_loadedOnce && open.isEmpty && shown.isNotEmpty && _openOnly)
+          if (_loadedOnce && open.isEmpty && byLeague.isNotEmpty && _openOnly)
             const FanEmpty(
               icon: Icons.lock_clock_rounded,
               title: 'Nothing open right now',
@@ -389,12 +450,16 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                   'Every match has kicked off. Check back for new fixtures.',
             ),
           if (started.isNotEmpty) ...[
-            const FanSectionTitle('Started or finished'),
+            const FanSectionTitle(
+              'Started or finished',
+              icon: Icons.lock_clock_rounded,
+            ),
             for (final f in started) _closedFixture(f, picks),
           ],
           if (picks.isNotEmpty) ...[
             FanSectionTitle(
               'Your predictions',
+              icon: Icons.history_rounded,
               trailing: picks.length > 5
                   ? (_showAllHistory ? 'Show less' : 'Show all ${picks.length}')
                   : null,
@@ -408,7 +473,31 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     );
   }
 
-  Widget _hero(FanStats stats) {
+  Widget _dayHeader(String label, int count) => Padding(
+    padding: const EdgeInsets.fromLTRB(2, 6, 2, 10),
+    child: Row(
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            fontSize: 12,
+            letterSpacing: 1.4,
+            fontWeight: FontWeight.w900,
+            color: Ui.redSoft,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Divider(color: Ui.line, height: 1)),
+        const SizedBox(width: 10),
+        Text(
+          '$count ${count == 1 ? 'match' : 'matches'}',
+          style: TextStyle(fontSize: 11, color: Ui.dim),
+        ),
+      ],
+    ),
+  );
+
+  Widget _hero(FanStats stats, int pending) {
     final level = fanLevelFor(stats.points);
     final next = fanNextLevel(stats.points);
     final progress = next == null
@@ -416,47 +505,32 @@ class _FanZoneScreenState extends State<FanZoneScreen>
         : ((stats.points - level.min) / (next.min - level.min))
               .clamp(0.0, 1.0)
               .toDouble();
-    Widget stat(IconData icon, String value, String label, Color color) =>
-        Expanded(
-          child: Column(
-            children: [
-              Icon(icon, size: 18, color: color),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              Text(label, style: TextStyle(fontSize: 11, color: Ui.muted)),
-            ],
-          ),
-        );
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Ui.red.withValues(alpha: .35)),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Ui.red.withValues(alpha: .28), Ui.card],
-        ),
-      ),
+    final toNext = next == null ? 0 : next.min - stats.points;
+    return FanHero(
+      color: _name.isEmpty ? Ui.red : level.color,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               _name.isEmpty
-                  ? CircleAvatar(
-                      radius: 26,
-                      backgroundColor: Colors.white12,
-                      child: const Icon(Icons.person_rounded, size: 28),
+                  ? Container(
+                      width: 68,
+                      height: 68,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: .08),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: const Icon(Icons.person_rounded, size: 32),
                     )
-                  : FanAvatar(name: _name, seed: _myId, size: 52),
-              const SizedBox(width: 12),
+                  : FanLevelAvatar(
+                      name: _name,
+                      seed: _myId,
+                      progress: progress,
+                      color: level.color,
+                    ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,25 +540,27 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 19,
+                        fontSize: 21,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     if (_name.isEmpty)
                       Text(
-                        'Pick a nickname and start predicting.',
-                        style: TextStyle(color: Ui.muted, fontSize: 13),
+                        'Pick a nickname, predict scores, climb the weekly table.',
+                        style: TextStyle(
+                          color: Ui.muted,
+                          fontSize: 13,
+                          height: 1.3,
+                        ),
                       )
                     else
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          FanPill(
-                            text: level.name,
-                            color: const Color(0xFFFFC107),
-                            icon: Icons.military_tech_rounded,
-                          ),
-                          const SizedBox(width: 8),
+                          FanLevelPill(level),
                           Text(
                             '#${fanShortId(_myId)}',
                             style: TextStyle(color: Ui.dim, fontSize: 12),
@@ -494,54 +570,66 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                   ],
                 ),
               ),
-              if (_name.isEmpty)
-                FilledButton(onPressed: _profile, child: const Text('Join')),
             ],
           ),
-          if (_name.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 7,
-                backgroundColor: Colors.white12,
-                valueColor: const AlwaysStoppedAnimation(Color(0xFFFFC107)),
+          if (_name.isEmpty) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton.icon(
+                onPressed: _profile,
+                icon: const Icon(Icons.rocket_launch_rounded, size: 18),
+                label: const Text('Join the Fan Zone'),
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              next == null
-                  ? 'Top level reached. You are a Fan Zone Legend!'
-                  : '${next.min - stats.points} more point${next.min - stats.points == 1 ? '' : 's'} to reach ${next.name}',
-              style: TextStyle(fontSize: 12, color: Ui.muted),
-            ),
+          ] else ...[
             const SizedBox(height: 14),
             Row(
               children: [
-                stat(
-                  Icons.stars_rounded,
-                  '${stats.points}',
-                  'Points',
-                  const Color(0xFFFFC107),
+                Expanded(
+                  child: Text(
+                    next == null
+                        ? 'Top level reached. You are a Fan Zone Legend!'
+                        : '$toNext more point${toNext == 1 ? '' : 's'} to reach ${next.name}',
+                    style: TextStyle(fontSize: 12, color: Ui.muted),
+                  ),
                 ),
-                stat(
-                  Icons.track_changes_rounded,
-                  '${stats.exact}',
-                  'Exact',
-                  Ui.green,
+                if (pending > 0)
+                  FanPill(
+                    text: '$pending awaiting result',
+                    color: fanBlue,
+                    icon: Icons.hourglass_bottom_rounded,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                FanStatTile(
+                  icon: Icons.stars_rounded,
+                  value: stats.points,
+                  label: 'Points',
+                  color: fanGold,
                 ),
-                stat(
-                  Icons.percent_rounded,
-                  stats.settled == 0 ? '–' : '${stats.accuracy}',
-                  'Accuracy',
-                  const Color(0xFF448AFF),
+                FanStatTile(
+                  icon: Icons.track_changes_rounded,
+                  value: stats.exact,
+                  label: 'Exact',
+                  color: Ui.green,
                 ),
-                stat(
-                  Icons.local_fire_department_rounded,
-                  '${stats.streak}',
-                  'Streak',
-                  const Color(0xFFFF7043),
+                FanStatTile(
+                  icon: Icons.percent_rounded,
+                  value: stats.accuracy,
+                  label: 'Accuracy',
+                  color: fanBlue,
+                  empty: stats.settled == 0,
+                ),
+                FanStatTile(
+                  icon: Icons.local_fire_department_rounded,
+                  value: stats.streak,
+                  label: 'Streak',
+                  color: fanOrange,
                 ),
               ],
             ),
@@ -551,109 +639,167 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     );
   }
 
-  Widget _rules() => SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
+  Widget _rules() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+    decoration: fanBox(radius: 18),
     child: Row(
       children: [
-        FanPill(
-          text: 'Exact score  +3',
-          color: Ui.green,
-          icon: Icons.track_changes_rounded,
-        ),
-        const SizedBox(width: 8),
-        const FanPill(
-          text: 'Winner or draw  +1',
-          color: Color(0xFF448AFF),
-          icon: Icons.check_circle_outline_rounded,
-        ),
-        const SizedBox(width: 8),
-        const FanPill(
-          text: 'Locks at kickoff',
-          color: Color(0xFFFFB300),
-          icon: Icons.lock_outline_rounded,
-        ),
+        _rule(Icons.track_changes_rounded, '+3', 'Exact score', Ui.green),
+        _ruleDivider(),
+        _rule(Icons.check_circle_outline_rounded, '+1', 'Winner or draw', fanBlue),
+        _ruleDivider(),
+        _rule(Icons.lock_outline_rounded, 'Locks', 'At kickoff', const Color(0xFFFFB300)),
       ],
     ),
   );
 
-  Widget _filters(List<String> leagues) => Padding(
-    padding: const EdgeInsets.only(top: 12),
-    child: SizedBox(
-      height: 38,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: [
-          FilterChip(
-            avatar: const Icon(Icons.lock_open_rounded, size: 15),
-            label: const Text('Open only'),
-            selected: _openOnly,
-            onSelected: (v) => setState(() => _openOnly = v),
-          ),
-          const SizedBox(width: 8),
-          ChoiceChip(
-            label: const Text('All leagues'),
-            selected: _league.isEmpty,
-            onSelected: (_) => setState(() => _league = ''),
-          ),
-          for (final l in leagues) ...[
+  Widget _ruleDivider() =>
+      Container(width: 1, height: 34, color: Ui.line);
+
+  Widget _rule(IconData icon, String big, String small, Color color) =>
+      Expanded(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 20, color: color),
             const SizedBox(width: 8),
-            ChoiceChip(
-              label: Text(l),
-              selected: _league == l,
-              onSelected: (_) => setState(() => _league = l),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  big,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                  ),
+                ),
+                Text(small, style: TextStyle(fontSize: 10, color: Ui.muted)),
+              ],
             ),
           ],
+        ),
+      );
+
+  Widget _days(Map<String, int> counts, String active, int total) => SizedBox(
+    height: 40,
+    child: ListView(
+      scrollDirection: Axis.horizontal,
+      children: [
+        FanChip(
+          label: 'All',
+          icon: Icons.calendar_view_week_rounded,
+          badge: '$total',
+          selected: active.isEmpty,
+          onTap: () => setState(() => _day = ''),
+        ),
+        for (final e in counts.entries) ...[
+          const SizedBox(width: 8),
+          FanChip(
+            label: e.key,
+            badge: '${e.value}',
+            selected: active == e.key,
+            onTap: () => setState(() => _day = e.key),
+          ),
         ],
-      ),
+      ],
     ),
   );
 
-  Widget _team(String name, String logo) => Expanded(
+  Widget _filters(List<String> leagues) => SizedBox(
+    height: 40,
+    child: ListView(
+      scrollDirection: Axis.horizontal,
+      children: [
+        FanChip(
+          label: 'Open only',
+          icon: Icons.lock_open_rounded,
+          color: Ui.green,
+          selected: _openOnly,
+          onTap: () => setState(() => _openOnly = !_openOnly),
+        ),
+        const SizedBox(width: 8),
+        FanChip(
+          label: 'All leagues',
+          icon: Icons.public_rounded,
+          color: fanBlue,
+          selected: _league.isEmpty,
+          onTap: () => setState(() => _league = ''),
+        ),
+        for (final l in leagues) ...[
+          const SizedBox(width: 8),
+          FanChip(
+            label: l,
+            color: fanBlue,
+            selected: _league == l,
+            onTap: () => setState(() => _league = l),
+          ),
+        ],
+      ],
+    ),
+  );
+
+  Widget _team(String name, String logo, {double size = 58}) => Expanded(
     child: Column(
       children: [
-        TeamCrest(logo: logo, size: 50),
+        Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.white.withValues(alpha: .06),
+                blurRadius: 16,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: TeamCrest(logo: logo, size: size),
+        ),
         const SizedBox(height: 8),
         Text(
           name,
           maxLines: 2,
           textAlign: TextAlign.center,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 14,
+            height: 1.15,
+          ),
         ),
       ],
     ),
   );
 
-  Widget _fixture(Fixture f, List<Map<String, dynamic>> picks, DateTime now) {
-    final key = FanZoneService.matchKey(f);
-    final pick = picks.where((p) => p['match_key'] == key).firstOrNull;
+  /// The soonest match gets a bigger card with a live countdown line.
+  Widget _nextUpCard(Fixture f, DateTime now) {
     final until = f.kickoff.difference(now);
-    final soon = until.inHours < 24;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: fanBox(
-        border: pick != null ? Ui.green.withValues(alpha: .45) : null,
-      ),
+    return FanHero(
+      color: const Color(0xFFFFB300),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       child: Column(
         children: [
           Row(
             children: [
               Expanded(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: FanPill(
-                    text: f.league.isEmpty ? 'Football' : f.league,
-                    color: Ui.redSoft,
+                child: Text(
+                  f.league.isEmpty ? 'Football' : f.league,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Ui.muted,
                   ),
                 ),
               ),
               FanPill(
-                text: soon
-                    ? 'Kicks off in ${fanCountdown(until)}'
-                    : fanClock(f.kickoff),
-                color: soon ? const Color(0xFFFFB300) : Ui.muted,
-                icon: Icons.schedule_rounded,
+                text: until.inMinutes < 1
+                    ? 'Kicking off'
+                    : 'Locks in ${fanCountdown(until)}',
+                color: const Color(0xFFFFB300),
+                icon: Icons.timer_outlined,
               ),
             ],
           ),
@@ -661,87 +807,209 @@ class _FanZoneScreenState extends State<FanZoneScreen>
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _team(f.home, f.homeLogo),
+              _team(f.home, f.homeLogo, size: 64),
               SizedBox(
-                width: 84,
+                width: 70,
                 child: Column(
                   children: [
-                    const SizedBox(height: 6),
-                    if (pick != null) ...[
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          '${pick['home']} – ${pick['away']}',
-                          style: TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                            color: Ui.green,
-                          ),
-                        ),
+                    const SizedBox(height: 10),
+                    Text(
+                      fanClock(f.kickoff),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
                       ),
-                      Text(
-                        'YOUR PICK',
-                        style: TextStyle(
-                          fontSize: 10,
-                          letterSpacing: 1,
-                          fontWeight: FontWeight.w700,
-                          color: Ui.muted,
-                        ),
-                      ),
-                    ] else ...[
-                      Text(
-                        'VS',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                          color: Ui.dim,
-                        ),
-                      ),
-                      Text(
-                        fanClock(f.kickoff),
-                        style: TextStyle(fontSize: 12, color: Ui.muted),
-                      ),
-                    ],
+                    ),
+                    Text(
+                      fanDayLabel(f.kickoff, now),
+                      style: TextStyle(fontSize: 12, color: Ui.muted),
+                    ),
                   ],
                 ),
               ),
-              _team(f.away, f.awayLogo),
+              _team(f.away, f.awayLogo, size: 64),
             ],
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: !_saving && _failure == null
-                      ? () => _pick(f)
-                      : null,
-                  icon: Icon(
-                    pick == null
-                        ? Icons.sports_soccer_rounded
-                        : Icons.edit_rounded,
-                    size: 18,
-                  ),
-                  label: Text(pick == null ? 'Predict score' : 'Edit pick'),
-                ),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton.icon(
+              onPressed: !_saving && _failure == null ? () => _pick(f) : null,
+              icon: const Icon(Icons.sports_score_rounded, size: 18),
+              label: const Text('Predict this match'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _fixture(Fixture f, List<Map<String, dynamic>> picks, DateTime now) {
+    final key = FanZoneService.matchKey(f);
+    final pick = picks.where((p) => p['match_key'] == key).firstOrNull;
+    final until = f.kickoff.difference(now);
+    final soon = until.inHours < 24;
+    final accent = pick != null ? Ui.green : Ui.red;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Ui.card,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: pick != null ? Ui.green.withValues(alpha: .5) : Ui.line,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [accent.withValues(alpha: .20), Colors.transparent],
               ),
-              const SizedBox(width: 8),
-              if (pick != null)
-                IconButton.outlined(
-                  tooltip: 'Share my pick',
-                  onPressed: () => _sharePick(
-                    f,
-                    (pick['home'] as num).toInt(),
-                    (pick['away'] as num).toInt(),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.emoji_events_outlined, size: 15, color: Ui.redSoft),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    f.league.isEmpty ? 'Football' : f.league,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: Ui.muted,
+                    ),
                   ),
-                  icon: const Icon(Icons.ios_share_rounded, size: 18),
                 ),
-              IconButton.outlined(
-                tooltip: 'Match chat',
-                onPressed: () => _discussion(key, f.title),
-                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
-              ),
-            ],
+                FanPill(
+                  text: soon
+                      ? 'Locks in ${fanCountdown(until)}'
+                      : fanClock(f.kickoff),
+                  color: soon ? const Color(0xFFFFB300) : Ui.muted,
+                  icon: Icons.schedule_rounded,
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 6, 14, 14),
+            child: Column(
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _team(f.home, f.homeLogo),
+                    SizedBox(
+                      width: 88,
+                      child: pick != null
+                          ? Column(
+                              children: [
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Ui.green.withValues(alpha: .16),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: Ui.green.withValues(alpha: .5),
+                                    ),
+                                  ),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      '${pick['home']} – ${pick['away']}',
+                                      style: TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.w900,
+                                        color: Ui.green,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'YOUR PICK',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    letterSpacing: 1.2,
+                                    fontWeight: FontWeight.w800,
+                                    color: Ui.muted,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                const SizedBox(height: 10),
+                                Text(
+                                  'VS',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    color: Ui.dim,
+                                  ),
+                                ),
+                                Text(
+                                  fanClock(f.kickoff),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Ui.muted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                    _team(f.away, f.awayLogo),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: !_saving && _failure == null
+                            ? () => _pick(f)
+                            : null,
+                        icon: Icon(
+                          pick == null
+                              ? Icons.sports_soccer_rounded
+                              : Icons.edit_rounded,
+                          size: 18,
+                        ),
+                        label: Text(pick == null ? 'Predict score' : 'Edit pick'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (pick != null)
+                      IconButton.outlined(
+                        tooltip: 'Share my pick',
+                        onPressed: () => _sharePick(
+                          f,
+                          (pick['home'] as num).toInt(),
+                          (pick['away'] as num).toInt(),
+                        ),
+                        icon: const Icon(Icons.ios_share_rounded, size: 18),
+                      ),
+                    IconButton.outlined(
+                      tooltip: 'Match chat',
+                      onPressed: () => _discussion(key, f.title),
+                      icon: const Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        size: 18,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -755,12 +1023,15 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: fanBox(radius: 14),
+      decoration: fanBox(
+        radius: 16,
+        border: live ? fanAlert.withValues(alpha: .45) : null,
+      ),
       child: Row(
         children: [
-          TeamCrest(logo: f.homeLogo, size: 30),
-          const SizedBox(width: 6),
-          TeamCrest(logo: f.awayLogo, size: 30),
+          TeamCrest(logo: f.homeLogo, size: 32),
+          const SizedBox(width: 4),
+          TeamCrest(logo: f.awayLogo, size: 32),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -770,7 +1041,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                   f.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 Text(
                   pick == null
@@ -782,9 +1053,23 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             ),
           ),
           if (live)
-            const FanPill(text: 'LIVE', color: Color(0xFFFF5252))
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const FanLiveDot(),
+                const SizedBox(width: 6),
+                Text(
+                  'LIVE',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    color: fanAlert,
+                  ),
+                ),
+              ],
+            )
           else
-            const Icon(Icons.lock_outline_rounded, size: 16),
+            Icon(Icons.lock_outline_rounded, size: 16, color: Ui.dim),
           IconButton(
             tooltip: 'Match chat',
             visualDensity: VisualDensity.compact,
@@ -800,13 +1085,14 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     final points = fanPickPoints(p);
     final (Color color, String badge) = switch (points) {
       3 => (Ui.green, '+3 Exact'),
-      1 => (const Color(0xFF448AFF), '+1 Winner'),
-      0 => (const Color(0xFFFF5252), '0 Missed'),
+      1 => (fanBlue, '+1 Winner'),
+      0 => (fanAlert, '0 Missed'),
       _ => (Ui.muted, 'Pending'),
     };
+    final settled = p['result_home'] != null;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: fanBox(radius: 14),
+      decoration: fanBox(radius: 16),
       clipBehavior: Clip.antiAlias,
       child: IntrinsicHeight(
         child: Row(
@@ -825,14 +1111,27 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                             '${p['title']}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                            style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            p['result_home'] == null
-                                ? 'Your pick ${p['home']} – ${p['away']} • awaiting result'
-                                : 'Your pick ${p['home']} – ${p['away']} • Final ${p['result_home']} – ${p['result_away']}',
-                            style: TextStyle(fontSize: 12, color: Ui.muted),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              _scoreChip('You', '${p['home']} – ${p['away']}', Ui.muted),
+                              if (settled) ...[
+                                const SizedBox(width: 8),
+                                _scoreChip(
+                                  'Final',
+                                  '${p['result_home']} – ${p['result_away']}',
+                                  color,
+                                ),
+                              ] else ...[
+                                const SizedBox(width: 8),
+                                Text(
+                                  'awaiting result',
+                                  style: TextStyle(fontSize: 11, color: Ui.dim),
+                                ),
+                              ],
+                            ],
                           ),
                         ],
                       ),
@@ -848,6 +1147,29 @@ class _FanZoneScreenState extends State<FanZoneScreen>
       ),
     );
   }
+
+  Widget _scoreChip(String label, String value, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: .05),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: TextStyle(fontSize: 10, color: Ui.dim)),
+        const SizedBox(width: 5),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            color: color,
+          ),
+        ),
+      ],
+    ),
+  );
 
   // ---------------------------------------------------------------------------
   // RANKS TAB
@@ -866,6 +1188,8 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     }
     final top = rows.take(3).toList();
     final rest = rows.length > 3 ? rows.sublist(3) : <Map<String, dynamic>>[];
+    final shownRest = rest.take(_rankShown).toList();
+    final leaderPoints = rows.isEmpty ? 1 : ((rows.first['points'] as num?)?.toInt() ?? 1);
 
     return RefreshIndicator(
       onRefresh: _refresh,
@@ -873,72 +1197,18 @@ class _FanZoneScreenState extends State<FanZoneScreen>
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
         children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: const Color(0xFFFFC107).withValues(alpha: .35),
-              ),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  const Color(0xFFFFC107).withValues(alpha: .20),
-                  Ui.card,
-                ],
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.emoji_events_rounded,
-                  size: 44,
-                  color: Color(0xFFFFC107),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Weekly top 100',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        rank >= 0
-                            ? 'You are #${rank + 1} with ${rows[rank]['points']} pts'
-                            : 'Your rank shows once a confirmed result puts you in the top 100.',
-                        style: TextStyle(color: Ui.muted, fontSize: 13),
-                      ),
-                      if (resets != null) ...[
-                        const SizedBox(height: 8),
-                        FanPill(
-                          text: 'Resets in ${fanCountdown(resets)}',
-                          color: const Color(0xFFFFC107),
-                          icon: Icons.timer_outlined,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _ranksHero(rows, rank, resets),
           if (!_loadedOnce && rows.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 12),
-              child: FanSkeleton(height: 200),
+              child: FanSkeleton(height: 220),
             ),
           if (_loadedOnce && rows.isEmpty)
             FanEmpty(
               icon: Icons.emoji_events_outlined,
               title: 'No ranked fans yet',
-              message: 'Rankings start once this week\'s matches are confirmed. Make your picks to be first on the board.',
+              message:
+                  'Rankings start once this week\'s matches are confirmed. Make your picks to be first on the board.',
               action: Builder(
                 builder: (tabContext) => FilledButton.icon(
                   onPressed: widget.onPredict,
@@ -948,12 +1218,24 @@ class _FanZoneScreenState extends State<FanZoneScreen>
               ),
             ),
           if (top.isNotEmpty) ...[
-            const SizedBox(height: 20),
+            const FanSectionTitle('Top of the table', icon: Icons.emoji_events_rounded),
             _podium(top, myId),
           ],
-          if (rest.isNotEmpty) const FanSectionTitle('Rest of the table'),
-          for (var i = 0; i < rest.length; i++) _rankRow(i + 4, rest[i], myId),
-          const SizedBox(height: 10),
+          if (rest.isNotEmpty) ...[
+            const FanSectionTitle('The chasing pack', icon: Icons.groups_rounded),
+            for (var i = 0; i < shownRest.length; i++)
+              _rankRow(i + 4, shownRest[i], myId, leaderPoints),
+            if (rest.length > shownRest.length)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: OutlinedButton.icon(
+                  onPressed: () => setState(() => _rankShown += 20),
+                  icon: const Icon(Icons.expand_more_rounded),
+                  label: Text('Show ${rest.length - shownRest.length} more'),
+                ),
+              ),
+          ],
+          const SizedBox(height: 14),
           Text(
             'Ranked by points, then fewer settled picks. Nicknames may be shared; the short ID identifies each fan.',
             textAlign: TextAlign.center,
@@ -964,15 +1246,161 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     );
   }
 
+  Widget _ranksHero(
+    List<Map<String, dynamic>> rows,
+    int rank,
+    Duration? resets,
+  ) {
+    final mine = rank >= 0 ? rows[rank] : null;
+    final myPoints = (mine?['points'] as num?)?.toInt() ?? 0;
+    String gap = '';
+    if (rank > 0) {
+      final above = (rows[rank - 1]['points'] as num?)?.toInt() ?? 0;
+      final diff = above - myPoints;
+      gap = diff <= 0
+          ? 'Level on points with #$rank'
+          : '$diff pt${diff == 1 ? '' : 's'} behind #$rank';
+    } else if (rank == 0) {
+      gap = 'You lead the table. Defend it!';
+    }
+    return FanHero(
+      color: fanGold,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: fanGold.withValues(alpha: .18),
+                  border: Border.all(color: fanGold.withValues(alpha: .6)),
+                ),
+                child: const Icon(
+                  Icons.emoji_events_rounded,
+                  color: fanGold,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Weekly top 100',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Points reset every week. Everyone starts level.',
+                      style: TextStyle(color: Ui.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: .25),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: fanGold.withValues(alpha: .22)),
+            ),
+            child: mine == null
+                ? Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded, size: 20, color: Ui.muted),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Your rank shows once a confirmed result puts you in the top 100.',
+                          style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3),
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'YOUR RANK',
+                            style: TextStyle(
+                              fontSize: 10,
+                              letterSpacing: 1.4,
+                              fontWeight: FontWeight.w800,
+                              color: Ui.muted,
+                            ),
+                          ),
+                          FanCountUp(
+                            value: rank + 1,
+                            style: const TextStyle(
+                              fontSize: 40,
+                              height: 1.05,
+                              fontWeight: FontWeight.w900,
+                              color: fanGold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 18),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$myPoints points',
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            if (gap.isNotEmpty)
+                              Text(
+                                gap,
+                                style: TextStyle(color: Ui.muted, fontSize: 12),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+          if (resets != null) ...[
+            const SizedBox(height: 12),
+            FanPill(
+              text: 'Resets in ${fanCountdown(resets)}',
+              color: fanGold,
+              icon: Icons.timer_outlined,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _podium(List<Map<String, dynamic>> top, dynamic myId) {
     Map<String, dynamic>? at(int i) => i < top.length ? top[i] : null;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(child: _spot(2, at(1), 92, myId)),
-        Expanded(child: _spot(1, at(0), 120, myId)),
-        Expanded(child: _spot(3, at(2), 72, myId)),
-      ],
+    return Container(
+      padding: const EdgeInsets.fromLTRB(6, 14, 6, 0),
+      decoration: fanBox(radius: 22),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(child: _spot(2, at(1), 84, myId)),
+          Expanded(child: _spot(1, at(0), 112, myId)),
+          Expanded(child: _spot(3, at(2), 64, myId)),
+        ],
+      ),
     );
   }
 
@@ -980,8 +1408,9 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     if (r == null) return const SizedBox.shrink();
     final name = '${r['name']}';
     final me = r['id'] == myId;
+    final points = (r['points'] as num?)?.toInt() ?? 0;
     final medal = rank == 1
-        ? const Color(0xFFFFC107)
+        ? fanGold
         : rank == 2
         ? const Color(0xFFB0BEC5)
         : const Color(0xFFCD7F32);
@@ -989,22 +1418,25 @@ class _FanZoneScreenState extends State<FanZoneScreen>
       mainAxisSize: MainAxisSize.min,
       children: [
         if (rank == 1)
-          Icon(Icons.emoji_events_rounded, color: medal, size: 26)
+          const Icon(Icons.workspace_premium_rounded, color: fanGold, size: 30)
         else
-          const SizedBox(height: 26),
+          const SizedBox(height: 30),
         Container(
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: medal, width: 2),
+            border: Border.all(color: medal, width: 2.5),
+            boxShadow: [
+              BoxShadow(color: medal.withValues(alpha: .4), blurRadius: 16),
+            ],
           ),
           child: FanAvatar(
             name: name,
             seed: '${r['id']}',
-            size: rank == 1 ? 58 : 48,
+            size: rank == 1 ? 62 : 50,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Text(
@@ -1012,16 +1444,14 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
               fontSize: 13,
               color: me ? Ui.redSoft : null,
             ),
           ),
         ),
-        Text(
-          '${r['points']} pts',
-          style: TextStyle(fontSize: 12, color: Ui.muted),
-        ),
+        const SizedBox(height: 4),
+        FanLevelPill(fanLevelFor(points)),
         const SizedBox(height: 8),
         Container(
           height: height,
@@ -1029,77 +1459,121 @@ class _FanZoneScreenState extends State<FanZoneScreen>
           alignment: Alignment.topCenter,
           padding: const EdgeInsets.only(top: 8),
           decoration: BoxDecoration(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-            border: Border.all(color: medal.withValues(alpha: .4)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            border: Border.all(color: medal.withValues(alpha: .45)),
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                medal.withValues(alpha: .35),
-                medal.withValues(alpha: .04),
-              ],
+              colors: [medal.withValues(alpha: .42), medal.withValues(alpha: .04)],
             ),
           ),
-          child: Text(
-            '$rank',
-            style: TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w900,
-              color: medal,
-            ),
+          child: Column(
+            children: [
+              Text(
+                '$rank',
+                style: TextStyle(
+                  fontSize: 28,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                  color: medal,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '$points pts',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _rankRow(int rank, Map<String, dynamic> r, dynamic myId) {
+  Widget _rankRow(int rank, Map<String, dynamic> r, dynamic myId, int leader) {
     final me = r['id'] == myId;
     final name = '${r['name']}';
+    final points = (r['points'] as num?)?.toInt() ?? 0;
+    final level = fanLevelFor(points);
+    final share = leader <= 0 ? 0.0 : (points / leader).clamp(0.0, 1.0).toDouble();
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
       decoration: fanBox(
-        radius: 14,
-        color: me ? Ui.red.withValues(alpha: .12) : null,
-        border: me ? Ui.red.withValues(alpha: .5) : null,
+        radius: 16,
+        color: me ? Ui.red.withValues(alpha: .13) : null,
+        border: me ? Ui.red.withValues(alpha: .55) : null,
       ),
       child: Row(
         children: [
-          SizedBox(
+          Container(
             width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .06),
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Text(
-              '#$rank',
+              '$rank',
               style: TextStyle(
                 fontWeight: FontWeight.w900,
                 color: me ? Ui.redSoft : Ui.muted,
               ),
             ),
           ),
-          FanAvatar(name: name, seed: '${r['id']}', size: 36),
+          const SizedBox(width: 10),
+          FanAvatar(name: name, seed: '${r['id']}', size: 38),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  me ? '$name (you)' : name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        me ? '$name (you)' : name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(level.icon, size: 13, color: level.color),
+                  ],
                 ),
+                const SizedBox(height: 5),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: share,
+                    minHeight: 4,
+                    backgroundColor: Colors.white10,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      me ? Ui.red : level.color,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Text(
                   'Fan ${fanShortId(r['id'])} • ${r['played']} settled',
-                  style: TextStyle(fontSize: 11, color: Ui.muted),
+                  style: TextStyle(fontSize: 11, color: Ui.dim),
                 ),
               ],
             ),
           ),
-          Text(
-            '${r['points']}',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '$points',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+              ),
+              Text('pts', style: TextStyle(fontSize: 10, color: Ui.muted)),
+            ],
           ),
-          Text(' pts', style: TextStyle(fontSize: 11, color: Ui.muted)),
         ],
       ),
     );
@@ -1285,14 +1759,32 @@ class _PickSheetState extends State<_PickSheet> {
           onPressed: value >= 20 ? null : () => set(value + 1),
           icon: const Icon(Icons.add_rounded),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Text(
-            '$value',
-            style: const TextStyle(
-              fontSize: 58,
-              fontWeight: FontWeight.w900,
-              height: 1.1,
+        Container(
+          width: 84,
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Ui.red.withValues(alpha: .35)),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Ui.red.withValues(alpha: .22), Ui.cardDeep],
+            ),
+          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 160),
+            transitionBuilder: (child, anim) =>
+                ScaleTransition(scale: anim, child: child),
+            child: Text(
+              '$value',
+              key: ValueKey<int>(value),
+              style: const TextStyle(
+                fontSize: 56,
+                fontWeight: FontWeight.w900,
+                height: 1.1,
+              ),
             ),
           ),
         ),
@@ -1335,7 +1827,7 @@ class _PickSheetState extends State<_PickSheet> {
                   (v) => setState(() => _home = v),
                 ),
                 Padding(
-                  padding: const EdgeInsets.only(top: 104),
+                  padding: const EdgeInsets.only(top: 126),
                   child: Text(
                     '–',
                     style: TextStyle(
