@@ -217,49 +217,87 @@ class _FanPostsFeedState extends State<FanPostsFeed>
   // ---------------------------------------------------------------------------
 
   Widget _composer() {
-    Widget quick(String kind) {
+    Widget quick(String kind, String hint) {
       final k = FanKind.of(kind);
       return Expanded(
-        child: OutlinedButton.icon(
-          onPressed: _busy ? null : () => _create(kind),
-          icon: Icon(k.icon, size: 16, color: k.color),
-          label: Text(k.label, style: const TextStyle(fontSize: 12)),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-            side: BorderSide(color: Ui.line),
+        child: GestureDetector(
+          onTap: _busy ? null : () => _create(kind),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+            decoration: BoxDecoration(
+              color: k.color.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: k.color.withValues(alpha: .32)),
+            ),
+            child: Column(
+              children: [
+                Icon(k.icon, size: 22, color: k.color),
+                const SizedBox(height: 4),
+                Text(
+                  k.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  hint,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 10, color: Ui.muted),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
 
-    return Container(
+    return FanHero(
+      color: Ui.red,
       padding: const EdgeInsets.all(14),
-      decoration: fanBox(radius: 18),
       child: Column(
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(14),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: _busy ? null : () => _create('banter'),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: Ui.red.withValues(alpha: .18),
-                  child: Icon(Icons.edit_rounded, size: 18, color: Ui.redSoft),
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [Ui.red, Ui.redSoft],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.edit_rounded,
+                    size: 20,
+                    color: Ui.palette.onAccent,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
-                      vertical: 12,
+                      vertical: 13,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .05),
-                      borderRadius: BorderRadius.circular(24),
+                      color: Colors.black.withValues(alpha: .28),
+                      borderRadius: BorderRadius.circular(26),
+                      border: Border.all(color: Ui.line),
                     ),
                     child: Text(
-                      'Share a prediction or football gist…',
+                      'What\'s the gist? Drop a take…',
                       style: TextStyle(color: Ui.muted, fontSize: 14),
                     ),
                   ),
@@ -267,14 +305,12 @@ class _FanPostsFeedState extends State<FanPostsFeed>
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Row(
             children: [
-              quick('prediction'),
-              const SizedBox(width: 8),
-              quick('betslip'),
-              const SizedBox(width: 8),
-              quick('banter'),
+              quick('prediction', 'Call the score'),
+              quick('betslip', 'Show your slip'),
+              quick('banter', 'Trash talk'),
             ],
           ),
         ],
@@ -283,81 +319,153 @@ class _FanPostsFeedState extends State<FanPostsFeed>
   }
 
   Widget _rooms() {
+    final now = DateTime.now();
     final fixtures = widget.fixtures.take(20).toList();
     Widget room({
+      required Widget lead,
       required String title,
       required String subtitle,
-      required IconData icon,
       required Color color,
+      required Widget status,
       required VoidCallback onTap,
-    }) => InkWell(
-      borderRadius: BorderRadius.circular(16),
+    }) => GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 190,
-        padding: const EdgeInsets.all(12),
-        decoration: fanBox(border: color.withValues(alpha: .35)),
+        width: 200,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: .4)),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [color.withValues(alpha: .26), Ui.card],
+          ),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(icon, size: 16, color: color),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: color,
-                    ),
-                  ),
-                ),
+                lead,
+                const Spacer(),
+                status,
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(
               title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w900,
                 fontSize: 14,
                 height: 1.2,
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 2),
             Text(
-              'Join chat  ›',
-              style: TextStyle(fontSize: 12, color: Ui.muted),
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: Ui.muted),
+            ),
+            const Spacer(),
+            Row(
+              children: [
+                Icon(Icons.forum_rounded, size: 13, color: color),
+                const SizedBox(width: 5),
+                Text(
+                  'Join chat',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, size: 16, color: color),
+              ],
             ),
           ],
         ),
       ),
     );
 
+    Widget crests(Fixture f) => SizedBox(
+      width: 62,
+      height: 32,
+      child: Stack(
+        children: [
+          TeamCrest(logo: f.homeLogo, size: 32),
+          Positioned(left: 26, child: TeamCrest(logo: f.awayLogo, size: 32)),
+        ],
+      ),
+    );
+
+    Widget status(Fixture f) {
+      final phase = f.phaseAt(now);
+      if (phase == MatchPhase.live) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const FanLiveDot(),
+            const SizedBox(width: 5),
+            Text(
+              'LIVE',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: fanAlert,
+              ),
+            ),
+          ],
+        );
+      }
+      if (phase == MatchPhase.upcoming) {
+        return FanPill(
+          text: fanDayLabel(f.kickoff, now) == 'Today'
+              ? fanClock(f.kickoff)
+              : fanDayLabel(f.kickoff, now),
+          color: Ui.muted,
+          icon: Icons.schedule_rounded,
+        );
+      }
+      return FanPill(text: 'FT', color: Ui.dim);
+    }
+
     return SizedBox(
-      height: 112,
+      height: 142,
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
           room(
+            lead: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: fanOrange.withValues(alpha: .2),
+              ),
+              child: const Icon(
+                Icons.local_fire_department_rounded,
+                color: fanOrange,
+                size: 22,
+              ),
+            ),
             title: 'Fan lounge',
-            subtitle: 'OPEN TO ALL',
-            icon: Icons.local_fire_department_rounded,
-            color: const Color(0xFFFF7043),
+            subtitle: 'Open to every fan, all day',
+            color: fanOrange,
+            status: const FanPill(text: 'OPEN', color: fanOrange),
             onTap: widget.onOpenLounge,
           ),
           for (final f in fixtures) ...[
             const SizedBox(width: 10),
             room(
+              lead: crests(f),
               title: f.title,
-              subtitle: f.league.isEmpty ? 'MATCH CHAT' : f.league,
-              icon: Icons.sports_soccer_rounded,
+              subtitle: f.league.isEmpty ? 'Match chat' : f.league,
               color: Ui.redSoft,
+              status: status(f),
               onTap: () => widget.onOpenMatch(f),
             ),
           ],
@@ -367,18 +475,19 @@ class _FanPostsFeedState extends State<FanPostsFeed>
   }
 
   Widget _filters() => SizedBox(
-    height: 38,
+    height: 40,
     child: ListView(
       scrollDirection: Axis.horizontal,
       children: [
         for (final kind in _labels.keys) ...[
-          ChoiceChip(
-            avatar: Icon(_filterIcons[kind], size: 15),
-            label: Text(_labels[kind]!),
+          FanChip(
+            icon: _filterIcons[kind],
+            label: _labels[kind]!,
+            color: kind == 'all' ? Ui.red : FanKind.of(kind).color,
             selected: kind == _kind,
-            onSelected: _busy
+            onTap: _busy
                 ? null
-                : (_) {
+                : () {
                     setState(() {
                       _kind = kind;
                       _next = null;
@@ -400,145 +509,157 @@ class _FanPostsFeedState extends State<FanPostsFeed>
     final name = '${p['name']}';
     final text = p['text'].toString();
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: fanBox(),
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Ui.card,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: mine ? Ui.red.withValues(alpha: .4) : Ui.line),
+      ),
       clipBehavior: Clip.antiAlias,
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(width: 4, color: k.color),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        FanAvatar(
-                          name: name,
-                          seed: '${p['user_id']}',
-                          size: 40,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 3,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [k.color, k.color.withValues(alpha: 0)],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 6, 0),
+            child: Row(
+              children: [
+                FanAvatar(name: name, seed: '${p['user_id']}', size: 42),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        mine ? '$name (you)' : name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15,
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                mine ? '$name (you)' : name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              Text(
-                                '#${fanShortId(p['user_id'])} • ${fanTimeAgo(p['at'])}',
-                                style: TextStyle(fontSize: 11, color: Ui.muted),
-                              ),
-                            ],
-                          ),
-                        ),
-                        FanPill(text: k.label, color: k.color, icon: k.icon),
-                        PopupMenuButton<String>(
-                          onSelected: (a) => _action(a, p),
-                          itemBuilder: (_) => [
-                            const PopupMenuItem(
-                              value: 'share',
-                              child: Text('Share post'),
-                            ),
-                            if (mine)
-                              const PopupMenuItem(
-                                value: 'delete',
-                                child: Text('Delete post'),
-                              ),
-                            if (!mine) ...const [
-                              PopupMenuItem(
-                                value: 'report',
-                                child: Text('Report post'),
-                              ),
-                              PopupMenuItem(
-                                value: 'block',
-                                child: Text('Block fan'),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
+                      ),
+                      Text(
+                        '#${fanShortId(p['user_id'])} • ${fanTimeAgo(p['at'])}',
+                        style: TextStyle(fontSize: 11, color: Ui.muted),
+                      ),
+                    ],
+                  ),
+                ),
+                FanPill(text: k.label, color: k.color, icon: k.icon),
+                PopupMenuButton<String>(
+                  onSelected: (a) => _action(a, p),
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'share',
+                      child: Text('Share post'),
                     ),
-                    if (text.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(2, 10, 8, 4),
-                        child: SelectableText(
-                          text,
-                          style: const TextStyle(fontSize: 15, height: 1.4),
-                        ),
+                    if (mine)
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Text('Delete post'),
                       ),
-                    if (p['has_image'] == 1)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(0, 8, 8, 0),
-                        child: Semantics(
-                          label: 'Open post image',
-                          button: true,
-                          child: InkWell(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute<void>(
-                                builder: (_) =>
-                                    _PostImage(postId: p['id'].toString()),
-                              ),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                width: double.infinity,
-                                height: 240,
-                                color: Colors.black26,
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    Image.network(
-                                      FanZoneService.imageUrl(
-                                        p['id'].toString(),
-                                      ),
-                                      fit: BoxFit.contain,
-                                      cacheWidth: 900,
-                                      loadingBuilder: (_, child, progress) =>
-                                          progress == null
-                                          ? child
-                                          : const Center(
-                                              child:
-                                                  CircularProgressIndicator(),
-                                            ),
-                                      errorBuilder: (_, __, ___) =>
-                                          const Center(
-                                            child: Text('Image unavailable'),
-                                          ),
-                                    ),
-                                    const Positioned(
-                                      right: 8,
-                                      bottom: 8,
-                                      child: Icon(
-                                        Icons.zoom_out_map_rounded,
-                                        size: 18,
-                                        color: Colors.white70,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                    if (!mine) ...const [
+                      PopupMenuItem(
+                        value: 'report',
+                        child: Text('Report post'),
+                      ),
+                      PopupMenuItem(
+                        value: 'block',
+                        child: Text('Block fan'),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (text.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+              child: SelectableText(
+                text,
+                style: const TextStyle(fontSize: 15.5, height: 1.45),
+              ),
+            ),
+          if (p['has_image'] == 1)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Semantics(
+                label: 'Open post image',
+                button: true,
+                child: InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => _PostImage(postId: p['id'].toString()),
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      width: double.infinity,
+                      height: 240,
+                      color: Colors.black26,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.network(
+                            FanZoneService.imageUrl(p['id'].toString()),
+                            fit: BoxFit.contain,
+                            cacheWidth: 900,
+                            loadingBuilder: (_, child, progress) =>
+                                progress == null
+                                ? child
+                                : const Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                            errorBuilder: (_, __, ___) =>
+                                const Center(child: Text('Image unavailable')),
+                          ),
+                          const Positioned(
+                            right: 8,
+                            bottom: 8,
+                            child: Icon(
+                              Icons.zoom_out_map_rounded,
+                              size: 18,
+                              color: Colors.white70,
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                  ],
+                    ),
+                  ),
                 ),
               ),
             ),
-          ],
-        ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+            child: Row(
+              children: [
+                TextButton.icon(
+                  onPressed: () => _action('share', p),
+                  icon: const Icon(Icons.ios_share_rounded, size: 17),
+                  label: const Text('Share'),
+                  style: TextButton.styleFrom(foregroundColor: Ui.muted),
+                ),
+                TextButton.icon(
+                  onPressed: widget.onOpenLounge,
+                  icon: const Icon(Icons.forum_outlined, size: 17),
+                  label: const Text('Reply in lounge'),
+                  style: TextButton.styleFrom(foregroundColor: Ui.muted),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -555,9 +676,9 @@ class _FanPostsFeedState extends State<FanPostsFeed>
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
         children: [
           _composer(),
-          const FanSectionTitle('Live chat rooms'),
+          const FanSectionTitle('Live chat rooms', icon: Icons.chat_rounded),
           _rooms(),
-          const FanSectionTitle('Community feed'),
+          const FanSectionTitle('Community feed', icon: Icons.dynamic_feed_rounded),
           _filters(),
           const SizedBox(height: 12),
           if (_blocked.isNotEmpty)
