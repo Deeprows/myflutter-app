@@ -24,8 +24,9 @@ class FanZoneService {
   }) async {
     try {
       final token = await _token();
-      final uri = Uri.parse('${AppConfig.feedBase}/fan/$path')
-          .replace(queryParameters: query);
+      final uri = Uri.parse(
+        '${AppConfig.feedBase}/fan/$path',
+      ).replace(queryParameters: query);
       final headers = {
         'content-type': 'application/json',
         'authorization': 'Bearer $token',
@@ -47,6 +48,12 @@ class FanZoneService {
       throw Exception('Fan Zone needs the updated Cloudflare Worker.');
     }
   }
+
+  static String handle(String id) =>
+      'fan_${id.length <= 12 ? id : id.substring(0, 12)}';
+
+  static String postUrl(String postId) =>
+      '${AppConfig.feedBase}/fan/share/${Uri.encodeComponent(postId)}';
 
   static String imageUrl(String postId) =>
       '${AppConfig.feedBase}/fan/image/${Uri.encodeComponent(postId)}';
