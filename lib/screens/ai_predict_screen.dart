@@ -54,13 +54,12 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       final fixtures = await FeedService().loadFixtures(remote: true);
       if (!mounted) return;
       setState(() {
-        _fixtures = sortFixtures(fixtures, DateTime.now())
-            .where(
-              (f) =>
-                  f.kickoff.isAfter(DateTime.now()) &&
-                  unique.add(FanZoneService.matchKey(f)),
-            )
-            .toList();
+        _error = null;
+        _fixtures = <String, Fixture>{
+          for (final fixture in sortFixtures(fixtures, DateTime.now()))
+            if (fixture.kickoff.isAfter(DateTime.now()))
+              FanZoneService.matchKey(fixture): fixture,
+        }.values.toList();
         if (!_fixtures.any((f) => FanZoneService.matchKey(f) == _selected)) {
           _selected = null;
         }
