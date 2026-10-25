@@ -9,6 +9,7 @@ import '../services/fan_zone_service.dart';
 import '../services/feed_service.dart';
 import '../theme/app_theme.dart';
 import 'fan_posts_feed.dart';
+import 'fan_profile_screen.dart';
 import 'fan_widgets.dart';
 import 'highlights_screen.dart';
 import 'movies_screen.dart';
@@ -199,6 +200,14 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     }
   }
 
+  Future<void> _openProfile(String id) async {
+    if (id.isEmpty) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => FanProfileScreen(userId: id)),
+    );
+    if (mounted) _refresh();
+  }
+
   void _discussion(String room, String title) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -294,8 +303,8 @@ class _FanZoneScreenState extends State<FanZoneScreen>
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: IconButton(
-              tooltip: 'Your nickname',
-              onPressed: _profile,
+              tooltip: 'Your public profile',
+              onPressed: _myId.isEmpty ? null : () => _openProfile(_myId),
               icon: _name.isEmpty
                   ? const Icon(Icons.person_add_alt_1_rounded)
                   : FanAvatar(name: _name, seed: _myId, size: 32),
@@ -395,7 +404,10 @@ class _FanZoneScreenState extends State<FanZoneScreen>
           const SizedBox(height: 14),
           _rules(),
           if (_name.isNotEmpty) ...[
-            const FanSectionTitle('Achievements', icon: Icons.military_tech_rounded),
+            const FanSectionTitle(
+              'Achievements',
+              icon: Icons.military_tech_rounded,
+            ),
             SizedBox(
               height: 92,
               child: ListView(
@@ -406,12 +418,18 @@ class _FanZoneScreenState extends State<FanZoneScreen>
               ),
             ),
           ],
-          if (nextUp != null && picks.every((p) => p['match_key'] != FanZoneService.matchKey(nextUp))) ...[
+          if (nextUp != null &&
+              picks.every(
+                (p) => p['match_key'] != FanZoneService.matchKey(nextUp),
+              )) ...[
             const FanSectionTitle('Next up', icon: Icons.bolt_rounded),
             _nextUpCard(nextUp, now),
           ],
           if (_fixtures.isNotEmpty) ...[
-            const FanSectionTitle('Fixtures', icon: Icons.sports_soccer_rounded),
+            const FanSectionTitle(
+              'Fixtures',
+              icon: Icons.sports_soccer_rounded,
+            ),
             _days(dayCounts, activeDay, openAll.length),
             const SizedBox(height: 10),
             _filters(leagues),
@@ -646,15 +664,24 @@ class _FanZoneScreenState extends State<FanZoneScreen>
       children: [
         _rule(Icons.track_changes_rounded, '+3', 'Exact score', Ui.green),
         _ruleDivider(),
-        _rule(Icons.check_circle_outline_rounded, '+1', 'Winner or draw', fanBlue),
+        _rule(
+          Icons.check_circle_outline_rounded,
+          '+1',
+          'Winner or draw',
+          fanBlue,
+        ),
         _ruleDivider(),
-        _rule(Icons.lock_outline_rounded, 'Locks', 'At kickoff', const Color(0xFFFFB300)),
+        _rule(
+          Icons.lock_outline_rounded,
+          'Locks',
+          'At kickoff',
+          const Color(0xFFFFB300),
+        ),
       ],
     ),
   );
 
-  Widget _ruleDivider() =>
-      Container(width: 1, height: 34, color: Ui.line);
+  Widget _ruleDivider() => Container(width: 1, height: 34, color: Ui.line);
 
   Widget _rule(IconData icon, String big, String small, Color color) =>
       Expanded(
@@ -984,7 +1011,9 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                               : Icons.edit_rounded,
                           size: 18,
                         ),
-                        label: Text(pick == null ? 'Predict score' : 'Edit pick'),
+                        label: Text(
+                          pick == null ? 'Predict score' : 'Edit pick',
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -1116,7 +1145,11 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                           const SizedBox(height: 6),
                           Row(
                             children: [
-                              _scoreChip('You', '${p['home']} – ${p['away']}', Ui.muted),
+                              _scoreChip(
+                                'You',
+                                '${p['home']} – ${p['away']}',
+                                Ui.muted,
+                              ),
                               if (settled) ...[
                                 const SizedBox(width: 8),
                                 _scoreChip(
@@ -1182,14 +1215,17 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     final week = (_data['week'] as num?)?.toInt();
     Duration? resets;
     if (week != null) {
-      final d = DateTime.fromMillisecondsSinceEpoch(week + 604800000)
-          .difference(DateTime.now());
+      final d = DateTime.fromMillisecondsSinceEpoch(
+        week + 604800000,
+      ).difference(DateTime.now());
       if (!d.isNegative) resets = d;
     }
     final top = rows.take(3).toList();
     final rest = rows.length > 3 ? rows.sublist(3) : <Map<String, dynamic>>[];
     final shownRest = rest.take(_rankShown).toList();
-    final leaderPoints = rows.isEmpty ? 1 : ((rows.first['points'] as num?)?.toInt() ?? 1);
+    final leaderPoints = rows.isEmpty
+        ? 1
+        : ((rows.first['points'] as num?)?.toInt() ?? 1);
 
     return RefreshIndicator(
       onRefresh: _refresh,
@@ -1218,11 +1254,17 @@ class _FanZoneScreenState extends State<FanZoneScreen>
               ),
             ),
           if (top.isNotEmpty) ...[
-            const FanSectionTitle('Top of the table', icon: Icons.emoji_events_rounded),
+            const FanSectionTitle(
+              'Top of the table',
+              icon: Icons.emoji_events_rounded,
+            ),
             _podium(top, myId),
           ],
           if (rest.isNotEmpty) ...[
-            const FanSectionTitle('The chasing pack', icon: Icons.groups_rounded),
+            const FanSectionTitle(
+              'The chasing pack',
+              icon: Icons.groups_rounded,
+            ),
             for (var i = 0; i < shownRest.length; i++)
               _rankRow(i + 4, shownRest[i], myId, leaderPoints),
             if (rest.length > shownRest.length)
@@ -1317,12 +1359,20 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             child: mine == null
                 ? Row(
                     children: [
-                      Icon(Icons.info_outline_rounded, size: 20, color: Ui.muted),
+                      Icon(
+                        Icons.info_outline_rounded,
+                        size: 20,
+                        color: Ui.muted,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           'Your rank shows once a confirmed result puts you in the top 100.',
-                          style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3),
+                          style: TextStyle(
+                            color: Ui.muted,
+                            fontSize: 13,
+                            height: 1.3,
+                          ),
                         ),
                       ),
                     ],
@@ -1414,79 +1464,94 @@ class _FanZoneScreenState extends State<FanZoneScreen>
         : rank == 2
         ? const Color(0xFFB0BEC5)
         : const Color(0xFFCD7F32);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (rank == 1)
-          const Icon(Icons.workspace_premium_rounded, color: fanGold, size: 30)
-        else
-          const SizedBox(height: 30),
-        Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: medal, width: 2.5),
-            boxShadow: [
-              BoxShadow(color: medal.withValues(alpha: .4), blurRadius: 16),
-            ],
-          ),
-          child: FanAvatar(
-            name: name,
-            seed: '${r['id']}',
-            size: rank == 1 ? 62 : 50,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text(
-            me ? '$name (you)' : name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 13,
-              color: me ? Ui.redSoft : null,
+    return InkWell(
+      onTap: () => _openProfile('${r['id']}'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (rank == 1)
+            const Icon(
+              Icons.workspace_premium_rounded,
+              color: fanGold,
+              size: 30,
+            )
+          else
+            const SizedBox(height: 30),
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: medal, width: 2.5),
+              boxShadow: [
+                BoxShadow(color: medal.withValues(alpha: .4), blurRadius: 16),
+              ],
+            ),
+            child: FanAvatar(
+              name: name,
+              seed: '${r['id']}',
+              size: rank == 1 ? 62 : 50,
             ),
           ),
-        ),
-        const SizedBox(height: 4),
-        FanLevelPill(fanLevelFor(points)),
-        const SizedBox(height: 8),
-        Container(
-          height: height,
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          alignment: Alignment.topCenter,
-          padding: const EdgeInsets.only(top: 8),
-          decoration: BoxDecoration(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            border: Border.all(color: medal.withValues(alpha: .45)),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [medal.withValues(alpha: .42), medal.withValues(alpha: .04)],
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              me ? '$name (you)' : name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+                color: me ? Ui.redSoft : null,
+              ),
             ),
           ),
-          child: Column(
-            children: [
-              Text(
-                '$rank',
-                style: TextStyle(
-                  fontSize: 28,
-                  height: 1,
-                  fontWeight: FontWeight.w900,
-                  color: medal,
+          const SizedBox(height: 4),
+          FanLevelPill(fanLevelFor(points)),
+          const SizedBox(height: 8),
+          Container(
+            height: height,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            alignment: Alignment.topCenter,
+            padding: const EdgeInsets.only(top: 8),
+            decoration: BoxDecoration(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
+              border: Border.all(color: medal.withValues(alpha: .45)),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  medal.withValues(alpha: .42),
+                  medal.withValues(alpha: .04),
+                ],
+              ),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  '$rank',
+                  style: TextStyle(
+                    fontSize: 28,
+                    height: 1,
+                    fontWeight: FontWeight.w900,
+                    color: medal,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '$points pts',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  '$points pts',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1495,86 +1560,94 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     final name = '${r['name']}';
     final points = (r['points'] as num?)?.toInt() ?? 0;
     final level = fanLevelFor(points);
-    final share = leader <= 0 ? 0.0 : (points / leader).clamp(0.0, 1.0).toDouble();
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
-      decoration: fanBox(
-        radius: 16,
-        color: me ? Ui.red.withValues(alpha: .13) : null,
-        border: me ? Ui.red.withValues(alpha: .55) : null,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .06),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              '$rank',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                color: me ? Ui.redSoft : Ui.muted,
+    final share = leader <= 0
+        ? 0.0
+        : (points / leader).clamp(0.0, 1.0).toDouble();
+    return InkWell(
+      onTap: () => _openProfile('${r['id']}'),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
+        decoration: fanBox(
+          radius: 16,
+          color: me ? Ui.red.withValues(alpha: .13) : null,
+          border: me ? Ui.red.withValues(alpha: .55) : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .06),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$rank',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: me ? Ui.redSoft : Ui.muted,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          FanAvatar(name: name, seed: '${r['id']}', size: 38),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        me ? '$name (you)' : name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w800),
+            const SizedBox(width: 10),
+            FanAvatar(name: name, seed: '${r['id']}', size: 38),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          me ? '$name (you)' : name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(level.icon, size: 13, color: level.color),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: share,
+                      minHeight: 4,
+                      backgroundColor: Colors.white10,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        me ? Ui.red : level.color,
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Icon(level.icon, size: 13, color: level.color),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: share,
-                    minHeight: 4,
-                    backgroundColor: Colors.white10,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      me ? Ui.red : level.color,
-                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Fan ${fanShortId(r['id'])} • ${r['played']} settled',
+                    style: TextStyle(fontSize: 11, color: Ui.dim),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '$points',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Fan ${fanShortId(r['id'])} • ${r['played']} settled',
-                  style: TextStyle(fontSize: 11, color: Ui.dim),
-                ),
+                Text('pts', style: TextStyle(fontSize: 10, color: Ui.muted)),
               ],
             ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '$points',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-              ),
-              Text('pts', style: TextStyle(fontSize: 10, color: Ui.muted)),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2135,7 +2208,14 @@ class _FanDiscussionState extends State<_FanDiscussion>
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             if (!mine) ...[
-              FanAvatar(name: name, seed: '${m['user_id']}', size: 28),
+              InkWell(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => FanProfileScreen(userId: '${m['user_id']}'),
+                  ),
+                ),
+                child: FanAvatar(name: name, seed: '${m['user_id']}', size: 28),
+              ),
               const SizedBox(width: 6),
             ],
             Flexible(child: bubble),
@@ -2225,7 +2305,8 @@ class _FanDiscussionState extends State<_FanDiscussion>
                           ? const FanEmpty(
                               icon: Icons.chat_bubble_outline_rounded,
                               title: 'Start the conversation!',
-                              message: 'Be the first to share your thoughts on this one.',
+                              message:
+                                  'Be the first to share your thoughts on this one.',
                             )
                           : const CircularProgressIndicator(),
                     )
