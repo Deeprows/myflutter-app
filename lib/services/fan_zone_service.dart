@@ -1,35 +1,20 @@
 import 'dart:convert';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
+import 'auth_service.dart';
 import '../models/fixture.dart';
 
-/// Private bearer credential, separate from the public analytics install ID.
+/// Uses the signed-in Google identity. The server verifies every ID token.
 class FanZoneService {
-  static Future<String>? _credential;
   static String matchKey(Fixture f) =>
       '${f.id}|${f.kickoff.millisecondsSinceEpoch}';
-
-  static Future<String> _token() => _credential ??= _loadToken();
-  static Future<String> _loadToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    var token = prefs.getString('fan_zone_token');
-    if (token == null) {
-      final random = Random.secure();
-      token = List.generate(
-        32,
-        (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
-      ).join();
-      if (!await prefs.setString('fan_zone_token', token)) {
-        throw Exception('Could not save your Fan Zone identity.');
-      }
-    }
-    return token;
-  }
+  static Future<String> _token() => AuthService.instance.idToken();
+  static String get _blockedKey =>
+      'fan_zone_blocked_${AuthService.instance.user?.id ?? 'signed_out'}';
 
   static Future<Map<String, dynamic>> call(
     String path, {
@@ -105,19 +90,19 @@ class FanZoneService {
 
   static Future<Set<String>> blocked() async =>
       (await SharedPreferences.getInstance())
-          .getStringList('fan_zone_blocked')
+          .getStringList(_blockedKey)
           ?.toSet() ??
       <String>{};
   static Future<void> block(String id) async {
     final ids = await blocked();
     ids.add(id);
     await (await SharedPreferences.getInstance()).setStringList(
-      'fan_zone_blocked',
+      _blockedKey,
       ids.toList(),
     );
   }
 
   static Future<void> unblockAll() async {
-    await (await SharedPreferences.getInstance()).remove('fan_zone_blocked');
+    await (await SharedPreferences.getInstance()).remove(_blockedKey);
   }
 }
