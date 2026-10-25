@@ -1682,10 +1682,20 @@ const FAN_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS fan_reports (message_id TEXT NOT NULL, user_id TEXT NOT NULL, reason TEXT NOT NULL, PRIMARY KEY(message_id,user_id))`,
   `CREATE TABLE IF NOT EXISTS fan_posts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL, image_key TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL, hidden INTEGER NOT NULL DEFAULT 0)`,
   `CREATE INDEX IF NOT EXISTS fan_post_time ON fan_posts(at DESC,id DESC)`,
+  `CREATE INDEX IF NOT EXISTS fan_posts_author ON fan_posts(user_id,hidden,at DESC,id DESC)`,
   `CREATE TABLE IF NOT EXISTS fan_post_reports (post_id TEXT NOT NULL, user_id TEXT NOT NULL, reason TEXT NOT NULL, PRIMARY KEY(post_id,user_id))`,
   `CREATE TABLE IF NOT EXISTS fan_accounts (id TEXT PRIMARY KEY, google_sub TEXT NOT NULL UNIQUE, email TEXT NOT NULL, name TEXT NOT NULL, photo TEXT NOT NULL, created_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_legacy_claims (legacy_id TEXT PRIMARY KEY, account_id TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_ai_limits (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL, expires INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS fan_public_profiles (user_id TEXT PRIMARY KEY, bio TEXT NOT NULL DEFAULT '')`,
+  `CREATE TABLE IF NOT EXISTS fan_follows (follower_id TEXT NOT NULL, following_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(follower_id,following_id))`,
+  `CREATE INDEX IF NOT EXISTS fan_follows_target ON fan_follows(following_id,at DESC,follower_id DESC)`,
+  `CREATE INDEX IF NOT EXISTS fan_follows_source ON fan_follows(follower_id,at DESC,following_id DESC)`,
+  `CREATE TABLE IF NOT EXISTS fan_likes (post_id TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(post_id,user_id))`,
+  `CREATE TABLE IF NOT EXISTS fan_comments (id TEXT PRIMARY KEY, post_id TEXT NOT NULL, user_id TEXT NOT NULL, text TEXT NOT NULL, at INTEGER NOT NULL, hidden INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE INDEX IF NOT EXISTS fan_comments_post ON fan_comments(post_id,hidden,at DESC,id DESC)`,
+  `CREATE TABLE IF NOT EXISTS fan_comment_reports (comment_id TEXT NOT NULL,user_id TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(comment_id,user_id))`,
+  `CREATE TABLE IF NOT EXISTS fan_social_limits (bucket TEXT PRIMARY KEY,count INTEGER NOT NULL,expires INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_limits (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL)`
 ];
 const fanReady = new WeakMap();
@@ -1721,6 +1731,7 @@ async function fanZone(request, env, url) {
     await fanInit(env.DB);
     const db = env.DB;
     if(url.pathname==='/fan/auth')return await fanAccountAuth(request,env);
+    if(request.method==='GET' && url.pathname.startsWith('/fan/share/'))return await fanSharePost(env,url);
     if(request.method==='GET' && url.pathname.startsWith('/fan/image/')) {
       const imageId=url.pathname.slice('/fan/image/'.length);
       if(!/^[a-f0-9-]{36}$/.test(imageId))return fail('Image not found',404);
@@ -1746,7 +1757,8 @@ async function fanZone(request, env, url) {
       if (url.pathname === '/fan/admin/reports' && request.method === 'GET') {
         const rows = await db.prepare(`SELECT r.message_id,r.reason,m.text,m.room,u.name,COUNT(*) AS reports FROM fan_reports r JOIN fan_messages m ON m.id=r.message_id JOIN fan_users u ON u.id=m.user_id WHERE m.hidden=0 GROUP BY r.message_id ORDER BY reports DESC LIMIT 100`).all();
         const posts = await db.prepare(`SELECT r.post_id,p.text,p.kind,p.image_key,u.name,COUNT(*) AS reports FROM fan_post_reports r JOIN fan_posts p ON p.id=r.post_id JOIN fan_users u ON u.id=p.user_id WHERE p.hidden=0 GROUP BY r.post_id ORDER BY reports DESC LIMIT 100`).all();
-        return json({reports:rows.results,post_reports:posts.results});
+        const comments=await db.prepare(`SELECT r.comment_id,c.post_id,c.text,u.name,COUNT(*) AS reports FROM fan_comment_reports r JOIN fan_comments c ON c.id=r.comment_id JOIN fan_users u ON u.id=c.user_id JOIN fan_posts p ON p.id=c.post_id WHERE c.hidden=0 AND p.hidden=0 GROUP BY r.comment_id ORDER BY reports DESC LIMIT 100`).all();
+        return json({reports:rows.results,post_reports:posts.results,comment_reports:comments.results});
       }
       if (request.method !== 'POST') return fail('Method not allowed',405);
       const b = await request.json();
@@ -1756,6 +1768,11 @@ async function fanZone(request, env, url) {
         if(!post)return fail('Post not found',404);
         await db.prepare('UPDATE fan_posts SET hidden=1 WHERE id=?').bind(b.id).run();
         if(post.image_key && env.FAN_MEDIA)await env.FAN_MEDIA.delete(post.image_key).catch(e=>console.error('Image cleanup failed',e));
+        return json({ok:true});
+      }
+      if (url.pathname === '/fan/admin/hide-comment') {
+        if(typeof b.id!=='string' || b.id.length>100)return fail('Invalid comment');
+        await db.prepare('UPDATE fan_comments SET hidden=1 WHERE id=?').bind(b.id).run();
         return json({ok:true});
       }
       if (url.pathname === '/fan/admin/hide') {
@@ -1786,6 +1803,7 @@ async function fanZone(request, env, url) {
     }
     if(url.pathname==='/fan/ai-predict')return await fanAiPredict(request,env,id);
     const user = await db.prepare('SELECT * FROM fan_users WHERE id=?').bind(id).first();
+    if(url.pathname.startsWith('/fan/social/'))return await fanSocial(request,env,url,user,id);
     if(url.pathname==='/fan/posts' || url.pathname==='/fan/post' || url.pathname.startsWith('/fan/post/')) {
       return await fanPosts(request,env,url,user,id);
     }
@@ -1908,14 +1926,15 @@ async function fanPosts(request,env,url,user,id) {
   const fail=(error,status=400)=>json({error},status);
   if(request.method==='GET' && url.pathname==='/fan/posts') {
     const kind=url.searchParams.get('kind') || 'all';
-    if(!['all','prediction','betslip','banter'].includes(kind)) return fail('Invalid post filter');
-    const before=url.searchParams.get('before') || '';
-    const cursor=before ? /^(\d+):([a-f0-9-]{36})$/.exec(before) : null;
-    if(before && !cursor)return fail('Invalid page cursor');
-    const rows=await db.prepare(`SELECT p.id,p.user_id,u.name,p.kind,p.text,p.at,CASE WHEN p.image_key<>'' THEN 1 ELSE 0 END AS has_image FROM fan_posts p JOIN fan_users u ON u.id=p.user_id WHERE p.hidden=0 AND (?='all' OR p.kind=?) AND (p.at<? OR (p.at=? AND p.id<?)) ORDER BY p.at DESC,p.id DESC LIMIT 41`)
-      .bind(kind,kind,cursor?Number(cursor[1]):Number.MAX_SAFE_INTEGER,cursor?Number(cursor[1]):Number.MAX_SAFE_INTEGER,cursor?cursor[2]:'~').all();
-    const posts=rows.results.slice(0,40);
-    const last=posts.at(-1);
+    if(!['all','prediction','betslip','banter'].includes(kind))return fail('Invalid post filter');
+    const author=url.searchParams.get('author') || '';
+    const scope=url.searchParams.get('scope') || 'all';
+    if((author && !/^[a-f0-9]{64}$/.test(author)) || !['all','following'].includes(scope))return fail('Invalid feed');
+    const cursor=fanSocialCursor(url.searchParams.get('before'),'post');
+    if(cursor===false)return fail('Invalid page cursor');
+    const rows=await db.prepare(`SELECT ${FAN_SOCIAL_POST_FIELDS} FROM fan_posts p JOIN fan_users u ON u.id=p.user_id WHERE p.hidden=0 AND (?='all' OR p.kind=?) AND (?='' OR p.user_id=?) AND (?='all' OR EXISTS(SELECT 1 FROM fan_follows f WHERE f.follower_id=? AND f.following_id=p.user_id)) AND (p.at<? OR (p.at=? AND p.id<?)) ORDER BY p.at DESC,p.id DESC LIMIT 41`)
+      .bind(id,kind,kind,author,author,scope,id,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
+    const posts=rows.results.slice(0,40),last=posts.at(-1);
     return json({posts,next:rows.results.length>40?`${last.at}:${last.id}`:null,id,uploads_enabled:Boolean(env.FAN_MEDIA)});
   }
   if(!user) return fail('Choose your Fan Zone nickname first.',403);
@@ -2032,6 +2051,18 @@ async function fanMigrateInstall(db,legacyToken,id,isNew) {
     db.prepare(`DELETE FROM fan_reports WHERE user_id=? AND ${guard}`).bind(legacy,legacy,id),
     db.prepare(`UPDATE OR IGNORE fan_post_reports SET user_id=? WHERE user_id=? AND ${guard}`).bind(id,legacy,legacy,id),
     db.prepare(`DELETE FROM fan_post_reports WHERE user_id=? AND ${guard}`).bind(legacy,legacy,id),
+    db.prepare(`UPDATE OR IGNORE fan_public_profiles SET user_id=? WHERE user_id=? AND ${guard}`).bind(id,legacy,legacy,id),
+    db.prepare(`DELETE FROM fan_public_profiles WHERE user_id=? AND ${guard}`).bind(legacy,legacy,id),
+    db.prepare(`UPDATE OR IGNORE fan_follows SET follower_id=? WHERE follower_id=? AND ${guard}`).bind(id,legacy,legacy,id),
+    db.prepare(`DELETE FROM fan_follows WHERE follower_id=? AND ${guard}`).bind(legacy,legacy,id),
+    db.prepare(`UPDATE OR IGNORE fan_follows SET following_id=? WHERE following_id=? AND ${guard}`).bind(id,legacy,legacy,id),
+    db.prepare(`DELETE FROM fan_follows WHERE following_id=? AND ${guard}`).bind(legacy,legacy,id),
+    db.prepare(`DELETE FROM fan_follows WHERE follower_id=? AND following_id=? AND ${guard}`).bind(id,id,legacy,id),
+    db.prepare(`UPDATE OR IGNORE fan_likes SET user_id=? WHERE user_id=? AND ${guard}`).bind(id,legacy,legacy,id),
+    db.prepare(`DELETE FROM fan_likes WHERE user_id=? AND ${guard}`).bind(legacy,legacy,id),
+    db.prepare(`UPDATE fan_comments SET user_id=? WHERE user_id=? AND ${guard}`).bind(id,legacy,legacy,id),
+    db.prepare(`UPDATE OR IGNORE fan_comment_reports SET user_id=? WHERE user_id=? AND ${guard}`).bind(id,legacy,legacy,id),
+    db.prepare(`DELETE FROM fan_comment_reports WHERE user_id=? AND ${guard}`).bind(legacy,legacy,id),
     db.prepare(`DELETE FROM fan_users WHERE id=? AND ${guard}`).bind(legacy,legacy,id),
   ]);
 }
@@ -2102,4 +2133,135 @@ async function fanAiPredict(request,env,id) {
     console.error('Fan AI request failed',e);
     return fail('AI is temporarily unavailable. Please try again later.',503);
   } finally {clearTimeout(timeout);}
+}
+
+// Social data is keyed by verified account identity; no emails in public DTOs.
+const FAN_SOCIAL_POST_FIELDS=`p.id,p.user_id,u.name,p.kind,p.text,p.at,CASE WHEN p.image_key<>'' THEN 1 ELSE 0 END AS has_image,
+ (SELECT COUNT(*) FROM fan_likes l WHERE l.post_id=p.id) AS likes,
+ (SELECT COUNT(*) FROM fan_comments c WHERE c.post_id=p.id AND c.hidden=0) AS comments,
+ EXISTS(SELECT 1 FROM fan_likes l WHERE l.post_id=p.id AND l.user_id=?) AS liked`;
+function fanSocialCursor(raw,type='post') {
+  if(!raw)return null;
+  const match=(type==='user'? /^(\d{1,16}):([a-f0-9]{64})$/ : /^(\d{1,16}):([a-f0-9-]{36})$/).exec(raw);
+  if(!match || !Number.isSafeInteger(Number(match[1])))return false;
+  return {at:Number(match[1]),id:match[2]};
+}
+async function fanSocialBudget(db,id,action,max) {
+  const now=Date.now(),hour=Math.floor(now/3600000);
+  const counter=await db.prepare(`INSERT INTO fan_social_limits(bucket,count,expires) VALUES(?,1,?) ON CONFLICT(bucket) DO UPDATE SET count=count+1 RETURNING count`).bind(`${action}:${id}:${hour}`,(hour+1)*3600000).first();
+  await db.prepare('DELETE FROM fan_social_limits WHERE expires<?').bind(now).run();
+  return counter.count<=max;
+}
+async function fanSocial(request,env,url,user,id) {
+  const db=env.DB,fail=(error,status=400)=>json({error},status),path=url.pathname;
+  if(!['GET','POST'].includes(request.method))return fail('Method not allowed',405);
+  if(request.method==='GET' && path==='/fan/social/profile') {
+    const target=url.searchParams.get('id') || id;
+    if(!/^[a-f0-9]{64}$/.test(target))return fail('Invalid fan');
+    const profile=await db.prepare(`SELECT u.id,u.name,COALESCE(p.bio,'') AS bio,a.created_at AS joined_at,
+      (SELECT COUNT(*) FROM fan_follows f WHERE f.following_id=u.id) AS followers,
+      (SELECT COUNT(*) FROM fan_follows f WHERE f.follower_id=u.id) AS following,
+      (SELECT COUNT(*) FROM fan_posts p WHERE p.user_id=u.id AND p.hidden=0) AS posts,
+      (SELECT COUNT(*) FROM fan_likes l JOIN fan_posts p ON p.id=l.post_id WHERE p.user_id=u.id AND p.hidden=0) AS likes_received,
+      EXISTS(SELECT 1 FROM fan_follows f WHERE f.follower_id=? AND f.following_id=u.id) AS followed
+      FROM fan_users u LEFT JOIN fan_public_profiles p ON p.user_id=u.id LEFT JOIN fan_accounts a ON a.id=u.id WHERE u.id=?`).bind(id,target).first();
+    if(!profile)return fail('Fan not found',404);
+    const stats=await db.prepare(`SELECT COUNT(*) AS settled,COALESCE(SUM(CASE WHEN p.home=r.home AND p.away=r.away THEN 1 ELSE 0 END),0) AS exact,
+      COALESCE(SUM(CASE WHEN ((p.home>p.away AND r.home>r.away) OR (p.home<p.away AND r.home<r.away) OR (p.home=p.away AND r.home=r.away)) THEN 1 ELSE 0 END),0) AS correct,
+      COALESCE(SUM(CASE WHEN p.home=r.home AND p.away=r.away THEN 3 WHEN ((p.home>p.away AND r.home>r.away) OR (p.home<p.away AND r.home<r.away) OR (p.home=p.away AND r.home=r.away)) THEN 1 ELSE 0 END),0) AS points
+      FROM fan_picks p JOIN fan_results r ON r.match_key=p.match_key WHERE p.user_id=?`).bind(target).first();
+    const achievements=[
+      {key:'first-post',title:'First word',description:'Publish your first community post',earned:profile.posts>=1},
+      {key:'ten-posts',title:'Conversation starter',description:'Publish 10 community posts',earned:profile.posts>=10},
+      {key:'first-exact',title:'On target',description:'Predict an exact final score',earned:stats.exact>=1},
+      {key:'five-exact',title:'Sharpshooter',description:'Predict 5 exact final scores',earned:stats.exact>=5},
+      {key:'ten-settled',title:'Match regular',description:'Have 10 predictions settled',earned:stats.settled>=10},
+      {key:'ten-followers',title:'Fan favourite',description:'Reach 10 followers',earned:profile.followers>=10}
+    ];
+    return json({profile:{...profile,handle:`fan_${target.slice(0,12)}`,is_me:target===id,stats,achievements},viewer_id:id});
+  }
+  if(request.method==='GET' && path==='/fan/social/people') {
+    const target=url.searchParams.get('id') || id,type=url.searchParams.get('type') || 'followers';
+    if(!/^[a-f0-9]{64}$/.test(target) || !['followers','following'].includes(type))return fail('Invalid fan list');
+    if(!await db.prepare('SELECT id FROM fan_users WHERE id=?').bind(target).first())return fail('Fan not found',404);
+    const cursor=fanSocialCursor(url.searchParams.get('before'),'user');if(cursor===false)return fail('Invalid page cursor');
+    const owner=type==='followers'?'following_id':'follower_id',person=type==='followers'?'follower_id':'following_id';
+    const result=await db.prepare(`SELECT u.id,u.name,f.at,EXISTS(SELECT 1 FROM fan_follows x WHERE x.follower_id=? AND x.following_id=u.id) AS followed FROM fan_follows f JOIN fan_users u ON u.id=f.${person} WHERE f.${owner}=? AND (f.at<? OR (f.at=? AND u.id<?)) ORDER BY f.at DESC,u.id DESC LIMIT 41`).bind(id,target,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
+    const people=result.results.slice(0,40),last=people.at(-1);
+    return json({people,next:result.results.length>40?`${last.at}:${last.id}`:null,viewer_id:id});
+  }
+  if(request.method==='GET' && ['/fan/social/post','/fan/social/comments'].includes(path)) {
+    const postId=url.searchParams.get('id');
+    if(!/^[a-f0-9-]{36}$/.test(postId || ''))return fail('Invalid post');
+    const post=await db.prepare(`SELECT ${FAN_SOCIAL_POST_FIELDS} FROM fan_posts p JOIN fan_users u ON u.id=p.user_id WHERE p.id=? AND p.hidden=0`).bind(id,postId).first();
+    if(!post)return fail('Post not found',404);
+    if(path==='/fan/social/post')return json({post,viewer_id:id});
+    const cursor=fanSocialCursor(url.searchParams.get('before'));if(cursor===false)return fail('Invalid page cursor');
+    const result=await db.prepare(`SELECT c.id,c.post_id,c.user_id,u.name,c.text,c.at FROM fan_comments c JOIN fan_users u ON u.id=c.user_id WHERE c.post_id=? AND c.hidden=0 AND (c.at<? OR (c.at=? AND c.id<?)) ORDER BY c.at DESC,c.id DESC LIMIT 31`).bind(postId,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
+    const comments=result.results.slice(0,30),last=comments.at(-1);
+    return json({comments,next:result.results.length>30?`${last.at}:${last.id}`:null,post,viewer_id:id});
+  }
+  if(request.method!=='POST')return fail('Not found',404);
+  if(!user)return fail('Choose your Fan Zone nickname first.',403);
+  const raw=await request.text();if(raw.length>4096)return fail('Request too large',413);
+  let b;try{b=JSON.parse(raw);}catch{return fail('Invalid request');}
+  if(!b || typeof b!=='object' || Array.isArray(b))return fail('Invalid request');
+  if(path==='/fan/social/profile') {
+    const name=typeof b.name==='string'?b.name.trim():'',bio=typeof b.bio==='string'?b.bio.trim():'';
+    if(name.length<3 || name.length>30 || bio.length>160 || /[\u0000-\u001f<>]/.test(name) || /[\u0000-\u0008\u000b\u000c\u000e-\u001f<>]/.test(bio))return fail('Use a 3–30 character nickname and bio up to 160 characters.');
+    await db.batch([db.prepare('UPDATE fan_users SET name=? WHERE id=?').bind(name,id),db.prepare(`INSERT INTO fan_public_profiles(user_id,bio) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET bio=excluded.bio`).bind(id,bio)]);
+    return json({ok:true});
+  }
+  if(path==='/fan/social/follow') {
+    if(typeof b.id!=='string' || !/^[a-f0-9]{64}$/.test(b.id) || typeof b.following!=='boolean')return fail('Invalid follow request');
+    if(b.id===id)return fail('You cannot follow yourself');
+    if(!await db.prepare('SELECT id FROM fan_users WHERE id=?').bind(b.id).first())return fail('Fan not found',404);
+    if(!await fanSocialBudget(db,id,'follow',120))return fail('Too many follow changes. Try next hour.',429);
+    if(b.following)await db.prepare('INSERT OR IGNORE INTO fan_follows(follower_id,following_id,at) VALUES(?,?,?)').bind(id,b.id,Date.now()).run();
+    else await db.prepare('DELETE FROM fan_follows WHERE follower_id=? AND following_id=?').bind(id,b.id).run();
+    const count=await db.prepare('SELECT COUNT(*) AS followers FROM fan_follows WHERE following_id=?').bind(b.id).first();
+    return json({ok:true,following:b.following,...count});
+  }
+  if(path==='/fan/social/like' || path==='/fan/social/comment') {
+    if(typeof b.id!=='string' || !/^[a-f0-9-]{36}$/.test(b.id))return fail('Invalid post');
+    if(!await db.prepare('SELECT id FROM fan_posts WHERE id=? AND hidden=0').bind(b.id).first())return fail('Post not found',404);
+    if(path==='/fan/social/like') {
+      if(typeof b.liked!=='boolean')return fail('Invalid like request');
+      if(!await fanSocialBudget(db,id,'like',300))return fail('Too many like changes. Try next hour.',429);
+      if(b.liked)await db.prepare('INSERT OR IGNORE INTO fan_likes(post_id,user_id,at) VALUES(?,?,?)').bind(b.id,id,Date.now()).run();
+      else await db.prepare('DELETE FROM fan_likes WHERE post_id=? AND user_id=?').bind(b.id,id).run();
+      const count=await db.prepare('SELECT COUNT(*) AS likes FROM fan_likes WHERE post_id=?').bind(b.id).first();
+      return json({ok:true,liked:b.liked,...count});
+    }
+    const text=typeof b.text==='string'?b.text.trim():'';
+    if(!text || text.length>500 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(text))return fail('Write a comment of 1–500 characters');
+    if(!await fanSocialBudget(db,id,'comment',60))return fail('Too many comments. Try next hour.',429);
+    const now=Date.now();
+    if(!await db.prepare('UPDATE fan_users SET last_post=? WHERE id=? AND last_post<? RETURNING id').bind(now,id,now-10000).first())return fail('Please wait 10 seconds between posts and comments.',429);
+    const commentId=crypto.randomUUID();
+    await db.prepare('INSERT INTO fan_comments(id,post_id,user_id,text,at) VALUES(?,?,?,?,?)').bind(commentId,b.id,id,text,now).run();
+    return json({ok:true,id:commentId});
+  }
+  if(['/fan/social/comment-delete','/fan/social/comment-report'].includes(path)) {
+    if(typeof b.id!=='string' || !/^[a-f0-9-]{36}$/.test(b.id))return fail('Invalid comment');
+    const comment=await db.prepare(`SELECT c.user_id,p.user_id AS post_owner FROM fan_comments c JOIN fan_posts p ON p.id=c.post_id WHERE c.id=? AND c.hidden=0 AND p.hidden=0`).bind(b.id).first();
+    if(!comment)return fail('Comment not found',404);
+    if(path.endsWith('comment-delete')) {
+      if(comment.user_id!==id && comment.post_owner!==id)return fail('You can only remove your comments or comments on your posts.',403);
+      await db.prepare('UPDATE fan_comments SET hidden=1 WHERE id=?').bind(b.id).run();
+    } else await db.prepare('INSERT OR IGNORE INTO fan_comment_reports(comment_id,user_id,reason) VALUES(?,?,?)').bind(b.id,id,String(b.reason || 'Inappropriate content').slice(0,200)).run();
+    return json({ok:true});
+  }
+  return fail('Not found',404);
+}
+async function fanSharePost(env,url) {
+  const id=url.pathname.slice('/fan/share/'.length),escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  if(!/^[a-f0-9-]{36}$/.test(id))return html('Post not found',404);
+  const post=await env.DB.prepare(`SELECT p.id,p.text,p.image_key,u.name FROM fan_posts p JOIN fan_users u ON u.id=p.user_id WHERE p.id=? AND p.hidden=0`).bind(id).first();
+  if(!post)return html('Post not found',404);
+  const image=`${url.origin}/fan/image/${id}`;
+  const response=html(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(post.name)} on Deeprowss</title><meta property="og:title" content="${escape(post.name)} on Deeprowss"><meta property="og:description" content="${escape(post.text.slice(0,200))}">${post.image_key?`<meta property="og:image" content="${escape(image)}">`:''}<style>body{background:#090d12;color:#eee;font:17px system-ui;max-width:640px;margin:40px auto;padding:20px}article{border:1px solid #333;border-radius:20px;padding:24px}p{white-space:pre-wrap;overflow-wrap:anywhere}img{max-width:100%;border-radius:12px}a{color:#ff315f}</style></head><body><h2>Deeprowss · Banter</h2><article><h3>${escape(post.name)}</h3><p>${escape(post.text)}</p>${post.image_key?`<img src="${escape(image)}" alt="Post image">`:''}</article><p>Join the conversation in the Deeprowss app.</p><a href="https://deeprowss.com">Visit Deeprowss</a></body></html>`);
+  response.headers.set('cache-control','no-store');response.headers.set('x-content-type-options','nosniff');
+  response.headers.set('content-security-policy',"default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
+  return response;
 }
