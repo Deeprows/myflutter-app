@@ -20,6 +20,7 @@ class FanZoneService {
     String path, {
     Map<String, dynamic>? body,
     Map<String, String>? query,
+    Duration timeout = const Duration(seconds: 20),
   }) async {
     try {
       final token = await _token();
@@ -33,7 +34,7 @@ class FanZoneService {
           await (body == null
                   ? http.get(uri, headers: headers)
                   : http.post(uri, headers: headers, body: jsonEncode(body)))
-              .timeout(const Duration(seconds: 20));
+              .timeout(timeout);
       final data = jsonDecode(utf8.decode(response.bodyBytes));
       if (data is! Map<String, dynamic>) {
         throw Exception('Fan Zone received an invalid response.');
