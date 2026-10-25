@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../player/mini_player.dart';
-import '../player/player_hub_screen.dart';
 import '../services/content_sync.dart';
 import '../services/notice_service.dart';
 import '../services/push_service.dart';
@@ -13,13 +12,14 @@ import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/brand_tag.dart';
 import 'fan_zone_screen.dart';
+import 'ai_predict_screen.dart';
+import 'content_shortcut_screen.dart';
 import 'highlights_screen.dart';
 import 'live_screen.dart';
 import 'movies_screen.dart';
-import 'tv_screen.dart';
 import '../utils/l10n.dart';
 
-/// The whole app: Football Live, Fan Zone, TV channels and Movies.
+/// Live, predictions, weekly ranks, community posts and AI analysis.
 class ShellScreen extends StatefulWidget {
   const ShellScreen({super.key});
 
@@ -33,6 +33,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   DateTime? _lastBack;
   Timer? _autoRefresh;
   bool _highlightsOpen = false;
+  bool _moviesOpen = false;
 
   @override
   void initState() {
@@ -43,6 +44,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
       _index = pending;
       PushService.instance.tabRequest.value = null;
       if (pending == 1) _openHighlights();
+      if (pending == 3) _openMovies();
     }
     PushService.instance.tabRequest.addListener(_openRequestedTab);
 
@@ -78,6 +80,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     PushService.instance.tabRequest.value = null;
     if (mounted && tab != _index) setState(() => _index = tab);
     if (tab == 1) _openHighlights();
+    if (tab == 3) _openMovies();
   }
 
   // Highlight notifications still open their original content after tab 1
@@ -87,10 +90,35 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     _highlightsOpen = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => const HighlightsScreen()));
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const ContentShortcutScreen(
+            title: 'Highlights',
+            child: HighlightsScreen(),
+          ),
+        ),
+      );
       _highlightsOpen = false;
+    });
+  }
+
+  void _openMovies() {
+    if (_moviesOpen) return;
+    _moviesOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      try {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const ContentShortcutScreen(
+              title: 'Movies',
+              child: MoviesScreen(),
+            ),
+          ),
+        );
+      } finally {
+        _moviesOpen = false;
+      }
     });
   }
 
@@ -136,13 +164,17 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
               children: [
                 const LiveScreen(),
                 FanZoneScreen(active: _index == 1),
-                const TvScreen(),
-                const MoviesScreen(),
-                PlayerHubScreen(active: _index == 4),
+                FanZoneScreen(
+                  active: _index == 2,
+                  page: FanZonePage.ranks,
+                  onPredict: () => setState(() => _index = 1),
+                ),
+                FanZoneScreen(active: _index == 3, page: FanZonePage.banter),
+                AiPredictScreen(active: _index == 4),
               ],
             ),
-            // Small brand mark, bottom right, on the Live and Movies screens.
-            if (_index == 0 || _index == 3)
+            // Small brand mark on Live.
+            if (_index == 0)
               const Positioned(right: 8, bottom: 6, child: BrandTag()),
           ],
         ),
@@ -168,19 +200,19 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     label: 'Fan Zone'.tr,
                   ),
                   NavigationDestination(
-                    icon: const Icon(Icons.live_tv_outlined),
-                    selectedIcon: const Icon(Icons.live_tv_rounded),
-                    label: 'TV'.tr,
+                    icon: const Icon(Icons.leaderboard_outlined),
+                    selectedIcon: const Icon(Icons.leaderboard_rounded),
+                    label: 'Ranks'.tr,
                   ),
                   NavigationDestination(
-                    icon: const Icon(Icons.movie_outlined),
-                    selectedIcon: const Icon(Icons.movie_rounded),
-                    label: 'Movies'.tr,
+                    icon: const Icon(Icons.forum_outlined),
+                    selectedIcon: const Icon(Icons.forum_rounded),
+                    label: 'Banter'.tr,
                   ),
                   NavigationDestination(
-                    icon: const Icon(Icons.video_library_outlined),
-                    selectedIcon: const Icon(Icons.video_library_rounded),
-                    label: 'Player'.tr,
+                    icon: const Icon(Icons.auto_awesome_outlined),
+                    selectedIcon: const Icon(Icons.auto_awesome_rounded),
+                    label: 'AI Predict'.tr,
                   ),
                 ],
               ),
