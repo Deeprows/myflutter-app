@@ -244,6 +244,7 @@ jobs:
       - name: Test Fan Zone and account backend
         run: |
           node cloudflare/fan_auth.test.mjs
+          node cloudflare/ai_predict.test.mjs
           node cloudflare/fan_zone.test.mjs
           node cloudflare/worker.test.mjs
           node cloudflare/subscription.test.mjs
