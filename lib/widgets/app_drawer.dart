@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../config.dart';
+import '../services/auth_service.dart';
 import '../screens/browser_screen.dart';
 import '../screens/network_stream_screen.dart';
 import '../screens/playlists_screen.dart';
@@ -46,18 +47,22 @@ class FootboliveDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget item(IconData icon, String label, Future<void> Function(BuildContext) f) =>
-        ListTile(
-          dense: true,
-          leading: Icon(icon, size: 21),
-          title: Text(label,
-              style:
-                  const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
-          onTap: () => _go(context, f),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 18),
-          minVerticalPadding: 6,
-          horizontalTitleGap: 12,
-        );
+    Widget item(
+      IconData icon,
+      String label,
+      Future<void> Function(BuildContext) f,
+    ) => ListTile(
+      dense: true,
+      leading: Icon(icon, size: 21),
+      title: Text(
+        label,
+        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+      ),
+      onTap: () => _go(context, f),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18),
+      minVerticalPadding: 6,
+      horizontalTitleGap: 12,
+    );
 
     // "Subscription: Active" + the end date and days left.
     Widget subscriptionItem() {
@@ -72,9 +77,10 @@ class FootboliveDrawer extends StatelessWidget {
       return ListTile(
         dense: true,
         leading: Icon(Icons.verified_rounded, size: 21, color: Ui.green),
-        title: Text('Subscription: Active'.tr,
-            style: const TextStyle(
-                fontSize: 13.5, fontWeight: FontWeight.w700)),
+        title: Text(
+          'Subscription: Active'.tr,
+          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+        ),
         subtitle: detail.isEmpty
             ? null
             : Text(detail, style: TextStyle(color: Ui.muted, fontSize: 11.5)),
@@ -92,7 +98,11 @@ class FootboliveDrawer extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: EdgeInsets.fromLTRB(
-                20, MediaQuery.of(context).padding.top + 24, 20, 16),
+              20,
+              MediaQuery.of(context).padding.top + 24,
+              20,
+              16,
+            ),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
@@ -111,8 +121,10 @@ class FootboliveDrawer extends StatelessWidget {
                   fit: BoxFit.contain,
                 ),
                 const SizedBox(height: 4),
-                Text('${'Version'.tr}: ${AppConfig.appVersion}',
-                    style: TextStyle(color: Ui.muted, fontSize: 11.5)),
+                Text(
+                  '${'Version'.tr}: ${AppConfig.appVersion}',
+                  style: TextStyle(color: Ui.muted, fontSize: 11.5),
+                ),
               ],
             ),
           ),
@@ -120,15 +132,47 @@ class FootboliveDrawer extends StatelessWidget {
             child: ListView(
               // Bottom padding keeps 'Exit' clear of the phone navigation bar.
               padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewPadding.bottom + 16),
+                bottom: MediaQuery.of(context).viewPadding.bottom + 16,
+              ),
               children: [
+                if (AuthService.instance.user != null)
+                  ListTile(
+                    leading: const Icon(Icons.account_circle_outlined),
+                    title: Text(AuthService.instance.user!.name),
+                    subtitle: Text(AuthService.instance.user!.email),
+                  ),
+                item(Icons.logout_rounded, 'Log out', (c) async {
+                  final sure = await showDialog<bool>(
+                    context: c,
+                    builder: (dialog) => AlertDialog(
+                      title: const Text('Log out of Deeprowss?'),
+                      content: const Text(
+                        'You can log in again with the same Gmail account.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialog),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(dialog, true),
+                          child: const Text('Log out'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (sure != true || !c.mounted) return;
+                  Navigator.of(c).popUntil((route) => route.isFirst);
+                  await AuthService.instance.signOut();
+                }),
                 if (SubscriptionService.instance.visible)
                   item(
-                      Icons.workspace_premium_rounded,
-                      SubscriptionService.instance.isPremium
-                          ? 'Premium (active)'.tr
-                          : 'Go Premium - no ads'.tr,
-                      (c) => _push(c, const PlansScreen())),
+                    Icons.workspace_premium_rounded,
+                    SubscriptionService.instance.isPremium
+                        ? 'Premium (active)'.tr
+                        : 'Go Premium - no ads'.tr,
+                    (c) => _push(c, const PlansScreen()),
+                  ),
                 // Token users: before = "Remove ads"; once ads are gone this
                 // becomes the subscription status. (Paystack Premium has its
                 // own item above, so it is not repeated.)
@@ -138,37 +182,82 @@ class FootboliveDrawer extends StatelessWidget {
                   if (SubscriptionService.instance.isPremium)
                     subscriptionItem()
                   else
-                    item(Icons.block_rounded, 'Remove ads'.tr,
-                        (c) => _push(c, const RemoveAdsScreen())),
-                item(Icons.link_rounded, 'Network Stream'.tr,
-                    (c) => _push(c, const NetworkStreamScreen())),
-                item(Icons.playlist_play_rounded, 'Playlists'.tr,
-                    (c) => _push(c, const PlaylistsScreen())),
-                item(Icons.picture_in_picture_alt_rounded, 'Floating Player'.tr,
-                    showFloatingPlayerDialog),
-                item(Icons.settings_rounded, 'Video Quality Setting'.tr,
-                    showLowQualityDialog),
+                    item(
+                      Icons.block_rounded,
+                      'Remove ads'.tr,
+                      (c) => _push(c, const RemoveAdsScreen()),
+                    ),
+                item(
+                  Icons.link_rounded,
+                  'Network Stream'.tr,
+                  (c) => _push(c, const NetworkStreamScreen()),
+                ),
+                item(
+                  Icons.playlist_play_rounded,
+                  'Playlists'.tr,
+                  (c) => _push(c, const PlaylistsScreen()),
+                ),
+                item(
+                  Icons.picture_in_picture_alt_rounded,
+                  'Floating Player'.tr,
+                  showFloatingPlayerDialog,
+                ),
+                item(
+                  Icons.settings_rounded,
+                  'Video Quality Setting'.tr,
+                  showLowQualityDialog,
+                ),
                 item(Icons.palette_rounded, 'Themes'.tr, showThemeSheet),
                 item(Icons.language_rounded, 'Language'.tr, showLanguageSheet),
-                item(Icons.sports_cricket_rounded, 'Cricket Score'.tr,
-                    (c) => openInApp(c, AppConfig.cricketScoreUrl,
-                        title: 'Cricket Score'.tr)),
-                item(Icons.sports_soccer_rounded, 'Football Score'.tr,
-                    (c) => openInApp(c, AppConfig.footballScoreUrl,
-                        title: 'Football Score'.tr)),
-                item(Icons.notifications_active_rounded, 'Notifications'.tr,
-                    showNotificationSettings),
+                item(
+                  Icons.sports_cricket_rounded,
+                  'Cricket Score'.tr,
+                  (c) => openInApp(
+                    c,
+                    AppConfig.cricketScoreUrl,
+                    title: 'Cricket Score'.tr,
+                  ),
+                ),
+                item(
+                  Icons.sports_soccer_rounded,
+                  'Football Score'.tr,
+                  (c) => openInApp(
+                    c,
+                    AppConfig.footballScoreUrl,
+                    title: 'Football Score'.tr,
+                  ),
+                ),
+                item(
+                  Icons.notifications_active_rounded,
+                  'Notifications'.tr,
+                  showNotificationSettings,
+                ),
                 item(Icons.campaign_rounded, 'Notice'.tr, showNoticeDialog),
-                item(Icons.chat_rounded, 'Join Us'.tr,
-                    (c) => _openLink(c, AppConfig.joinUrl, 'Join Us'.tr)),
-                item(Icons.copyright_rounded, 'Copyright'.tr,
-                    showCopyrightDialog),
-                item(Icons.share_rounded, 'Share App'.tr,
-                    (c) => AppSharer.instance.share(c)),
-                item(Icons.sync_rounded, 'Update App'.tr,
-                    (c) => AppUpdater.instance.update(c)),
-                item(Icons.exit_to_app_rounded, 'Exit'.tr,
-                    (c) async => SystemNavigator.pop()),
+                item(
+                  Icons.chat_rounded,
+                  'Join Us'.tr,
+                  (c) => _openLink(c, AppConfig.joinUrl, 'Join Us'.tr),
+                ),
+                item(
+                  Icons.copyright_rounded,
+                  'Copyright'.tr,
+                  showCopyrightDialog,
+                ),
+                item(
+                  Icons.share_rounded,
+                  'Share App'.tr,
+                  (c) => AppSharer.instance.share(c),
+                ),
+                item(
+                  Icons.sync_rounded,
+                  'Update App'.tr,
+                  (c) => AppUpdater.instance.update(c),
+                ),
+                item(
+                  Icons.exit_to_app_rounded,
+                  'Exit'.tr,
+                  (c) async => SystemNavigator.pop(),
+                ),
               ],
             ),
           ),
@@ -203,9 +292,13 @@ Future<void> showThemeSheet(BuildContext context) {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Choose a theme'.tr,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w900)),
+              Text(
+                'Choose a theme'.tr,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
               const SizedBox(height: 14),
               for (var i = 0; i < Palettes.all.length; i++)
                 _ThemeTile(
@@ -225,8 +318,11 @@ class _ThemeTile extends StatelessWidget {
   final Palette palette;
   final bool selected;
   final VoidCallback onTap;
-  const _ThemeTile(
-      {required this.palette, required this.selected, required this.onTap});
+  const _ThemeTile({
+    required this.palette,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -243,8 +339,9 @@ class _ThemeTile extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                  color: selected ? palette.accent : Colors.white12,
-                  width: selected ? 2 : 1),
+                color: selected ? palette.accent : Colors.white12,
+                width: selected ? 2 : 1,
+              ),
             ),
             child: Row(
               children: [
@@ -262,14 +359,16 @@ class _ThemeTile extends StatelessWidget {
                       for (final c in [
                         palette.accent,
                         palette.accentSoft,
-                        palette.panel
+                        palette.panel,
                       ])
                         Container(
                           width: 14,
                           height: 14,
                           margin: const EdgeInsets.symmetric(horizontal: 3),
-                          decoration:
-                              BoxDecoration(color: c, shape: BoxShape.circle),
+                          decoration: BoxDecoration(
+                            color: c,
+                            shape: BoxShape.circle,
+                          ),
                         ),
                     ],
                   ),
@@ -279,13 +378,18 @@ class _ThemeTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(palette.name,
-                          style: const TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w800)),
+                      Text(
+                        palette.name,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                       const SizedBox(height: 2),
-                      Text(palette.tagline,
-                          style: TextStyle(
-                              color: palette.muted, fontSize: 12)),
+                      Text(
+                        palette.tagline,
+                        style: TextStyle(color: palette.muted, fontSize: 12),
+                      ),
                     ],
                   ),
                 ),
@@ -300,7 +404,6 @@ class _ThemeTile extends StatelessWidget {
   }
 }
 
-
 Future<void> showLowQualityDialog(BuildContext context) async {
   var on = await Settings.forceLowQuality();
   if (!context.mounted) return;
@@ -314,17 +417,22 @@ Future<void> showLowQualityDialog(BuildContext context) async {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-                'Enable this option to reduce buffering on slow connections. '
-                        'This will reduce video quality but improve playback stability.'
-                    .tr,
-                style: const TextStyle(fontWeight: FontWeight.w700, height: 1.3)),
+              'Enable this option to reduce buffering on slow connections. '
+                      'This will reduce video quality but improve playback stability.'
+                  .tr,
+              style: const TextStyle(fontWeight: FontWeight.w700, height: 1.3),
+            ),
             const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
-                  child: Text('Force to Low Quality'.tr,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w800)),
+                  child: Text(
+                    'Force to Low Quality'.tr,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
                 Switch(
                   value: on,
@@ -339,7 +447,9 @@ Future<void> showLowQualityDialog(BuildContext context) async {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: Text('CLOSE'.tr)),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('CLOSE'.tr),
+          ),
         ],
       ),
     ),
@@ -359,18 +469,23 @@ Future<void> showFloatingPlayerDialog(BuildContext context) async {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-                'Adds a button to the player that shrinks the video into a '
-                        'small floating window (picture-in-picture) so you can keep '
-                        'watching while using other apps.'
-                    .tr,
-                style: const TextStyle(fontWeight: FontWeight.w700, height: 1.3)),
+              'Adds a button to the player that shrinks the video into a '
+                      'small floating window (picture-in-picture) so you can keep '
+                      'watching while using other apps.'
+                  .tr,
+              style: const TextStyle(fontWeight: FontWeight.w700, height: 1.3),
+            ),
             const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
-                  child: Text('Enable Floating Player'.tr,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w800)),
+                  child: Text(
+                    'Enable Floating Player'.tr,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
                 Switch(
                   value: on,
@@ -385,7 +500,9 @@ Future<void> showFloatingPlayerDialog(BuildContext context) async {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: Text('CLOSE'.tr)),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('CLOSE'.tr),
+          ),
         ],
       ),
     ),
@@ -398,15 +515,15 @@ Future<void> showCopyrightDialog(BuildContext context) {
     builder: (ctx) => AlertDialog(
       title: Text('Copyright Alert'.tr),
       content: Text(
-          'Deeprowss does not host, upload or own any of the channels, '
-                  'matches or videos shown in this application. All content is the '
-                  'copyright of its respective owners, and you are responsible for '
-                  'making sure you have the right to watch what you play.'
-              .tr,
-          style: const TextStyle(fontWeight: FontWeight.w700, height: 1.3)),
+        'Deeprowss does not host, upload or own any of the channels, '
+                'matches or videos shown in this application. All content is the '
+                'copyright of its respective owners, and you are responsible for '
+                'making sure you have the right to watch what you play.'
+            .tr,
+        style: const TextStyle(fontWeight: FontWeight.w700, height: 1.3),
+      ),
       actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(ctx), child: Text('OK'.tr)),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text('OK'.tr)),
       ],
     ),
   );
