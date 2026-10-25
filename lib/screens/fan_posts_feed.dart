@@ -4,13 +4,13 @@ import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../models/fixture.dart';
 import '../services/fan_zone_service.dart';
 import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
 import 'fan_widgets.dart';
+import 'fan_post_card.dart';
 
 const _labels = {
   'all': 'All',
@@ -28,6 +28,8 @@ String _error(Object e) => e.toString().replaceFirst('Exception: ', '');
 
 class FanPostsFeed extends StatefulWidget {
   final bool active;
+  final String? authorId;
+  final VoidCallback? onSocialChanged;
   final Future<bool> Function() onJoin;
   final VoidCallback onOpenLounge;
   final List<Fixture> fixtures;
@@ -35,6 +37,8 @@ class FanPostsFeed extends StatefulWidget {
   const FanPostsFeed({
     super.key,
     required this.active,
+    this.authorId,
+    this.onSocialChanged,
     required this.onJoin,
     required this.onOpenLounge,
     required this.fixtures,
@@ -49,6 +53,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
   List<Map<String, dynamic>> _posts = [];
   Set<String> _blocked = {};
   String _kind = 'all', _myId = '';
+  String _scope = 'all';
   String? _next, _failure;
   bool _busy = false, _uploads = false, _foreground = true, _loadedOnce = false;
   Timer? _poll;
@@ -60,7 +65,11 @@ class _FanPostsFeedState extends State<FanPostsFeed>
     ContentSync.tick.addListener(_sync);
     if (widget.active) _load();
     _poll = Timer.periodic(const Duration(seconds: 45), (_) {
-      if (widget.active && _foreground && _posts.length <= 40) _load();
+      if (widget.active &&
+          _foreground &&
+          _posts.length <= 40 &&
+          TickerMode.of(context))
+        _load();
     });
   }
 
@@ -77,7 +86,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
   }
 
   void _sync() {
-    if (widget.active && _foreground) _load();
+    if (widget.active && _foreground && TickerMode.of(context)) _load();
   }
 
   @override
@@ -98,12 +107,17 @@ class _FanPostsFeedState extends State<FanPostsFeed>
   }
 
   Future<void> _load({bool more = false}) async {
-    if (_busy) return;
+    if (!mounted || _busy) return;
     setState(() => _busy = true);
     try {
       final data = await FanZoneService.call(
         'posts',
-        query: {'kind': _kind, if (more && _next != null) 'before': _next!},
+        query: {
+          'kind': _kind,
+          'scope': _scope,
+          if (widget.authorId != null) 'author': widget.authorId!,
+          if (more && _next != null) 'before': _next!,
+        },
       );
       final blocked = await FanZoneService.blocked();
       if (!mounted) return;
@@ -150,65 +164,6 @@ class _FanPostsFeedState extends State<FanPostsFeed>
         _next = null;
       });
       await _load();
-    }
-  }
-
-  Future<void> _action(String action, Map<String, dynamic> post) async {
-    try {
-      if (action == 'share') {
-        final text = post['text'].toString().trim();
-        await Share.share(
-          '${post['name']} on Deeprowss Fan Zone'
-          '${text.isEmpty ? '' : ':\n$text'}',
-        );
-        return;
-      }
-      if (action == 'block') {
-        await FanZoneService.block(post['user_id'].toString());
-        if (mounted) setState(() => _blocked.add(post['user_id'].toString()));
-        _notice('Fan blocked on this device.');
-        return;
-      }
-      if (!await widget.onJoin() || !mounted) return;
-      if (action == 'delete') {
-        final yes = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Delete this post?'),
-            content: const Text(
-              'This removes the post and its image from the community feed.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-        );
-        if (yes != true) return;
-      }
-      await FanZoneService.call(
-        'post/${action == 'delete' ? 'delete' : 'report'}',
-        body: {
-          'id': post['id'],
-          if (action == 'report') 'reason': 'Inappropriate content',
-        },
-      );
-      if (action == 'delete') {
-        if (mounted) {
-          setState(() => _posts.removeWhere((p) => p['id'] == post['id']));
-        }
-        _notice('Post deleted.');
-      } else {
-        _notice('Report sent for review.');
-      }
-    } catch (e) {
-      _notice(_error(e));
     }
   }
 
@@ -345,13 +300,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                lead,
-                const Spacer(),
-                status,
-              ],
-            ),
+            Row(children: [lead, const Spacer(), status]),
             const SizedBox(height: 10),
             Text(
               title,
@@ -503,166 +452,16 @@ class _FanPostsFeedState extends State<FanPostsFeed>
     ),
   );
 
-  Widget _post(Map<String, dynamic> p) {
-    final mine = p['user_id'] == _myId;
-    final k = FanKind.of(p['kind'].toString());
-    final name = '${p['name']}';
-    final text = p['text'].toString();
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: Ui.card,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: mine ? Ui.red.withValues(alpha: .4) : Ui.line),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 3,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [k.color, k.color.withValues(alpha: 0)],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 6, 0),
-            child: Row(
-              children: [
-                FanAvatar(name: name, seed: '${p['user_id']}', size: 42),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        mine ? '$name (you)' : name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 15,
-                        ),
-                      ),
-                      Text(
-                        '#${fanShortId(p['user_id'])} • ${fanTimeAgo(p['at'])}',
-                        style: TextStyle(fontSize: 11, color: Ui.muted),
-                      ),
-                    ],
-                  ),
-                ),
-                FanPill(text: k.label, color: k.color, icon: k.icon),
-                PopupMenuButton<String>(
-                  onSelected: (a) => _action(a, p),
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: 'share',
-                      child: Text('Share post'),
-                    ),
-                    if (mine)
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Text('Delete post'),
-                      ),
-                    if (!mine) ...const [
-                      PopupMenuItem(
-                        value: 'report',
-                        child: Text('Report post'),
-                      ),
-                      PopupMenuItem(
-                        value: 'block',
-                        child: Text('Block fan'),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-          if (text.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-              child: SelectableText(
-                text,
-                style: const TextStyle(fontSize: 15.5, height: 1.45),
-              ),
-            ),
-          if (p['has_image'] == 1)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: Semantics(
-                label: 'Open post image',
-                button: true,
-                child: InkWell(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => _PostImage(postId: p['id'].toString()),
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      width: double.infinity,
-                      height: 240,
-                      color: Colors.black26,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.network(
-                            FanZoneService.imageUrl(p['id'].toString()),
-                            fit: BoxFit.contain,
-                            cacheWidth: 900,
-                            loadingBuilder: (_, child, progress) =>
-                                progress == null
-                                ? child
-                                : const Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                            errorBuilder: (_, __, ___) =>
-                                const Center(child: Text('Image unavailable')),
-                          ),
-                          const Positioned(
-                            right: 8,
-                            bottom: 8,
-                            child: Icon(
-                              Icons.zoom_out_map_rounded,
-                              size: 18,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-            child: Row(
-              children: [
-                TextButton.icon(
-                  onPressed: () => _action('share', p),
-                  icon: const Icon(Icons.ios_share_rounded, size: 17),
-                  label: const Text('Share'),
-                  style: TextButton.styleFrom(foregroundColor: Ui.muted),
-                ),
-                TextButton.icon(
-                  onPressed: widget.onOpenLounge,
-                  icon: const Icon(Icons.forum_outlined, size: 17),
-                  label: const Text('Reply in lounge'),
-                  style: TextButton.styleFrom(foregroundColor: Ui.muted),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _post(Map<String, dynamic> p) => FanPostCard(
+    key: ValueKey(p['id']),
+    post: p,
+    viewerId: _myId,
+    onChanged: () {
+      _load();
+      widget.onSocialChanged?.call();
+    },
+    onBlocked: () => _load(),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -675,10 +474,41 @@ class _FanPostsFeedState extends State<FanPostsFeed>
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
         children: [
-          _composer(),
-          const FanSectionTitle('Live chat rooms', icon: Icons.chat_rounded),
-          _rooms(),
-          const FanSectionTitle('Community feed', icon: Icons.dynamic_feed_rounded),
+          if (widget.authorId == null) ...[
+            _composer(),
+            const FanSectionTitle('Live chat rooms', icon: Icons.chat_rounded),
+            _rooms(),
+            const FanSectionTitle(
+              'Community feed',
+              icon: Icons.dynamic_feed_rounded,
+            ),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: 'all',
+                  label: Text('Everyone'),
+                  icon: Icon(Icons.public_rounded),
+                ),
+                ButtonSegment(
+                  value: 'following',
+                  label: Text('Following'),
+                  icon: Icon(Icons.people_outline),
+                ),
+              ],
+              selected: {_scope},
+              onSelectionChanged: _busy
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _scope = value.first;
+                        _posts = [];
+                        _next = null;
+                      });
+                      _load();
+                    },
+            ),
+            const SizedBox(height: 12),
+          ],
           _filters(),
           const SizedBox(height: 12),
           if (_blocked.isNotEmpty)
@@ -731,12 +561,18 @@ class _FanPostsFeedState extends State<FanPostsFeed>
             FanEmpty(
               icon: Icons.forum_outlined,
               title: 'No posts here yet',
-              message: 'Be the first to share a prediction or some gist.',
-              action: FilledButton.icon(
-                onPressed: () => _create('banter'),
-                icon: const Icon(Icons.edit_rounded, size: 18),
-                label: const Text('Create a post'),
-              ),
+              message: widget.authorId != null
+                  ? 'This fan has not posted here yet.'
+                  : _scope == 'following'
+                  ? 'Follow fans from their profiles to see their posts here.'
+                  : 'Be the first to share a prediction or some gist.',
+              action: widget.authorId != null
+                  ? null
+                  : FilledButton.icon(
+                      onPressed: () => _create('banter'),
+                      icon: const Icon(Icons.edit_rounded, size: 18),
+                      label: const Text('Create a post'),
+                    ),
             ),
           for (final p in visible) _post(p),
           if (_busy && visible.isNotEmpty)
@@ -1122,30 +958,4 @@ class _ComposePostState extends State<_ComposePost> {
       ),
     );
   }
-}
-
-class _PostImage extends StatelessWidget {
-  final String postId;
-  const _PostImage({required this.postId});
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: Colors.black,
-    appBar: AppBar(
-      backgroundColor: Colors.black,
-      title: const Text('Post image'),
-    ),
-    body: Center(
-      child: InteractiveViewer(
-        minScale: .5,
-        maxScale: 5,
-        child: Image.network(
-          FanZoneService.imageUrl(postId),
-          cacheWidth: 2000,
-          errorBuilder: (_, __, ___) => const Text('Image unavailable'),
-          loadingBuilder: (_, child, progress) =>
-              progress == null ? child : const CircularProgressIndicator(),
-        ),
-      ),
-    ),
-  );
 }
