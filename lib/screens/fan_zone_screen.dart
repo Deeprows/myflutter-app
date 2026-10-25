@@ -11,12 +11,24 @@ import '../theme/app_theme.dart';
 import 'fan_posts_feed.dart';
 import 'fan_widgets.dart';
 import 'highlights_screen.dart';
+import 'movies_screen.dart';
+import 'tv_screen.dart';
+import 'content_shortcut_screen.dart';
 
 String _error(Object e) => e.toString().replaceFirst('Exception: ', '');
 
+enum FanZonePage { predict, ranks, banter }
+
 class FanZoneScreen extends StatefulWidget {
   final bool active;
-  const FanZoneScreen({super.key, required this.active});
+  final FanZonePage page;
+  final VoidCallback? onPredict;
+  const FanZoneScreen({
+    super.key,
+    required this.active,
+    this.page = FanZonePage.predict,
+    this.onPredict,
+  });
   @override
   State<FanZoneScreen> createState() => _FanZoneScreenState();
 }
@@ -205,110 +217,79 @@ class _FanZoneScreenState extends State<FanZoneScreen>
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
+    final title = switch (widget.page) {
+      FanZonePage.predict => 'Fan Zone',
+      FanZonePage.ranks => 'Ranks',
+      FanZonePage.banter => 'Banter',
+    };
+    final shortcut = switch (widget.page) {
+      FanZonePage.predict => 'Highlights',
+      FanZonePage.ranks => 'TV',
+      FanZonePage.banter => 'Movies',
+    };
+    final icon = switch (widget.page) {
+      FanZonePage.predict => Icons.play_circle_outline_rounded,
+      FanZonePage.ranks => Icons.live_tv_outlined,
+      FanZonePage.banter => Icons.movie_outlined,
+    };
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          titleSpacing: 16,
-          title: Row(
-            children: [
-              const Text(
-                'Fan Zone',
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        titleSpacing: 16,
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        actions: [
+          IconButton(
+            tooltip: shortcut,
+            icon: Icon(icon),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ContentShortcutScreen(
+                  title: shortcut,
+                  child: switch (widget.page) {
+                    FanZonePage.predict => const HighlightsScreen(),
+                    FanZonePage.ranks => const TvScreen(),
+                    FanZonePage.banter => const MoviesScreen(),
+                  },
+                ),
               ),
-              const SizedBox(width: 8),
-              FanPill(text: 'BETA', color: Ui.redSoft),
-            ],
+            ),
           ),
-          actions: [
-            IconButton(
-              tooltip: 'Highlights',
-              icon: const Icon(Icons.play_circle_outline_rounded),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute<void>(
-                  builder: (_) => const HighlightsScreen(),
-                ),
-              ),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _busy
+                ? null
+                : () {
+                    _refresh();
+                    ContentSync.request(force: true);
+                  },
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: IconButton(
+              tooltip: 'Your nickname',
+              onPressed: _profile,
+              icon: _name.isEmpty
+                  ? const Icon(Icons.person_add_alt_1_rounded)
+                  : FanAvatar(name: _name, seed: _myId, size: 32),
             ),
-            IconButton(
-              tooltip: 'Refresh',
-              onPressed: _busy ? null : _refresh,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 12, left: 2),
-              child: GestureDetector(
-                onTap: _profile,
-                child: Tooltip(
-                  message: 'Your nickname',
-                  child: _name.isEmpty
-                      ? CircleAvatar(
-                          radius: 16,
-                          backgroundColor: Ui.card,
-                          child: Icon(
-                            Icons.person_add_alt_1_rounded,
-                            size: 17,
-                            color: Ui.muted,
-                          ),
-                        )
-                      : FanAvatar(name: _name, seed: _myId, size: 32),
-                ),
-              ),
-            ),
-          ],
-        ),
-        body: Column(
-          children: [
-            _tabs(),
-            if (_busy) const LinearProgressIndicator(minHeight: 2),
-            if (_failure != null) _failureBanner(),
-            Expanded(
-              child: TabBarView(
-                children: [_predictions(), _rankings(), _banter()],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
-
-  Widget _tabs() {
-    Tab tab(IconData icon, String text) => Tab(
-      height: 40,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [Icon(icon, size: 17), const SizedBox(width: 6), Text(text)],
-      ),
-    );
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      padding: const EdgeInsets.all(4),
-      decoration: fanBox(radius: 16),
-      child: TabBar(
-        dividerColor: Colors.transparent,
-        indicatorSize: TabBarIndicatorSize.tab,
-        splashBorderRadius: BorderRadius.circular(12),
-        indicator: BoxDecoration(
-          color: Ui.red,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        labelColor: Ui.palette.onAccent,
-        unselectedLabelColor: Ui.muted,
-        labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
-        unselectedLabelStyle: const TextStyle(
-          fontWeight: FontWeight.w600,
-          fontSize: 13,
-        ),
-        tabs: [
-          tab(Icons.sports_score_rounded, 'Predict'),
-          tab(Icons.leaderboard_rounded, 'Ranks'),
-          tab(Icons.forum_rounded, 'Banter'),
+      body: Column(
+        children: [
+          if (_busy) const LinearProgressIndicator(minHeight: 2),
+          if (_failure != null) _failureBanner(),
+          Expanded(
+            child: switch (widget.page) {
+              FanZonePage.predict => _predictions(),
+              FanZonePage.ranks => _rankings(),
+              FanZonePage.banter => _banter(),
+            },
+          ),
         ],
       ),
     );
@@ -960,8 +941,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
               message: 'Rankings start once this week\'s matches are confirmed. Make your picks to be first on the board.',
               action: Builder(
                 builder: (tabContext) => FilledButton.icon(
-                  onPressed: () =>
-                      DefaultTabController.of(tabContext).animateTo(0),
+                  onPressed: widget.onPredict,
                   icon: const Icon(Icons.sports_score_rounded, size: 18),
                   label: const Text('Make predictions'),
                 ),
