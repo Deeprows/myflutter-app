@@ -221,10 +221,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                 style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22),
               ),
               const SizedBox(width: 8),
-              FanPill(
-                text: 'BETA',
-                color: Ui.redSoft,
-              ),
+              FanPill(text: 'BETA', color: Ui.redSoft),
             ],
           ),
           actions: [
@@ -283,16 +280,12 @@ class _FanZoneScreenState extends State<FanZoneScreen>
 
   Widget _tabs() {
     Tab tab(IconData icon, String text) => Tab(
-          height: 40,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 17),
-              const SizedBox(width: 6),
-              Text(text),
-            ],
-          ),
-        );
+      height: 40,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 17), const SizedBox(width: 6), Text(text)],
+      ),
+    );
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       padding: const EdgeInsets.all(4),
@@ -308,8 +301,10 @@ class _FanZoneScreenState extends State<FanZoneScreen>
         labelColor: Ui.palette.onAccent,
         unselectedLabelColor: Ui.muted,
         labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
-        unselectedLabelStyle:
-            const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        unselectedLabelStyle: const TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 13,
+        ),
         tabs: [
           tab(Icons.sports_score_rounded, 'Predict'),
           tab(Icons.leaderboard_rounded, 'Ranks'),
@@ -320,28 +315,29 @@ class _FanZoneScreenState extends State<FanZoneScreen>
   }
 
   Widget _failureBanner() => Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
-        decoration: fanBox(
-          color: Theme.of(context).colorScheme.error.withValues(alpha: .12),
-          border: Theme.of(context).colorScheme.error.withValues(alpha: .4),
-          radius: 14,
+    margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+    padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+    decoration: fanBox(
+      color: Theme.of(context).colorScheme.error.withValues(alpha: .12),
+      border: Theme.of(context).colorScheme.error.withValues(alpha: .4),
+      radius: 14,
+    ),
+    child: Row(
+      children: [
+        Icon(
+          Icons.cloud_off_rounded,
+          size: 18,
+          color: Theme.of(context).colorScheme.error,
         ),
-        child: Row(
-          children: [
-            Icon(Icons.cloud_off_rounded,
-                size: 18, color: Theme.of(context).colorScheme.error),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(_failure!, style: const TextStyle(fontSize: 13)),
-            ),
-            TextButton(
-              onPressed: _busy ? null : _refresh,
-              child: const Text('Retry'),
-            ),
-          ],
+        const SizedBox(width: 10),
+        Expanded(child: Text(_failure!, style: const TextStyle(fontSize: 13))),
+        TextButton(
+          onPressed: _busy ? null : _refresh,
+          child: const Text('Retry'),
         ),
-      );
+      ],
+    ),
+  );
 
   // ---------------------------------------------------------------------------
   // PREDICT TAB
@@ -354,8 +350,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     final leagues = <String>{
       for (final f in _fixtures)
         if (f.league.isNotEmpty) f.league,
-    }.toList()
-      ..sort();
+    }.toList()..sort();
     final shown = _fixtures
         .where((f) => _league.isEmpty || f.league == _league)
         .toList();
@@ -409,7 +404,8 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             const FanEmpty(
               icon: Icons.lock_clock_rounded,
               title: 'Nothing open right now',
-              message: 'Every match has kicked off. Check back for new fixtures.',
+              message:
+                  'Every match has kicked off. Check back for new fixtures.',
             ),
           if (started.isNotEmpty) ...[
             const FanSectionTitle('Started or finished'),
@@ -437,8 +433,8 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     final progress = next == null
         ? 1.0
         : ((stats.points - level.min) / (next.min - level.min))
-            .clamp(0.0, 1.0)
-            .toDouble();
+              .clamp(0.0, 1.0)
+              .toDouble();
     Widget stat(IconData icon, String value, String label, Color color) =>
         Expanded(
           child: Column(
@@ -518,10 +514,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                 ),
               ),
               if (_name.isEmpty)
-                FilledButton(
-                  onPressed: _profile,
-                  child: const Text('Join'),
-                ),
+                FilledButton(onPressed: _profile, child: const Text('Join')),
             ],
           ),
           if (_name.isNotEmpty) ...[
@@ -545,17 +538,30 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             const SizedBox(height: 14),
             Row(
               children: [
-                stat(Icons.stars_rounded, '${stats.points}', 'Points',
-                    const Color(0xFFFFC107)),
-                stat(Icons.track_changes_rounded, '${stats.exact}', 'Exact',
-                    Ui.green),
                 stat(
-                    Icons.percent_rounded,
-                    stats.settled == 0 ? '–' : '${stats.accuracy}',
-                    'Accuracy',
-                    const Color(0xFF448AFF)),
-                stat(Icons.local_fire_department_rounded, '${stats.streak}',
-                    'Streak', const Color(0xFFFF7043)),
+                  Icons.stars_rounded,
+                  '${stats.points}',
+                  'Points',
+                  const Color(0xFFFFC107),
+                ),
+                stat(
+                  Icons.track_changes_rounded,
+                  '${stats.exact}',
+                  'Exact',
+                  Ui.green,
+                ),
+                stat(
+                  Icons.percent_rounded,
+                  stats.settled == 0 ? '–' : '${stats.accuracy}',
+                  'Accuracy',
+                  const Color(0xFF448AFF),
+                ),
+                stat(
+                  Icons.local_fire_department_rounded,
+                  '${stats.streak}',
+                  'Streak',
+                  const Color(0xFFFF7043),
+                ),
               ],
             ),
           ],
@@ -565,77 +571,77 @@ class _FanZoneScreenState extends State<FanZoneScreen>
   }
 
   Widget _rules() => SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            FanPill(
-              text: 'Exact score  +3',
-              color: Ui.green,
-              icon: Icons.track_changes_rounded,
-            ),
-            const SizedBox(width: 8),
-            const FanPill(
-              text: 'Winner or draw  +1',
-              color: Color(0xFF448AFF),
-              icon: Icons.check_circle_outline_rounded,
-            ),
-            const SizedBox(width: 8),
-            const FanPill(
-              text: 'Locks at kickoff',
-              color: Color(0xFFFFB300),
-              icon: Icons.lock_outline_rounded,
-            ),
-          ],
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: [
+        FanPill(
+          text: 'Exact score  +3',
+          color: Ui.green,
+          icon: Icons.track_changes_rounded,
         ),
-      );
+        const SizedBox(width: 8),
+        const FanPill(
+          text: 'Winner or draw  +1',
+          color: Color(0xFF448AFF),
+          icon: Icons.check_circle_outline_rounded,
+        ),
+        const SizedBox(width: 8),
+        const FanPill(
+          text: 'Locks at kickoff',
+          color: Color(0xFFFFB300),
+          icon: Icons.lock_outline_rounded,
+        ),
+      ],
+    ),
+  );
 
   Widget _filters(List<String> leagues) => Padding(
-        padding: const EdgeInsets.only(top: 12),
-        child: SizedBox(
-          height: 38,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              FilterChip(
-                avatar: const Icon(Icons.lock_open_rounded, size: 15),
-                label: const Text('Open only'),
-                selected: _openOnly,
-                onSelected: (v) => setState(() => _openOnly = v),
-              ),
-              const SizedBox(width: 8),
-              ChoiceChip(
-                label: const Text('All leagues'),
-                selected: _league.isEmpty,
-                onSelected: (_) => setState(() => _league = ''),
-              ),
-              for (final l in leagues) ...[
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: Text(l),
-                  selected: _league == l,
-                  onSelected: (_) => setState(() => _league = l),
-                ),
-              ],
-            ],
+    padding: const EdgeInsets.only(top: 12),
+    child: SizedBox(
+      height: 38,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          FilterChip(
+            avatar: const Icon(Icons.lock_open_rounded, size: 15),
+            label: const Text('Open only'),
+            selected: _openOnly,
+            onSelected: (v) => setState(() => _openOnly = v),
           ),
-        ),
-      );
-
-  Widget _team(String name, String logo) => Expanded(
-        child: Column(
-          children: [
-            TeamCrest(logo: logo, size: 50),
-            const SizedBox(height: 8),
-            Text(
-              name,
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+          const SizedBox(width: 8),
+          ChoiceChip(
+            label: const Text('All leagues'),
+            selected: _league.isEmpty,
+            onSelected: (_) => setState(() => _league = ''),
+          ),
+          for (final l in leagues) ...[
+            const SizedBox(width: 8),
+            ChoiceChip(
+              label: Text(l),
+              selected: _league == l,
+              onSelected: (_) => setState(() => _league = l),
             ),
           ],
+        ],
+      ),
+    ),
+  );
+
+  Widget _team(String name, String logo) => Expanded(
+    child: Column(
+      children: [
+        TeamCrest(logo: logo, size: 50),
+        const SizedBox(height: 8),
+        Text(
+          name,
+          maxLines: 2,
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _fixture(Fixture f, List<Map<String, dynamic>> picks, DateTime now) {
     final key = FanZoneService.matchKey(f);
@@ -726,8 +732,9 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed:
-                      !_saving && _failure == null ? () => _pick(f) : null,
+                  onPressed: !_saving && _failure == null
+                      ? () => _pick(f)
+                      : null,
                   icon: Icon(
                     pick == null
                         ? Icons.sports_soccer_rounded
@@ -950,8 +957,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             FanEmpty(
               icon: Icons.emoji_events_outlined,
               title: 'No ranked fans yet',
-              message:
-                  'Rankings start once this week\'s matches are confirmed. Make your picks to be first on the board.',
+              message: 'Rankings start once this week\'s matches are confirmed. Make your picks to be first on the board.',
               action: Builder(
                 builder: (tabContext) => FilledButton.icon(
                   onPressed: () =>
@@ -997,8 +1003,8 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     final medal = rank == 1
         ? const Color(0xFFFFC107)
         : rank == 2
-            ? const Color(0xFFB0BEC5)
-            : const Color(0xFFCD7F32);
+        ? const Color(0xFFB0BEC5)
+        : const Color(0xFFCD7F32);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1048,7 +1054,10 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [medal.withValues(alpha: .35), medal.withValues(alpha: .04)],
+              colors: [
+                medal.withValues(alpha: .35),
+                medal.withValues(alpha: .04),
+              ],
             ),
           ),
           child: Text(
@@ -1121,15 +1130,15 @@ class _FanZoneScreenState extends State<FanZoneScreen>
   // ---------------------------------------------------------------------------
 
   Widget _banter() => FanPostsFeed(
-        active: widget.active,
-        onJoin: () async {
-          if (_name.isNotEmpty) return true;
-          return _profile();
-        },
-        onOpenLounge: () => _discussion('lounge', 'Fan lounge'),
-        fixtures: _fixtures,
-        onOpenMatch: (f) => _discussion(FanZoneService.matchKey(f), f.title),
-      );
+    active: widget.active,
+    onJoin: () async {
+      if (_name.isNotEmpty) return true;
+      return _profile();
+    },
+    onOpenLounge: () => _discussion('lounge', 'Fan lounge'),
+    fixtures: _fixtures,
+    onOpenMatch: (f) => _discussion(FanZoneService.matchKey(f), f.title),
+  );
 }
 
 // -----------------------------------------------------------------------------
@@ -1182,11 +1191,8 @@ class _NicknameSheetState extends State<_NicknameSheet> {
           Center(
             child: ValueListenableBuilder<TextEditingValue>(
               valueListenable: _input,
-              builder: (_, v, __) => FanAvatar(
-                name: v.text,
-                seed: v.text,
-                size: 72,
-              ),
+              builder: (_, v, __) =>
+                  FanAvatar(name: v.text, seed: v.text, size: 72),
             ),
           ),
           const SizedBox(height: 16),
@@ -1196,7 +1202,7 @@ class _NicknameSheetState extends State<_NicknameSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Your name and rank are public. This profile stays on this device; clearing app data removes access to it.',
+            'Your name and rank are public. Your profile is linked to your Gmail account. Log in on another device to recover your nickname, predictions and posts.',
             style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.35),
           ),
           const SizedBox(height: 14),
@@ -1256,9 +1262,17 @@ class _PickSheetState extends State<_PickSheet> {
   late int _away = widget.away;
 
   static const _quick = [
-    [1, 0], [2, 0], [2, 1], [3, 1],
-    [1, 1], [0, 0], [2, 2],
-    [0, 1], [0, 2], [1, 2], [1, 3],
+    [1, 0],
+    [2, 0],
+    [2, 1],
+    [3, 1],
+    [1, 1],
+    [0, 0],
+    [2, 2],
+    [0, 1],
+    [0, 2],
+    [1, 2],
+    [1, 3],
   ];
 
   String get _verdict {
@@ -1269,42 +1283,46 @@ class _PickSheetState extends State<_PickSheet> {
         : 'You predict ${f.away} to win';
   }
 
-  Widget _stepper(String name, String logo, int value, void Function(int) set) =>
-      Expanded(
-        child: Column(
-          children: [
-            TeamCrest(logo: logo, size: 52),
-            const SizedBox(height: 8),
-            Text(
-              name,
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-            IconButton.filledTonal(
-              onPressed: value >= 20 ? null : () => set(value + 1),
-              icon: const Icon(Icons.add_rounded),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text(
-                '$value',
-                style: const TextStyle(
-                  fontSize: 58,
-                  fontWeight: FontWeight.w900,
-                  height: 1.1,
-                ),
-              ),
-            ),
-            IconButton.filledTonal(
-              onPressed: value <= 0 ? null : () => set(value - 1),
-              icon: const Icon(Icons.remove_rounded),
-            ),
-          ],
+  Widget _stepper(
+    String name,
+    String logo,
+    int value,
+    void Function(int) set,
+  ) => Expanded(
+    child: Column(
+      children: [
+        TeamCrest(logo: logo, size: 52),
+        const SizedBox(height: 8),
+        Text(
+          name,
+          maxLines: 2,
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
-      );
+        const SizedBox(height: 10),
+        IconButton.filledTonal(
+          onPressed: value >= 20 ? null : () => set(value + 1),
+          icon: const Icon(Icons.add_rounded),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Text(
+            '$value',
+            style: const TextStyle(
+              fontSize: 58,
+              fontWeight: FontWeight.w900,
+              height: 1.1,
+            ),
+          ),
+        ),
+        IconButton.filledTonal(
+          onPressed: value <= 0 ? null : () => set(value - 1),
+          icon: const Icon(Icons.remove_rounded),
+        ),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -1316,7 +1334,9 @@ class _PickSheetState extends State<_PickSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              widget.editing ? 'Edit your prediction' : 'Predict the final score',
+              widget.editing
+                  ? 'Edit your prediction'
+                  : 'Predict the final score',
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 4),
@@ -1328,8 +1348,12 @@ class _PickSheetState extends State<_PickSheet> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _stepper(f.home, f.homeLogo, _home,
-                    (v) => setState(() => _home = v)),
+                _stepper(
+                  f.home,
+                  f.homeLogo,
+                  _home,
+                  (v) => setState(() => _home = v),
+                ),
                 Padding(
                   padding: const EdgeInsets.only(top: 104),
                   child: Text(
@@ -1341,16 +1365,16 @@ class _PickSheetState extends State<_PickSheet> {
                     ),
                   ),
                 ),
-                _stepper(f.away, f.awayLogo, _away,
-                    (v) => setState(() => _away = v)),
+                _stepper(
+                  f.away,
+                  f.awayLogo,
+                  _away,
+                  (v) => setState(() => _away = v),
+                ),
               ],
             ),
             const SizedBox(height: 14),
-            FanPill(
-              text: _verdict,
-              color: Ui.green,
-              icon: Icons.bolt_rounded,
-            ),
+            FanPill(text: _verdict, color: Ui.green, icon: Icons.bolt_rounded),
             const SizedBox(height: 14),
             Wrap(
               spacing: 8,
@@ -1486,10 +1510,7 @@ class _FanDiscussionState extends State<_FanDiscussion>
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            content: Text(message),
-          ),
+          SnackBar(behavior: SnackBarBehavior.floating, content: Text(message)),
         );
     }
   }
@@ -1636,8 +1657,9 @@ class _FanDiscussionState extends State<_FanDiscussion>
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
         child: Row(
-          mainAxisAlignment:
-              mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+          mainAxisAlignment: mine
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             if (!mine) ...[
@@ -1653,8 +1675,9 @@ class _FanDiscussionState extends State<_FanDiscussion>
 
   @override
   Widget build(BuildContext context) {
-    final visible =
-        _messages.where((m) => !_blocked.contains(m['user_id'])).toList();
+    final visible = _messages
+        .where((m) => !_blocked.contains(m['user_id']))
+        .toList();
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -1730,8 +1753,7 @@ class _FanDiscussionState extends State<_FanDiscussion>
                           ? const FanEmpty(
                               icon: Icons.chat_bubble_outline_rounded,
                               title: 'Start the conversation!',
-                              message:
-                                  'Be the first to share your thoughts on this one.',
+                              message: 'Be the first to share your thoughts on this one.',
                             )
                           : const CircularProgressIndicator(),
                     )
@@ -1779,7 +1801,10 @@ class _FanDiscussionState extends State<_FanDiscussion>
                               vertical: 4,
                             ),
                             decoration: fanBox(radius: 20),
-                            child: Text(e, style: const TextStyle(fontSize: 18)),
+                            child: Text(
+                              e,
+                              style: const TextStyle(fontSize: 18),
+                            ),
                           ),
                         ),
                       ),
