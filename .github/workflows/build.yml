@@ -236,6 +236,19 @@ jobs:
       # Code quality
       # ---------------------------------------------------------------
 
+      - name: Set up Node for backend checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Test Fan Zone and account backend
+        run: |
+          node cloudflare/fan_auth.test.mjs
+          node cloudflare/fan_zone.test.mjs
+          node cloudflare/worker.test.mjs
+          node cloudflare/subscription.test.mjs
+          node cloudflare/token.test.mjs
+
       - name: Analyze Flutter project
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
@@ -275,9 +288,14 @@ jobs:
 
       - name: Build signed release APK
         env:
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
           FIREBASE_ANDROID_APP_ID: ${{ vars.FIREBASE_ANDROID_APP_ID }}
           FIREBASE_ANDROID_API_KEY: ${{ vars.FIREBASE_ANDROID_API_KEY }}
         run: |
+          test -n "$GOOGLE_WEB_CLIENT_ID" || {
+            echo "::error::Add the GOOGLE_WEB_CLIENT_ID repository secret before building."
+            exit 1
+          }
           # --build-number grows with every run so a new APK always installs
           # over the old one as an update.
           # Size: ship only the two ABIs real phones use (32-bit + 64-bit ARM).
@@ -290,6 +308,7 @@ jobs:
             --build-number="${{ github.run_number }}" \
             --dart-define=FIREBASE_ANDROID_APP_ID="$FIREBASE_ANDROID_APP_ID" \
             --dart-define=FIREBASE_ANDROID_API_KEY="$FIREBASE_ANDROID_API_KEY" \
+            --dart-define=GOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID" \
             --dart-define=APP_VERSION="${{ steps.ver.outputs.version }}"
 
       # ---------------------------------------------------------------
