@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/fixture.dart';
 import '../services/fan_zone_service.dart';
+import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
 import 'fan_widgets.dart';
 
@@ -56,6 +57,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ContentSync.tick.addListener(_sync);
     if (widget.active) _load();
     _poll = Timer.periodic(const Duration(seconds: 45), (_) {
       if (widget.active && _foreground && _posts.length <= 40) _load();
@@ -74,8 +76,13 @@ class _FanPostsFeedState extends State<FanPostsFeed>
     if (_foreground && widget.active) _load();
   }
 
+  void _sync() {
+    if (widget.active && _foreground) _load();
+  }
+
   @override
   void dispose() {
+    ContentSync.tick.removeListener(_sync);
     _poll?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -283,55 +290,54 @@ class _FanPostsFeedState extends State<FanPostsFeed>
       required IconData icon,
       required Color color,
       required VoidCallback onTap,
-    }) =>
-        InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Container(
-            width: 190,
-            padding: const EdgeInsets.all(12),
-            decoration: fanBox(border: color.withValues(alpha: .35)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    }) => InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        width: 190,
+        padding: const EdgeInsets.all(12),
+        decoration: fanBox(border: color.withValues(alpha: .35)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Icon(icon, size: 16, color: color),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: color,
-                        ),
-                      ),
+                Icon(icon, size: 16, color: color),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: color,
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
-                    height: 1.2,
                   ),
-                ),
-                const Spacer(),
-                Text(
-                  'Join chat  ›',
-                  style: TextStyle(fontSize: 12, color: Ui.muted),
                 ),
               ],
             ),
-          ),
-        );
+            const SizedBox(height: 8),
+            Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 14,
+                height: 1.2,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              'Join chat  ›',
+              style: TextStyle(fontSize: 12, color: Ui.muted),
+            ),
+          ],
+        ),
+      ),
+    );
 
     return SizedBox(
       height: 112,
@@ -361,32 +367,32 @@ class _FanPostsFeedState extends State<FanPostsFeed>
   }
 
   Widget _filters() => SizedBox(
-        height: 38,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          children: [
-            for (final kind in _labels.keys) ...[
-              ChoiceChip(
-                avatar: Icon(_filterIcons[kind], size: 15),
-                label: Text(_labels[kind]!),
-                selected: kind == _kind,
-                onSelected: _busy
-                    ? null
-                    : (_) {
-                        setState(() {
-                          _kind = kind;
-                          _next = null;
-                          _posts = [];
-                          _failure = null;
-                        });
-                        _load();
-                      },
-              ),
-              const SizedBox(width: 8),
-            ],
-          ],
-        ),
-      );
+    height: 38,
+    child: ListView(
+      scrollDirection: Axis.horizontal,
+      children: [
+        for (final kind in _labels.keys) ...[
+          ChoiceChip(
+            avatar: Icon(_filterIcons[kind], size: 15),
+            label: Text(_labels[kind]!),
+            selected: kind == _kind,
+            onSelected: _busy
+                ? null
+                : (_) {
+                    setState(() {
+                      _kind = kind;
+                      _next = null;
+                      _posts = [];
+                      _failure = null;
+                    });
+                    _load();
+                  },
+          ),
+          const SizedBox(width: 8),
+        ],
+      ],
+    ),
+  );
 
   Widget _post(Map<String, dynamic> p) {
     final mine = p['user_id'] == _myId;
@@ -410,7 +416,11 @@ class _FanPostsFeedState extends State<FanPostsFeed>
                   children: [
                     Row(
                       children: [
-                        FanAvatar(name: name, seed: '${p['user_id']}', size: 40),
+                        FanAvatar(
+                          name: name,
+                          seed: '${p['user_id']}',
+                          size: 40,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -497,14 +507,15 @@ class _FanPostsFeedState extends State<FanPostsFeed>
                                       cacheWidth: 900,
                                       loadingBuilder: (_, child, progress) =>
                                           progress == null
-                                              ? child
-                                              : const Center(
-                                                  child:
-                                                      CircularProgressIndicator(),
-                                                ),
-                                      errorBuilder: (_, __, ___) => const Center(
-                                        child: Text('Image unavailable'),
-                                      ),
+                                          ? child
+                                          : const Center(
+                                              child:
+                                                  CircularProgressIndicator(),
+                                            ),
+                                      errorBuilder: (_, __, ___) =>
+                                          const Center(
+                                            child: Text('Image unavailable'),
+                                          ),
                                     ),
                                     const Positioned(
                                       right: 8,
@@ -534,8 +545,9 @@ class _FanPostsFeedState extends State<FanPostsFeed>
 
   @override
   Widget build(BuildContext context) {
-    final visible =
-        _posts.where((p) => !_blocked.contains(p['user_id'])).toList();
+    final visible = _posts
+        .where((p) => !_blocked.contains(p['user_id']))
+        .toList();
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -557,8 +569,10 @@ class _FanPostsFeedState extends State<FanPostsFeed>
                   if (mounted) setState(() => _blocked = {});
                 },
                 icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
-                label: Text('Unblock ${_blocked.length} blocked fan'
-                    '${_blocked.length == 1 ? '' : 's'}'),
+                label: Text(
+                  'Unblock ${_blocked.length} blocked fan'
+                  '${_blocked.length == 1 ? '' : 's'}',
+                ),
               ),
             ),
           if (_failure != null)
@@ -575,7 +589,10 @@ class _FanPostsFeedState extends State<FanPostsFeed>
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(_failure!, style: const TextStyle(fontSize: 13)),
+                    child: Text(
+                      _failure!,
+                      style: const TextStyle(fontSize: 13),
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.refresh_rounded),
@@ -846,8 +863,9 @@ class _ComposePostState extends State<_ComposePost> {
                     ),
                 ],
                 selected: {_kind},
-                onSelectionChanged:
-                    _busy ? null : (s) => setState(() => _kind = s.first),
+                onSelectionChanged: _busy
+                    ? null
+                    : (s) => setState(() => _kind = s.first),
               ),
               const SizedBox(height: 16),
               Container(
@@ -877,8 +895,10 @@ class _ComposePostState extends State<_ComposePost> {
                         children: [
                           TextButton.icon(
                             onPressed: _busy ? null : _tagMatch,
-                            icon: const Icon(Icons.sports_soccer_rounded,
-                                size: 16),
+                            icon: const Icon(
+                              Icons.sports_soccer_rounded,
+                              size: 16,
+                            ),
                             label: const Text('Tag a match'),
                           ),
                           const Spacer(),
@@ -916,8 +936,9 @@ class _ComposePostState extends State<_ComposePost> {
                       right: 6,
                       top: 6,
                       child: IconButton.filled(
-                        onPressed:
-                            _busy ? null : () => setState(() => _image = null),
+                        onPressed: _busy
+                            ? null
+                            : () => setState(() => _image = null),
                         icon: const Icon(Icons.close_rounded),
                       ),
                     ),
@@ -933,8 +954,8 @@ class _ComposePostState extends State<_ComposePost> {
                     _picking
                         ? 'Opening photos…'
                         : _kind == 'betslip'
-                            ? 'Attach your bet slip'
-                            : 'Attach a photo',
+                        ? 'Attach your bet slip'
+                        : 'Attach a photo',
                   ),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size.fromHeight(52),
@@ -987,23 +1008,23 @@ class _PostImage extends StatelessWidget {
   const _PostImage({required this.postId});
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(
-          backgroundColor: Colors.black,
-          title: const Text('Post image'),
+    backgroundColor: Colors.black,
+    appBar: AppBar(
+      backgroundColor: Colors.black,
+      title: const Text('Post image'),
+    ),
+    body: Center(
+      child: InteractiveViewer(
+        minScale: .5,
+        maxScale: 5,
+        child: Image.network(
+          FanZoneService.imageUrl(postId),
+          cacheWidth: 2000,
+          errorBuilder: (_, __, ___) => const Text('Image unavailable'),
+          loadingBuilder: (_, child, progress) =>
+              progress == null ? child : const CircularProgressIndicator(),
         ),
-        body: Center(
-          child: InteractiveViewer(
-            minScale: .5,
-            maxScale: 5,
-            child: Image.network(
-              FanZoneService.imageUrl(postId),
-              cacheWidth: 2000,
-              errorBuilder: (_, __, ___) => const Text('Image unavailable'),
-              loadingBuilder: (_, child, progress) =>
-                  progress == null ? child : const CircularProgressIndicator(),
-            ),
-          ),
-        ),
-      );
+      ),
+    ),
+  );
 }
