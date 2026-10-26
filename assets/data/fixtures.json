@@ -34,5 +34,17 @@
     "altUrl": "https://forprivateuse.sbs/embedextra/tv/1.php",
     "homeLogo": "536",
     "awayLogo": "727"
-  }
+  },
+ {
+  "id": "3",
+  "home": "Ballon d'Or 2026",
+  "away": "🔴 LIVE CEREMONY",
+  "league": "Ballon d'Or Awards 2026",
+  "kickoff": "2026-10-26T21:00:00+01:00",
+  "duration": 180,
+  "url": "https://www.youtube.com/embed/efzxdQeODpU?autoplay=1&mute=1&playsinline=1",
+  "altUrl": "",
+  "homeLogo": "",
+  "awayLogo": ""
+}
 ]
