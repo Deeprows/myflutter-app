@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../config.dart';
-import '../services/auth_service.dart';
 import '../screens/browser_screen.dart';
 import '../screens/content_shortcut_screen.dart';
 import '../screens/highlights_screen.dart';
@@ -70,33 +69,6 @@ class FootboliveDrawer extends StatelessWidget {
       horizontalTitleGap: 12,
     );
 
-    // "Subscription: Active" + the end date and days left.
-    Widget subscriptionItem() {
-      final sub = SubscriptionService.instance;
-      final date = sub.expiresLabel;
-      final left = sub.daysLeft;
-      final detail = [
-        if (date != null) 'No ads until {date}'.trArgs({'date': date}),
-        if (left != null && left <= 400)
-          (left == 1 ? '{n} day left' : '{n} days left').trArgs({'n': left}),
-      ].join(' · ');
-      return ListTile(
-        dense: true,
-        leading: Icon(Icons.verified_rounded, size: 21, color: Ui.green),
-        title: Text(
-          'Subscription: Active'.tr,
-          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
-        ),
-        subtitle: detail.isEmpty
-            ? null
-            : Text(detail, style: TextStyle(color: Ui.muted, fontSize: 11.5)),
-        onTap: () => _go(context, (c) => _push(c, const RemoveAdsScreen())),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18),
-        minVerticalPadding: 6,
-        horizontalTitleGap: 12,
-      );
-    }
-
     return Drawer(
       backgroundColor: Ui.cardDeep,
       child: Column(
@@ -141,10 +113,16 @@ class FootboliveDrawer extends StatelessWidget {
                 bottom: MediaQuery.of(context).viewPadding.bottom + 16,
               ),
               children: [
-                if (onHome != null)
-                  item(Icons.apps_rounded, 'Choose experience', (c) async {
-                    onHome!();
-                  }),
+                item(
+                  Icons.block_rounded,
+                  'Remove ads',
+                  (c) => _push(
+                    c,
+                    SubscriptionService.instance.visible
+                        ? const PlansScreen()
+                        : const RemoveAdsScreen(),
+                  ),
+                ),
                 item(
                   Icons.sensors_rounded,
                   'Live Now',
@@ -189,80 +167,43 @@ class FootboliveDrawer extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (AuthService.instance.user != null)
-                  ListTile(
-                    leading: const Icon(Icons.account_circle_outlined),
-                    title: Text(AuthService.instance.user!.name),
-                    subtitle: Text(AuthService.instance.user!.email),
-                  ),
-                item(Icons.logout_rounded, 'Log out', (c) async {
-                  final sure = await showDialog<bool>(
-                    context: c,
-                    builder: (dialog) => AlertDialog(
-                      title: const Text('Log out of Deeprowss?'),
-                      content: const Text(
-                        'You can log in again with the same Gmail account.',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(dialog),
-                          child: const Text('Cancel'),
-                        ),
-                        FilledButton(
-                          onPressed: () => Navigator.pop(dialog, true),
-                          child: const Text('Log out'),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (sure != true || !c.mounted) return;
-                  Navigator.of(c).popUntil((route) => route.isFirst);
-                  await AuthService.instance.signOut();
-                }),
-                if (SubscriptionService.instance.visible)
-                  item(
-                    Icons.workspace_premium_rounded,
-                    SubscriptionService.instance.isPremium
-                        ? 'Premium (active)'.tr
-                        : 'Go Premium - no ads'.tr,
-                    (c) => _push(c, const PlansScreen()),
-                  ),
-                // Token users: before = "Remove ads"; once ads are gone this
-                // becomes the subscription status. (Paystack Premium has its
-                // own item above, so it is not repeated.)
-                if (SubscriptionService.instance.tokensVisible &&
-                    !(SubscriptionService.instance.visible &&
-                        SubscriptionService.instance.isPremium))
-                  if (SubscriptionService.instance.isPremium)
-                    subscriptionItem()
-                  else
+                ExpansionTile(
+                  leading: const Icon(Icons.settings_rounded, size: 21),
+                  title: const Text('Settings'),
+                  children: [
+                    item(Icons.palette_rounded, 'Themes'.tr, showThemeSheet),
                     item(
-                      Icons.block_rounded,
-                      'Remove ads'.tr,
-                      (c) => _push(c, const RemoveAdsScreen()),
+                      Icons.language_rounded,
+                      'Language'.tr,
+                      showLanguageSheet,
                     ),
-                item(
-                  Icons.link_rounded,
-                  'Network Stream'.tr,
-                  (c) => _push(c, const NetworkStreamScreen()),
+                    item(
+                      Icons.notifications_active_rounded,
+                      'Notifications'.tr,
+                      showNotificationSettings,
+                    ),
+                    item(
+                      Icons.picture_in_picture_alt_rounded,
+                      'Floating Player'.tr,
+                      showFloatingPlayerDialog,
+                    ),
+                    item(
+                      Icons.link_rounded,
+                      'Network Stream'.tr,
+                      (c) => _push(c, const NetworkStreamScreen()),
+                    ),
+                    item(
+                      Icons.playlist_play_rounded,
+                      'Playlists'.tr,
+                      (c) => _push(c, const PlaylistsScreen()),
+                    ),
+                    item(
+                      Icons.tune_rounded,
+                      'Video Quality Setting'.tr,
+                      showLowQualityDialog,
+                    ),
+                  ],
                 ),
-                item(
-                  Icons.playlist_play_rounded,
-                  'Playlists'.tr,
-                  (c) => _push(c, const PlaylistsScreen()),
-                ),
-                item(
-                  Icons.picture_in_picture_alt_rounded,
-                  'Floating Player'.tr,
-                  showFloatingPlayerDialog,
-                ),
-                item(
-                  Icons.settings_rounded,
-                  'Video Quality Setting'.tr,
-                  showLowQualityDialog,
-                ),
-                item(Icons.palette_rounded, 'Themes'.tr, showThemeSheet),
-                item(Icons.language_rounded, 'Language'.tr, showLanguageSheet),
                 item(
                   Icons.sports_cricket_rounded,
                   'Cricket Score'.tr,
@@ -281,11 +222,7 @@ class FootboliveDrawer extends StatelessWidget {
                     title: 'Football Score'.tr,
                   ),
                 ),
-                item(
-                  Icons.notifications_active_rounded,
-                  'Notifications'.tr,
-                  showNotificationSettings,
-                ),
+
                 item(Icons.campaign_rounded, 'Notice'.tr, showNoticeDialog),
                 item(
                   Icons.chat_rounded,
