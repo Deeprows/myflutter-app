@@ -21,7 +21,8 @@ import '../utils/l10n.dart';
 
 /// Live, predictions, weekly ranks, community posts and AI analysis.
 class ShellScreen extends StatefulWidget {
-  const ShellScreen({super.key});
+  final VoidCallback? onHome;
+  const ShellScreen({super.key, this.onHome});
 
   @override
   State<ShellScreen> createState() => _ShellScreenState();
@@ -131,6 +132,10 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
       state.closeDrawer();
       return;
     }
+    if (widget.onHome != null) {
+      widget.onHome!();
+      return;
+    }
     final now = DateTime.now();
     if (_lastBack != null &&
         now.difference(_lastBack!) < const Duration(seconds: 2)) {
@@ -158,7 +163,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
       },
       child: Scaffold(
         key: _scaffoldKey,
-        drawer: const FootboliveDrawer(),
+        drawer: FootboliveDrawer(onHome: widget.onHome),
         extendBody: false,
         body: Stack(
           children: [
@@ -195,7 +200,9 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                 indicatorColor: Colors.transparent,
                 labelBehavior:
                     NavigationDestinationLabelBehavior.onlyShowSelected,
-                selectedIndex: _order.contains(_index) ? _order.indexOf(_index) : 0,
+                selectedIndex: _order.contains(_index)
+                    ? _order.indexOf(_index)
+                    : 0,
                 onDestinationSelected: (i) =>
                     setState(() => _index = _order[i]),
                 destinations: [
