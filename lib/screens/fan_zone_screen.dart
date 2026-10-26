@@ -24,6 +24,7 @@ class FanZoneScreen extends StatefulWidget {
   final bool active;
   final FanZonePage page;
   final VoidCallback? onPredict, onOpenMenu, onExit;
+
   const FanZoneScreen({
     super.key,
     required this.active,
@@ -265,7 +266,15 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                 (_myId.isEmpty ? null : () => _openProfile(_myId)),
             icon: _name.isEmpty
                 ? const Icon(Icons.person_add_alt_1_rounded)
-                : FanAvatar(name: _name, seed: _myId, size: 34),
+                : FanAvatar(
+                    name: _name,
+                    seed: _myId,
+                    size: 34,
+                    imageUrl: FanZoneService.avatarUrl(
+                      _myId,
+                      _data['avatar_at'],
+                    ),
+                  ),
           ),
         ),
         centerTitle: widget.page == FanZonePage.banter,
@@ -1685,6 +1694,8 @@ class _FanZoneScreenState extends State<FanZoneScreen>
 
   Widget _banter() => FanPostsFeed(
     active: widget.active,
+    viewerName: _name,
+    viewerAvatarAt: _data['avatar_at'],
     onJoin: () async {
       if (_name.isNotEmpty) return true;
       return _profile();
