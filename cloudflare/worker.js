@@ -1689,6 +1689,7 @@ const FAN_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS fan_form_cache (team_id TEXT PRIMARY KEY, data TEXT NOT NULL, fetched_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_ai_limits (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL, expires INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_public_profiles (user_id TEXT PRIMARY KEY, bio TEXT NOT NULL DEFAULT '')`,
+  `CREATE TABLE IF NOT EXISTS fan_profile_media (user_id TEXT PRIMARY KEY, location TEXT NOT NULL DEFAULT '', avatar_at INTEGER NOT NULL DEFAULT 0, cover_at INTEGER NOT NULL DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS fan_follows (follower_id TEXT NOT NULL, following_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(follower_id,following_id))`,
   `CREATE INDEX IF NOT EXISTS fan_follows_target ON fan_follows(following_id,at DESC,follower_id DESC)`,
   `CREATE INDEX IF NOT EXISTS fan_follows_source ON fan_follows(follower_id,at DESC,following_id DESC)`,
@@ -1753,6 +1754,21 @@ async function fanZone(request, env, url) {
       headers.set('content-security-policy',"default-src 'none'; sandbox");
       return new Response(image.body,{headers});
     }
+    if(request.method==='GET' && url.pathname.startsWith('/fan/profile-image/')) {
+      const [target,kind]=url.pathname.slice('/fan/profile-image/'.length).split('/');
+      if(!/^[a-f0-9]{64}$/.test(target || '') || !['avatar','cover'].includes(kind))return fail('Image not found',404);
+      const row=await db.prepare('SELECT avatar_at,cover_at FROM fan_profile_media WHERE user_id=?').bind(target).first();
+      if(!row || !row[`${kind}_at`] || !env.FAN_MEDIA)return fail('Image not found',404);
+      const image=await env.FAN_MEDIA.get(`fan-profile/${target}/${kind}`);
+      if(!image)return fail('Image not found',404);
+      const headers=new Headers(CORS);
+      image.writeHttpMetadata(headers);
+      // The app adds ?v=<upload time>, so a new upload is always a new URL.
+      headers.set('cache-control','public, max-age=86400');
+      headers.set('x-content-type-options','nosniff');
+      headers.set('content-security-policy',"default-src 'none'; sandbox");
+      return new Response(image.body,{headers});
+    }
     // Admin routes use a secret in the header, never a URL or the app.
     if (url.pathname.startsWith('/fan/admin/')) {
       const secret = env.ADMIN_TOKEN || env.STATS_TOKEN;
@@ -1810,6 +1826,7 @@ async function fanZone(request, env, url) {
     }
     if(url.pathname==='/fan/ai-predict')return await fanAiPredict(request,env,id);
     const user = await db.prepare('SELECT * FROM fan_users WHERE id=?').bind(id).first();
+    if(request.method==='POST' && url.pathname==='/fan/profile/image')return await fanProfileImage(request,env,user,id);
     if(url.pathname.startsWith('/fan/social/'))return await fanSocial(request,env,url,user,id);
     if(url.pathname==='/fan/posts' || url.pathname==='/fan/post' || url.pathname.startsWith('/fan/post/')) {
       return await fanPosts(request,env,url,user,id);
@@ -1818,7 +1835,8 @@ async function fanZone(request, env, url) {
       const picks = await db.prepare(`SELECT p.*,r.home AS result_home,r.away AS result_away FROM fan_picks p LEFT JOIN fan_results r ON r.match_key=p.match_key WHERE p.user_id=? ORDER BY p.kickoff DESC LIMIT 300`).bind(id).all();
       const week = fanWeek();
       const board = await db.prepare(`SELECT u.id,u.name,COALESCE(SUM(${FAN_PICK_POINTS_SQL}),0) AS points,COUNT(${FAN_PICK_POINTS_SQL}) AS played FROM fan_picks p JOIN fan_results r ON r.match_key=p.match_key JOIN fan_users u ON u.id=p.user_id WHERE p.kickoff>=? AND p.kickoff<? GROUP BY u.id HAVING COUNT(${FAN_PICK_POINTS_SQL})>0 ORDER BY points DESC,played ASC,u.id ASC LIMIT 100`).bind(week,week+604800000).all();
-      return json({id,name:user?.name || '',week,leaderboard:board.results,picks:picks.results});
+      const media=await db.prepare('SELECT avatar_at FROM fan_profile_media WHERE user_id=?').bind(id).first();
+      return json({id,name:user?.name || '',avatar_at:media?.avatar_at || 0,week,leaderboard:board.results,picks:picks.results});
     }
     if (request.method === 'GET' && url.pathname === '/fan/messages') {
       const room = url.searchParams.get('room') || '';
@@ -1930,6 +1948,28 @@ async function fanReadForm(request) {
   try {
     return await new Response(bytes,{headers:{'content-type':request.headers.get('content-type') || ''}}).formData();
   } catch (_) {return null;}
+}
+// Profile photo / cover photo upload: multipart form with kind=avatar|cover and an image.
+async function fanProfileImage(request,env,user,id) {
+  const fail=(error,status=400)=>json({error},status);
+  if(!user)return fail('Choose your Fan Zone nickname first.',403);
+  if(!env.FAN_MEDIA)return fail('Image uploads need the FAN_MEDIA R2 binding.',503);
+  if(!(request.headers.get('content-type') || '').startsWith('multipart/form-data'))return fail('Use an image form');
+  const form=await fanReadForm(request);
+  if(!form)return fail('Invalid upload or image exceeds 4 MB.',413);
+  const kind=String(form.get('kind') || '');
+  if(!['avatar','cover'].includes(kind))return fail('Choose a profile photo or a cover photo');
+  const file=form.get('image');
+  if(!file || typeof file==='string' || file.size<=0)return fail('Choose an image');
+  if(file.size>FAN_IMAGE_LIMIT)return fail('Choose an image smaller than 4 MB.',413);
+  const bytes=new Uint8Array(await file.arrayBuffer());
+  const type=fanImageType(bytes);
+  if(!type)return fail('Choose a JPG or PNG image, up to 6,000 pixels per side and 16 megapixels.');
+  if(!await fanSocialBudget(env.DB,id,'profile-image',30))return fail('Too many photo changes. Try next hour.',429);
+  const now=Date.now(),column=`${kind}_at`;
+  await env.FAN_MEDIA.put(`fan-profile/${id}/${kind}`,bytes,{httpMetadata:{contentType:type}});
+  await env.DB.prepare(`INSERT INTO fan_profile_media(user_id,${column}) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET ${column}=excluded.${column}`).bind(id,now).run();
+  return json({ok:true,kind,version:now});
 }
 async function fanPosts(request,env,url,user,id) {
   const db=env.DB;
@@ -2191,7 +2231,8 @@ async function fanRecentForm(env,teamId,kickoff) {
 const FAN_SOCIAL_POST_FIELDS=`p.id,p.user_id,u.name,p.kind,p.text,p.at,CASE WHEN p.image_key<>'' THEN 1 ELSE 0 END AS has_image,
  (SELECT COUNT(*) FROM fan_likes l WHERE l.post_id=p.id) AS likes,
  (SELECT COUNT(*) FROM fan_comments c WHERE c.post_id=p.id AND c.hidden=0) AS comments,
- EXISTS(SELECT 1 FROM fan_likes l WHERE l.post_id=p.id AND l.user_id=?) AS liked`;
+ EXISTS(SELECT 1 FROM fan_likes l WHERE l.post_id=p.id AND l.user_id=?) AS liked,
+ COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=p.user_id),0) AS avatar_at`;
 function fanSocialCursor(raw,type='post') {
   if(!raw)return null;
   const match=(type==='user'? /^(\d{1,16}):([a-f0-9]{64})$/ : /^(\d{1,16}):([a-f0-9-]{36})$/).exec(raw);
@@ -2211,6 +2252,9 @@ async function fanSocial(request,env,url,user,id) {
     const target=url.searchParams.get('id') || id;
     if(!/^[a-f0-9]{64}$/.test(target))return fail('Invalid fan');
     const profile=await db.prepare(`SELECT u.id,u.name,COALESCE(p.bio,'') AS bio,a.created_at AS joined_at,
+      COALESCE((SELECT m.location FROM fan_profile_media m WHERE m.user_id=u.id),'') AS location,
+      COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=u.id),0) AS avatar_at,
+      COALESCE((SELECT m.cover_at FROM fan_profile_media m WHERE m.user_id=u.id),0) AS cover_at,
       (SELECT COUNT(*) FROM fan_follows f WHERE f.following_id=u.id) AS followers,
       (SELECT COUNT(*) FROM fan_follows f WHERE f.follower_id=u.id) AS following,
       (SELECT COUNT(*) FROM fan_posts p WHERE p.user_id=u.id AND p.hidden=0) AS posts,
@@ -2238,7 +2282,7 @@ async function fanSocial(request,env,url,user,id) {
     if(!await db.prepare('SELECT id FROM fan_users WHERE id=?').bind(target).first())return fail('Fan not found',404);
     const cursor=fanSocialCursor(url.searchParams.get('before'),'user');if(cursor===false)return fail('Invalid page cursor');
     const owner=type==='followers'?'following_id':'follower_id',person=type==='followers'?'follower_id':'following_id';
-    const result=await db.prepare(`SELECT u.id,u.name,f.at,EXISTS(SELECT 1 FROM fan_follows x WHERE x.follower_id=? AND x.following_id=u.id) AS followed FROM fan_follows f JOIN fan_users u ON u.id=f.${person} WHERE f.${owner}=? AND (f.at<? OR (f.at=? AND u.id<?)) ORDER BY f.at DESC,u.id DESC LIMIT 41`).bind(id,target,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
+    const result=await db.prepare(`SELECT u.id,u.name,f.at,COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=u.id),0) AS avatar_at,EXISTS(SELECT 1 FROM fan_follows x WHERE x.follower_id=? AND x.following_id=u.id) AS followed FROM fan_follows f JOIN fan_users u ON u.id=f.${person} WHERE f.${owner}=? AND (f.at<? OR (f.at=? AND u.id<?)) ORDER BY f.at DESC,u.id DESC LIMIT 41`).bind(id,target,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
     const people=result.results.slice(0,40),last=people.at(-1);
     return json({people,next:result.results.length>40?`${last.at}:${last.id}`:null,viewer_id:id});
   }
@@ -2261,7 +2305,12 @@ async function fanSocial(request,env,url,user,id) {
   if(path==='/fan/social/profile') {
     const name=typeof b.name==='string'?b.name.trim():'',bio=typeof b.bio==='string'?b.bio.trim():'';
     if(name.length<3 || name.length>30 || bio.length>160 || /[\u0000-\u001f<>]/.test(name) || /[\u0000-\u0008\u000b\u000c\u000e-\u001f<>]/.test(bio))return fail('Use a 3–30 character nickname and bio up to 160 characters.');
-    await db.batch([db.prepare('UPDATE fan_users SET name=? WHERE id=?').bind(name,id),db.prepare(`INSERT INTO fan_public_profiles(user_id,bio) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET bio=excluded.bio`).bind(id,bio)]);
+    // Location is optional so older app versions that only send name + bio keep working.
+    const hasLocation=typeof b.location==='string',location=hasLocation?b.location.trim():'';
+    if(hasLocation && (location.length>40 || /[\u0000-\u001f<>]/.test(location)))return fail('Use a location up to 40 characters.');
+    const saves=[db.prepare('UPDATE fan_users SET name=? WHERE id=?').bind(name,id),db.prepare(`INSERT INTO fan_public_profiles(user_id,bio) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET bio=excluded.bio`).bind(id,bio)];
+    if(hasLocation)saves.push(db.prepare(`INSERT INTO fan_profile_media(user_id,location) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET location=excluded.location`).bind(id,location));
+    await db.batch(saves);
     return json({ok:true});
   }
   if(path==='/fan/social/follow') {
