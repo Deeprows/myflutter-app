@@ -159,3 +159,47 @@ const page3=await (await call('posts?kind=banter&before='+encodeURIComponent(pag
 assert.equal(page3.posts.length,5);assert.equal(page3.next,null);
 assert.equal(new Set([...page1.posts,...page2.posts,...page3.posts].map(p=>p.id)).size,85);
 console.log('Community feed: text/photo publishing, image validation/limits, R2 serving, filters, permissions, cooldown, reports, hide/delete and stable pagination passed.');
+
+// Profile photo, cover photo and location.
+async function uploadProfileImage({kind,image,credential=token,e=postEnv}) {
+  const form=new FormData();form.set('kind',kind);
+  if(image)form.set('image',new Blob([image]),'photo.png');
+  return worker.fetch(new Request('https://feed.test/fan/profile/image',{
+    method:'POST',headers:{authorization:'Bearer '+credential},body:form,
+  }),e,{});
+}
+const profileId=(await (await call('state',null,token,postEnv)).json()).id;
+assert.equal((await uploadProfileImage({kind:'avatar',image:png,e:env})).status,503);
+assert.equal((await uploadProfileImage({kind:'banner',image:png})).status,400);
+assert.equal((await uploadProfileImage({kind:'avatar',image:Buffer.from('not an image')})).status,400);
+assert.equal((await uploadProfileImage({kind:'cover',image:new Uint8Array(4*1024*1024+1)})).status,413);
+assert.equal((await uploadProfileImage({kind:'avatar'})).status,400);
+assert.equal((await uploadProfileImage({kind:'avatar',image:png,credential:'ef'.repeat(32)})).status,403);
+assert.equal((await fetchProfileImage(profileId,'avatar')).status,404);
+async function fetchProfileImage(id,kind){return worker.fetch(new Request(`https://feed.test/fan/profile-image/${id}/${kind}`),postEnv,{});}
+const avatarUpload=await uploadProfileImage({kind:'avatar',image:png});
+assert.equal(avatarUpload.status,200);
+assert.equal((await uploadProfileImage({kind:'cover',image:png})).status,200);
+const avatarImage=await fetchProfileImage(profileId,'avatar');
+assert.equal(avatarImage.status,200);assert.equal(avatarImage.headers.get('content-type'),'image/png');
+assert.equal(avatarImage.headers.get('x-content-type-options'),'nosniff');
+assert.equal((await fetchProfileImage(profileId,'cover')).status,200);
+assert.equal((await fetchProfileImage(profileId,'other')).status,404);
+assert.equal((await fetchProfileImage('zz',"avatar")).status,404);
+// Old app versions send only name + bio: that must keep location and photos.
+assert.equal((await call('social/profile',{name:'Fan One',bio:'Gunner for life',location:'Cairo, Egypt'})).status,200);
+let mine=(await (await call('social/profile?id='+profileId,null,token,postEnv)).json()).profile;
+assert.equal(mine.location,'Cairo, Egypt');assert.equal(mine.bio,'Gunner for life');
+assert.ok(mine.avatar_at>0);assert.ok(mine.cover_at>0);
+assert.equal((await call('social/profile',{name:'Fan One',bio:'New bio'})).status,200);
+mine=(await (await call('social/profile?id='+profileId,null,token,postEnv)).json()).profile;
+assert.equal(mine.location,'Cairo, Egypt');assert.equal(mine.bio,'New bio');
+assert.equal((await call('social/profile',{name:'Fan One',bio:'x',location:'<b>'})).status,400);
+assert.equal((await call('social/profile',{name:'Fan One',bio:'x',location:'x'.repeat(41)})).status,400);
+assert.equal((await call('social/profile',{name:'Fan One',bio:'x',location:''})).status,200);
+mine=(await (await call('social/profile?id='+profileId,null,token,postEnv)).json()).profile;
+assert.equal(mine.location,'');assert.ok(mine.avatar_at>0);
+assert.ok((await (await call('state',null,token,postEnv)).json()).avatar_at>0);
+const feed=await (await call('posts?kind=banter',null,token,postEnv)).json();
+assert.ok(feed.posts.every(p=>p.user_id!==profileId || p.avatar_at>0));
+console.log('Profile: photo and cover upload, validation, public serving, location, bio and feed avatars passed.');
