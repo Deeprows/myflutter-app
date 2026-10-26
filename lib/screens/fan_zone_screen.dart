@@ -1,3 +1,4 @@
+import '../models/fan_prediction.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -51,7 +52,6 @@ class _FanZoneScreenState extends State<FanZoneScreen>
   bool _showAllHistory = false;
   String _league = '';
   String _day = '';
-  int _rankShown = 20;
   Timer? _timer;
 
   @override
@@ -153,17 +153,6 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     }
   }
 
-  Future<void> _sharePick(Fixture f, int home, int away) async {
-    try {
-      await Share.share(
-        'My Fan Zone prediction: ${f.home} $home - $away ${f.away}\n'
-        'Think you can do better? Predict on Deeprowss Fan Zone.',
-      );
-    } catch (_) {
-      _notice('Could not open the share sheet.');
-    }
-  }
-
   Future<void> _pick(Fixture f) async {
     if (_saving) return;
     if (_name.isEmpty && !await _profile()) return;
@@ -171,7 +160,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     final key = FanZoneService.matchKey(f);
     final picks = FanZoneService.rows(_data['picks']);
     final old = picks.where((p) => p['match_key'] == key).firstOrNull;
-    final result = await showModalBottomSheet<List<int>>(
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -181,20 +170,21 @@ class _FanZoneScreenState extends State<FanZoneScreen>
         home: (old?['home'] as num?)?.toInt() ?? 0,
         away: (old?['away'] as num?)?.toInt() ?? 0,
         editing: old != null,
+        market: old == null ? 'result' : old['market'] as String? ?? 'score',
+        selection: old == null ? '1' : old['selection'] as String? ?? '',
       ),
     );
     if (result == null || !mounted) return;
     setState(() => _saving = true);
     try {
-      await FanZoneService.call(
-        'pick',
-        body: {'key': key, 'home': result[0], 'away': result[1]},
-      );
+      await FanZoneService.call('pick', body: {'key': key, ...result});
       await _refresh();
       _notice(
-        'Prediction locked in: ${result[0]} – ${result[1]}. Good luck!',
+        'Prediction saved: ${fanPredictionLabel(result)}. Good luck!',
         action: 'Share',
-        onAction: () => _sharePick(f, result[0], result[1]),
+        onAction: () => Share.share(
+          'My prediction: ${f.title}: ${fanPredictionLabel(result)}. Join me on Deeprowss!',
+        ),
       );
     } catch (e) {
       _notice(_error(e));
@@ -301,7 +291,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                   Text(
                     switch (widget.page) {
                       FanZonePage.predict =>
-                        'Predict scores. Earn points. Level up.',
+                        'Pick winners, draws or goals. Earn points.',
                       FanZonePage.ranks => 'This week\'s best fans',
                       FanZonePage.banter => 'Deeprowss community',
                     },
@@ -601,7 +591,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                     const SizedBox(height: 6),
                     if (_name.isEmpty)
                       Text(
-                        'Pick a nickname, predict scores, climb the weekly table.',
+                        'Make your predictions and climb the weekly league table.',
                         style: TextStyle(
                           color: Ui.muted,
                           fontSize: 13,
@@ -988,7 +978,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                                   child: FittedBox(
                                     fit: BoxFit.scaleDown,
                                     child: Text(
-                                      '${pick['home']} – ${pick['away']}',
+                                      fanPredictionLabel(pick),
                                       style: TextStyle(
                                         fontSize: 24,
                                         fontWeight: FontWeight.w900,
@@ -1048,7 +1038,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                           size: 18,
                         ),
                         label: Text(
-                          pick == null ? 'Predict score' : 'Edit pick',
+                          pick == null ? 'Make prediction' : 'Edit pick',
                         ),
                       ),
                     ),
@@ -1056,10 +1046,8 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                     if (pick != null)
                       IconButton.outlined(
                         tooltip: 'Share my pick',
-                        onPressed: () => _sharePick(
-                          f,
-                          (pick['home'] as num).toInt(),
-                          (pick['away'] as num).toInt(),
+                        onPressed: () => Share.share(
+                          'My prediction: ${f.title}: ${fanPredictionLabel(pick)}. Join me on Deeprowss!',
                         ),
                         icon: const Icon(Icons.ios_share_rounded, size: 18),
                       ),
@@ -1111,7 +1099,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                 Text(
                   pick == null
                       ? '${f.league.isEmpty ? 'Football' : f.league} • picks locked'
-                      : 'Your pick: ${pick['home']} – ${pick['away']}',
+                      : 'Your pick: ${fanPredictionLabel(pick)}',
                   style: TextStyle(fontSize: 12, color: Ui.muted),
                 ),
               ],
@@ -1150,9 +1138,9 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     final points = fanPickPoints(p);
     final (Color color, String badge) = switch (points) {
       3 => (Ui.green, '+3 Exact'),
-      1 => (fanBlue, '+1 Winner'),
+      1 => (fanBlue, '+1 Correct'),
       0 => (fanAlert, '0 Missed'),
-      _ => (Ui.muted, 'Pending'),
+      _ => (Ui.muted, fanPredictionPush(p) ? 'Push / refunded' : 'Pending'),
     };
     final settled = p['result_home'] != null;
     return Container(
@@ -1183,7 +1171,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                             children: [
                               _scoreChip(
                                 'You',
-                                '${p['home']} – ${p['away']}',
+                                fanPredictionLabel(p),
                                 Ui.muted,
                               ),
                               if (settled) ...[
@@ -1244,453 +1232,147 @@ class _FanZoneScreenState extends State<FanZoneScreen>
   // RANKS TAB
   // ---------------------------------------------------------------------------
 
+  bool _moreRanks = false;
+  Future<void> _loadMoreRanks() async {
+    if (_moreRanks || _data['board_next'] == null) return;
+    setState(() => _moreRanks = true);
+    try {
+      final page = await FanZoneService.call(
+        'leaderboard',
+        query: {'offset': '${_data['board_next']}'},
+      );
+      if (!mounted) return;
+      if (page['week'] != _data['week']) {
+        await _refresh();
+        return;
+      }
+      setState(() {
+        final rows = FanZoneService.rows(_data['leaderboard']);
+        final ids = rows.map((r) => r['id']).toSet();
+        _data['leaderboard'] = [
+          ...rows,
+          ...FanZoneService.rows(
+            page['leaderboard'],
+          ).where((r) => !ids.contains(r['id'])),
+        ];
+        _data['board_next'] = page['board_next'];
+      });
+    } catch (e) {
+      _notice(_error(e));
+    } finally {
+      if (mounted) setState(() => _moreRanks = false);
+    }
+  }
+
   Widget _rankings() {
     final rows = FanZoneService.rows(_data['leaderboard']);
-    final myId = _data['id'];
-    final rank = rows.indexWhere((r) => r['id'] == myId);
-    final week = (_data['week'] as num?)?.toInt();
-    Duration? resets;
-    if (week != null) {
-      final d = DateTime.fromMillisecondsSinceEpoch(
-        week + 604800000,
-      ).difference(DateTime.now());
-      if (!d.isNegative) resets = d;
-    }
-    final top = rows.take(3).toList();
-    final rest = rows.length > 3 ? rows.sublist(3) : <Map<String, dynamic>>[];
-    final shownRest = rest.take(_rankShown).toList();
-    final leaderPoints = rows.isEmpty
-        ? 1
-        : ((rows.first['points'] as num?)?.toInt() ?? 1);
-
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
         children: [
-          _ranksHero(rows, rank, resets),
-          if (!_loadedOnce && rows.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 12),
-              child: FanSkeleton(height: 220),
-            ),
-          if (_loadedOnce && rows.isEmpty)
-            FanEmpty(
-              icon: Icons.emoji_events_outlined,
-              title: 'No ranked fans yet',
-              message:
-                  'Rankings start once this week\'s matches are confirmed. Make your picks to be first on the board.',
-              action: Builder(
-                builder: (tabContext) => FilledButton.icon(
-                  onPressed: widget.onPredict,
-                  icon: const Icon(Icons.sports_score_rounded, size: 18),
-                  label: const Text('Make predictions'),
-                ),
-              ),
-            ),
-          if (top.isNotEmpty) ...[
-            const FanSectionTitle(
-              'Top of the table',
-              icon: Icons.emoji_events_rounded,
-            ),
-            _podium(top, myId),
-          ],
-          if (rest.isNotEmpty) ...[
-            const FanSectionTitle(
-              'The chasing pack',
-              icon: Icons.groups_rounded,
-            ),
-            for (var i = 0; i < shownRest.length; i++)
-              _rankRow(i + 4, shownRest[i], myId, leaderPoints),
-            if (rest.length > shownRest.length)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: OutlinedButton.icon(
-                  onPressed: () => setState(() => _rankShown += 20),
-                  icon: const Icon(Icons.expand_more_rounded),
-                  label: Text('Show ${rest.length - shownRest.length} more'),
-                ),
-              ),
-          ],
-          const SizedBox(height: 14),
-          Text(
-            'Ranked by points, then fewer settled picks. Nicknames may be shared; the short ID identifies each fan.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 11, color: Ui.dim, height: 1.4),
+          const Text(
+            'Fan League',
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _ranksHero(
-    List<Map<String, dynamic>> rows,
-    int rank,
-    Duration? resets,
-  ) {
-    final mine = rank >= 0 ? rows[rank] : null;
-    final myPoints = (mine?['points'] as num?)?.toInt() ?? 0;
-    String gap = '';
-    if (rank > 0) {
-      final above = (rows[rank - 1]['points'] as num?)?.toInt() ?? 0;
-      final diff = above - myPoints;
-      gap = diff <= 0
-          ? 'Level on points with #$rank'
-          : '$diff pt${diff == 1 ? '' : 's'} behind #$rank';
-    } else if (rank == 0) {
-      gap = 'You lead the table. Defend it!';
-    }
-    return FanHero(
-      color: fanGold,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: fanGold.withValues(alpha: .18),
-                  border: Border.all(color: fanGold.withValues(alpha: .6)),
-                ),
-                child: const Icon(
-                  Icons.emoji_events_rounded,
-                  color: fanGold,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 6),
+          Text(
+            'Every registered fan starts on zero. Confirmed results update the table each week.',
+            style: TextStyle(color: Ui.muted),
+          ),
+          const SizedBox(height: 16),
+          if (!_loadedOnce) const LinearProgressIndicator(),
+          Container(
+            decoration: fanBox(radius: 14),
+            clipBehavior: Clip.antiAlias,
+            child: Table(
+              columnWidths: const {
+                0: FixedColumnWidth(32),
+                1: FlexColumnWidth(),
+                2: FixedColumnWidth(32),
+                3: FixedColumnWidth(32),
+                4: FixedColumnWidth(32),
+                5: FixedColumnWidth(40),
+              },
+              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(color: Ui.panel),
                   children: [
-                    const Text(
-                      'Weekly top 100',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
+                    for (final title in ['#', 'Fan', 'P', 'W', 'L', 'Pts'])
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                          horizontal: 3,
+                        ),
+                        child: Text(
+                          title,
+                          textAlign: title == 'Fan'
+                              ? TextAlign.left
+                              : TextAlign.center,
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Points reset every week. Everyone starts level.',
-                      style: TextStyle(color: Ui.muted, fontSize: 12),
-                    ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: .25),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: fanGold.withValues(alpha: .22)),
-            ),
-            child: mine == null
-                ? Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline_rounded,
-                        size: 20,
-                        color: Ui.muted,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Your rank shows once a confirmed result puts you in the top 100.',
-                          style: TextStyle(
-                            color: Ui.muted,
-                            fontSize: 13,
-                            height: 1.3,
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                : Row(
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'YOUR RANK',
-                            style: TextStyle(
-                              fontSize: 10,
-                              letterSpacing: 1.4,
-                              fontWeight: FontWeight.w800,
-                              color: Ui.muted,
-                            ),
-                          ),
-                          FanCountUp(
-                            value: rank + 1,
-                            style: const TextStyle(
-                              fontSize: 40,
-                              height: 1.05,
-                              fontWeight: FontWeight.w900,
-                              color: fanGold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: 18),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '$myPoints points',
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            if (gap.isNotEmpty)
-                              Text(
-                                gap,
-                                style: TextStyle(color: Ui.muted, fontSize: 12),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-          if (resets != null) ...[
-            const SizedBox(height: 12),
-            FanPill(
-              text: 'Resets in ${fanCountdown(resets)}',
-              color: fanGold,
-              icon: Icons.timer_outlined,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _podium(List<Map<String, dynamic>> top, dynamic myId) {
-    Map<String, dynamic>? at(int i) => i < top.length ? top[i] : null;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(6, 14, 6, 0),
-      decoration: fanBox(radius: 22),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(child: _spot(2, at(1), 84, myId)),
-          Expanded(child: _spot(1, at(0), 112, myId)),
-          Expanded(child: _spot(3, at(2), 64, myId)),
-        ],
-      ),
-    );
-  }
-
-  Widget _spot(int rank, Map<String, dynamic>? r, double height, dynamic myId) {
-    if (r == null) return const SizedBox.shrink();
-    final name = '${r['name']}';
-    final me = r['id'] == myId;
-    final points = (r['points'] as num?)?.toInt() ?? 0;
-    final medal = rank == 1
-        ? fanGold
-        : rank == 2
-        ? const Color(0xFFB0BEC5)
-        : const Color(0xFFCD7F32);
-    return InkWell(
-      onTap: () => _openProfile('${r['id']}'),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (rank == 1)
-            const Icon(
-              Icons.workspace_premium_rounded,
-              color: fanGold,
-              size: 30,
-            )
-          else
-            const SizedBox(height: 30),
-          Container(
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: medal, width: 2.5),
-              boxShadow: [
-                BoxShadow(color: medal.withValues(alpha: .4), blurRadius: 16),
-              ],
-            ),
-            child: FanAvatar(
-              name: name,
-              seed: '${r['id']}',
-              size: rank == 1 ? 62 : 50,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              me ? '$name (you)' : name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 13,
-                color: me ? Ui.redSoft : null,
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          FanLevelPill(fanLevelFor(points)),
-          const SizedBox(height: 8),
-          Container(
-            height: height,
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            alignment: Alignment.topCenter,
-            padding: const EdgeInsets.only(top: 8),
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(16),
-              ),
-              border: Border.all(color: medal.withValues(alpha: .45)),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  medal.withValues(alpha: .42),
-                  medal.withValues(alpha: .04),
-                ],
-              ),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  '$rank',
-                  style: TextStyle(
-                    fontSize: 28,
-                    height: 1,
-                    fontWeight: FontWeight.w900,
-                    color: medal,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '$points pts',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _rankRow(int rank, Map<String, dynamic> r, dynamic myId, int leader) {
-    final me = r['id'] == myId;
-    final name = '${r['name']}';
-    final points = (r['points'] as num?)?.toInt() ?? 0;
-    final level = fanLevelFor(points);
-    final share = leader <= 0
-        ? 0.0
-        : (points / leader).clamp(0.0, 1.0).toDouble();
-    return InkWell(
-      onTap: () => _openProfile('${r['id']}'),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
-        decoration: fanBox(
-          radius: 16,
-          color: me ? Ui.red.withValues(alpha: .13) : null,
-          border: me ? Ui.red.withValues(alpha: .55) : null,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .06),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '$rank',
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: me ? Ui.redSoft : Ui.muted,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            FanAvatar(name: name, seed: '${r['id']}', size: 38),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          me ? '$name (you)' : name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Icon(level.icon, size: 13, color: level.color),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: share,
-                      minHeight: 4,
-                      backgroundColor: Colors.white10,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        me ? Ui.red : level.color,
-                      ),
+                for (var i = 0; i < rows.length; i++)
+                  TableRow(
+                    decoration: BoxDecoration(
+                      color: rows[i]['id'] == _data['id']
+                          ? Ui.red.withValues(alpha: .12)
+                          : null,
+                      border: Border(bottom: BorderSide(color: Ui.line)),
                     ),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Text('${i + 1}', textAlign: TextAlign.center),
+                      ),
+                      InkWell(
+                        onTap: () => _openProfile('${rows[i]['id']}'),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                            horizontal: 4,
+                          ),
+                          child: Text(
+                            '${rows[i]['name']}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      for (final field in ['played', 'won', 'lost', 'points'])
+                        Text(
+                          '${rows[i][field] ?? 0}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontWeight: field == 'points'
+                                ? FontWeight.w900
+                                : FontWeight.normal,
+                          ),
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Fan ${fanShortId(r['id'])} • ${r['played']} settled',
-                    style: TextStyle(fontSize: 11, color: Ui.dim),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '$points',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text('pts', style: TextStyle(fontSize: 10, color: Ui.muted)),
               ],
             ),
-          ],
-        ),
+          ),
+          if (_data['board_next'] != null)
+            TextButton(
+              onPressed: _moreRanks ? null : _loadMoreRanks,
+              child: Text(_moreRanks ? 'Loading…' : 'Show more fans'),
+            ),
+          const SizedBox(height: 12),
+          Text(
+            'P: settled picks • W: correct • L: missed. Exact score: 3 points; correct outcome or market: 1; missed: 0. Pushes do not count. Ties: points, wins, fewer losses, then account ID. Tap a name to view their profile.',
+            style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5),
+          ),
+        ],
       ),
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // BANTER TAB
-  // ---------------------------------------------------------------------------
 
   Widget _banter() => FanPostsFeed(
     active: widget.active,
@@ -1812,179 +1494,170 @@ class _PickSheet extends StatefulWidget {
   final Fixture fixture;
   final int home, away;
   final bool editing;
+  final String market, selection;
   const _PickSheet({
     required this.fixture,
     required this.home,
     required this.away,
     required this.editing,
+    required this.market,
+    required this.selection,
   });
   @override
   State<_PickSheet> createState() => _PickSheetState();
 }
 
 class _PickSheetState extends State<_PickSheet> {
-  late int _home = widget.home;
-  late int _away = widget.away;
-
-  static const _quick = [
-    [1, 0],
-    [2, 0],
-    [2, 1],
-    [3, 1],
-    [1, 1],
-    [0, 0],
-    [2, 2],
-    [0, 1],
-    [0, 2],
-    [1, 2],
-    [1, 3],
-  ];
-
-  String get _verdict {
-    final f = widget.fixture;
-    if (_home == _away) return 'You predict a draw';
-    return _home > _away
-        ? 'You predict ${f.home} to win'
-        : 'You predict ${f.away} to win';
-  }
-
-  Widget _stepper(
-    String name,
-    String logo,
-    int value,
-    void Function(int) set,
-  ) => Expanded(
-    child: Column(
-      children: [
-        TeamCrest(logo: logo, size: 52),
-        const SizedBox(height: 8),
-        Text(
-          name,
-          maxLines: 2,
-          textAlign: TextAlign.center,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 10),
-        IconButton.filledTonal(
-          onPressed: value >= 20 ? null : () => set(value + 1),
-          icon: const Icon(Icons.add_rounded),
-        ),
-        Container(
-          width: 84,
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Ui.red.withValues(alpha: .35)),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Ui.red.withValues(alpha: .22), Ui.cardDeep],
-            ),
-          ),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 160),
-            transitionBuilder: (child, anim) =>
-                ScaleTransition(scale: anim, child: child),
-            child: Text(
-              '$value',
-              key: ValueKey<int>(value),
-              style: const TextStyle(
-                fontSize: 56,
-                fontWeight: FontWeight.w900,
-                height: 1.1,
-              ),
-            ),
-          ),
-        ),
-        IconButton.filledTonal(
-          onPressed: value <= 0 ? null : () => set(value - 1),
-          icon: const Icon(Icons.remove_rounded),
-        ),
-      ],
-    ),
-  );
-
+  late int _home = widget.home, _away = widget.away;
+  late String _market = widget.market, _selection = widget.selection;
+  static const markets = {
+    'result': 'Straight win / Draw',
+    'double_chance': 'Double chance',
+    'totals': 'Over / Under goals',
+    'btts': 'Both teams to score',
+    'score': 'Correct score',
+  };
+  Map<String, String> get choices => switch (_market) {
+    'result' => {
+      '1': '${widget.fixture.home} win',
+      'X': 'Draw',
+      '2': '${widget.fixture.away} win',
+    },
+    'double_chance' => {
+      '1X': 'Home or draw',
+      'X2': 'Away or draw',
+      '12': 'Either team wins',
+    },
+    'btts' => {'yes': 'Yes', 'no': 'No'},
+    'totals' => {
+      for (final line in [
+        '0.5',
+        '1',
+        '1.5',
+        '2',
+        '2.5',
+        '3',
+        '3.5',
+        '4',
+        '4.5',
+      ])
+        for (final side in ['over', 'under'])
+          '${side}_$line': '${side == 'over' ? 'Over' : 'Under'} $line goals',
+    },
+    _ => {},
+  };
   @override
   Widget build(BuildContext context) {
-    final f = widget.fixture;
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          0,
+          20,
+          20 + MediaQuery.viewInsetsOf(context).bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              widget.editing
-                  ? 'Edit your prediction'
-                  : 'Predict the final score',
+              widget.fixture.title,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text(
-              '${f.league.isEmpty ? 'Football' : f.league} • locks at ${fanClock(f.kickoff)}',
-              style: TextStyle(color: Ui.muted, fontSize: 13),
+              '90-minute result. Predictions lock at kickoff.',
+              style: TextStyle(color: Ui.muted),
             ),
-            const SizedBox(height: 18),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _stepper(
-                  f.home,
-                  f.homeLogo,
-                  _home,
-                  (v) => setState(() => _home = v),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 126),
-                  child: Text(
-                    '–',
-                    style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w900,
-                      color: Ui.dim,
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              initialValue: _market,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Prediction market'),
+              items: markets.entries
+                  .map(
+                    (e) => DropdownMenuItem(value: e.key, child: Text(e.value)),
+                  )
+                  .toList(),
+              onChanged: (v) => setState(() {
+                _market = v!;
+                _selection = choices.isEmpty ? '' : choices.keys.first;
+              }),
+            ),
+            const SizedBox(height: 16),
+            if (_market == 'score')
+              Row(
+                children: [
+                  for (final home in [true, false])
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Text(
+                            home ? widget.fixture.home : widget.fixture.away,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              IconButton(
+                                onPressed: () => setState(() {
+                                  if (home && _home > 0) _home--;
+                                  if (!home && _away > 0) _away--;
+                                }),
+                                icon: const Icon(Icons.remove_circle_outline),
+                              ),
+                              Text(
+                                '${home ? _home : _away}',
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () => setState(() {
+                                  if (home && _home < 20) _home++;
+                                  if (!home && _away < 20) _away++;
+                                }),
+                                icon: const Icon(Icons.add_circle_outline),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-                _stepper(
-                  f.away,
-                  f.awayLogo,
-                  _away,
-                  (v) => setState(() => _away = v),
-                ),
-              ],
+                ],
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final e in choices.entries)
+                    ChoiceChip(
+                      label: Text(e.value),
+                      selected: _selection == e.key,
+                      onSelected: (_) => setState(() => _selection = e.key),
+                    ),
+                ],
+              ),
+            const SizedBox(height: 16),
+            const Text(
+              'Exact score: 3 points; correct outcome or market: 1 point. Integer goal lines are refunded if the total equals the line.',
             ),
-            const SizedBox(height: 14),
-            FanPill(text: _verdict, color: Ui.green, icon: Icons.bolt_rounded),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              alignment: WrapAlignment.center,
-              children: [
-                for (final s in _quick)
-                  ChoiceChip(
-                    label: Text('${s[0]} – ${s[1]}'),
-                    selected: _home == s[0] && _away == s[1],
-                    onSelected: (_) => setState(() {
-                      _home = s[0];
-                      _away = s[1];
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _market != 'score' && !choices.containsKey(_selection)
+                  ? null
+                  : () => Navigator.pop(context, <String, dynamic>{
+                      'home': _home,
+                      'away': _away,
+                      'market': _market,
+                      'selection': _market == 'score' ? '' : _selection,
                     }),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: FilledButton.icon(
-                onPressed: () => Navigator.pop(context, [_home, _away]),
-                icon: const Icon(Icons.lock_rounded, size: 18),
-                label: Text(
-                  widget.editing ? 'Update prediction' : 'Lock in prediction',
-                ),
+              icon: const Icon(Icons.lock_outline),
+              label: Text(
+                widget.editing ? 'Update prediction' : 'Save prediction',
               ),
             ),
           ],
