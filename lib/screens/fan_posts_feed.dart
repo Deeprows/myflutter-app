@@ -619,6 +619,7 @@ class _ComposePost extends StatefulWidget {
 }
 
 class _ComposePostState extends State<_ComposePost> {
+  Fixture? _taggedMatch;
   final _text = TextEditingController();
   late String _kind = widget.initialKind;
   Uint8List? _image;
@@ -691,11 +692,7 @@ class _ComposePostState extends State<_ComposePost> {
       ),
     );
     if (f == null || !mounted) return;
-    final tag = '⚽ ${f.title}';
-    if (!_text.text.contains(tag)) {
-      _text.text = _text.text.isEmpty ? '$tag\n' : '$tag\n${_text.text}';
-      _text.selection = TextSelection.collapsed(offset: _text.text.length);
-    }
+    setState(() => _taggedMatch = f);
   }
 
   Future<void> _pickImage() async {
@@ -774,6 +771,9 @@ class _ComposePostState extends State<_ComposePost> {
         kind: _kind,
         text: _text.text,
         image: _image,
+        matchKey: _taggedMatch == null
+            ? null
+            : FanZoneService.matchKey(_taggedMatch!),
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -847,14 +847,28 @@ class _ComposePostState extends State<_ComposePost> {
                       padding: const EdgeInsets.fromLTRB(8, 0, 12, 8),
                       child: Row(
                         children: [
-                          TextButton.icon(
-                            onPressed: _busy ? null : _tagMatch,
-                            icon: const Icon(
-                              Icons.sports_soccer_rounded,
-                              size: 16,
+                          Flexible(
+                            child: TextButton.icon(
+                              onPressed: _busy ? null : _tagMatch,
+                              icon: const Icon(
+                                Icons.sports_soccer_rounded,
+                                size: 16,
+                              ),
+                              label: Text(
+                                _taggedMatch?.title ?? 'Tag a match',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            label: const Text('Tag a match'),
                           ),
+                          if (_taggedMatch != null)
+                            IconButton(
+                              onPressed: _busy
+                                  ? null
+                                  : () => setState(() => _taggedMatch = null),
+                              tooltip: 'Remove match tag',
+                              icon: const Icon(Icons.close, size: 16),
+                            ),
                           const Spacer(),
                           ValueListenableBuilder<TextEditingValue>(
                             valueListenable: _text,
