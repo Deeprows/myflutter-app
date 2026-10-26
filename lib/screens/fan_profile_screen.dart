@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../services/fan_zone_service.dart';
 import '../services/content_sync.dart';
+import '../widgets/fan_club_picker.dart';
 import '../theme/app_theme.dart';
 import 'fan_posts_feed.dart';
 import 'fan_widgets.dart';
@@ -129,7 +130,9 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
             ),
           ),
         ),
-        if (url != null)
+        if ('${p['club_logo'] ?? ''}'.isNotEmpty)
+          FanClubCover(name: '${p['club_name']}', logo: '${p['club_logo']}')
+        else if (url != null)
           Image.network(
             url,
             fit: BoxFit.cover,
@@ -279,6 +282,14 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
                 ),
               ),
               Text('@${p['handle']}', style: TextStyle(color: Ui.muted)),
+              if ('${p['club_name'] ?? ''}'.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    '⚽ ${p['club_name']}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
               if (bio.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 10),
@@ -336,7 +347,9 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
                 ],
               ),
               Theme(
-                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                data: Theme.of(
+                  context,
+                ).copyWith(dividerColor: Colors.transparent),
                 child: ExpansionTile(
                   tilePadding: EdgeInsets.zero,
                   childrenPadding: const EdgeInsets.only(bottom: 8),
@@ -382,11 +395,7 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
             ],
           ),
         ),
-        const XTabBar(
-          labels: ['Posts'],
-          index: 0,
-          onTap: _noTab,
-        ),
+        const XTabBar(labels: ['Posts'], index: 0, onTap: _noTab),
       ],
     );
   }
@@ -483,6 +492,8 @@ class _EditFanProfileState extends State<_EditFanProfile> {
   static const double _avatarSize = 76;
   late final TextEditingController _name, _bio, _location;
   Uint8List? _avatar, _cover;
+  late String _clubName = '${widget.profile['club_name'] ?? ''}',
+      _clubLogo = '${widget.profile['club_logo'] ?? ''}';
   bool _avatarSent = false, _coverSent = false;
   String? _error;
   bool _saving = false, _picking = false;
@@ -543,6 +554,8 @@ class _EditFanProfileState extends State<_EditFanProfile> {
           _avatarSent = false;
         } else {
           _cover = bytes;
+          _clubLogo = '';
+
           _coverSent = false;
         }
         _error = null;
@@ -569,6 +582,8 @@ class _EditFanProfileState extends State<_EditFanProfile> {
           'name': _name.text.trim(),
           'bio': _bio.text.trim(),
           'location': _location.text.trim(),
+          'club_name': _clubName,
+          'club_logo': _clubLogo,
         },
       );
       final avatar = _avatar, cover = _cover;
@@ -625,7 +640,9 @@ class _EditFanProfileState extends State<_EditFanProfile> {
               ),
             ),
           ),
-          if (_cover != null)
+          if (_clubLogo.isNotEmpty)
+            FanClubCover(name: _clubName, logo: _clubLogo)
+          else if (_cover != null)
             Image.memory(_cover!, fit: BoxFit.cover)
           else if (url != null)
             Image.network(
@@ -711,7 +728,9 @@ class _EditFanProfileState extends State<_EditFanProfile> {
       ],
     ),
     body: ListView(
-      padding: EdgeInsets.only(bottom: 24 + MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
+      ),
       children: [
         if (_saving) const LinearProgressIndicator(minHeight: 2),
         SizedBox(
@@ -757,6 +776,25 @@ class _EditFanProfileState extends State<_EditFanProfile> {
                   hintText: 'Tell fans a bit about yourself',
                 ),
               ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.sports_soccer),
+                title: Text(_clubName.isEmpty ? 'Select your club' : _clubName),
+                subtitle: const Text(
+                  'Choose a crest cover, or upload your own club image',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _saving
+                    ? null
+                    : () async {
+                        final club = await chooseFanClub(context);
+                        if (club != null && mounted)
+                          setState(() {
+                            _clubName = club.key;
+                            _clubLogo = club.value;
+                          });
+                      },
+              ),
               TextField(
                 controller: _location,
                 maxLength: 40,
@@ -778,7 +816,9 @@ class _EditFanProfileState extends State<_EditFanProfile> {
                   padding: const EdgeInsets.only(top: 12),
                   child: Text(
                     _error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
                 ),
             ],
