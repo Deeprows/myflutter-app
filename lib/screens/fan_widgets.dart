@@ -1,3 +1,4 @@
+import '../models/fan_prediction.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -41,8 +42,18 @@ String fanClock(DateTime d) {
 
 const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 /// "Today", "Tomorrow" or "Sat 25 Oct".
@@ -81,15 +92,7 @@ String fanCountdown(Duration d) {
 // -----------------------------------------------------------------------------
 
 /// 3 = exact score, 1 = right winner/draw, 0 = missed, null = not settled yet.
-int? fanPickPoints(Map<String, dynamic> p) {
-  final rh = p['result_home'];
-  final ra = p['result_away'];
-  if (rh is! num || ra is! num) return null;
-  final h = (p['home'] as num).toInt();
-  final a = (p['away'] as num).toInt();
-  if (h == rh.toInt() && a == ra.toInt()) return 3;
-  return (h - a).sign == (rh.toInt() - ra.toInt()).sign ? 1 : 0;
-}
+int? fanPickPoints(Map<String, dynamic> p) => fanPredictionScore(p);
 
 class FanStats {
   final int picks, settled, points, exact, correct, streak, bestStreak;
@@ -107,11 +110,15 @@ class FanStats {
   int get accuracy => settled == 0 ? 0 : (correct * 100 / settled).round();
 
   factory FanStats.from(List<Map<String, dynamic>> picks) {
-    final settledPicks = <Map<String, dynamic>>[
-      for (final p in picks)
-        if (fanPickPoints(p) != null) p,
-    ]..sort((a, b) => ((b['kickoff'] as num?) ?? 0)
-        .compareTo((a['kickoff'] as num?) ?? 0));
+    final settledPicks =
+        <Map<String, dynamic>>[
+          for (final p in picks)
+            if (fanPickPoints(p) != null) p,
+        ]..sort(
+          (a, b) => ((b['kickoff'] as num?) ?? 0).compareTo(
+            (a['kickoff'] as num?) ?? 0,
+          ),
+        );
     var points = 0, exact = 0, correct = 0;
     for (final p in settledPicks) {
       final v = fanPickPoints(p)!;
@@ -193,7 +200,10 @@ class FanKind {
     switch (kind) {
       case 'betslip':
         return const FanKind(
-            'Bet Slip', Icons.receipt_long_rounded, Color(0xFFFFB300));
+          'Bet Slip',
+          Icons.receipt_long_rounded,
+          Color(0xFFFFB300),
+        );
       case 'prediction':
         return FanKind('Prediction', Icons.sports_soccer_rounded, Ui.green);
       default:
@@ -228,7 +238,9 @@ class FanAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = fanColor(seed.isEmpty ? name : seed);
     final trimmed = name.trim();
-    final initial = trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase();
+    final initial = trimmed.isEmpty
+        ? '?'
+        : trimmed.characters.first.toUpperCase();
     return Container(
       width: size,
       height: size,
@@ -257,37 +269,42 @@ class FanPill extends StatelessWidget {
   final String text;
   final Color color;
   final IconData? icon;
-  const FanPill({super.key, required this.text, required this.color, this.icon});
+  const FanPill({
+    super.key,
+    required this.text,
+    required this.color,
+    this.icon,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: .16),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 12, color: color),
-              const SizedBox(width: 4),
-            ],
-            Flexible(
-              child: Text(
-                text,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .16),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+        ],
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
             ),
-          ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class FanSectionTitle extends StatelessWidget {
@@ -305,47 +322,47 @@ class FanSectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(2, 22, 2, 12),
-        child: Row(
-          children: [
-            Container(
-              width: 4,
-              height: 18,
-              decoration: BoxDecoration(
-                color: Ui.red,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            const SizedBox(width: 10),
-            if (icon != null) ...[
-              Icon(icon, size: 18, color: Ui.redSoft),
-              const SizedBox(width: 6),
-            ],
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: .2,
-                ),
-              ),
-            ),
-            if (trailing != null)
-              GestureDetector(
-                onTap: onTrailing,
-                child: Text(
-                  trailing!,
-                  style: TextStyle(
-                    color: Ui.redSoft,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-          ],
+    padding: const EdgeInsets.fromLTRB(2, 22, 2, 12),
+    child: Row(
+      children: [
+        Container(
+          width: 4,
+          height: 18,
+          decoration: BoxDecoration(
+            color: Ui.red,
+            borderRadius: BorderRadius.circular(4),
+          ),
         ),
-      );
+        const SizedBox(width: 10),
+        if (icon != null) ...[
+          Icon(icon, size: 18, color: Ui.redSoft),
+          const SizedBox(width: 6),
+        ],
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              letterSpacing: .2,
+            ),
+          ),
+        ),
+        if (trailing != null)
+          GestureDetector(
+            onTap: onTrailing,
+            child: Text(
+              trailing!,
+              style: TextStyle(
+                color: Ui.redSoft,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 /// Team crest. The feed stores either an API-Sports team id or a full URL.
@@ -423,28 +440,24 @@ class _FanSkeletonState extends State<FanSkeleton>
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-        animation: _c,
-        builder: (_, __) {
-          final t = _c.value;
-          return Container(
-            height: widget.height,
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Ui.line),
-              gradient: LinearGradient(
-                begin: Alignment(-1.6 + 3.2 * t, -.3),
-                end: Alignment(-.6 + 3.2 * t, .3),
-                colors: [
-                  Ui.card,
-                  Colors.white.withValues(alpha: .07),
-                  Ui.card,
-                ],
-              ),
-            ),
-          );
-        },
+    animation: _c,
+    builder: (_, __) {
+      final t = _c.value;
+      return Container(
+        height: widget.height,
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Ui.line),
+          gradient: LinearGradient(
+            begin: Alignment(-1.6 + 3.2 * t, -.3),
+            end: Alignment(-.6 + 3.2 * t, .3),
+            colors: [Ui.card, Colors.white.withValues(alpha: .07), Ui.card],
+          ),
+        ),
       );
+    },
+  );
 }
 
 class FanEmpty extends StatelessWidget {
@@ -461,26 +474,26 @@ class FanEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
-        child: Column(
-          children: [
-            Icon(icon, size: 46, color: Ui.dim),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Ui.muted, height: 1.35),
-            ),
-            if (action != null) ...[const SizedBox(height: 16), action!],
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+    child: Column(
+      children: [
+        Icon(icon, size: 46, color: Ui.dim),
+        const SizedBox(height: 12),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
         ),
-      );
+        const SizedBox(height: 6),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Ui.muted, height: 1.35),
+        ),
+        if (action != null) ...[const SizedBox(height: 16), action!],
+      ],
+    ),
+  );
 }
 
 // -----------------------------------------------------------------------------
@@ -528,36 +541,36 @@ class FanHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: color.withValues(alpha: .38)),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [color.withValues(alpha: .34), Ui.card, Ui.cardDeep],
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: color.withValues(alpha: .38)),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [color.withValues(alpha: .34), Ui.card, Ui.cardDeep],
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: color.withValues(alpha: .14),
+          blurRadius: 22,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Stack(
+      children: [
+        Positioned.fill(
+          child: CustomPaint(
+            painter: FanPitchPainter(
+              color: Colors.white.withValues(alpha: .055),
+            ),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: .14),
-              blurRadius: 22,
-              offset: const Offset(0, 8),
-            ),
-          ],
         ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: CustomPaint(
-                painter: FanPitchPainter(
-                  color: Colors.white.withValues(alpha: .055),
-                ),
-              ),
-            ),
-            Padding(padding: padding, child: child),
-          ],
-        ),
-      );
+        Padding(padding: padding, child: child),
+      ],
+    ),
+  );
 }
 
 /// Pill-shaped selectable chip used for filters (days, leagues, post types).
@@ -649,11 +662,11 @@ class FanCountUp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => TweenAnimationBuilder<double>(
-        tween: Tween<double>(begin: 0, end: value.toDouble()),
-        duration: const Duration(milliseconds: 800),
-        curve: Curves.easeOutCubic,
-        builder: (_, v, __) => Text('${v.round()}$suffix', style: style),
-      );
+    tween: Tween<double>(begin: 0, end: value.toDouble()),
+    duration: const Duration(milliseconds: 800),
+    curve: Curves.easeOutCubic,
+    builder: (_, v, __) => Text('${v.round()}$suffix', style: style),
+  );
 }
 
 /// One stat in a row: tinted icon, animated number, small label.
@@ -676,37 +689,36 @@ class FanStatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Expanded(
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 3),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: .22),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withValues(alpha: .22)),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, size: 18, color: color),
-              const SizedBox(height: 4),
-              empty
-                  ? const Text(
-                      '–',
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-                    )
-                  : FanCountUp(
-                      value: value,
-                      suffix: suffix ?? '',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-              Text(label, style: TextStyle(fontSize: 11, color: Ui.muted)),
-            ],
-          ),
-        ),
-      );
+    child: Container(
+      margin: const EdgeInsets.symmetric(horizontal: 3),
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: .22),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: .22)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(height: 4),
+          empty
+              ? const Text(
+                  '–',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                )
+              : FanCountUp(
+                  value: value,
+                  suffix: suffix ?? '',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+          Text(label, style: TextStyle(fontSize: 11, color: Ui.muted)),
+        ],
+      ),
+    ),
+  );
 }
 
 /// Avatar wrapped in a ring that fills as the fan climbs to the next level.
@@ -727,28 +739,28 @@ class FanLevelAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: size + 12,
-        height: size + 12,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            SizedBox.expand(
-              child: TweenAnimationBuilder<double>(
-                tween: Tween<double>(begin: 0, end: progress.clamp(0.0, 1.0)),
-                duration: const Duration(milliseconds: 900),
-                curve: Curves.easeOutCubic,
-                builder: (_, v, __) => CircularProgressIndicator(
-                  value: v,
-                  strokeWidth: 4,
-                  backgroundColor: Colors.white12,
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
-                ),
-              ),
+    width: size + 12,
+    height: size + 12,
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        SizedBox.expand(
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: progress.clamp(0.0, 1.0)),
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOutCubic,
+            builder: (_, v, __) => CircularProgressIndicator(
+              value: v,
+              strokeWidth: 4,
+              backgroundColor: Colors.white12,
+              valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
-            FanAvatar(name: name, seed: seed, size: size),
-          ],
+          ),
         ),
-      );
+        FanAvatar(name: name, seed: seed, size: size),
+      ],
+    ),
+  );
 }
 
 /// Small pill showing a fan's level (icon + name) in the level colour.
@@ -786,23 +798,23 @@ class _FanLiveDotState extends State<FanLiveDot>
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-        animation: _c,
-        builder: (_, __) => Container(
-          width: widget.size,
-          height: widget.size,
-          decoration: BoxDecoration(
-            color: widget.color,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: widget.color.withValues(alpha: .65 * _c.value),
-                blurRadius: 4 + 5 * _c.value,
-                spreadRadius: 1 + _c.value,
-              ),
-            ],
+    animation: _c,
+    builder: (_, __) => Container(
+      width: widget.size,
+      height: widget.size,
+      decoration: BoxDecoration(
+        color: widget.color,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: widget.color.withValues(alpha: .65 * _c.value),
+            blurRadius: 4 + 5 * _c.value,
+            spreadRadius: 1 + _c.value,
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }
 
 // -----------------------------------------------------------------------------
@@ -819,23 +831,63 @@ class FanBadge {
 }
 
 List<FanBadge> fanBadgesFor(FanStats s) => [
-      FanBadge('First pick', 'Make your first prediction',
-          Icons.flag_rounded, const Color(0xFF4FC3F7), s.picks >= 1),
-      FanBadge('Sharpshooter', 'Nail one exact score',
-          Icons.track_changes_rounded, Ui.green, s.exact >= 1),
-      FanBadge('Hat-trick', 'Nail 3 exact scores',
-          Icons.looks_3_rounded, const Color(0xFF00C896), s.exact >= 3),
-      FanBadge('On fire', 'Get 3 correct picks in a row',
-          Icons.local_fire_department_rounded, fanOrange, s.bestStreak >= 3),
-      FanBadge('Unstoppable', 'Get 7 correct picks in a row',
-          Icons.bolt_rounded, const Color(0xFFFFB300), s.bestStreak >= 7),
-      FanBadge('Regular', 'Get 10 picks settled',
-          Icons.event_available_rounded, const Color(0xFF7986CB), s.settled >= 10),
-      FanBadge('Analyst', 'Reach 35 points',
-          Icons.insights_rounded, const Color(0xFFAB47BC), s.points >= 35),
-      FanBadge('Legend', 'Reach 75 points',
-          Icons.workspace_premium_rounded, fanGold, s.points >= 75),
-    ];
+  FanBadge(
+    'First pick',
+    'Make your first prediction',
+    Icons.flag_rounded,
+    const Color(0xFF4FC3F7),
+    s.picks >= 1,
+  ),
+  FanBadge(
+    'Sharpshooter',
+    'Nail one exact score',
+    Icons.track_changes_rounded,
+    Ui.green,
+    s.exact >= 1,
+  ),
+  FanBadge(
+    'Hat-trick',
+    'Nail 3 exact scores',
+    Icons.looks_3_rounded,
+    const Color(0xFF00C896),
+    s.exact >= 3,
+  ),
+  FanBadge(
+    'On fire',
+    'Get 3 correct picks in a row',
+    Icons.local_fire_department_rounded,
+    fanOrange,
+    s.bestStreak >= 3,
+  ),
+  FanBadge(
+    'Unstoppable',
+    'Get 7 correct picks in a row',
+    Icons.bolt_rounded,
+    const Color(0xFFFFB300),
+    s.bestStreak >= 7,
+  ),
+  FanBadge(
+    'Regular',
+    'Get 10 picks settled',
+    Icons.event_available_rounded,
+    const Color(0xFF7986CB),
+    s.settled >= 10,
+  ),
+  FanBadge(
+    'Analyst',
+    'Reach 35 points',
+    Icons.insights_rounded,
+    const Color(0xFFAB47BC),
+    s.points >= 35,
+  ),
+  FanBadge(
+    'Legend',
+    'Reach 75 points',
+    Icons.workspace_premium_rounded,
+    fanGold,
+    s.points >= 75,
+  ),
+];
 
 class FanBadgeTile extends StatelessWidget {
   final FanBadge badge;
