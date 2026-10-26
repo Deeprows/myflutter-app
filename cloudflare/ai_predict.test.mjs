@@ -6,16 +6,22 @@ const sql=new DatabaseSync(':memory:');
 const DB={prepare(query){let args=[];const st={bind(...a){args=a;return st;},
   async first(){return sql.prepare(query).get(...args)||null;},
   async all(){return {results:sql.prepare(query).all(...args)};},
-  async run(){return /RETURNING/i.test(query) ? {results:sql.prepare(query).all(...args)} : sql.prepare(query).run(...args);}};return st;},
+  async run(){return /RETURNING/i.test(query)?{results:sql.prepare(query).all(...args)}:sql.prepare(query).run(...args);}};return st;},
   async batch(list){sql.exec('BEGIN');try{const result=[];for(const s of list)result.push(await s.run());sql.exec('COMMIT');return result;}catch(e){sql.exec('ROLLBACK');throw e;}}};
 const keys=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
 const jwk=await crypto.subtle.exportKey('jwk',keys.publicKey);jwk.kid='test-google-key';
-let keyFetches=0;
-const kickoff=new Date(Date.now()+3600000).toISOString();
-const fixture={id:'ai-fixture',home:'Home FC',away:'Away FC',league:'Test League',kickoff};
+let keyFetches=0,providerCalls=0,providerFailure=false,smallSample=false;
+const fixture={id:'auto',home:'Home FC',away:'Away FC',homeLogo:'66',awayLogo:'50',kickoff:new Date(Date.now()+3600000).toISOString()};
+function history(id) {
+  return Array.from({length:smallSample?2:5},(_,i)=>({fixture:{id:Number(id)*100+i,date:new Date(Date.now()-(i+1)*86400000).toISOString(),status:{short:i===0?'AET':'FT'}},teams:{home:{id:Number(id),name:'Team '+id},away:{id:777,name:'Opponent'}},goals:{home:3,away:1},score:{fulltime:{home:i===0?1:2,away:1}}}));
+}
 globalThis.fetch=async(url)=>{
   if(String(url)==='https://www.googleapis.com/oauth2/v3/certs'){
     keyFetches++;return new Response(JSON.stringify({keys:[jwk]}),{headers:{'cache-control':'public,max-age=3600'}});
+  }
+  if(String(url).startsWith('https://v3.football.api-sports.io/fixtures?')) {
+    providerCalls++;if(providerFailure)return new Response('{}',{status:403});
+    return new Response(JSON.stringify({errors:[],response:history(new URL(url).searchParams.get('team'))}));
   }
   return new Response(JSON.stringify([fixture]));
 };
@@ -35,42 +41,35 @@ async function call(path,{body,bearer,e=env}={}){
     ...(body?{body:JSON.stringify(body)}:{})}),e,{});
 }
 
-const alice=await token();
-assert.equal((await call('auth',{body:{mode:'signup',idToken:alice}})).status,200);
+const alice=await token();assert.equal((await call('auth',{body:{mode:'signup',idToken:alice}})).status,200);
+const body={key:fixture.id+'|'+Date.parse(fixture.kickoff)};
 let runs=0;
-env.AI={async run(model,input){
-  runs++;assert.equal(model,'@cf/meta/llama-3.1-8b-instruct-fp8');
-  assert.match(input.messages[0].content,/no live data/);
-  const details=JSON.parse(input.messages[1].content);
-  assert.equal(details.fixture.home,'Home FC');assert.equal(details.userProvidedStats,stats);
-  return {response:'Tentative home lean based on unverified supplied form. No guaranteed result.'};
+env.API_FOOTBALL_KEY='test-secret';env.AI={async run(model,input){
+ runs++;assert.equal(model,'@cf/meta/llama-3.1-8b-instruct-fp8');
+ const data=JSON.parse(input.messages[1].content);
+ assert.equal(data.home.played,5);assert.equal(data.away.played,5);
+ assert.equal(data.home.matches[0].goalsFor,1,'AET uses 90-minute score');
+ assert.equal(data.home.matches[0].result,'D');
+ assert.equal(data.home.goalsFor,9);assert.equal(data.home.goalsAgainst,5);
+ assert.equal('userProvidedStats' in data,false);assert.equal(JSON.stringify(data).includes('invented-user-data'),false);
+ return {response:'Home lean based on the fetched recent results; uncertain outcome.'};
 }};
-const stats='Home won 3 of last 5; Away won 1 of last 5. User-supplied data.';
-const body={key:fixture.id+'|'+new Date(kickoff).getTime(),stats};
 assert.equal((await call('ai-predict',{body})).status,401);
 assert.equal((await call('ai-predict',{body,bearer:await token({sub:'unknown'})})).status,403);
 assert.equal((await call('ai-predict',{body,bearer:alice,e:{...env,AI:undefined}})).status,503);
+assert.equal((await call('ai-predict',{body,bearer:alice,e:{...env,API_FOOTBALL_KEY:undefined}})).status,503);
 assert.equal((await call('ai-predict',{bearer:alice})).status,405);
-assert.equal((await call('ai-predict',{body:{...body,stats:'short'},bearer:alice})).status,400);
-assert.equal((await call('ai-predict',{body:{...body,stats:'x'.repeat(2501)},bearer:alice})).status,400);
-assert.equal((await call('ai-predict',{body:{...body,stats:'x'.repeat(5000)},bearer:alice})).status,413);
-assert.equal((await call('ai-predict',{body:{...body,key:'unknown'},bearer:alice})).status,404);
-fixture.kickoff=new Date(Date.now()-1000).toISOString();
-assert.equal((await call('ai-predict',{body:{...body,key:fixture.id+'|'+new Date(fixture.kickoff).getTime()},bearer:alice})).status,400);
-fixture.kickoff=kickoff;
-assert.equal(runs,0,'Invalid/unauthorized requests never invoke AI');
-const response=await call('ai-predict',{body,bearer:alice});assert.equal(response.status,200);
-const result=await response.json();assert.match(result.analysis,/Tentative home lean/);assert.match(result.dataSource,/no live data/);
+assert.equal((await call('ai-predict',{body:{key:'missing'},bearer:alice})).status,404);
+const savedLogo=fixture.homeLogo;fixture.homeLogo='';assert.equal((await call('ai-predict',{body,bearer:alice})).status,422);fixture.homeLogo=savedLogo;
+let response=await call('ai-predict',{body:{...body,stats:'invented-user-data'},bearer:alice});assert.equal(response.status,200);
+const result=await response.json();assert.match(result.dataSource,/API-Football/);assert.equal(result.home.matches.length,5);assert.equal(JSON.stringify(result).includes('test-secret'),false);
+assert.equal(providerCalls,2);
 for(let i=1;i<10;i++)assert.equal((await call('ai-predict',{body,bearer:alice})).status,200);
+assert.equal(providerCalls,2,'Server cache reuses recent results');
 assert.equal((await call('ai-predict',{body,bearer:alice})).status,429);assert.equal(runs,10);
-assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM fan_picks').get().n,0,'AI never submits competition picks');
-sql.exec('DELETE FROM fan_ai_limits');
-env.AI={async run(){throw new Error('Test provider failure');}};
+assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM fan_picks').get().n,0,'AI does not submit user picks');
+sql.exec('DELETE FROM fan_ai_limits; DELETE FROM fan_form_cache');providerFailure=true;
 assert.equal((await call('ai-predict',{body,bearer:alice})).status,503);
-sql.exec('DELETE FROM fan_ai_limits');env.AI={async run(){return {response:''};}};
-assert.equal((await call('ai-predict',{body,bearer:alice})).status,502);
-sql.exec('DELETE FROM fan_ai_limits');
-const id=sql.prepare('SELECT id FROM fan_accounts LIMIT 1').get().id;
-sql.prepare('INSERT INTO fan_ai_limits VALUES(?,?,?)').run('day:'+id+':'+Math.floor(Date.now()/86400000),50,Date.now()+86400000);
-assert.equal((await call('ai-predict',{body,bearer:alice})).status,429,'Daily quota survives hourly resets');
-console.log('AI Predict: registered Gmail access, binding, input validation, upcoming fixtures, prompt data boundaries, inference response, hourly/daily limits, provider errors and no competition side effects passed.');
+sql.exec('DELETE FROM fan_ai_limits; DELETE FROM fan_form_cache');providerFailure=false;smallSample=true;
+assert.equal((await call('ai-predict',{body,bearer:alice})).status,422);assert.equal(runs,10,'Insufficient results never invent an analysis');
+console.log('Automatic AI: verified access, binding/key setup, real server-sourced results, 90-minute scores, sample checks, cache, quotas, user-input exclusion and provider errors passed.');
