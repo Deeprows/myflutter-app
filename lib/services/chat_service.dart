@@ -9,7 +9,8 @@ class ChatMessage {
   final String username;
   final String text;
   final DateTime? at;
-  const ChatMessage(this.id, this.username, this.text, this.at);
+  final String? userId;
+  const ChatMessage(this.id, this.username, this.text, this.at, {this.userId});
 }
 
 enum NameClaim { ok, taken, unchecked }
@@ -54,16 +55,16 @@ class ChatService {
           body: jsonEncode({
             'structuredQuery': {
               'from': [
-                {'collectionId': 'messages'}
+                {'collectionId': 'messages'},
               ],
               'orderBy': [
                 {
                   'field': {'fieldPath': 'createdAt'},
-                  'direction': 'DESCENDING'
-                }
+                  'direction': 'DESCENDING',
+                },
               ],
               'limit': limit,
-            }
+            },
           }),
         )
         .timeout(const Duration(seconds: 12));
@@ -82,12 +83,15 @@ class ChatService {
         final id = (doc['name'] ?? '').toString().split('/').last;
         final text = s('message');
         if (text.isEmpty) continue;
-        out.add(ChatMessage(
-          id,
-          s('username').isEmpty ? 'Football Fan' : s('username'),
-          text,
-          ts == null ? null : DateTime.tryParse(ts)?.toLocal(),
-        ));
+        out.add(
+          ChatMessage(
+            id,
+            s('username').isEmpty ? 'Football Fan' : s('username'),
+            text,
+            ts == null ? null : DateTime.tryParse(ts)?.toLocal(),
+            userId: s('userId'),
+          ),
+        );
       }
     }
     return out.reversed.toList();
@@ -99,11 +103,13 @@ class ChatService {
     required String matchName,
     required String username,
     required String text,
+    String? userId,
   }) async {
     final msg = text.trim();
     if (msg.isEmpty) return null;
     final id = _autoId();
-    final name = 'projects/$_project/databases/(default)/documents'
+    final name =
+        'projects/$_project/databases/(default)/documents'
         '/match_chats/$slug/messages/$id';
     try {
       final res = await http
@@ -117,10 +123,11 @@ class ChatService {
                     'name': name,
                     'fields': {
                       'username': {'stringValue': username},
+                      if (userId != null) 'userId': {'stringValue': userId},
                       'message': {
                         'stringValue': msg.length > maxLength
                             ? msg.substring(0, maxLength)
-                            : msg
+                            : msg,
                       },
                       'matchName': {'stringValue': matchName},
                     },
@@ -128,12 +135,12 @@ class ChatService {
                   'updateTransforms': [
                     {
                       'fieldPath': 'createdAt',
-                      'setToServerValue': 'REQUEST_TIME'
-                    }
+                      'setToServerValue': 'REQUEST_TIME',
+                    },
                   ],
                   'currentDocument': {'exists': false},
-                }
-              ]
+                },
+              ],
             }),
           )
           .timeout(const Duration(seconds: 12));
@@ -175,8 +182,8 @@ class ChatService {
                     },
                   },
                   'currentDocument': {'exists': false},
-                }
-              ]
+                },
+              ],
             }),
           )
           .timeout(const Duration(seconds: 12));
@@ -184,8 +191,10 @@ class ChatService {
       // Already exists: fine if it is this phone's own claim.
       if (res.statusCode == 409 || res.statusCode == 400) {
         final get = await http
-            .get(Uri.parse('$_base/chat_names/$id?key=$_apiKey'),
-                headers: _headers)
+            .get(
+              Uri.parse('$_base/chat_names/$id?key=$_apiKey'),
+              headers: _headers,
+            )
             .timeout(const Duration(seconds: 12));
         if (get.statusCode == 200) {
           final f = (jsonDecode(get.body) as Map)['fields'] as Map? ?? const {};
@@ -209,9 +218,16 @@ class ChatService {
 
   static String randomName() {
     const names = [
-      'Football Fan', 'Match Fan', 'Goal Hunter', 'Football Lover',
-      'Super Fan', 'Game Watcher', 'Goal Master', 'Football King',
-      'Football Queen', 'Match Expert',
+      'Football Fan',
+      'Match Fan',
+      'Goal Hunter',
+      'Football Lover',
+      'Super Fan',
+      'Game Watcher',
+      'Goal Master',
+      'Football King',
+      'Football Queen',
+      'Match Expert',
     ];
     final r = Random();
     return '${names[r.nextInt(names.length)]} ${100 + r.nextInt(900)}';
