@@ -6,7 +6,11 @@ import '../services/push_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/pitch_painter.dart';
 import 'community_shell_screen.dart';
+import 'content_shortcut_screen.dart';
+import 'highlights_screen.dart';
+import 'movies_screen.dart';
 import 'shell_screen.dart';
+import 'tv_screen.dart';
 
 /// The signed-in entry point: the user chooses football or community.
 class ExperienceHub extends StatefulWidget {
@@ -43,6 +47,23 @@ class _ExperienceHubState extends State<ExperienceHub> {
     setState(() => _mode = mode);
     _syncAds();
     if (mode != 'landing') unawaited(AdScheduler.instance.start());
+  }
+
+  /// Highlights and Movies open as full pages from the front page and come
+  /// back here; ads follow the same rules as the other experiences.
+  Future<void> _openPage(String title, Widget page) async {
+    if (!mounted) return;
+    if (_adsHeld) {
+      AdScheduler.instance.release();
+      _adsHeld = false;
+    }
+    unawaited(AdScheduler.instance.start());
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ContentShortcutScreen(title: title, child: page),
+      ),
+    );
+    if (mounted) _syncAds();
   }
 
   void _notification() {
@@ -82,6 +103,7 @@ class _ExperienceHubState extends State<ExperienceHub> {
     if (yes == true) await AuthService.instance.signOut();
   }
 
+  // A slim horizontal button: icon, title + one short line, arrow.
   Widget _choice({
     required String title,
     required String subtitle,
@@ -91,29 +113,31 @@ class _ExperienceHubState extends State<ExperienceHub> {
     bool pitch = false,
   }) => Semantics(
     button: true,
+    label: title,
     child: Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(16),
         child: Ink(
+          height: 58,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(16),
             gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [accent.withValues(alpha: .23), Ui.card],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [accent.withValues(alpha: .20), Ui.card],
             ),
-            border: Border.all(color: accent.withValues(alpha: .4)),
+            border: Border.all(color: accent.withValues(alpha: .38)),
           ),
           child: Stack(
             children: [
               if (pitch)
                 Positioned(
-                  right: -10,
-                  top: 4,
-                  bottom: 4,
-                  width: 160,
+                  right: 30,
+                  top: 3,
+                  bottom: 3,
+                  width: 70,
                   child: IgnorePointer(
                     child: CustomPaint(
                       painter: PitchPainter(
@@ -123,42 +147,49 @@ class _ExperienceHubState extends State<ExperienceHub> {
                   ),
                 ),
               Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: accent.withValues(alpha: .15),
-                            borderRadius: BorderRadius.circular(18),
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: .16),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Icon(icon, color: accent, size: 19),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w800,
+                              height: 1.15,
+                            ),
                           ),
-                          child: Icon(icon, color: accent, size: 29),
-                        ),
-                        const Spacer(),
-                        Icon(Icons.arrow_forward_rounded, color: accent),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 23,
-                        fontWeight: FontWeight.w900,
-                        height: 1.2,
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Ui.muted,
+                              fontSize: 11.5,
+                              height: 1.15,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 9),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        color: Ui.muted,
-                        height: 1.5,
-                        fontSize: 14,
-                      ),
-                    ),
+                    Icon(Icons.chevron_right_rounded, color: accent, size: 22),
                   ],
                 ),
               ),
@@ -217,45 +248,67 @@ class _ExperienceHubState extends State<ExperienceHub> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 36),
+                const SizedBox(height: 22),
                 Text(
                   'Welcome, $first',
                   style: TextStyle(
                     color: Ui.muted,
                     fontWeight: FontWeight.w600,
-                    fontSize: 15,
+                    fontSize: 13,
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 4),
                 const Text(
-                  'Your match.\nYour people.',
+                  'Your match. Your people.',
                   style: TextStyle(
-                    fontSize: 40,
-                    height: 1.1,
-                    letterSpacing: -1.5,
+                    fontSize: 24,
+                    height: 1.15,
+                    letterSpacing: -.6,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 6),
                 Text(
-                  'The game brings us together.\nChoose where you want to go.',
-                  style: TextStyle(color: Ui.muted, fontSize: 16, height: 1.5),
+                  'The game brings us together. Choose where you want to go.',
+                  style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.4),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 18),
                 _choice(
                   title: 'Watch Live Football',
-                  subtitle:
-                      'Open live events, find your match and enjoy the action.',
+                  subtitle: 'Live events, TV channels and your match.',
                   icon: Icons.stadium_rounded,
                   accent: const Color(0xFF45D99A),
                   pitch: true,
                   onTap: () => _open('watch'),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
+                _choice(
+                  title: 'Football Highlights',
+                  subtitle: 'Goals, replays and match highlights.',
+                  icon: Icons.play_circle_outline_rounded,
+                  accent: const Color(0xFFFFB02E),
+                  onTap: () => _openPage('Football Highlights', const HighlightsScreen()),
+                ),
+                const SizedBox(height: 10),
+                _choice(
+                  title: 'TV Channels',
+                  subtitle: 'Live TV channels from around the world.',
+                  icon: Icons.live_tv_rounded,
+                  accent: const Color(0xFFB16CFF),
+                  onTap: () => _openPage('TV Channels', const TvScreen()),
+                ),
+                const SizedBox(height: 10),
+                _choice(
+                  title: 'Latest Movies',
+                  subtitle: 'New movies and series to watch.',
+                  icon: Icons.movie_outlined,
+                  accent: const Color(0xFF6C8CFF),
+                  onTap: () => _openPage('Latest Movies', const MoviesScreen()),
+                ),
+                const SizedBox(height: 10),
                 _choice(
                   title: 'Join Community Trend',
-                  subtitle:
-                      'Share your take. Post photos. Follow fans and join the conversation.',
+                  subtitle: 'Share your take, post photos, follow fans.',
                   icon: Icons.forum_rounded,
                   accent: Ui.redSoft,
                   onTap: () => _open('community'),
