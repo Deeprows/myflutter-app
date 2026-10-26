@@ -105,13 +105,18 @@ class FanZoneService {
     required String kind,
     required String text,
     Uint8List? image,
+    String? matchKey,
   }) async {
     final request = http.MultipartRequest(
       'POST',
       Uri.parse('${AppConfig.feedBase}/fan/post'),
     );
     request.headers['authorization'] = 'Bearer ${await _token()}';
-    request.fields.addAll({'kind': kind, 'text': text.trim()});
+    request.fields.addAll({
+      'kind': kind,
+      'text': text.trim(),
+      if (matchKey != null) 'match_key': matchKey,
+    });
     if (image != null) {
       if (image.length > 4 * 1024 * 1024) {
         throw Exception('Choose an image smaller than 4 MB.');
