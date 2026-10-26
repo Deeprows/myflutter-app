@@ -98,15 +98,6 @@ class _FanPostsFeedState extends State<FanPostsFeed>
     super.dispose();
   }
 
-  void _notice(String value) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(behavior: SnackBarBehavior.floating, content: Text(value)),
-      );
-  }
-
   Future<void> _load({bool more = false}) async {
     if (!mounted || _busy) return;
     setState(() => _busy = true);
@@ -172,78 +163,33 @@ class _FanPostsFeedState extends State<FanPostsFeed>
   // PIECES
   // ---------------------------------------------------------------------------
 
-  Widget _composer() {
-    Widget quick(String kind, String label) {
-      final k = FanKind.of(kind);
-      return TextButton.icon(
-        onPressed: _busy ? null : () => _create(kind),
-        icon: Icon(k.icon, size: 17, color: k.color),
-        label: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w800,
-            color: k.color,
-          ),
-        ),
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          visualDensity: VisualDensity.compact,
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
-      child: Column(
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _busy ? null : () => _create('banter'),
-            child: Row(
-              children: [
-                FanAvatar(
-                  name: _myId.isEmpty ? 'F' : 'You',
-                  seed: _myId,
-                  size: 44,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'What\'s happening in football?',
-                    style: TextStyle(fontSize: 18, color: Ui.dim),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
+  void _showRooms() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Ui.bg,
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 0, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              quick('prediction', 'Predict'),
-              quick('betslip', 'Slip'),
-              quick('banter', 'Banter'),
-              const Spacer(),
-              FilledButton(
-                onPressed: _busy ? null : () => _create('banter'),
-                style: FilledButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  shape: const StadiumBorder(),
-                ),
-                child: const Text(
-                  'Post',
-                  style: TextStyle(fontWeight: FontWeight.w900),
-                ),
+              const Text(
+                'Live match rooms',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
               ),
+              const SizedBox(height: 14),
+              _rooms(onSelected: () => Navigator.pop(ctx)),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _rooms() {
+  Widget _rooms({VoidCallback? onSelected}) {
     final now = DateTime.now();
     final fixtures = widget.fixtures.take(20).toList();
     Widget room({
@@ -254,7 +200,10 @@ class _FanPostsFeedState extends State<FanPostsFeed>
       required Widget status,
       required VoidCallback onTap,
     }) => GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        onSelected?.call();
+        onTap();
+      },
       child: Container(
         width: 200,
         padding: const EdgeInsets.all(14),
@@ -457,28 +406,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.only(bottom: home ? 96 : 28),
         children: [
-          if (home) ...[
-            XTabBar(
-              labels: const ['For you', 'Following'],
-              index: _scope == 'following' ? 1 : 0,
-              onTap: (i) => _setScope(i == 1 ? 'following' : 'all'),
-            ),
-            _composer(),
-            const XSectionGap(),
-            const XSectionHeader(
-              'Live match rooms',
-              icon: Icons.sensors_rounded,
-            ),
-            Padding(
-              padding: const EdgeInsets.only(left: 14, bottom: 14),
-              child: _rooms(),
-            ),
-            const XSectionGap(),
-            const SizedBox(height: 12),
-          ],
-          _filters(),
-          const SizedBox(height: 10),
-          const XDivider(),
+          if (!home) ...[_filters(), const XDivider()],
           if (_blocked.isNotEmpty)
             Align(
               alignment: Alignment.centerLeft,
@@ -573,33 +501,46 @@ class _FanPostsFeedState extends State<FanPostsFeed>
                 label: const Text('Load older posts'),
               ),
             ),
-          const SizedBox(height: 12),
-          Padding(
-            padding: pad,
-            child: Text(
-              'Community opinions, not guaranteed results. Posts do not earn prediction-game points.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 11, color: Ui.dim, height: 1.4),
-            ),
-          ),
         ],
       ),
     );
     if (!home) return list;
-    return Stack(
+    return Column(
       children: [
-        list,
-        Positioned(
-          right: 16,
-          bottom: 16,
-          child: FloatingActionButton(
-            heroTag: null,
-            tooltip: 'New post',
-            backgroundColor: Ui.red,
-            foregroundColor: Ui.palette.onAccent,
-            shape: const CircleBorder(),
-            onPressed: _busy ? null : () => _create('banter'),
-            child: const Icon(Icons.edit_rounded),
+        XTabBar(
+          labels: const ['For you', 'Following'],
+          index: _scope == 'following' ? 1 : 0,
+          onTap: (i) => _setScope(i == 1 ? 'following' : 'all'),
+        ),
+        Row(
+          children: [
+            Expanded(child: _filters()),
+            IconButton(
+              tooltip: 'Match rooms',
+              onPressed: _showRooms,
+              icon: const Icon(Icons.forum_outlined),
+            ),
+          ],
+        ),
+        const XDivider(),
+        Expanded(
+          child: Stack(
+            children: [
+              Positioned.fill(child: list),
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: FloatingActionButton(
+                  heroTag: null,
+                  tooltip: 'New post',
+                  backgroundColor: Ui.red,
+                  foregroundColor: Ui.palette.onAccent,
+                  shape: const CircleBorder(),
+                  onPressed: _busy ? null : () => _create('banter'),
+                  child: const Icon(Icons.add_rounded, size: 30),
+                ),
+              ),
+            ],
           ),
         ),
       ],
