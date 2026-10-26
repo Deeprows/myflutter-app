@@ -1,3 +1,6 @@
+import '../widgets/fan_match_link.dart';
+import '../widgets/fan_post_video.dart';
+import '../models/fan_post_link.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../services/fan_zone_service.dart';
@@ -309,7 +312,10 @@ class _FanPostCardState extends State<FanPostCard> {
                   )
                 : Text.rich(TextSpan(children: xRichSpans(text, base: style))),
           ),
+        FanMatchLink(snapshot: '${_post['match_json'] ?? ''}', text: text),
         if (_post['has_image'] == 1) _media(detail),
+        for (final link in fanPostLinks(text))
+          FanPostVideo(key: ValueKey(link), url: link, inline: detail),
       ],
     );
   }
