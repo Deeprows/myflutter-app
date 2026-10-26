@@ -35,11 +35,18 @@ class FanPostsFeed extends StatefulWidget {
   final VoidCallback onOpenLounge;
   final List<Fixture> fixtures;
   final void Function(Fixture) onOpenMatch;
+
+  /// Signed-in fan, shown in the "What's happening?" box.
+  final String viewerName;
+  final dynamic viewerAvatarAt;
+
   const FanPostsFeed({
     super.key,
     required this.active,
     this.authorId,
     this.onSocialChanged,
+    this.viewerName = '',
+    this.viewerAvatarAt,
     required this.onJoin,
     required this.onOpenLounge,
     required this.fixtures,
@@ -372,6 +379,51 @@ class _FanPostsFeedState extends State<FanPostsFeed>
     ),
   );
 
+  // X-style "What's happening?" box at the top of the home feed.
+  Widget _composerRow() => InkWell(
+    onTap: _busy ? null : () => _create('banter'),
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Ui.line, width: .6)),
+      ),
+      child: Row(
+        children: [
+          FanAvatar(
+            name: widget.viewerName.isEmpty ? 'You' : widget.viewerName,
+            seed: _myId,
+            size: 38,
+            imageUrl: FanZoneService.avatarUrl(_myId, widget.viewerAvatarAt),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'What’s happening?',
+              style: TextStyle(color: Ui.muted, fontSize: 16),
+            ),
+          ),
+          Icon(Icons.image_outlined, color: Ui.red, size: 22),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+            decoration: BoxDecoration(
+              color: Ui.red,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              'Post',
+              style: TextStyle(
+                color: Ui.palette.onAccent,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
   Widget _post(Map<String, dynamic> p) => FanPostCard(
     key: ValueKey(p['id']),
     post: p,
@@ -407,6 +459,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
         padding: EdgeInsets.only(bottom: home ? 96 : 28),
         children: [
           if (!home) ...[_filters(), const XDivider()],
+          if (home) _composerRow(),
           if (_blocked.isNotEmpty)
             Align(
               alignment: Alignment.centerLeft,
