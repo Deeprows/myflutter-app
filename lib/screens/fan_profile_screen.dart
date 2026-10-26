@@ -1,9 +1,15 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../services/fan_zone_service.dart';
 import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
 import 'fan_posts_feed.dart';
 import 'fan_widgets.dart';
+import 'fan_x_widgets.dart';
+
+void _noTab(int index) {}
 
 class FanProfileScreen extends StatefulWidget {
   final String userId;
@@ -85,11 +91,12 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
   }
 
   Future<void> _edit() async {
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => _EditFanProfile(profile: _profile!),
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        fullscreenDialog: true,
+        builder: (_) =>
+            _EditFanProfile(userId: widget.userId, profile: _profile!),
+      ),
     );
     if (saved == true && mounted) {
       await _load();
@@ -97,133 +104,290 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
     }
   }
 
+  static const double _coverHeight = 128;
+  static const double _avatarSize = 76;
+
+  String _text(dynamic v) => v == null ? '' : '$v'.trim();
+
+  Widget _coverImage(Map<String, dynamic> p) {
+    final v = p['cover_at'];
+    final url = v is num && v > 0
+        ? FanZoneService.profileImageUrl(widget.userId, 'cover', v)
+        : null;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                fanColor(widget.userId).withValues(alpha: .65),
+                Ui.red.withValues(alpha: .18),
+              ],
+            ),
+          ),
+        ),
+        if (url != null)
+          Image.network(
+            url,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+          ),
+      ],
+    );
+  }
+
+  Widget _count(String number, String label, VoidCallback onTap) => InkWell(
+    onTap: onTap,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: number,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            TextSpan(
+              text: ' $label',
+              style: TextStyle(color: Ui.muted),
+            ),
+          ],
+        ),
+        style: const TextStyle(fontSize: 14),
+      ),
+    ),
+  );
+
+  Widget _meta(IconData icon, String text) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 15, color: Ui.muted),
+      const SizedBox(width: 4),
+      Flexible(
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: Ui.muted, fontSize: 13.5),
+        ),
+      ),
+    ],
+  );
+
   Widget _header() {
     final p = _profile!, stats = Map<String, dynamic>.from(p['stats'] as Map);
     final badges = FanZoneService.rows(p['achievements']);
     final followed = p['followed'] == 1 || p['followed'] == true;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 80,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              gradient: LinearGradient(
-                colors: [
-                  fanColor(widget.userId).withValues(alpha: .65),
-                  Ui.red.withValues(alpha: .15),
+    final bio = _text(p['bio']);
+    final location = _text(p['location']);
+    final mine = p['is_me'] == true;
+    final button = mine
+        ? OutlinedButton(
+            onPressed: _edit,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 36),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shape: const StadiumBorder(),
+            ),
+            child: const Text(
+              'Edit profile',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          )
+        : followed
+        ? OutlinedButton(
+            onPressed: _following ? null : _follow,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 36),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shape: const StadiumBorder(),
+            ),
+            child: Text(
+              _following ? 'Saving…' : 'Following',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          )
+        : FilledButton(
+            onPressed: _following ? null : _follow,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 36),
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              backgroundColor: Theme.of(context).colorScheme.onSurface,
+              foregroundColor: Theme.of(context).colorScheme.surface,
+              shape: const StadiumBorder(),
+            ),
+            child: Text(
+              _following ? 'Saving…' : 'Follow',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Cover photo, the round profile photo overlapping it, and the
+        // Edit profile / Follow button on the right (like X).
+        SizedBox(
+          height: _coverHeight + 52,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: _coverHeight,
+                child: _coverImage(p),
+              ),
+              Positioned(
+                left: 14,
+                top: _coverHeight - _avatarSize / 2,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Ui.bg,
+                    shape: BoxShape.circle,
+                  ),
+                  child: FanAvatar(
+                    name: '${p['name']}',
+                    seed: widget.userId,
+                    size: _avatarSize,
+                    imageUrl: FanZoneService.avatarUrl(
+                      widget.userId,
+                      p['avatar_at'],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(right: 14, top: _coverHeight + 10, child: button),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${p['name']}',
+                style: const TextStyle(
+                  fontSize: 21,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Text('@${p['handle']}', style: TextStyle(color: Ui.muted)),
+              if (bio.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(
+                    bio,
+                    style: const TextStyle(fontSize: 15, height: 1.4),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Wrap(
+                  spacing: 14,
+                  runSpacing: 4,
+                  children: [
+                    if (location.isNotEmpty)
+                      _meta(Icons.location_on_outlined, location),
+                    if (p['joined_at'] is num)
+                      _meta(
+                        Icons.calendar_month_outlined,
+                        'Joined ${_joined((p['joined_at'] as num).toInt())}',
+                      ),
+                  ],
+                ),
+              ),
+              Wrap(
+                spacing: 18,
+                children: [
+                  _count(
+                    '${p['following']}',
+                    'Following',
+                    () => _people('following'),
+                  ),
+                  _count(
+                    '${p['followers']}',
+                    'Followers',
+                    () => _people('followers'),
+                  ),
                 ],
               ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              FanAvatar(name: '${p['name']}', seed: widget.userId, size: 68),
-              const Spacer(),
-              if (p['is_me'] == true)
-                OutlinedButton(
-                  onPressed: _edit,
-                  child: const Text('Edit profile'),
-                )
-              else
-                FilledButton(
-                  onPressed: _following ? null : _follow,
-                  child: Text(
-                    _following
-                        ? 'Saving…'
-                        : followed
-                        ? 'Following'
-                        : 'Follow',
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FanPill(text: '${stats['points']} points', color: Ui.redSoft),
+                  FanPill(
+                    text: '${stats['exact']} exact scores',
+                    color: Ui.green,
                   ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '${p['name']}',
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-          ),
-          Text('@${p['handle']}', style: TextStyle(color: Ui.muted)),
-          if ('${p['bio']}'.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text('${p['bio']}', style: const TextStyle(height: 1.5)),
-            ),
-          if (p['joined_at'] is num)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                'Joined ${_joined((p['joined_at'] as num).toInt())}',
-                style: TextStyle(color: Ui.muted, fontSize: 12),
-              ),
-            ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: [
-              TextButton(
-                onPressed: () => _people('followers'),
-                child: Text('${p['followers']} Followers'),
-              ),
-              TextButton(
-                onPressed: () => _people('following'),
-                child: Text('${p['following']} Following'),
-              ),
-            ],
-          ),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FanPill(text: '${stats['points']} points', color: Ui.redSoft),
-              FanPill(text: '${stats['exact']} exact scores', color: Ui.green),
-              FanPill(text: '${stats['settled']} settled', color: Ui.muted),
-              FanPill(
-                text: '${p['likes_received']} likes received',
-                color: Ui.muted,
-              ),
-            ],
-          ),
-          const FanSectionTitle(
-            'Achievements',
-            icon: Icons.workspace_premium_outlined,
-          ),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final badge in badges)
-                Tooltip(
-                  message: '${badge['description']}',
-                  child: Chip(
-                    avatar: Icon(
-                      badge['earned'] == true
-                          ? Icons.verified_rounded
-                          : Icons.lock_outline_rounded,
-                      size: 17,
-                      color: badge['earned'] == true ? Ui.redSoft : Ui.muted,
-                    ),
-                    label: Text(
-                      '${badge['title']}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: badge['earned'] == true ? null : Ui.muted,
-                      ),
-                    ),
+                  FanPill(text: '${stats['settled']} settled', color: Ui.muted),
+                  FanPill(
+                    text: '${p['likes_received']} likes received',
+                    color: Ui.muted,
                   ),
+                ],
+              ),
+              Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: const EdgeInsets.only(bottom: 8),
+                  expandedCrossAxisAlignment: CrossAxisAlignment.start,
+                  title: const Text(
+                    'Achievements',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                  ),
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final badge in badges)
+                          Tooltip(
+                            message: '${badge['description']}',
+                            child: Chip(
+                              avatar: Icon(
+                                badge['earned'] == true
+                                    ? Icons.verified_rounded
+                                    : Icons.lock_outline_rounded,
+                                size: 17,
+                                color: badge['earned'] == true
+                                    ? Ui.redSoft
+                                    : Ui.muted,
+                              ),
+                              label: Text(
+                                '${badge['title']}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: badge['earned'] == true
+                                      ? null
+                                      : Ui.muted,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
+              ),
             ],
           ),
-          const SizedBox(height: 10),
-          Text(
-            '${p['posts']} Posts',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-          ),
-        ],
-      ),
+        ),
+        const XTabBar(
+          labels: ['Posts'],
+          index: 0,
+          onTap: _noTab,
+        ),
+      ],
     );
   }
 
@@ -250,7 +414,27 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Ui.bg,
     appBar: AppBar(
-      title: const Text('Fan profile'),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _profile == null ? 'Fan profile' : '${_profile!['name']}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          ),
+          if (_profile != null)
+            Text(
+              '${_profile!['posts']} posts',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Ui.muted,
+              ),
+            ),
+        ],
+      ),
       actions: [
         IconButton(
           tooltip: 'Refresh profile',
@@ -287,28 +471,89 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
 }
 
 class _EditFanProfile extends StatefulWidget {
+  final String userId;
   final Map<String, dynamic> profile;
-  const _EditFanProfile({required this.profile});
+  const _EditFanProfile({required this.userId, required this.profile});
   @override
   State<_EditFanProfile> createState() => _EditFanProfileState();
 }
 
 class _EditFanProfileState extends State<_EditFanProfile> {
-  late final TextEditingController _name, _bio;
+  static const double _coverHeight = 128;
+  static const double _avatarSize = 76;
+  late final TextEditingController _name, _bio, _location;
+  Uint8List? _avatar, _cover;
+  bool _avatarSent = false, _coverSent = false;
   String? _error;
-  bool _saving = false;
+  bool _saving = false, _picking = false;
+
   @override
   void initState() {
     super.initState();
     _name = TextEditingController(text: '${widget.profile['name']}');
-    _bio = TextEditingController(text: '${widget.profile['bio']}');
+    _bio = TextEditingController(text: '${widget.profile['bio'] ?? ''}');
+    _location = TextEditingController(
+      text: '${widget.profile['location'] ?? ''}',
+    );
   }
 
   @override
   void dispose() {
     _name.dispose();
     _bio.dispose();
+    _location.dispose();
     super.dispose();
+  }
+
+  Future<void> _pick(String kind) async {
+    if (_picking || _saving) return;
+    setState(() => _picking = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png'],
+        withData: false,
+        withReadStream: true,
+        allowMultiple: false,
+      );
+      if (result == null || !mounted) return;
+      final file = result.files.single;
+      const limit = 4 * 1024 * 1024;
+      if (file.size > limit) {
+        throw Exception('Choose a JPG or PNG smaller than 4 MB.');
+      }
+      Uint8List? bytes = file.bytes;
+      if (bytes == null && file.readStream != null) {
+        final buffer = BytesBuilder(copy: false);
+        await for (final chunk in file.readStream!) {
+          if (buffer.length + chunk.length > limit) {
+            throw Exception('Choose an image smaller than 4 MB.');
+          }
+          buffer.add(chunk);
+        }
+        bytes = buffer.takeBytes();
+      }
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('Could not read that image.');
+      }
+      if (!mounted) return;
+      setState(() {
+        if (kind == 'avatar') {
+          _avatar = bytes;
+          _avatarSent = false;
+        } else {
+          _cover = bytes;
+          _coverSent = false;
+        }
+        _error = null;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      }
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
   }
 
   Future<void> _save() async {
@@ -320,55 +565,224 @@ class _EditFanProfileState extends State<_EditFanProfile> {
     try {
       await FanZoneService.call(
         'social/profile',
-        body: {'name': _name.text.trim(), 'bio': _bio.text.trim()},
+        body: {
+          'name': _name.text.trim(),
+          'bio': _bio.text.trim(),
+          'location': _location.text.trim(),
+        },
       );
+      final avatar = _avatar, cover = _cover;
+      if (avatar != null && !_avatarSent) {
+        await FanZoneService.uploadProfileImage(kind: 'avatar', image: avatar);
+        _avatarSent = true;
+      }
+      if (cover != null && !_coverSent) {
+        await FanZoneService.uploadProfileImage(kind: 'cover', image: cover);
+        _coverSent = true;
+      }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    padding: EdgeInsets.fromLTRB(
-      20,
-      8,
-      20,
-      20 + MediaQuery.of(context).viewInsets.bottom,
+  Widget _cameraBadge() => Container(
+    padding: const EdgeInsets.all(9),
+    decoration: BoxDecoration(
+      color: Colors.black.withValues(alpha: .55),
+      shape: BoxShape.circle,
     ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Text(
-          'Edit public profile',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _name,
-          maxLength: 30,
-          enabled: !_saving,
-          decoration: const InputDecoration(labelText: 'Nickname'),
-        ),
-        TextField(
-          controller: _bio,
-          maxLength: 160,
-          maxLines: 3,
-          enabled: !_saving,
-          decoration: const InputDecoration(labelText: 'Bio'),
-        ),
-        if (_error != null)
-          Text(
-            _error!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+    child: const Icon(
+      Icons.add_a_photo_outlined,
+      size: 20,
+      color: Colors.white,
+    ),
+  );
+
+  Widget _coverArea() {
+    final v = widget.profile['cover_at'];
+    final url = v is num && v > 0
+        ? FanZoneService.profileImageUrl(widget.userId, 'cover', v)
+        : null;
+    return GestureDetector(
+      onTap: () => _pick('cover'),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  fanColor(widget.userId).withValues(alpha: .65),
+                  Ui.red.withValues(alpha: .18),
+                ],
+              ),
+            ),
           ),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          child: Text(_saving ? 'Saving…' : 'Save profile'),
+          if (_cover != null)
+            Image.memory(_cover!, fit: BoxFit.cover)
+          else if (url != null)
+            Image.network(
+              url,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+            ),
+          Center(child: _cameraBadge()),
+        ],
+      ),
+    );
+  }
+
+  Widget _avatarArea() {
+    final name = _name.text.trim().isEmpty
+        ? '${widget.profile['name']}'
+        : _name.text;
+    return GestureDetector(
+      onTap: () => _pick('avatar'),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(color: Ui.bg, shape: BoxShape.circle),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            if (_avatar != null)
+              ClipOval(
+                child: Image.memory(
+                  _avatar!,
+                  width: _avatarSize,
+                  height: _avatarSize,
+                  fit: BoxFit.cover,
+                ),
+              )
+            else
+              FanAvatar(
+                name: name,
+                seed: widget.userId,
+                size: _avatarSize,
+                imageUrl: FanZoneService.avatarUrl(
+                  widget.userId,
+                  widget.profile['avatar_at'],
+                ),
+              ),
+            _cameraBadge(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Ui.bg,
+    appBar: AppBar(
+      leading: IconButton(
+        tooltip: 'Close',
+        onPressed: _saving ? null : () => Navigator.pop(context, false),
+        icon: const Icon(Icons.close_rounded),
+      ),
+      title: const Text(
+        'Edit profile',
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+      ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: FilledButton(
+            onPressed: _saving ? null : _save,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 34),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              backgroundColor: Theme.of(context).colorScheme.onSurface,
+              foregroundColor: Theme.of(context).colorScheme.surface,
+              shape: const StadiumBorder(),
+            ),
+            child: Text(
+              _saving ? 'Saving…' : 'Save',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+      ],
+    ),
+    body: ListView(
+      padding: EdgeInsets.only(bottom: 24 + MediaQuery.of(context).viewInsets.bottom),
+      children: [
+        if (_saving) const LinearProgressIndicator(minHeight: 2),
+        SizedBox(
+          height: _coverHeight + _avatarSize / 2 + 8,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: _coverHeight,
+                child: _coverArea(),
+              ),
+              Positioned(
+                left: 14,
+                top: _coverHeight - _avatarSize / 2,
+                child: _avatarArea(),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _name,
+                maxLength: 30,
+                enabled: !_saving,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(labelText: 'Name'),
+              ),
+              TextField(
+                controller: _bio,
+                maxLength: 160,
+                maxLines: 3,
+                minLines: 2,
+                enabled: !_saving,
+                decoration: const InputDecoration(
+                  labelText: 'Bio',
+                  hintText: 'Tell fans a bit about yourself',
+                ),
+              ),
+              TextField(
+                controller: _location,
+                maxLength: 40,
+                enabled: !_saving,
+                decoration: const InputDecoration(
+                  labelText: 'Location',
+                  prefixIcon: Icon(Icons.location_on_outlined),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Tap the cover or profile photo to change it. JPG or PNG, up to 4 MB.',
+                  style: TextStyle(color: Ui.muted, fontSize: 12.5),
+                ),
+              ),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    _error!,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                ),
+            ],
+          ),
         ),
       ],
     ),
@@ -448,6 +862,10 @@ class _FanPeopleScreenState extends State<FanPeopleScreen> {
                 name: '${person['name']}',
                 seed: '${person['id']}',
                 size: 40,
+                imageUrl: FanZoneService.avatarUrl(
+                  '${person['id']}',
+                  person['avatar_at'],
+                ),
               ),
               title: Text('${person['name']}'),
               subtitle: Text('@${FanZoneService.handle('${person['id']}')}'),
