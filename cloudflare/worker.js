@@ -1674,6 +1674,8 @@ export function fanPoints(h, a, rh, ra) {
   return h === rh && a === ra ? 3 : Math.sign(h - a) === Math.sign(rh - ra) ? 1 : 0;
 }
 const FAN_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS fan_clubs (user_id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', logo TEXT NOT NULL DEFAULT '')`,
+  `CREATE TABLE IF NOT EXISTS fan_post_matches (post_id TEXT PRIMARY KEY, fixture_json TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_users (id TEXT PRIMARY KEY, name TEXT NOT NULL, last_post INTEGER NOT NULL DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS fan_picks (user_id TEXT NOT NULL, match_key TEXT NOT NULL, title TEXT NOT NULL, kickoff INTEGER NOT NULL, home INTEGER NOT NULL, away INTEGER NOT NULL, PRIMARY KEY(user_id, match_key))`,
   `CREATE TABLE IF NOT EXISTS fan_results (match_key TEXT PRIMARY KEY, home INTEGER NOT NULL, away INTEGER NOT NULL)`,
@@ -1705,6 +1707,7 @@ async function fanInit(db) {
   if (!fanReady.has(db)) {
     fanReady.set(db, (async()=> {
       await db.batch(FAN_SCHEMA.map(sql=>db.prepare(sql)));
+      await db.prepare('INSERT OR IGNORE INTO fan_users(id,name) SELECT id,SUBSTR(name,1,30) FROM fan_accounts').run();
       const columns=(await db.prepare('PRAGMA table_info(fan_picks)').all()).results;
       for(const [name,definition] of [['market',"TEXT NOT NULL DEFAULT 'score'"],['selection',"TEXT NOT NULL DEFAULT ''"]]) {
         if(columns.some(c=>c.name===name))continue;
@@ -1834,9 +1837,15 @@ async function fanZone(request, env, url) {
     if (request.method === 'GET' && url.pathname === '/fan/state') {
       const picks = await db.prepare(`SELECT p.*,r.home AS result_home,r.away AS result_away FROM fan_picks p LEFT JOIN fan_results r ON r.match_key=p.match_key WHERE p.user_id=? ORDER BY p.kickoff DESC LIMIT 300`).bind(id).all();
       const week = fanWeek();
-      const board = await db.prepare(`SELECT u.id,u.name,COALESCE(SUM(${FAN_PICK_POINTS_SQL}),0) AS points,COUNT(${FAN_PICK_POINTS_SQL}) AS played FROM fan_picks p JOIN fan_results r ON r.match_key=p.match_key JOIN fan_users u ON u.id=p.user_id WHERE p.kickoff>=? AND p.kickoff<? GROUP BY u.id HAVING COUNT(${FAN_PICK_POINTS_SQL})>0 ORDER BY points DESC,played ASC,u.id ASC LIMIT 100`).bind(week,week+604800000).all();
+      const board = await fanLeagueTable(db,week,0);
       const media=await db.prepare('SELECT avatar_at FROM fan_profile_media WHERE user_id=?').bind(id).first();
-      return json({id,name:user?.name || '',avatar_at:media?.avatar_at || 0,week,leaderboard:board.results,picks:picks.results});
+      return json({id,name:user?.name || '',avatar_at:media?.avatar_at || 0,week,leaderboard:board.rows,board_next:board.next,picks:picks.results});
+    }
+    if(request.method==='GET' && url.pathname==='/fan/leaderboard') {
+      const offset=Number(url.searchParams.get('offset') || 0),week=fanWeek();
+      if(!Number.isSafeInteger(offset) || offset<0 || offset>10000000)return fail('Invalid page');
+      const board=await fanLeagueTable(db,week,offset);
+      return json({leaderboard:board.rows,board_next:board.next,week});
     }
     if (request.method === 'GET' && url.pathname === '/fan/messages') {
       const room = url.searchParams.get('room') || '';
@@ -1995,6 +2004,12 @@ async function fanPosts(request,env,url,user,id) {
     const kind=String(form.get('kind') || 'banter');
     const text=String(form.get('text') || '').trim();
     if(!['prediction','betslip','banter'].includes(kind) || text.length>1000)return fail('Choose a post type and keep text within 1,000 characters');
+    const tagged=String(form.get('match_key') || '');
+    let taggedFixture=null;
+    if(tagged) {
+      taggedFixture=(await fanFixtures(env)).find(f=>fanKey(f)===tagged);
+      if(!taggedFixture)return fail('Tagged match is no longer available. Choose another match.');
+    }
     const file=form.get('image');
     const hasImage=file && typeof file!=='string' && file.size>0;
     if(!text && !hasImage)return fail('Write something or attach a photo');
@@ -2016,7 +2031,9 @@ async function fanPosts(request,env,url,user,id) {
     const imageKey=hasImage?`fan-posts/${postId}`:'';
     try {
       if(hasImage)await env.FAN_MEDIA.put(imageKey,bytes,{httpMetadata:{contentType:type}});
-      await db.prepare('INSERT INTO fan_posts(id,user_id,kind,text,image_key,at) VALUES(?,?,?,?,?,?)').bind(postId,id,kind,text,imageKey,now).run();
+      const insert=db.prepare('INSERT INTO fan_posts(id,user_id,kind,text,image_key,at) VALUES(?,?,?,?,?,?)').bind(postId,id,kind,text,imageKey,now);
+      if(taggedFixture)await db.batch([insert,db.prepare('INSERT INTO fan_post_matches(post_id,fixture_json) VALUES(?,?)').bind(postId,JSON.stringify(taggedFixture))]);
+      else await insert.run();
     } catch(e) {
       if(imageKey)await env.FAN_MEDIA.delete(imageKey).catch(()=>{});
       throw e;
@@ -2228,7 +2245,7 @@ async function fanRecentForm(env,teamId,kickoff) {
 }
 
 // Social data is keyed by verified account identity; no emails in public DTOs.
-const FAN_SOCIAL_POST_FIELDS=`p.id,p.user_id,u.name,p.kind,p.text,p.at,CASE WHEN p.image_key<>'' THEN 1 ELSE 0 END AS has_image,
+const FAN_SOCIAL_POST_FIELDS=`p.id,p.user_id,u.name,p.kind,p.text,p.at,COALESCE((SELECT t.fixture_json FROM fan_post_matches t WHERE t.post_id=p.id),'') AS match_json,CASE WHEN p.image_key<>'' THEN 1 ELSE 0 END AS has_image,
  (SELECT COUNT(*) FROM fan_likes l WHERE l.post_id=p.id) AS likes,
  (SELECT COUNT(*) FROM fan_comments c WHERE c.post_id=p.id AND c.hidden=0) AS comments,
  EXISTS(SELECT 1 FROM fan_likes l WHERE l.post_id=p.id AND l.user_id=?) AS liked,
@@ -2252,6 +2269,8 @@ async function fanSocial(request,env,url,user,id) {
     const target=url.searchParams.get('id') || id;
     if(!/^[a-f0-9]{64}$/.test(target))return fail('Invalid fan');
     const profile=await db.prepare(`SELECT u.id,u.name,COALESCE(p.bio,'') AS bio,a.created_at AS joined_at,
+      COALESCE((SELECT c.name FROM fan_clubs c WHERE c.user_id=u.id),'') AS club_name,
+      COALESCE((SELECT c.logo FROM fan_clubs c WHERE c.user_id=u.id),'') AS club_logo,
       COALESCE((SELECT m.location FROM fan_profile_media m WHERE m.user_id=u.id),'') AS location,
       COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=u.id),0) AS avatar_at,
       COALESCE((SELECT m.cover_at FROM fan_profile_media m WHERE m.user_id=u.id),0) AS cover_at,
@@ -2310,6 +2329,12 @@ async function fanSocial(request,env,url,user,id) {
     if(hasLocation && (location.length>40 || /[\u0000-\u001f<>]/.test(location)))return fail('Use a location up to 40 characters.');
     const saves=[db.prepare('UPDATE fan_users SET name=? WHERE id=?').bind(name,id),db.prepare(`INSERT INTO fan_public_profiles(user_id,bio) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET bio=excluded.bio`).bind(id,bio)];
     if(hasLocation)saves.push(db.prepare(`INSERT INTO fan_profile_media(user_id,location) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET location=excluded.location`).bind(id,location));
+    if(b.club_name!==undefined || b.club_logo!==undefined) {
+      const clubName=typeof b.club_name==='string'?b.club_name.trim():null;
+      const clubLogo=typeof b.club_logo==='string'?b.club_logo:null;
+      if(clubName===null || clubLogo===null || clubName.length>60 || /[\u0000-\u001f<>]/.test(clubName) || !/^(|[0-9]{1,8})$/.test(clubLogo) || (!clubName && Boolean(clubLogo)))return fail('Choose a valid club.');
+      saves.push(db.prepare('INSERT INTO fan_clubs(user_id,name,logo) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET name=excluded.name,logo=excluded.logo').bind(id,clubName,clubLogo));
+    }
     await db.batch(saves);
     return json({ok:true});
   }
@@ -2367,7 +2392,7 @@ async function fanSharePost(env,url) {
   return response;
 }
 
-const FAN_TOTAL_LINES=['0.5','1','1.5','2','2.5','3','3.5','4.5'];
+const FAN_TOTAL_LINES=['0.5','1','1.5','2','2.5','3','3.5','4','4.5'];
 export function validFanMarket(market,selection) {
   return market==='score' ? selection==='' : market==='result'?['1','X','2'].includes(selection):market==='double_chance'?['1X','X2','12'].includes(selection):market==='btts'?['yes','no'].includes(selection):market==='totals'?FAN_TOTAL_LINES.some(line=>selection===`over_${line}` || selection===`under_${line}`):false;
 }
@@ -2387,3 +2412,18 @@ const FAN_PICK_POINTS_SQL=`CASE WHEN r.home IS NULL OR r.away IS NULL THEN NULL
  WHEN p.market='double_chance' THEN CASE WHEN (p.selection IN ('1X','12') AND r.home>r.away) OR (p.selection IN ('1X','X2') AND r.home=r.away) OR (p.selection IN ('X2','12') AND r.home<r.away) THEN 1 ELSE 0 END
  WHEN p.market='btts' THEN CASE WHEN (p.selection='yes' AND r.home>0 AND r.away>0) OR (p.selection='no' AND (r.home=0 OR r.away=0)) THEN 1 ELSE 0 END
  WHEN p.market='totals' THEN CASE WHEN SUBSTR(p.selection,1,5)='over_' THEN CASE WHEN r.home+r.away=CAST(SUBSTR(p.selection,6) AS REAL) THEN NULL WHEN r.home+r.away>CAST(SUBSTR(p.selection,6) AS REAL) THEN 1 ELSE 0 END ELSE CASE WHEN r.home+r.away=CAST(SUBSTR(p.selection,7) AS REAL) THEN NULL WHEN r.home+r.away<CAST(SUBSTR(p.selection,7) AS REAL) THEN 1 ELSE 0 END END ELSE 0 END`;
+
+async function fanLeagueTable(db,week,offset) {
+  const result=await db.prepare(`WITH scores AS (
+    SELECT p.user_id,${FAN_PICK_POINTS_SQL} AS earned FROM fan_picks p
+    LEFT JOIN fan_results r ON r.match_key=p.match_key WHERE p.kickoff>=? AND p.kickoff<?
+  ), members AS (
+    SELECT id,name FROM fan_users UNION ALL
+    SELECT a.id,SUBSTR(a.name,1,30) FROM fan_accounts a WHERE NOT EXISTS(SELECT 1 FROM fan_users u WHERE u.id=a.id)
+  ) SELECT u.id,u.name,COALESCE(SUM(s.earned),0) AS points,COUNT(s.earned) AS played,
+    COALESCE(SUM(CASE WHEN s.earned>0 THEN 1 ELSE 0 END),0) AS won,
+    COALESCE(SUM(CASE WHEN s.earned=0 THEN 1 ELSE 0 END),0) AS lost
+    FROM members u LEFT JOIN scores s ON s.user_id=u.id GROUP BY u.id
+    ORDER BY points DESC,won DESC,lost ASC,u.id ASC LIMIT 51 OFFSET ?`).bind(week,week+604800000,offset).all();
+  return {rows:result.results.slice(0,50),next:result.results.length>50?offset+50:null};
+}
