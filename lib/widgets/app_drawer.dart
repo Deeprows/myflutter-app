@@ -4,6 +4,11 @@ import 'package:flutter/services.dart';
 import '../config.dart';
 import '../services/auth_service.dart';
 import '../screens/browser_screen.dart';
+import '../screens/content_shortcut_screen.dart';
+import '../screens/highlights_screen.dart';
+import '../screens/live_screen.dart';
+import '../screens/movies_screen.dart';
+import '../screens/tv_screen.dart';
 import '../screens/network_stream_screen.dart';
 import '../screens/playlists_screen.dart';
 import '../screens/plans_screen.dart';
@@ -140,6 +145,50 @@ class FootboliveDrawer extends StatelessWidget {
                   item(Icons.apps_rounded, 'Choose experience', (c) async {
                     onHome!();
                   }),
+                item(
+                  Icons.sensors_rounded,
+                  'Live Now',
+                  (c) => _push(
+                    c,
+                    const ContentShortcutScreen(
+                      title: 'Live Now',
+                      child: LiveScreen(),
+                    ),
+                  ),
+                ),
+                item(
+                  Icons.play_circle_outline_rounded,
+                  'Football Highlights',
+                  (c) => _push(
+                    c,
+                    const ContentShortcutScreen(
+                      title: 'Football Highlights',
+                      child: HighlightsScreen(),
+                    ),
+                  ),
+                ),
+                item(
+                  Icons.live_tv_rounded,
+                  'TV Channels',
+                  (c) => _push(
+                    c,
+                    const ContentShortcutScreen(
+                      title: 'TV Channels',
+                      child: TvScreen(),
+                    ),
+                  ),
+                ),
+                item(
+                  Icons.movie_outlined,
+                  'Movies',
+                  (c) => _push(
+                    c,
+                    const ContentShortcutScreen(
+                      title: 'Movies',
+                      child: MoviesScreen(),
+                    ),
+                  ),
+                ),
                 if (AuthService.instance.user != null)
                   ListTile(
                     leading: const Icon(Icons.account_circle_outlined),
