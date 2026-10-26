@@ -23,12 +23,14 @@ enum FanZonePage { predict, ranks, banter }
 class FanZoneScreen extends StatefulWidget {
   final bool active;
   final FanZonePage page;
-  final VoidCallback? onPredict;
+  final VoidCallback? onPredict, onOpenMenu, onExit;
   const FanZoneScreen({
     super.key,
     required this.active,
     this.page = FanZonePage.predict,
     this.onPredict,
+    this.onOpenMenu,
+    this.onExit,
   });
   @override
   State<FanZoneScreen> createState() => _FanZoneScreenState();
@@ -231,7 +233,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     final title = switch (widget.page) {
       FanZonePage.predict => 'Predict',
       FanZonePage.ranks => 'Ranks',
-      FanZonePage.banter => 'Home',
+      FanZonePage.banter => 'Deeprowss',
     };
     final shortcut = switch (widget.page) {
       FanZonePage.predict => 'Highlights',
@@ -255,36 +257,60 @@ class _FanZoneScreenState extends State<FanZoneScreen>
         leading: Padding(
           padding: const EdgeInsets.only(left: 12),
           child: IconButton(
-            tooltip: 'Your public profile',
-            onPressed: _myId.isEmpty ? null : () => _openProfile(_myId),
+            tooltip: widget.onOpenMenu != null
+                ? 'Account menu'
+                : 'Your public profile',
+            onPressed:
+                widget.onOpenMenu ??
+                (_myId.isEmpty ? null : () => _openProfile(_myId)),
             icon: _name.isEmpty
                 ? const Icon(Icons.person_add_alt_1_rounded)
                 : FanAvatar(name: _name, seed: _myId, size: 34),
           ),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-            ),
-            Text(
-              switch (widget.page) {
-                FanZonePage.predict => 'Predict scores. Earn points. Level up.',
-                FanZonePage.ranks => 'This week\'s best fans',
-                FanZonePage.banter => 'Gist, predictions and match talk',
-              },
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Ui.muted,
+        centerTitle: widget.page == FanZonePage.banter,
+        title: widget.page == FanZonePage.banter
+            ? const Text(
+                'Deeprowss',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -.5,
+                ),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  Text(
+                    switch (widget.page) {
+                      FanZonePage.predict =>
+                        'Predict scores. Earn points. Level up.',
+                      FanZonePage.ranks => 'This week\'s best fans',
+                      FanZonePage.banter => 'Deeprowss community',
+                    },
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Ui.muted,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
         actions: [
+          if (widget.onExit != null)
+            IconButton(
+              tooltip: 'Choose experience',
+              onPressed: widget.onExit,
+              icon: const Icon(Icons.apps_rounded),
+            ),
           IconButton(
             tooltip: shortcut,
             icon: Icon(icon),
