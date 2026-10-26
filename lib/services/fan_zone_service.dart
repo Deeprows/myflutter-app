@@ -58,6 +58,49 @@ class FanZoneService {
   static String imageUrl(String postId) =>
       '${AppConfig.feedBase}/fan/image/${Uri.encodeComponent(postId)}';
 
+  /// Public URL of a fan's profile photo or cover photo. [version] is the
+  /// upload time the server reports, so a new upload is a new URL.
+  static String profileImageUrl(String userId, String kind, num version) =>
+      '${AppConfig.feedBase}/fan/profile-image/${Uri.encodeComponent(userId)}/$kind?v=${version.toInt()}';
+
+  /// The avatar URL, or null when the fan has not uploaded a photo.
+  static String? avatarUrl(String userId, dynamic version) =>
+      userId.isNotEmpty && version is num && version > 0
+      ? profileImageUrl(userId, 'avatar', version)
+      : null;
+
+  /// Uploads a profile photo ([kind] = 'avatar') or cover photo ('cover').
+  static Future<void> uploadProfileImage({
+    required String kind,
+    required Uint8List image,
+  }) async {
+    if (image.length > 4 * 1024 * 1024) {
+      throw Exception('Choose an image smaller than 4 MB.');
+    }
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('${AppConfig.feedBase}/fan/profile/image'),
+    );
+    request.headers['authorization'] = 'Bearer ${await _token()}';
+    request.fields['kind'] = kind;
+    request.files.add(
+      http.MultipartFile.fromBytes('image', image, filename: 'fan-$kind'),
+    );
+    final response = await request.send().timeout(const Duration(seconds: 45));
+    final body = await response.stream.bytesToString().timeout(
+      const Duration(seconds: 20),
+    );
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(body) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception('Photo uploads need the updated Cloudflare Worker.');
+    }
+    if (response.statusCode != 200) {
+      throw Exception(data['error'] ?? 'Could not upload your photo.');
+    }
+  }
+
   static Future<void> publish({
     required String kind,
     required String text,
