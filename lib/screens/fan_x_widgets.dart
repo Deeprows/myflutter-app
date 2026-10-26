@@ -40,7 +40,9 @@ class XTabBar extends StatelessWidget {
                         fontWeight: i == index
                             ? FontWeight.w900
                             : FontWeight.w600,
-                        color: i == index ? Colors.white : Ui.muted,
+                        color: i == index
+                            ? Theme.of(context).colorScheme.onSurface
+                            : Ui.muted,
                       ),
                     ),
                     const SizedBox(height: 11),
@@ -113,6 +115,7 @@ class XSectionHeader extends StatelessWidget {
 /// Reply / like / share button: icon with a small count.
 class XAction extends StatelessWidget {
   final IconData icon;
+  final String? tooltip;
   final int? count;
   final Color? color;
   final bool active;
@@ -120,6 +123,7 @@ class XAction extends StatelessWidget {
   const XAction({
     super.key,
     required this.icon,
+    this.tooltip,
     this.count,
     this.color,
     this.active = false,
@@ -129,32 +133,35 @@ class XAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = active ? (color ?? Ui.red) : Ui.dim;
-    return InkResponse(
-      onTap: onTap,
-      radius: 22,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedScale(
-              scale: active ? 1.18 : 1,
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutBack,
-              child: Icon(icon, size: 19, color: c),
-            ),
-            if (count != null && count! > 0) ...[
-              const SizedBox(width: 5),
-              Text(
-                _short(count!),
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: c,
-                  fontWeight: active ? FontWeight.w800 : FontWeight.w500,
-                ),
+    return Tooltip(
+      message: tooltip ?? 'Post action',
+      child: InkResponse(
+        onTap: onTap,
+        radius: 22,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedScale(
+                scale: active ? 1.18 : 1,
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutBack,
+                child: Icon(icon, size: 19, color: c),
               ),
+              if (count != null) ...[
+                const SizedBox(width: 5),
+                Text(
+                  _short(count!),
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: c,
+                    fontWeight: active ? FontWeight.w800 : FontWeight.w500,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
