@@ -11,6 +11,7 @@ import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
 import 'fan_widgets.dart';
 import 'fan_post_card.dart';
+import 'fan_x_widgets.dart';
 
 const _labels = {
   'all': 'All',
@@ -172,49 +173,28 @@ class _FanPostsFeedState extends State<FanPostsFeed>
   // ---------------------------------------------------------------------------
 
   Widget _composer() {
-    Widget quick(String kind, String hint) {
+    Widget quick(String kind, String label) {
       final k = FanKind.of(kind);
-      return Expanded(
-        child: GestureDetector(
-          onTap: _busy ? null : () => _create(kind),
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 3),
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-            decoration: BoxDecoration(
-              color: k.color.withValues(alpha: .12),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: k.color.withValues(alpha: .32)),
-            ),
-            child: Column(
-              children: [
-                Icon(k.icon, size: 22, color: k.color),
-                const SizedBox(height: 4),
-                Text(
-                  k.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text(
-                  hint,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 10, color: Ui.muted),
-                ),
-              ],
-            ),
+      return TextButton.icon(
+        onPressed: _busy ? null : () => _create(kind),
+        icon: Icon(k.icon, size: 17, color: k.color),
+        label: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w800,
+            color: k.color,
           ),
+        ),
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          visualDensity: VisualDensity.compact,
         ),
       );
     }
 
-    return FanHero(
-      color: Ui.red,
-      padding: const EdgeInsets.all(14),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
       child: Column(
         children: [
           GestureDetector(
@@ -222,50 +202,40 @@ class _FanPostsFeedState extends State<FanPostsFeed>
             onTap: _busy ? null : () => _create('banter'),
             child: Row(
               children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [Ui.red, Ui.redSoft],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Icon(
-                    Icons.edit_rounded,
-                    size: 20,
-                    color: Ui.palette.onAccent,
-                  ),
+                FanAvatar(
+                  name: _myId.isEmpty ? 'F' : 'You',
+                  seed: _myId,
+                  size: 44,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 13,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: .28),
-                      borderRadius: BorderRadius.circular(26),
-                      border: Border.all(color: Ui.line),
-                    ),
-                    child: Text(
-                      'What\'s the gist? Drop a take…',
-                      style: TextStyle(color: Ui.muted, fontSize: 14),
-                    ),
+                  child: Text(
+                    'What\'s happening in football?',
+                    style: TextStyle(fontSize: 18, color: Ui.dim),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
           Row(
             children: [
-              quick('prediction', 'Call the score'),
-              quick('betslip', 'Show your slip'),
-              quick('banter', 'Trash talk'),
+              quick('prediction', 'Predict'),
+              quick('betslip', 'Slip'),
+              quick('banter', 'Banter'),
+              const Spacer(),
+              FilledButton(
+                onPressed: _busy ? null : () => _create('banter'),
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  shape: const StadiumBorder(),
+                ),
+                child: const Text(
+                  'Post',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
             ],
           ),
         ],
@@ -427,6 +397,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
     height: 40,
     child: ListView(
       scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       children: [
         for (final kind in _labels.keys) ...[
           FanChip(
@@ -463,54 +434,51 @@ class _FanPostsFeedState extends State<FanPostsFeed>
     onBlocked: () => _load(),
   );
 
+  void _setScope(String value) {
+    if (_busy || value == _scope) return;
+    setState(() {
+      _scope = value;
+      _posts = [];
+      _next = null;
+    });
+    _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final visible = _posts
         .where((p) => !_blocked.contains(p['user_id']))
         .toList();
-    return RefreshIndicator(
+    final home = widget.authorId == null;
+    const pad = EdgeInsets.symmetric(horizontal: 16);
+    final list = RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+        padding: EdgeInsets.only(bottom: home ? 96 : 28),
         children: [
-          if (widget.authorId == null) ...[
+          if (home) ...[
+            XTabBar(
+              labels: const ['For you', 'Following'],
+              index: _scope == 'following' ? 1 : 0,
+              onTap: (i) => _setScope(i == 1 ? 'following' : 'all'),
+            ),
             _composer(),
-            const FanSectionTitle('Live chat rooms', icon: Icons.chat_rounded),
-            _rooms(),
-            const FanSectionTitle(
-              'Community feed',
-              icon: Icons.dynamic_feed_rounded,
+            const XSectionGap(),
+            const XSectionHeader(
+              'Live match rooms',
+              icon: Icons.sensors_rounded,
             ),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(
-                  value: 'all',
-                  label: Text('Everyone'),
-                  icon: Icon(Icons.public_rounded),
-                ),
-                ButtonSegment(
-                  value: 'following',
-                  label: Text('Following'),
-                  icon: Icon(Icons.people_outline),
-                ),
-              ],
-              selected: {_scope},
-              onSelectionChanged: _busy
-                  ? null
-                  : (value) {
-                      setState(() {
-                        _scope = value.first;
-                        _posts = [];
-                        _next = null;
-                      });
-                      _load();
-                    },
+            Padding(
+              padding: const EdgeInsets.only(left: 14, bottom: 14),
+              child: _rooms(),
             ),
+            const XSectionGap(),
             const SizedBox(height: 12),
           ],
           _filters(),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
+          const XDivider(),
           if (_blocked.isNotEmpty)
             Align(
               alignment: Alignment.centerLeft,
@@ -528,7 +496,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
             ),
           if (_failure != null)
             Container(
-              margin: const EdgeInsets.only(bottom: 12),
+              margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
               decoration: fanBox(radius: 14),
               child: Row(
@@ -552,32 +520,42 @@ class _FanPostsFeedState extends State<FanPostsFeed>
                 ],
               ),
             ),
-          if (_busy && visible.isEmpty && !_loadedOnce) ...const [
-            FanSkeleton(height: 130),
-            FanSkeleton(height: 130),
-            FanSkeleton(height: 130),
-          ],
+          if (_busy && visible.isEmpty && !_loadedOnce)
+            const Padding(
+              padding: pad,
+              child: Column(
+                children: [
+                  SizedBox(height: 12),
+                  FanSkeleton(height: 110),
+                  FanSkeleton(height: 110),
+                  FanSkeleton(height: 110),
+                ],
+              ),
+            ),
           if (!_busy && _failure == null && visible.isEmpty)
-            FanEmpty(
-              icon: Icons.forum_outlined,
-              title: 'No posts here yet',
-              message: widget.authorId != null
-                  ? 'This fan has not posted here yet.'
-                  : _scope == 'following'
-                  ? 'Follow fans from their profiles to see their posts here.'
-                  : 'Be the first to share a prediction or some gist.',
-              action: widget.authorId != null
-                  ? null
-                  : FilledButton.icon(
-                      onPressed: () => _create('banter'),
-                      icon: const Icon(Icons.edit_rounded, size: 18),
-                      label: const Text('Create a post'),
-                    ),
+            Padding(
+              padding: pad,
+              child: FanEmpty(
+                icon: Icons.forum_outlined,
+                title: 'No posts here yet',
+                message: widget.authorId != null
+                    ? 'This fan has not posted here yet.'
+                    : _scope == 'following'
+                    ? 'Follow fans from their profiles to see their posts here.'
+                    : 'Be the first to share a prediction or some gist.',
+                action: widget.authorId != null
+                    ? null
+                    : FilledButton.icon(
+                        onPressed: () => _create('banter'),
+                        icon: const Icon(Icons.edit_rounded, size: 18),
+                        label: const Text('Create a post'),
+                      ),
+              ),
             ),
           for (final p in visible) _post(p),
           if (_busy && visible.isNotEmpty)
             const Padding(
-              padding: EdgeInsets.all(8),
+              padding: EdgeInsets.all(12),
               child: Center(
                 child: SizedBox(
                   width: 22,
@@ -587,19 +565,44 @@ class _FanPostsFeedState extends State<FanPostsFeed>
               ),
             ),
           if (_next != null && !_busy)
-            OutlinedButton.icon(
-              onPressed: () => _load(more: true),
-              icon: const Icon(Icons.expand_more_rounded),
-              label: const Text('Load older posts'),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: OutlinedButton.icon(
+                onPressed: () => _load(more: true),
+                icon: const Icon(Icons.expand_more_rounded),
+                label: const Text('Load older posts'),
+              ),
             ),
           const SizedBox(height: 12),
-          Text(
-            'Community opinions, not guaranteed results. Posts do not earn prediction-game points.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 11, color: Ui.dim, height: 1.4),
+          Padding(
+            padding: pad,
+            child: Text(
+              'Community opinions, not guaranteed results. Posts do not earn prediction-game points.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, color: Ui.dim, height: 1.4),
+            ),
           ),
         ],
       ),
+    );
+    if (!home) return list;
+    return Stack(
+      children: [
+        list,
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton(
+            heroTag: null,
+            tooltip: 'New post',
+            backgroundColor: Ui.red,
+            foregroundColor: Ui.palette.onAccent,
+            shape: const CircleBorder(),
+            onPressed: _busy ? null : () => _create('banter'),
+            child: const Icon(Icons.edit_rounded),
+          ),
+        ),
+      ],
     );
   }
 }
