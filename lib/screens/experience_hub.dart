@@ -208,123 +208,142 @@ class _ExperienceHubState extends State<ExperienceHub> {
     final first = name.isEmpty ? 'Fan' : name.split(RegExp(r'\s+')).first;
     return Scaffold(
       backgroundColor: Ui.bg,
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 680),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: Ui.red,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.sports_soccer_rounded,
-                        color: Colors.white,
-                        size: 23,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Text(
-                        'DEEPROWSS',
-                        style: TextStyle(
-                          fontSize: 20,
-                          letterSpacing: 1.2,
-                          fontWeight: FontWeight.w900,
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/themes/cr7.png'),
+            fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(Color(0xB3000000), BlendMode.darken),
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 680),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Ui.red,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.sports_soccer_rounded,
+                          color: Colors.white,
+                          size: 23,
                         ),
                       ),
-                    ),
-                    IconButton(
-                      tooltip: 'Log out',
-                      onPressed: _logout,
-                      icon: const Icon(Icons.logout_rounded),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                Text(
-                  'Welcome, $first',
-                  style: TextStyle(
-                    color: Ui.muted,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'DEEPROWSS',
+                          style: TextStyle(
+                            fontSize: 20,
+                            letterSpacing: 1.2,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Your match. Your people.',
-                  style: TextStyle(
-                    fontSize: 24,
-                    height: 1.15,
-                    letterSpacing: -.6,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'The game brings us together. Choose where you want to go.',
-                  style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.4),
-                ),
-                const SizedBox(height: 18),
-                _choice(
-                  title: 'Watch Live Football',
-                  subtitle: 'Live events, TV channels and your match.',
-                  icon: Icons.stadium_rounded,
-                  accent: const Color(0xFF45D99A),
-                  pitch: true,
-                  onTap: () => _open('watch'),
-                ),
-                const SizedBox(height: 10),
-                _choice(
-                  title: 'Football Highlights',
-                  subtitle: 'Goals, replays and match highlights.',
-                  icon: Icons.play_circle_outline_rounded,
-                  accent: const Color(0xFFFFB02E),
-                  onTap: () => _openPage('Football Highlights', const HighlightsScreen()),
-                ),
-                const SizedBox(height: 10),
-                _choice(
-                  title: 'TV Channels',
-                  subtitle: 'Live TV channels from around the world.',
-                  icon: Icons.live_tv_rounded,
-                  accent: const Color(0xFFB16CFF),
-                  onTap: () => _openPage('TV Channels', const TvScreen()),
-                ),
-                const SizedBox(height: 10),
-                _choice(
-                  title: 'Latest Movies',
-                  subtitle: 'New movies and series to watch.',
-                  icon: Icons.movie_outlined,
-                  accent: const Color(0xFF6C8CFF),
-                  onTap: () => _openPage('Latest Movies', const MoviesScreen()),
-                ),
-                const SizedBox(height: 10),
-                _choice(
-                  title: 'Join Community Trend',
-                  subtitle: 'Share your take, post photos, follow fans.',
-                  icon: Icons.forum_rounded,
-                  accent: Ui.redSoft,
-                  onTap: () => _open('community'),
-                ),
-                const SizedBox(height: 28),
-                Center(
-                  child: Text(
-                    'Let’s Go Deep!',
+                  const SizedBox(height: 22),
+                  Text(
+                    'Welcome, $first',
                     style: TextStyle(
-                      color: Ui.dim,
+                      color: Ui.muted,
+                      fontWeight: FontWeight.w600,
                       fontSize: 13,
-                      letterSpacing: 1,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Your match. Your people.',
+                    style: TextStyle(
+                      fontSize: 24,
+                      height: 1.15,
+                      letterSpacing: -.6,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'The game brings us together. Choose where you want to go.',
+                    style: TextStyle(
+                      color: Ui.muted,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  _choice(
+                    title: 'Watch Live Football',
+                    subtitle: 'Live events, TV channels and your match.',
+                    icon: Icons.stadium_rounded,
+                    accent: const Color(0xFF45D99A),
+                    pitch: true,
+                    onTap: () => _open('watch'),
+                  ),
+                  const SizedBox(height: 10),
+                  _choice(
+                    title: 'Football Highlights',
+                    subtitle: 'Goals, replays and match highlights.',
+                    icon: Icons.play_circle_outline_rounded,
+                    accent: const Color(0xFFFFB02E),
+                    onTap: () => _openPage(
+                      'Football Highlights',
+                      const HighlightsScreen(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _choice(
+                    title: 'TV Channels',
+                    subtitle: 'Live TV channels from around the world.',
+                    icon: Icons.live_tv_rounded,
+                    accent: const Color(0xFFB16CFF),
+                    onTap: () => _openPage('TV Channels', const TvScreen()),
+                  ),
+                  const SizedBox(height: 10),
+                  _choice(
+                    title: 'Latest Movies',
+                    subtitle: 'New movies and series to watch.',
+                    icon: Icons.movie_outlined,
+                    accent: const Color(0xFF6C8CFF),
+                    onTap: () =>
+                        _openPage('Latest Movies', const MoviesScreen()),
+                  ),
+                  const SizedBox(height: 10),
+                  _choice(
+                    title: 'Join Community Trend',
+                    subtitle: 'Share your take, post photos, follow fans.',
+                    icon: Icons.forum_rounded,
+                    accent: Ui.redSoft,
+                    onTap: () => _open('community'),
+                  ),
+                  const SizedBox(height: 28),
+                  Center(
+                    child: Text(
+                      'Let’s Go Deep!',
+                      style: TextStyle(
+                        color: Ui.dim,
+                        fontSize: 13,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _logout,
+                      icon: const Icon(Icons.logout_rounded, size: 18),
+                      label: const Text('Log out'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
