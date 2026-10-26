@@ -29,6 +29,9 @@ class ShellScreen extends StatefulWidget {
 
 class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   int _index = 0;
+  // Bottom bar order: Live, Home (feed), Predict, Ranks, AI. The numbers are
+  // positions in the IndexedStack, kept so push-notification tabs still work.
+  static const _order = [0, 3, 1, 2, 4];
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   DateTime? _lastBack;
   Timer? _autoRefresh;
@@ -187,27 +190,33 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                 border: Border(top: BorderSide(color: Ui.line)),
               ),
               child: NavigationBar(
-                selectedIndex: _index,
-                onDestinationSelected: (i) => setState(() => _index = i),
+                height: 62,
+                backgroundColor: Ui.bg,
+                indicatorColor: Colors.transparent,
+                labelBehavior:
+                    NavigationDestinationLabelBehavior.onlyShowSelected,
+                selectedIndex: _order.contains(_index) ? _order.indexOf(_index) : 0,
+                onDestinationSelected: (i) =>
+                    setState(() => _index = _order[i]),
                 destinations: [
                   NavigationDestination(
                     icon: const Icon(Icons.sensors_rounded),
                     label: 'Live'.tr,
                   ),
                   NavigationDestination(
-                    icon: const Icon(Icons.groups_outlined),
-                    selectedIcon: const Icon(Icons.groups_rounded),
-                    label: 'Fan Zone'.tr,
+                    icon: const Icon(Icons.home_outlined),
+                    selectedIcon: const Icon(Icons.home_rounded),
+                    label: 'Home'.tr,
+                  ),
+                  NavigationDestination(
+                    icon: const Icon(Icons.sports_soccer_outlined),
+                    selectedIcon: const Icon(Icons.sports_soccer_rounded),
+                    label: 'Predict'.tr,
                   ),
                   NavigationDestination(
                     icon: const Icon(Icons.leaderboard_outlined),
                     selectedIcon: const Icon(Icons.leaderboard_rounded),
                     label: 'Ranks'.tr,
-                  ),
-                  NavigationDestination(
-                    icon: const Icon(Icons.forum_outlined),
-                    selectedIcon: const Icon(Icons.forum_rounded),
-                    label: 'Banter'.tr,
                   ),
                   NavigationDestination(
                     icon: const Icon(Icons.auto_awesome_outlined),
