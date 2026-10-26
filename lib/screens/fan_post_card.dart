@@ -212,6 +212,10 @@ class _FanPostCardState extends State<FanPostCard> {
       name: '${_post['name']}',
       seed: '${_post['user_id']}',
       size: size,
+      imageUrl: FanZoneService.avatarUrl(
+        '${_post['user_id']}',
+        _post['avatar_at'],
+      ),
     ),
   );
 
@@ -459,7 +463,7 @@ class _FanPostCardState extends State<FanPostCard> {
                                 ),
                                 TextSpan(
                                   text:
-                                      '  $handle · ${fanTimeAgo(_post['at'])}',
+                                      '  $handle · ${fanTimeAgo(_post['at']).replaceAll(' ago', '')}',
                                   style: TextStyle(
                                     color: Ui.muted,
                                     fontSize: 13,
