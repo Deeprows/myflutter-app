@@ -24,7 +24,8 @@ void _toast(BuildContext c, String msg) =>
 /// Side menu: Network Stream, Playlists, Floating Player, Video Quality
 /// Setting, scores, Notice, Join Us, Copyright, Share App, Update App, Exit.
 class FootboliveDrawer extends StatelessWidget {
-  const FootboliveDrawer({super.key});
+  final VoidCallback? onHome;
+  const FootboliveDrawer({super.key, this.onHome});
 
   void _go(BuildContext context, Future<void> Function(BuildContext) action) {
     final nav = Navigator.of(context);
@@ -135,6 +136,10 @@ class FootboliveDrawer extends StatelessWidget {
                 bottom: MediaQuery.of(context).viewPadding.bottom + 16,
               ),
               children: [
+                if (onHome != null)
+                  item(Icons.apps_rounded, 'Choose experience', (c) async {
+                    onHome!();
+                  }),
                 if (AuthService.instance.user != null)
                   ListTile(
                     leading: const Icon(Icons.account_circle_outlined),
