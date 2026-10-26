@@ -6,9 +6,9 @@ import '../services/auth_service.dart';
 import '../services/ad_scheduler.dart';
 import '../theme/app_theme.dart';
 import 'auth_screen.dart';
-import 'start_gate.dart';
+import 'experience_hub.dart';
 
-/// Registration/login precedes the existing Free/Premium and app flow.
+/// Signed-in users choose the live-football or community experience.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
   @override
@@ -38,25 +38,42 @@ class _AuthGateState extends State<AuthGate> {
 
   void _authChanged() {
     _syncAds();
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+      if (AuthService.instance.ready && !AuthService.instance.signedIn) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !AuthService.instance.signedIn) {
+            Navigator.of(context).popUntil((route) => route.isFirst);
+          }
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
     AuthService.instance.removeListener(_authChanged);
-    if (_adsHeld) AdScheduler.instance.release();
+    if (_adsHeld) {
+      AdScheduler.instance.release();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = AuthService.instance;
-    if (!auth.ready)
+    if (!auth.ready) {
       return Scaffold(
         backgroundColor: Ui.bg,
         body: const Center(child: CircularProgressIndicator()),
       );
-    if (!auth.signedIn) return const AuthScreen();
-    return KeyedSubtree(key: ValueKey(auth.user!.id), child: const StartGate());
+    }
+    if (!auth.signedIn) {
+      return const AuthScreen();
+    }
+    return KeyedSubtree(
+      key: ValueKey(auth.user!.id),
+      child: const ExperienceHub(),
+    );
   }
 }
