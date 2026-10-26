@@ -1,16 +1,47 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:footbolive/screens/fan_widgets.dart';
+import 'package:footbolive/models/fan_prediction.dart';
 
 Map<String, dynamic> pick(int h, int a, int? rh, int? ra, int kickoff) => {
-      'home': h,
-      'away': a,
-      'result_home': rh,
-      'result_away': ra,
-      'kickoff': kickoff,
-    };
+  'home': h,
+  'away': a,
+  'result_home': rh,
+  'result_away': ra,
+  'kickoff': kickoff,
+};
 
 void main() {
+  group('Prediction markets', () {
+    Map<String, dynamic> market(
+      String type,
+      String selection,
+      int home,
+      int away,
+    ) => {
+      'market': type,
+      'selection': selection,
+      'home': 2,
+      'away': 1,
+      'result_home': home,
+      'result_away': away,
+    };
+    test('outcomes, double chance and BTTS settle from confirmed scores', () {
+      expect(fanPickPoints(market('result', 'X', 1, 1)), 1);
+      expect(fanPickPoints(market('double_chance', '12', 1, 1)), 0);
+      expect(fanPickPoints(market('btts', 'yes', 2, 1)), 1);
+      expect(fanPickPoints(market('btts', 'no', 2, 0)), 1);
+    });
+    test('integer totals push and do not become settled wins or losses', () {
+      final p = market('totals', 'over_1', 1, 0);
+      expect(fanPredictionPush(p), true);
+      expect(fanPickPoints(p), isNull);
+      expect(FanStats.from([p]).settled, 0);
+      expect(fanPickPoints(market('totals', 'over_1', 2, 0)), 1);
+      expect(fanPickPoints(market('totals', 'over_2.5', 1, 1)), 0);
+      expect(fanPickPoints(market('totals', 'over_2.5', 2, 1)), 1);
+    });
+  });
   group('Fan Zone scoring', () {
     test('exact score is 3, right outcome is 1, miss is 0', () {
       expect(fanPickPoints(pick(2, 1, 2, 1, 1)), 3);
