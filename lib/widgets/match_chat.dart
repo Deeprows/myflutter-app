@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/chat_service.dart';
+import '../services/auth_service.dart';
+import '../services/fan_zone_service.dart';
 import '../services/install_id.dart';
 import '../services/settings_service.dart';
 import '../theme/app_theme.dart';
@@ -36,15 +38,34 @@ class _MatchChatState extends State<MatchChat> {
   void initState() {
     super.initState();
     _nameInput.text = ChatService.randomName();
-    Settings.chatName().then((n) {
-      if (!mounted) return;
-      setState(() {
-        _username = n;
-        _ready = true;
-      });
-    });
+    _loadIdentity();
     _refresh();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) => _refresh());
+  }
+
+  bool _identityFailed = false;
+  Future<void> _loadIdentity() async {
+    if (mounted)
+      setState(() {
+        _ready = false;
+        _identityFailed = false;
+      });
+    try {
+      final name = AuthService.instance.signedIn
+          ? '${(await FanZoneService.call('social/profile'))['profile']['name']}'
+          : await Settings.chatName();
+      if (mounted)
+        setState(() {
+          _username = name;
+          _ready = true;
+        });
+    } catch (_) {
+      if (mounted)
+        setState(() {
+          _identityFailed = true;
+          _ready = true;
+        });
+    }
   }
 
   @override
@@ -60,11 +81,13 @@ class _MatchChatState extends State<MatchChat> {
     try {
       final list = await ChatService.fetch(_slug);
       if (!mounted) return;
-      final grew = list.length != _messages.length ||
+      final grew =
+          list.length != _messages.length ||
           (list.isNotEmpty &&
               _messages.isNotEmpty &&
               list.last.id != _messages.last.id);
-      final nearBottom = !_scroll.hasClients ||
+      final nearBottom =
+          !_scroll.hasClients ||
           _scroll.position.maxScrollExtent - _scroll.offset < 120;
       setState(() {
         _messages = list;
@@ -96,12 +119,18 @@ class _MatchChatState extends State<MatchChat> {
 
   /// The name is chosen once and then locked: it cannot be changed later.
   Future<void> _join() async {
+    if (AuthService.instance.signedIn) {
+      await _loadIdentity();
+      return;
+    }
     if (_joining) return;
     final n = _nameInput.text.trim();
     final name = n.length > 30 ? n.substring(0, 30) : n;
     if (name.length < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pick a name with at least 3 characters.')),
+        const SnackBar(
+          content: Text('Pick a name with at least 3 characters.'),
+        ),
       );
       return;
     }
@@ -109,8 +138,10 @@ class _MatchChatState extends State<MatchChat> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Ui.panel,
-        title: const Text('Use this name?',
-            style: TextStyle(fontWeight: FontWeight.w900)),
+        title: const Text(
+          'Use this name?',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
         content: Text(
           '"$name" will be your name in the live chat. You can\'t change it '
           'later.',
@@ -118,8 +149,9 @@ class _MatchChatState extends State<MatchChat> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Change')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Change'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Ui.red),
             onPressed: () => Navigator.pop(ctx, true),
@@ -136,7 +168,9 @@ class _MatchChatState extends State<MatchChat> {
     if (claim == NameClaim.taken) {
       setState(() => _joining = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('That name is already taken. Try another.')),
+        const SnackBar(
+          content: Text('That name is already taken. Try another.'),
+        ),
       );
       return;
     }
@@ -157,6 +191,7 @@ class _MatchChatState extends State<MatchChat> {
       _slug,
       matchName: widget.matchName,
       username: _username,
+      userId: AuthService.instance.user?.id,
       text: text,
     );
     if (!mounted) return;
@@ -195,8 +230,10 @@ class _MatchChatState extends State<MatchChat> {
         children: [
           Icon(Icons.forum_rounded, size: 18, color: Ui.redSoft),
           const SizedBox(width: 8),
-          const Text('Live chat',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
+          const Text(
+            'Live chat',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+          ),
           const SizedBox(width: 8),
           if (_loaded && !_failed)
             Container(
@@ -205,11 +242,14 @@ class _MatchChatState extends State<MatchChat> {
                 color: Colors.white.withValues(alpha: .07),
                 borderRadius: BorderRadius.circular(99),
               ),
-              child: Text('${_messages.length}',
-                  style: TextStyle(
-                      color: Ui.muted,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w800)),
+              child: Text(
+                '${_messages.length}',
+                style: TextStyle(
+                  color: Ui.muted,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           const Spacer(),
           if (_username.isNotEmpty)
@@ -222,13 +262,16 @@ class _MatchChatState extends State<MatchChat> {
                   const SizedBox(width: 4),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 120),
-                    child: Text(_username,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: Ui.muted,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700)),
+                    child: Text(
+                      _username,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Ui.muted,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 3),
                   Icon(Icons.lock_rounded, size: 12, color: Ui.dim),
@@ -243,10 +286,12 @@ class _MatchChatState extends State<MatchChat> {
   Widget _body() {
     if (!_loaded) {
       return Center(
-          child: SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2.4, color: Ui.red)));
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2.4, color: Ui.red),
+        ),
+      );
     }
     if (_failed) {
       return _Hint(
@@ -268,7 +313,9 @@ class _MatchChatState extends State<MatchChat> {
       itemCount: _messages.length,
       itemBuilder: (_, i) => _Bubble(
         message: _messages[i],
-        mine: _messages[i].username == _username,
+        mine: AuthService.instance.signedIn
+            ? _messages[i].userId == AuthService.instance.user?.id
+            : _messages[i].username == _username,
       ),
     );
   }
@@ -282,7 +329,22 @@ class _MatchChatState extends State<MatchChat> {
           color: Ui.panel,
           border: Border(top: BorderSide(color: Ui.line)),
         ),
-        child: _username.isEmpty ? _joinRow() : _composer(),
+        child: !_ready
+            ? const LinearProgressIndicator()
+            : _identityFailed
+            ? TextButton.icon(
+                onPressed: _loadIdentity,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry loading your profile name'),
+              )
+            : _username.isEmpty && AuthService.instance.signedIn
+            ? TextButton(
+                onPressed: _loadIdentity,
+                child: const Text('Load profile name'),
+              )
+            : _username.isEmpty
+            ? _joinRow()
+            : _composer(),
       ),
     );
   }
@@ -292,9 +354,14 @@ class _MatchChatState extends State<MatchChat> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Pick a unique name  ·  you can\'t change it later  ·  18+',
-            style: TextStyle(
-                color: Ui.muted, fontSize: 11.5, fontWeight: FontWeight.w700)),
+        Text(
+          'Pick a unique name  ·  you can\'t change it later  ·  18+',
+          style: TextStyle(
+            color: Ui.muted,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 6),
         Row(
           children: [
@@ -347,7 +414,10 @@ class _MatchChatState extends State<MatchChat> {
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white))
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
               : const Icon(Icons.send_rounded, size: 20),
         ),
       ],
@@ -372,8 +442,10 @@ class _MatchChatState extends State<MatchChat> {
         isDense: true,
         filled: true,
         fillColor: Ui.card,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 11,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(99),
           borderSide: BorderSide(color: Ui.line),
@@ -397,8 +469,12 @@ class _Bubble extends StatelessWidget {
   const _Bubble({required this.message, required this.mine});
 
   static const _tints = [
-    Color(0xFFFF6B6B), Color(0xFFFFB84D), Color(0xFF4DD0A1),
-    Color(0xFF5BC0FF), Color(0xFFB794F6), Color(0xFFFF8AD8),
+    Color(0xFFFF6B6B),
+    Color(0xFFFFB84D),
+    Color(0xFF4DD0A1),
+    Color(0xFF5BC0FF),
+    Color(0xFFB794F6),
+    Color(0xFFFF8AD8),
   ];
 
   @override
@@ -427,7 +503,10 @@ class _Bubble extends StatelessWidget {
                   ? '?'
                   : message.username.characters.first.toUpperCase(),
               style: TextStyle(
-                  color: tint, fontSize: 12, fontWeight: FontWeight.w900),
+                color: tint,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -443,7 +522,8 @@ class _Bubble extends StatelessWidget {
                   bottomRight: Radius.circular(14),
                 ),
                 border: Border.all(
-                    color: mine ? Ui.red.withValues(alpha: .45) : Ui.line),
+                  color: mine ? Ui.red.withValues(alpha: .45) : Ui.line,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -452,24 +532,31 @@ class _Bubble extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Flexible(
-                        child: Text(message.username,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: tint,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w800)),
+                        child: Text(
+                          message.username,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: tint,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
                       if (time.isNotEmpty) ...[
                         const SizedBox(width: 8),
-                        Text(time,
-                            style: TextStyle(color: Ui.dim, fontSize: 10)),
+                        Text(
+                          time,
+                          style: TextStyle(color: Ui.dim, fontSize: 10),
+                        ),
                       ],
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Text(message.text,
-                      style: const TextStyle(fontSize: 13.5, height: 1.3)),
+                  Text(
+                    message.text,
+                    style: const TextStyle(fontSize: 13.5, height: 1.3),
+                  ),
                 ],
               ),
             ),
@@ -485,7 +572,12 @@ class _Hint extends StatelessWidget {
   final String text;
   final String? action;
   final VoidCallback? onAction;
-  const _Hint({required this.icon, required this.text, this.action, this.onAction});
+  const _Hint({
+    required this.icon,
+    required this.text,
+    this.action,
+    this.onAction,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -495,10 +587,15 @@ class _Hint extends StatelessWidget {
         children: [
           Icon(icon, size: 30, color: Ui.dim),
           const SizedBox(height: 8),
-          Text(text,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  color: Ui.muted, fontSize: 13, fontWeight: FontWeight.w700)),
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Ui.muted,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           if (action != null) ...[
             const SizedBox(height: 6),
             TextButton(onPressed: onAction, child: Text(action!)),
