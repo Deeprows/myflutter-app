@@ -227,11 +227,16 @@ class FanAvatar extends StatelessWidget {
   final String name;
   final String seed;
   final double size;
+
+  /// Profile photo. When it is missing or fails to load, the coloured
+  /// initial is shown instead.
+  final String? imageUrl;
   const FanAvatar({
     super.key,
     required this.name,
     required this.seed,
     this.size = 40,
+    this.imageUrl,
   });
 
   @override
@@ -241,7 +246,7 @@ class FanAvatar extends StatelessWidget {
     final initial = trimmed.isEmpty
         ? '?'
         : trimmed.characters.first.toUpperCase();
-    return Container(
+    final base = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
@@ -260,6 +265,28 @@ class FanAvatar extends StatelessWidget {
           fontWeight: FontWeight.w800,
           fontSize: size * .42,
         ),
+      ),
+    );
+    final url = imageUrl;
+    if (url == null || url.isEmpty) return base;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          base,
+          ClipOval(
+            child: Image.network(
+              url,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+            ),
+          ),
+        ],
       ),
     );
   }
