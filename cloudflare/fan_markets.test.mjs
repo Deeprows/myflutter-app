@@ -30,7 +30,7 @@ async function call(path,body,credential=token,customEnv=env){
 
 assert.equal((await call('profile',{name:'Markets Fan'})).status,200);
 const key=fanKey(fixtures[0]),id=(await (await call('state')).json()).id;
-const choices=[['score',''],...['1','X','2'].map(s=>['result',s]),...['1X','X2','12'].map(s=>['double_chance',s]),...['yes','no'].map(s=>['btts',s]),...['0.5','1','1.5','2','2.5','3','3.5','4.5'].flatMap(n=>[['totals','over_'+n],['totals','under_'+n]])];
+const choices=[['score',''],...['1','X','2'].map(s=>['result',s]),...['1X','X2','12'].map(s=>['double_chance',s]),...['yes','no'].map(s=>['btts',s]),...['0.5','1','1.5','2','2.5','3','3.5','4','4.5'].flatMap(n=>[['totals','over_'+n],['totals','under_'+n]])];
 for(const [market,selection] of choices){
  assert.ok(validFanMarket(market,selection));
  assert.equal((await call('pick',{key,market,selection,home:2,away:1})).status,200);
@@ -45,7 +45,7 @@ for(const [market,selection] of choices){
   sql.prepare('INSERT INTO fan_results VALUES(?,?,?) ON CONFLICT(match_key) DO UPDATE SET home=excluded.home,away=excluded.away').run(key,home,away);
   const expected=fanPredictionPoints({market,selection,home:2,away:1},home,away);
   const state=await (await call('state')).json();
-  if(expected===null)assert.equal(state.leaderboard.length,0,'Push excludes this pick from ranking count');
+  if(expected===null){assert.equal(state.leaderboard.length,1,'The fan remains enlisted after a push');assert.equal(state.leaderboard[0].played,0);assert.equal(state.leaderboard[0].points,0);assert.equal(state.leaderboard[0].lost,0);}
   else {assert.equal(state.leaderboard[0].points,expected,`${market}/${selection} @ ${home}-${away}`);assert.equal(state.leaderboard[0].played,1);}
  }
 }
