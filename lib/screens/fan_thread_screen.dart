@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import 'fan_post_card.dart';
 import 'fan_profile_screen.dart';
 import 'fan_widgets.dart';
+import 'fan_x_widgets.dart';
 
 class FanThreadScreen extends StatefulWidget {
   final String postId;
@@ -143,9 +144,9 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
       ),
     );
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 4, 12),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Ui.line)),
+        border: Border(bottom: BorderSide(color: Ui.line, width: .6)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -206,7 +207,7 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Ui.bg,
     appBar: AppBar(
-      title: const Text('Post & comments'),
+      title: const Text('Post'),
       actions: [
         IconButton(
           tooltip: 'Refresh',
@@ -223,7 +224,7 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
             onRefresh: _load,
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.zero,
               children: [
                 if (_error != null)
                   Padding(
@@ -238,12 +239,12 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
                     onChanged: _load,
                     onBlocked: () => Navigator.pop(context),
                   ),
-                const FanSectionTitle(
-                  'Comments',
-                  icon: Icons.chat_bubble_outline_rounded,
-                ),
+                const XSectionGap(),
                 if (!_loading && _post != null && _comments.isEmpty)
-                  const Text('Start the conversation.'),
+                  const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text('No replies yet. Start the conversation.'),
+                  ),
                 for (final c in _comments) _comment(c),
                 if (_next != null)
                   OutlinedButton(
@@ -270,8 +271,11 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
                       maxLines: 4,
                       maxLength: 500,
                       decoration: const InputDecoration(
-                        hintText: 'Write a comment…',
-                        border: OutlineInputBorder(),
+                        hintText: 'Post your reply…',
+                        counterText: '',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(26)),
+                        ),
                       ),
                     ),
                   ),
