@@ -96,7 +96,7 @@ people=await (await social('people?id='+b)).json();assert.equal(people.people.le
 const people2=await (await social('people?id='+b+'&before='+encodeURIComponent(people.next))).json();assert.equal(people2.people.length,6);
 assert.equal(new Set([...people.people,...people2.people].map(p=>p.id)).size,46);
 for(let i=0;i<10;i++){
- const key='history-'+i;sql.prepare('INSERT INTO fan_picks VALUES(?,?,?,?,?,?)').run(b,key,'A vs B',1000,i<5?2:0,1);
+ const key='history-'+i;sql.prepare('INSERT INTO fan_picks(user_id,match_key,title,kickoff,home,away) VALUES(?,?,?,?,?,?)').run(b,key,'A vs B',1000,i<5?2:0,1);
  sql.prepare('INSERT INTO fan_results VALUES(?,?,?)').run(key,2,1);
 }
 profile=(await (await social('profile?id='+b)).json()).profile;assert.equal(profile.stats.points,15);assert.equal(profile.stats.exact,5);
@@ -124,6 +124,7 @@ const legacyId=sql.prepare('SELECT id FROM fan_users WHERE name=?').get('Legacy 
 sql.prepare('INSERT INTO fan_follows VALUES(?,?,?)').run(legacyId,c,100);
 sql.prepare('INSERT INTO fan_follows VALUES(?,?,?)').run(c,legacyId,100);
 sql.prepare('INSERT INTO fan_likes VALUES(?,?,?)').run(otherPost,legacyId,100);
+sql.prepare('INSERT INTO fan_picks(user_id,match_key,title,kickoff,home,away,market,selection) VALUES(?,?,?,?,?,?,?,?)').run(legacyId,'legacy-market','A vs B',100,0,0,'totals','over_1');
 const legacyComment=crypto.randomUUID();sql.prepare('INSERT INTO fan_comments(id,post_id,user_id,text,at) VALUES(?,?,?,?,?)').run(legacyComment,otherPost,legacyId,'Legacy reply',100);
 assert.equal((await call('auth',{body:{mode:'login',idToken:alice,legacyToken:legacy}})).status,200);
 assert.equal(sql.prepare('SELECT user_id FROM fan_comments WHERE id=?').get(legacyComment).user_id,a);
@@ -131,4 +132,5 @@ assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM fan_follows WHERE follower_i
 assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM fan_follows WHERE follower_id=? AND following_id=?').get(c,a).n,1);
 assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM fan_likes WHERE post_id=? AND user_id=?').get(otherPost,a).n,1);
 assert.equal(sql.prepare('SELECT id FROM fan_users WHERE id=?').get(legacyId),undefined);
+assert.equal(sql.prepare('SELECT selection FROM fan_picks WHERE user_id=? AND match_key=?').get(a,'legacy-market').selection,'over_1');
 console.log('Social: Google identity, public privacy, profile ownership, follows, follower pagination, following/author feeds, idempotent likes, comments, cooldowns, ownership, reports/admin moderation, stable pages, earned achievements, safe shares and hidden-parent access passed.');
