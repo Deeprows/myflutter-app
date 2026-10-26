@@ -5,7 +5,6 @@ import '../theme/app_theme.dart';
 import 'fan_post_card.dart';
 import 'fan_profile_screen.dart';
 import 'fan_widgets.dart';
-import 'fan_x_widgets.dart';
 
 class FanThreadScreen extends StatefulWidget {
   final String postId;
@@ -16,6 +15,7 @@ class FanThreadScreen extends StatefulWidget {
 
 class _FanThreadScreenState extends State<FanThreadScreen> {
   final _text = TextEditingController();
+  final _replyFocus = FocusNode();
   Map<String, dynamic>? _post;
   List<Map<String, dynamic>> _comments = [];
   String _viewer = '';
@@ -29,6 +29,7 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
 
   @override
   void dispose() {
+    _replyFocus.dispose();
     _text.dispose();
     super.dispose();
   }
@@ -236,10 +237,11 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
                     post: _post!,
                     viewerId: _viewer,
                     openThread: false,
+                    onReply: () => _replyFocus.requestFocus(),
                     onChanged: _load,
                     onBlocked: () => Navigator.pop(context),
                   ),
-                const XSectionGap(),
+
                 if (!_loading && _post != null && _comments.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(20),
@@ -258,37 +260,61 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
         if (_post != null)
           SafeArea(
             top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
+              decoration: BoxDecoration(
+                color: Ui.card,
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: Ui.line, width: .6),
+              ),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  FanAvatar(name: 'You', seed: _viewer, size: 34),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
                       controller: _text,
+                      focusNode: _replyFocus,
                       enabled: !_sending,
                       minLines: 1,
                       maxLines: 4,
                       maxLength: 500,
+                      textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
                         hintText: 'Post your reply…',
                         counterText: '',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(26)),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 4,
                         ),
                       ),
                     ),
                   ),
-                  IconButton.filled(
-                    tooltip: 'Post comment',
-                    onPressed: _sending ? null : _send,
-                    icon: _sending
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send_rounded),
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _text,
+                    builder: (_, value, child) => IconButton(
+                      tooltip: 'Post reply',
+                      onPressed: _sending || value.text.trim().isEmpty
+                          ? null
+                          : _send,
+                      icon: _sending
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(
+                              Icons.send_rounded,
+                              color: value.text.trim().isEmpty
+                                  ? Ui.dim
+                                  : Ui.red,
+                            ),
+                    ),
                   ),
                 ],
               ),
