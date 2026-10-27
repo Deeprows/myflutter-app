@@ -16,6 +16,7 @@ import 'highlights_screen.dart';
 import 'movies_screen.dart';
 import 'tv_screen.dart';
 import 'content_shortcut_screen.dart';
+import 'sports_news_screen.dart';
 
 String _error(Object e) => e.toString().replaceFirst('Exception: ', '');
 
@@ -304,6 +305,16 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                 ],
               ),
         actions: [
+          if (widget.page == FanZonePage.banter)
+            IconButton(
+              tooltip: 'Explore sports news',
+              icon: const Icon(Icons.search_rounded),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const SportsNewsScreen(),
+                ),
+              ),
+            ),
           if (widget.onExit != null)
             IconButton(
               tooltip: 'Choose experience',
