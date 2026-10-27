@@ -1,50 +1,63 @@
+
 [
   {
     "id": "1",
-    "home": "Galatasaray",
-    "away": "Fenerbahçe",
-    "league": "Süper Lig",
-    "kickoff": "2026-10-26T19:30:00+01:00",
+    "home": "Sassuolo",
+    "away": "Lazio",
+    "league": "Serie A",
+    "kickoff": "2026-10-27T18:30:00+01:00",
     "duration": 130,
-    "url": "https://matchora.to/embed/match/2527798",
-    "altUrl": "https://forprivateuse.sbs/embedextra/tv/39.php",
-    "homeLogo": "645",
-    "awayLogo": "611"
+    "url": "https://matchora.to/embed/match/2482218",
+    "altUrl": "",
+    "homeLogo": "488",
+    "awayLogo": "487"
   },
   {
     "id": "2",
-    "home": "Paris Saint-Germain",
-    "away": "Lyon",
-    "league": "Ligue 1",
-    "kickoff": "2026-10-26T20:30:00+01:00",
+    "home": "AS Roma",
+    "away": "Cagliari",
+    "league": "Serie A",
+    "kickoff": "2026-10-27T20:45:00+01:00",
     "duration": 130,
-    "url": "https://forprivateuse.sbs/embedextra/tv/17.php",
-    "altUrl": "https://ch.nexa.st/stream?id=51",
-    "homeLogo": "85",
-    "awayLogo": "80"
+    "url": "https://matchora.to/embed/match/2482221",
+    "altUrl": "",
+    "homeLogo": "497",
+    "awayLogo": "490"
   },
   {
     "id": "3",
-    "home": "Sevilla",
-    "away": "Osasuna",
-    "league": "LaLiga",
-    "kickoff": "2026-10-26T21:00:00+01:00",
+    "home": "Torino",
+    "away": "Como 1907",
+    "league": "Serie A",
+    "kickoff": "2026-10-27T20:45:00+01:00",
     "duration": 130,
-    "url": "https://matchora.to/embed/match/2506263",
-    "altUrl": "https://forprivateuse.sbs/embedextra/tv/1.php",
-    "homeLogo": "536",
-    "awayLogo": "727"
+    "url": "https://matchora.to/embed/match/2482223",
+    "altUrl": "",
+    "homeLogo": "503",
+    "awayLogo": "895"
   },
- {
-  "id": "3",
-  "home": "Ballon d'Or 2026",
-  "away": "🔴 LIVE CEREMONY",
-  "league": "Ballon d'Or Awards 2026",
-  "kickoff": "2026-10-26T21:00:00+01:00",
-  "duration": 180,
-  "url": "https://streamec.st/embed/ch1.php",
-  "altUrl": "",
-  "homeLogo": "",
-  "awayLogo": ""
-}
+  {
+    "id": "4",
+    "home": "Bradford City",
+    "away": "Peterborough United",
+    "league": "EFL Cup",
+    "kickoff": "2026-10-27T20:45:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2606326",
+    "altUrl": "",
+    "homeLogo": "1347",
+    "awayLogo": "1355"
+  },
+  {
+    "id": "5",
+    "home": "Fleetwood Town",
+    "away": "Arsenal",
+    "league": "EFL Cup",
+    "kickoff": "2026-10-27T21:00:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2606325",
+    "altUrl": "",
+    "homeLogo": "1359",
+    "awayLogo": "42"
+  }
 ]
