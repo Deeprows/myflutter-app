@@ -65,6 +65,10 @@ const CORS = {
 };
 
 export default {
+  async scheduled(controller,env,ctx) {
+    const task=(async()=>{if(!env.DB)return;await fanInit(env.DB);await fanSyncResults(env);})();
+    ctx.waitUntil(task);
+  },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
@@ -1674,6 +1678,8 @@ export function fanPoints(h, a, rh, ra) {
   return h === rh && a === ra ? 3 : Math.sign(h - a) === Math.sign(rh - ra) ? 1 : 0;
 }
 const FAN_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS fan_result_jobs (match_key TEXT PRIMARY KEY, fixture_json TEXT NOT NULL DEFAULT '', checked_at INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '')`,
+  `CREATE TABLE IF NOT EXISTS fan_result_sync (id INTEGER PRIMARY KEY, next_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_clubs (user_id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', logo TEXT NOT NULL DEFAULT '')`,
   `CREATE TABLE IF NOT EXISTS fan_post_matches (post_id TEXT PRIMARY KEY, fixture_json TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_users (id TEXT PRIMARY KEY, name TEXT NOT NULL, last_post INTEGER NOT NULL DEFAULT 0)`,
@@ -1722,9 +1728,9 @@ async function fanHash(s) {
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(b)].map(n => n.toString(16).padStart(2, '0')).join('');
 }
-async function fanFixtures(env) {
+async function fanFixtures(env,timeout=10000) {
   const base = (env.GITHUB_RAW_BASE || DEFAULT_RAW_BASE).replace(/\/$/, '');
-  const res = await fetch(`${base}/fixtures.json`, {signal: AbortSignal.timeout(10000), cache: 'no-store'});
+  const res = await fetch(`${base}/fixtures.json`, {signal: AbortSignal.timeout(timeout), cache: 'no-store'});
   if (!res.ok) throw new Error('Fixtures unavailable. Try again shortly.');
   const raw = await res.json();
   const list = Array.isArray(raw) ? raw : raw.fixtures;
@@ -1835,15 +1841,17 @@ async function fanZone(request, env, url) {
       return await fanPosts(request,env,url,user,id);
     }
     if (request.method === 'GET' && url.pathname === '/fan/state') {
+      const resultSync=await fanSyncResults(env);
       const picks = await db.prepare(`SELECT p.*,r.home AS result_home,r.away AS result_away FROM fan_picks p LEFT JOIN fan_results r ON r.match_key=p.match_key WHERE p.user_id=? ORDER BY p.kickoff DESC LIMIT 300`).bind(id).all();
       const week = fanWeek();
       const board = await fanLeagueTable(db,week,0);
       const media=await db.prepare('SELECT avatar_at FROM fan_profile_media WHERE user_id=?').bind(id).first();
-      return json({id,name:user?.name || '',avatar_at:media?.avatar_at || 0,week,leaderboard:board.rows,board_next:board.next,picks:picks.results});
+      return json({id,name:user?.name || '',avatar_at:media?.avatar_at || 0,week,leaderboard:board.rows,board_next:board.next,result_sync:resultSync,picks:picks.results});
     }
     if(request.method==='GET' && url.pathname==='/fan/leaderboard') {
       const offset=Number(url.searchParams.get('offset') || 0),week=fanWeek();
       if(!Number.isSafeInteger(offset) || offset<0 || offset>10000000)return fail('Invalid page');
+      await fanSyncResults(env);
       const board=await fanLeagueTable(db,week,offset);
       return json({leaderboard:board.rows,board_next:board.next,week});
     }
@@ -1881,6 +1889,8 @@ async function fanZone(request, env, url) {
       if (!f) return fail('Match is no longer available. Refresh the fixtures.');
       const kickoff = new Date(f.kickoff).getTime();
       if (Date.now()>=kickoff) return fail('Predictions are locked at kickoff.',409);
+      if(!fanFootballFixture(f))return fail('Predictions are available only for football matches.');
+      await db.prepare(`INSERT INTO fan_result_jobs(match_key,fixture_json) VALUES(?,?) ON CONFLICT(match_key) DO UPDATE SET fixture_json=excluded.fixture_json`).bind(b.key,JSON.stringify(f)).run();
       // The final cutoff check runs in the same statement as the write.
       const saved = await db.prepare(`INSERT INTO fan_picks(user_id,match_key,title,kickoff,home,away,market,selection) SELECT ?,?,?,?,?,?,?,? WHERE (unixepoch('now')*1000)<? ON CONFLICT(user_id,match_key) DO UPDATE SET home=excluded.home,away=excluded.away,market=excluded.market,selection=excluded.selection WHERE (unixepoch('now')*1000)<fan_picks.kickoff`).bind(id,b.key,`${f.home} vs ${f.away}`,kickoff,home,away,market,selection,kickoff).run();
       if ((saved.meta?.changes ?? saved.changes ?? 0) === 0) return fail('Predictions are locked at kickoff.',409);
@@ -2266,6 +2276,7 @@ async function fanSocial(request,env,url,user,id) {
   const db=env.DB,fail=(error,status=400)=>json({error},status),path=url.pathname;
   if(!['GET','POST'].includes(request.method))return fail('Method not allowed',405);
   if(request.method==='GET' && path==='/fan/social/profile') {
+    await fanSyncResults(env);
     const target=url.searchParams.get('id') || id;
     if(!/^[a-f0-9]{64}$/.test(target))return fail('Invalid fan');
     const profile=await db.prepare(`SELECT u.id,u.name,COALESCE(p.bio,'') AS bio,a.created_at AS joined_at,
@@ -2426,4 +2437,126 @@ async function fanLeagueTable(db,week,offset) {
     FROM members u LEFT JOIN scores s ON s.user_id=u.id GROUP BY u.id
     ORDER BY points DESC,won DESC,lost ASC,u.id ASC LIMIT 51 OFFSET ?`).bind(week,week+604800000,offset).all();
   return {rows:result.results.slice(0,50),next:result.results.length>50?offset+50:null};
+}
+
+// Final results are always verified on the server; app-supplied scores are never trusted.
+function fanFootballFixture(f) {
+  return f && typeof f.home==='string' && typeof f.away==='string' && f.home.trim() && f.away.trim() &&
+    !/ballon|award|ceremony|presentation/i.test(`${f.league || ''} ${f.home} ${f.away}`);
+}
+const FAN_RESULT_LEAGUES={
+  'premier league':'eng.1','laliga':'esp.1','la liga':'esp.1','bundesliga':'ger.1',
+  'serie a':'ita.1','ligue 1':'fra.1','eredivisie':'ned.1','primeira liga':'por.1',
+  'super lig':'tur.1','super ligue':'tur.1','championship':'eng.2',
+  'uefa champions league':'uefa.champions','champions league':'uefa.champions',
+  'uefa europa league':'uefa.europa','europa league':'uefa.europa',
+  'uefa conference league':'uefa.europa.conf','conference league':'uefa.europa.conf',
+  'saudi pro league':'ksa.1','mls':'usa.1','world cup':'fifa.world',
+};
+function fanResultName(raw) {
+  const aliases={man:'manchester',utd:'united',st:'saint',nottm:'nottingham',spurs:'tottenham',wolves:'wolverhampton'};
+  const stop=new Set(['fc','cf','afc','sc','ac','as','ssc','cd','ud','fk','sk','bk','club','the','sv']);
+  return String(raw || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(t=>t && !stop.has(t)).map(t=>aliases[t] || t).join(' ');
+}
+function fanResultScore(value) {
+  if(typeof value==='number')return Number.isInteger(value) && value>=0 && value<=50?value:null;
+  return typeof value==='string' && /^\d{1,2}$/.test(value.trim()) && Number(value)<=50?Number(value):null;
+}
+export function fanEspnFinal(f,data) {
+  if(!fanFootballFixture(f) || !Array.isArray(data?.events))return null;
+  const kickoff=new Date(f.kickoff).getTime();
+  if(!Number.isFinite(kickoff))return null;
+  const out=[];
+  for(const e of data.events) {
+    const c=e?.competitions?.[0],status=c?.status || e?.status,t=status?.type;
+    // Do not use an elapsed clock or post-state alone as proof of completion.
+    if(!c || t?.completed!==true || t.state!=='post' || !['STATUS_FULL_TIME','STATUS_FINAL'].includes(t.name) || (Number(status.period)>2))continue;
+    const at=new Date(e.date || c.date).getTime();
+    if(!Number.isFinite(at) || Math.abs(at-kickoff)>4*3600000)continue;
+    if(!Array.isArray(c.competitors))continue;
+    const h=c.competitors.find(x=>x?.homeAway==='home'),a=c.competitors.find(x=>x?.homeAway==='away');
+    if(!h || !a)continue;
+    const matches=(name,team)=>['displayName','shortDisplayName','name','location'].some(k=>fanResultName(team?.[k])===fanResultName(name));
+    const straight=matches(f.home,h.team) && matches(f.away,a.team);
+    const reverse=matches(f.home,a.team) && matches(f.away,h.team);
+    if(!straight && !reverse)continue;
+    const wanted=String(f.espnEventId || f.scoreEventId || '');
+    if(wanted && String(e.id)!==wanted)continue;
+    const home=fanResultScore(h.score),away=fanResultScore(a.score);
+    if(home===null || away===null)continue;
+    out.push({home:straight?home:away,away:straight?away:home,source:'ESPN',eventId:String(e.id || '')});
+  }
+  // Ambiguous candidates stay pending rather than attaching another game's score.
+  return out.length===1?out[0]:null;
+}
+export function fanApiFinal(f,data) {
+  const home=fanTeamId(f.homeTeamId ?? f.homeLogo),away=fanTeamId(f.awayTeamId ?? f.awayLogo);
+  if(!home || !away || !Array.isArray(data?.response) || (data.errors && Object.keys(data.errors).length))return null;
+  const found=[];
+  for(const e of data.response) {
+    if(!['FT','AET','PEN'].includes(e?.fixture?.status?.short))continue;
+    if(Math.abs(new Date(e.fixture.date).getTime()-new Date(f.kickoff).getTime())>4*3600000 || !Number.isFinite(new Date(e.fixture.date).getTime()))continue;
+    const straight=String(e.teams?.home?.id)===home && String(e.teams?.away?.id)===away;
+    const reverse=String(e.teams?.home?.id)===away && String(e.teams?.away?.id)===home;
+    if(!straight && !reverse)continue;
+    // Fulltime is the 90-minute score; never use goals/extra-time/penalty totals.
+    const h=fanResultScore(e.score?.fulltime?.home),a=fanResultScore(e.score?.fulltime?.away);
+    if(h===null || a===null)continue;
+    found.push({home:straight?h:a,away:straight?a:h,source:'API-Football',eventId:String(e.fixture.id || '')});
+  }
+  return found.length===1?found[0]:null;
+}
+async function fanResultJson(url,headers={}) {
+  const response=await fetch(url,{headers,signal:AbortSignal.timeout(4500)});
+  if(!response.ok)throw new Error('Final-score provider unavailable');
+  return response.json();
+}
+async function fanSyncResults(env) {
+  const db=env.DB,now=Date.now();
+  // Shared D1 lease bounds provider traffic across Worker isolates and all users.
+  const due=await db.prepare('SELECT match_key,MIN(kickoff) AS kickoff,MAX(title) AS title FROM fan_picks p WHERE kickoff<=? AND NOT EXISTS(SELECT 1 FROM fan_results r WHERE r.match_key=p.match_key) GROUP BY match_key LIMIT 1').bind(now-90*60000).first();
+  if(!due)return {status:'idle',checked_at:now};
+  const lease=await db.prepare(`INSERT INTO fan_result_sync(id,next_at) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET next_at=excluded.next_at WHERE fan_result_sync.next_at<=? RETURNING id`).bind(now+60000,now).first();
+  if(!lease)return {status:'waiting',message:'Final scores are checked automatically. Awaiting a verified result.'};
+  let rows=await db.prepare(`SELECT p.match_key,MIN(p.kickoff) AS kickoff,MAX(p.title) AS title,j.fixture_json,COALESCE(j.checked_at,0) AS checked_at
+    FROM fan_picks p LEFT JOIN fan_result_jobs j ON j.match_key=p.match_key
+    WHERE p.kickoff<=? AND NOT EXISTS(SELECT 1 FROM fan_results r WHERE r.match_key=p.match_key) AND COALESCE(j.checked_at,0)<=?
+    GROUP BY p.match_key ORDER BY COALESCE(j.checked_at,0) ASC,MIN(p.kickoff) DESC LIMIT 4`).bind(now-90*60000,now-300000).all();
+  if(!rows.results.length)return {status:'waiting',message:'Final scores are checked automatically. Awaiting a verified result.'};
+  let fixtures=[];
+  try{fixtures=await fanFixtures(env,2500);}catch{} // Historical picks still work after feed removal/outage.
+  const cache=new Map();let settled=0,unavailable=false;
+  const load=(url,headers)=>{if(!cache.has(url))cache.set(url,fanResultJson(url,headers).catch(()=>{unavailable=true;return null;}));return cache.get(url);};
+  await Promise.all(rows.results.map(async row=> {
+    let f;try{f=JSON.parse(row.fixture_json || 'null');}catch{}
+    const titleParts=row.title.split(' vs ');
+    const sameTitle=f=>titleParts.length===2 && fanResultName(f.home)===fanResultName(titleParts[0]) && fanResultName(f.away)===fanResultName(titleParts[1]);
+    if(f && !sameTitle(f))f=null;
+    f=f || fixtures.find(f=>fanKey(f)===row.match_key && sameTitle(f));
+    if(!f) {
+      const parts=row.title.split(' vs ');
+      if(parts.length===2)f={home:parts[0],away:parts[1],kickoff:new Date(row.kickoff).toISOString()};
+    }
+    let result=null,note='Awaiting a verified final score';
+    if(fanFootballFixture(f)) {
+      const start=new Date(row.kickoff-86400000).toISOString().slice(0,10).replaceAll('-','');
+      const end=new Date(row.kickoff+86400000).toISOString().slice(0,10).replaceAll('-','');
+      const league=/^[a-z0-9.]{1,40}$/.test(f.scoreLeague || '')?f.scoreLeague:(FAN_RESULT_LEAGUES[fanResultName(f.league)] || 'all');
+      const url=`https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/scoreboard?dates=${start}-${end}&limit=1000`;
+      result=fanEspnFinal(f,await load(url));
+      // Optional existing API-Football binding gives verified 90-minute scores after ET/penalties too.
+      const team=fanTeamId(f.homeTeamId ?? f.homeLogo);
+      if(!result && env.API_FOOTBALL_KEY && team) {
+        const day=new Date(row.kickoff).toISOString().slice(0,10);
+        result=fanApiFinal(f,await load(`https://v3.football.api-sports.io/fixtures?team=${team}&date=${day}`,{'x-apisports-key':env.API_FOOTBALL_KEY}));
+      }
+      if(result) {
+        const write=await db.prepare('INSERT OR IGNORE INTO fan_results(match_key,home,away) VALUES(?,?,?)').bind(row.match_key,result.home,result.away).run();
+        settled+=Number(write.meta?.changes ?? write.changes ?? 0);
+        note=`Verified final score (${result.source})`;
+      }
+    } else note='This event is not a football match';
+    await db.prepare(`INSERT INTO fan_result_jobs(match_key,fixture_json,checked_at,note) VALUES(?,?,?,?) ON CONFLICT(match_key) DO UPDATE SET fixture_json=excluded.fixture_json,checked_at=excluded.checked_at,note=excluded.note`).bind(row.match_key,JSON.stringify(f || {}),now,note).run();
+  }));
+  return {status:settled?'updated':unavailable?'unavailable':'waiting',settled,checked_at:now,message:settled?'Final scores updated automatically.':unavailable?'Score provider is temporarily unavailable. Results will retry automatically.':'Awaiting verified final scores. Checks run automatically.'};
 }
