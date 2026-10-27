@@ -1183,13 +1183,28 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                                 ),
                               ] else ...[
                                 const SizedBox(width: 8),
-                                Text(
-                                  'awaiting result',
-                                  style: TextStyle(fontSize: 11, color: Ui.dim),
+                                Expanded(
+                                  child: Text(
+                                    'Checking final score automatically',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Ui.dim,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ],
                           ),
+                          if (!settled &&
+                              (_data['result_sync'] as Map?)?['status'] ==
+                                  'unavailable')
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                'Score provider unavailable. Retrying automatically.',
+                                style: TextStyle(fontSize: 11, color: Ui.dim),
+                              ),
+                            ),
                         ],
                       ),
                     ),
