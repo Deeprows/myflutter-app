@@ -108,7 +108,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         final data = await FanZoneService.call(
           'ai-predict',
           body: {'key': key},
-          timeout: const Duration(seconds: 100),
+          timeout: const Duration(seconds: 120),
         );
         if (!mounted) return;
         setState(() => _results[key] = data);
@@ -138,7 +138,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     tilePadding: EdgeInsets.zero,
     title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
     subtitle: Text(
-      '${form['wins']}W · ${form['draws']}D · ${form['losses']}L | ${form['goalsFor']} scored / ${form['goalsAgainst']} conceded',
+      '${form['source'] ?? 'API-Football'} · ${form['wins']}W · ${form['draws']}D · ${form['losses']}L | ${form['goalsFor']} scored / ${form['goalsAgainst']} conceded',
     ),
     children: [
       for (final match in FanZoneService.rows(form['matches']))
@@ -174,7 +174,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Recent results: API-Football · Analysis ${_date(data['generatedAt'])}',
+          'Recent results: ${data['dataSource'] ?? 'Verified match results'} · Analysis ${_date(data['generatedAt'])}',
           style: TextStyle(color: Ui.muted, fontSize: 12),
         ),
         _form(
@@ -199,7 +199,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           onPressed: () async {
             try {
               await Share.share(
-                'Deeprowss AI Predict\n${f.title}\n\n${data['analysis']}\n\nSource: API-Football recent results. Outcomes are uncertain.',
+                'Deeprowss AI Predict\n${f.title}\n\n${data['analysis']}\n\nSource: ${data['dataSource'] ?? 'Verified recent results'}. Outcomes are uncertain.',
               );
             } catch (_) {
               if (mounted)
@@ -271,7 +271,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Select up to 3 matches. We fetch each team’s last 5 completed results and analyse form, goals and possible outcomes automatically.',
+                  'Select up to 3 matches. We fetch up to 5 recent completed results for each team and analyse form, goals and possible outcomes automatically.',
                   style: TextStyle(color: Colors.white, height: 1.5),
                 ),
               ],
