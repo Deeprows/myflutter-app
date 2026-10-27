@@ -10,8 +10,8 @@ const DB={prepare(query){let args=[];const st={bind(...a){args=a;return st;},
   async batch(list){sql.exec('BEGIN');try{const result=[];for(const s of list)result.push(await s.run());sql.exec('COMMIT');return result;}catch(e){sql.exec('ROLLBACK');throw e;}}};
 const keys=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
 const jwk=await crypto.subtle.exportKey('jwk',keys.publicKey);jwk.kid='test-google-key';
-let keyFetches=0,providerCalls=0,providerFailure=false,smallSample=false;
-const fixture={id:'auto',home:'Home FC',away:'Away FC',homeLogo:'66',awayLogo:'50',kickoff:new Date(Date.now()+3600000).toISOString()};
+let keyFetches=0,providerCalls=0,providerFailure=false,smallSample=false,providerError=null,espnEnabled=false,espnCalls=0,espnLimited=false;
+const fixture={id:'auto',home:'Home FC',away:'Away FC',homeLogo:'66',awayLogo:'50',league:'Serie A',kickoff:new Date(Date.now()+3600000).toISOString()};
 function history(id) {
   return Array.from({length:smallSample?2:5},(_,i)=>({fixture:{id:Number(id)*100+i,date:new Date(Date.now()-(i+1)*86400000).toISOString(),status:{short:i===0?'AET':'FT'}},teams:{home:{id:Number(id),name:'Team '+id},away:{id:777,name:'Opponent'}},goals:{home:3,away:1},score:{fulltime:{home:i===0?1:2,away:1}}}));
 }
@@ -20,8 +20,15 @@ globalThis.fetch=async(url)=>{
     keyFetches++;return new Response(JSON.stringify({keys:[jwk]}),{headers:{'cache-control':'public,max-age=3600'}});
   }
   if(String(url).startsWith('https://v3.football.api-sports.io/fixtures?')) {
-    providerCalls++;if(providerFailure)return new Response('{}',{status:403});
+    const q=new URL(url).searchParams;assert.equal(q.has('last'),false);assert.equal(q.has('next'),false);assert.match(q.get('season'),/^\d{4}$/);assert.match(q.get('from'),/^\d{4}-\d{2}-\d{2}$/);
+    providerCalls++;if(providerError)return new Response(JSON.stringify({errors:providerError,response:[]}));if(providerFailure)return new Response('{}',{status:403});
     return new Response(JSON.stringify({errors:[],response:history(new URL(url).searchParams.get('team'))}));
+  }
+  if(String(url).startsWith('https://site.api.espn.com/') && espnEnabled) {
+    espnCalls++;
+    if(String(url).includes('/teams?'))return new Response(JSON.stringify({sports:[{leagues:[{teams:[{team:{id:'101',displayName:'Home FC'}},{team:{id:'202',displayName:'Away FC'}}]}]}]}));
+    const id=String(url).includes('/101/')?'101':'202';
+    return new Response(JSON.stringify({events:Array.from({length:espnLimited?2:5},(_,i)=>({id:id+'-'+i,date:new Date(Date.now()-(i+1)*86400000).toISOString(),status:{period:2,type:{name:'STATUS_FULL_TIME',state:'post',completed:true}},competitions:[{competitors:[{homeAway:'home',team:{id,displayName:'Verified Club'},score:{value:2}},{homeAway:'away',team:{id:'999',displayName:'Opponent'},score:{value:1}}]}]}))}));
   }
   return new Response(JSON.stringify([fixture]));
 };
@@ -73,3 +80,22 @@ assert.equal((await call('ai-predict',{body,bearer:alice})).status,503);
 sql.exec('DELETE FROM fan_ai_limits; DELETE FROM fan_form_cache');providerFailure=false;smallSample=true;
 assert.equal((await call('ai-predict',{body,bearer:alice})).status,422);assert.equal(runs,10,'Insufficient results never invent an analysis');
 console.log('Automatic AI: verified access, binding/key setup, real server-sourced results, 90-minute scores, sample checks, cache, quotas, user-input exclusion and provider errors passed.');
+
+// Rejected provider plans use real normalized ESPN data; API-Sports IDs are not reused as ESPN IDs.
+sql.exec('DELETE FROM fan_ai_limits; DELETE FROM fan_form_cache; DELETE FROM fan_espn_form_cache; DELETE FROM fan_social_limits');
+smallSample=false;providerError={plan:'Free plan does not allow this query'};espnEnabled=true;
+env.AI={async run(model,input){runs++;const data=JSON.parse(input.messages[1].content);assert.equal(data.home.source,'ESPN');assert.equal(data.home.teamId,'espn:101');assert.equal(data.away.teamId,'espn:202');assert.equal(data.home.played,5);assert.equal(data.home.goalsFor,10);assert.equal(data.home.goalsAgainst,5);return {response:'Analysis from verified ESPN recent results.'};}};
+response=await call('ai-predict',{body,bearer:alice});assert.equal(response.status,200);let fallback=await response.json();assert.equal(fallback.dataSource,'ESPN');assert.equal(fallback.home.played,5);assert.equal(espnCalls,3,'Shared team lookup and two schedules');
+const used=espnCalls;await call('ai-predict',{body,bearer:alice});assert.equal(espnCalls,used,'ESPN forms are cached');
+// When neither source is usable, report a specific cause and do not consume model-call quota.
+for(const [errors,code] of [[{token:'Invalid key'},'provider_auth'],[{requests:'Daily quota exceeded'},'provider_quota'],[{plan:'Season unavailable with this plan'},'provider_plan']]) {
+ sql.exec('DELETE FROM fan_ai_limits; DELETE FROM fan_form_cache; DELETE FROM fan_espn_form_cache');espnEnabled=false;providerError=errors;
+ response=await call('ai-predict',{body,bearer:alice});assert.equal(response.status,503);const failure=await response.json();assert.equal(failure.code,code);assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM fan_ai_limits').get().n,0);assert.ok(!JSON.stringify(failure).includes('test-secret'));
+}
+console.log('AI provider fix: date/season queries, duplicate exclusion, ESPN fallback and caching, source attribution, actionable auth/plan/quota errors and model-quota accounting passed.');
+
+sql.exec('DELETE FROM fan_ai_limits; DELETE FROM fan_form_cache; DELETE FROM fan_espn_form_cache');
+providerError={plan:'Season not available'};espnEnabled=true;espnLimited=true;
+const before=runs;response=await call('ai-predict',{body,bearer:alice});assert.equal(response.status,422);assert.equal(runs,before,'Incomplete fallback data never generates analysis');
+assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM fan_ai_limits').get().n,0);
+console.log('Insufficient fallback results leave AI model quota untouched.');
