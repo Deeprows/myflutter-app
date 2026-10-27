@@ -87,6 +87,8 @@ export default {
       return json({ error: "method not allowed" }, 405);
     }
 
+    if(url.pathname==='/sports-news')return sportsNews(request,env,url,ctx);
+
     // Health check.
     if (url.pathname === "/" || url.pathname === "/health") {
       return json({
@@ -2559,4 +2561,77 @@ async function fanSyncResults(env) {
     await db.prepare(`INSERT INTO fan_result_jobs(match_key,fixture_json,checked_at,note) VALUES(?,?,?,?) ON CONFLICT(match_key) DO UPDATE SET fixture_json=excluded.fixture_json,checked_at=excluded.checked_at,note=excluded.note`).bind(row.match_key,JSON.stringify(f || {}),now,note).run();
   }));
   return {status:settled?'updated':unavailable?'unavailable':'waiting',settled,checked_at:now,message:settled?'Final scores updated automatically.':unavailable?'Score provider is temporarily unavailable. Results will retry automatically.':'Awaiting verified final scores. Checks run automatically.'};
+}
+
+// Publisher headlines and links only. A fixed source list prevents arbitrary URL fetching.
+const SPORTS_NEWS_CATEGORIES={all:'',football:'football/',cricket:'cricket/',f1:'formula1/'};
+const sportsNewsMemory=new WeakMap(),sportsNewsRunning=new WeakMap();
+function sportsNewsUrl(raw,hosts) {
+  try{const u=new URL(raw);if(!['https:','http:'].includes(u.protocol) || u.username || u.password)return null;
+    if(!hosts.some(h=>u.hostname===h || u.hostname.endsWith('.'+h)))return null;
+    u.protocol='https:';u.hash='';return u.toString();}catch{return null;}
+}
+function sportsNewsText(raw) {
+  let s=String(raw || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1');
+  const entities={amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",nbsp:' '};
+  for(let i=0;i<2;i++)s=s.replace(/&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi,(_,e)=>{
+    if(e[0]!=='#')return entities[e.toLowerCase()] || '';
+    const n=e[1].toLowerCase()==='x'?parseInt(e.slice(2),16):parseInt(e.slice(1),10);
+    return Number.isInteger(n) && n>0 && n<=0x10ffff && !(n>=0xd800 && n<=0xdfff)?String.fromCodePoint(n):'';
+  });
+  return s.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
+}
+export function parseSportsNewsRss(xml,source,now=Date.now()) {
+  if(typeof xml!=='string' || xml.length>550000)return [];
+  const tag=(s,name)=>{const m=new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)<\\/${name}>`,'i').exec(s);return m?.[1] || '';};
+  const articles=[];
+  for(const m of xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)) {
+    const item=m[1],title=sportsNewsText(tag(item,'title')).slice(0,260);
+    const url=sportsNewsUrl(sportsNewsText(tag(item,'link')),source.hosts);
+    const publishedAt=Date.parse(sportsNewsText(tag(item,'pubDate')));
+    if(!title || !url || !Number.isFinite(publishedAt) || publishedAt>now+300000 || publishedAt<now-7*86400000)continue;
+    const imageMatch=/<(?:media:thumbnail|media:content|enclosure)\b[^>]*\burl\s*=\s*["']([^"']+)["']/i.exec(item);
+    const image=imageMatch?sportsNewsUrl(sportsNewsText(imageMatch[1]),['ichef.bbci.co.uk','bbci.co.uk','365dm.com']):null;
+    articles.push({id:url,title,url,image,source:source.name,published_at:publishedAt});
+    if(articles.length>=100)break;
+  }
+  return articles;
+}
+async function sportsNewsRead(response) {
+  if(!response.ok || !response.body)throw new Error('News feed unavailable');
+  const reader=response.body.getReader();let size=0;const chunks=[];
+  try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>500000){await reader.cancel();throw new Error('News feed too large');}chunks.push(value);}}finally{reader.releaseLock();}
+  const bytes=new Uint8Array(size);let at=0;for(const part of chunks){bytes.set(part,at);at+=part.length;}
+  return new TextDecoder().decode(bytes);
+}
+async function sportsNews(request,env,url,ctx) {
+  if(request.method!=='GET')return json({error:'Method not allowed'},405);
+  const category=url.searchParams.get('category') || 'all';
+  if(!Object.hasOwn(SPORTS_NEWS_CATEGORIES,category))return json({error:'Choose a supported sports category'},400);
+  const now=Date.now(),cacheKey=new Request(`${url.origin}/sports-news?category=${category}`);
+  let entries=sportsNewsMemory.get(env);if(!entries){entries=new Map();sportsNewsMemory.set(env,entries);}
+  let cached=entries.get(category);
+  if(!cached && globalThis.caches?.default){try{const old=await caches.default.match(cacheKey);if(old)cached=await old.json();}catch{}}
+  if(cached && now-cached.fetched_at<300000)return json({...cached,stale:false});
+  let running=sportsNewsRunning.get(env);if(!running){running=new Map();sportsNewsRunning.set(env,running);}
+  if(running.has(category))return json(await running.get(category));
+  const task=(async()=>{
+    const sources=[{name:'BBC Sport',url:`https://feeds.bbci.co.uk/sport/${SPORTS_NEWS_CATEGORIES[category]}rss.xml`,hosts:['bbc.co.uk','bbc.com']}];
+    if(category==='all' || category==='football')sources.push({name:'Sky Sports',url:'https://www.skysports.com/rss/12040',hosts:['skysports.com']});
+    const results=await Promise.allSettled(sources.map(async source=>{
+      const response=await fetch(source.url,{headers:{accept:'application/rss+xml,application/xml,text/xml'},signal:AbortSignal.timeout(6500)});
+      return parseSportsNewsRss(await sportsNewsRead(response),source,now);
+    }));
+    const seen=new Set(),titles=new Set(),items=[],combined=[];let failed=0;
+    for(const r of results){if(r.status!=='fulfilled' || !r.value.length){failed++;continue;}combined.push(...r.value);}
+    combined.sort((a,b)=>b.published_at-a.published_at || a.id.localeCompare(b.id));
+    for(const item of combined){const key=item.title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'');if(seen.has(item.url) || titles.has(key))continue;seen.add(item.url);titles.add(key);items.push(item);}
+    if(!items.length){if(cached && now-cached.fetched_at<86400000)return {...cached,stale:true};return {category,items:[],fetched_at:now,stale:false,unavailable:true};}
+    const data={category,items:items.slice(0,80),fetched_at:now,partial:failed>0,stale:false};
+    entries.set(category,data);
+    if(globalThis.caches?.default){const save=caches.default.put(cacheKey,new Response(JSON.stringify(data),{headers:{'content-type':'application/json','cache-control':'public,max-age=86400'}})).catch(()=>{});if(ctx?.waitUntil)ctx.waitUntil(save);else await save;}
+    return data;
+  })();
+  running.set(category,task);
+  try{return json(await task);}finally{running.delete(category);}
 }
