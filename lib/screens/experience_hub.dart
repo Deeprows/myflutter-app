@@ -126,7 +126,7 @@ class _ExperienceHubState extends State<ExperienceHub> {
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
-              colors: [accent.withValues(alpha: .20), Ui.card],
+              colors: [accent.withValues(alpha: .20), const Color(0xFF101724)],
             ),
             border: Border.all(color: accent.withValues(alpha: .38)),
           ),
@@ -170,6 +170,7 @@ class _ExperienceHubState extends State<ExperienceHub> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
+                              color: Colors.white,
                               fontSize: 14.5,
                               fontWeight: FontWeight.w800,
                               height: 1.15,
@@ -181,7 +182,7 @@ class _ExperienceHubState extends State<ExperienceHub> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Ui.muted,
+                              color: Colors.white70,
                               fontSize: 11.5,
                               height: 1.15,
                             ),
@@ -207,13 +208,13 @@ class _ExperienceHubState extends State<ExperienceHub> {
     final name = AuthService.instance.user?.name.trim() ?? '';
     final first = name.isEmpty ? 'Fan' : name.split(RegExp(r'\s+')).first;
     return Scaffold(
-      backgroundColor: Ui.bg,
+      backgroundColor: const Color(0xFF070B12),
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
             image: AssetImage('assets/themes/cr7.png'),
             fit: BoxFit.cover,
-            colorFilter: ColorFilter.mode(Color(0xB3000000), BlendMode.darken),
+            colorFilter: ColorFilter.mode(Color(0xB8000000), BlendMode.srcOver),
           ),
         ),
         child: SafeArea(
@@ -243,6 +244,7 @@ class _ExperienceHubState extends State<ExperienceHub> {
                         child: Text(
                           'DEEPROWSS',
                           style: TextStyle(
+                            color: Colors.white,
                             fontSize: 20,
                             letterSpacing: 1.2,
                             fontWeight: FontWeight.w900,
@@ -255,28 +257,20 @@ class _ExperienceHubState extends State<ExperienceHub> {
                   Text(
                     'Welcome, $first',
                     style: TextStyle(
-                      color: Ui.muted,
+                      color: Colors.white70,
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Your match. Your people.',
+                    'The game brings us together.',
                     style: TextStyle(
+                      color: Colors.white,
                       fontSize: 24,
                       height: 1.15,
                       letterSpacing: -.6,
                       fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'The game brings us together. Choose where you want to go.',
-                    style: TextStyle(
-                      color: Ui.muted,
-                      fontSize: 13,
-                      height: 1.4,
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -329,7 +323,7 @@ class _ExperienceHubState extends State<ExperienceHub> {
                     child: Text(
                       'Let’s Go Deep!',
                       style: TextStyle(
-                        color: Ui.dim,
+                        color: Colors.white70,
                         fontSize: 13,
                         letterSpacing: 1,
                       ),
