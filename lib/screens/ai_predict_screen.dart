@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/safe_error_message.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/fixture.dart';
 import '../player/player_hub_screen.dart';
@@ -114,7 +115,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         setState(() => _results[key] = data);
       } catch (e) {
         if (!mounted) return;
-        var message = e.toString().replaceFirst('Exception: ', '');
+        var message = safeErrorMessage(e);
         if (message.contains('setup needed:'))
           message =
               'Automatic analysis is being configured. Please contact the administrator.';
