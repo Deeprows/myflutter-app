@@ -12,6 +12,9 @@ import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/brand_tag.dart';
 import 'fan_zone_screen.dart';
+import 'fan_profile_screen.dart';
+import 'sports_news_screen.dart';
+import '../services/auth_service.dart';
 import 'ai_predict_screen.dart';
 import 'content_shortcut_screen.dart';
 import 'highlights_screen.dart';
@@ -30,9 +33,9 @@ class ShellScreen extends StatefulWidget {
 
 class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   int _index = 0;
-  // Bottom bar order: Live, Home (feed), Predict, Ranks, AI. The numbers are
-  // positions in the IndexedStack, kept so push-notification tabs still work.
-  static const _order = [0, 3, 1, 2, 4];
+  // Bottom bar order: Live, Home, Predict, Ranks, AI Predict, Profile.
+  // Search is an action that opens the sports news/search page.
+  static const _order = [0, 3, 1, 2, 4, 5];
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   DateTime? _lastBack;
   Timer? _autoRefresh;
@@ -179,6 +182,10 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                 ),
                 FanZoneScreen(active: _index == 3, page: FanZonePage.banter),
                 AiPredictScreen(active: _index == 4),
+                FanProfileScreen(
+                  key: ValueKey('profile-${AuthService.instance.user?.id ?? ''}'),
+                  userId: AuthService.instance.user?.id ?? '',
+                ),
               ],
             ),
             // Small brand mark on Live.
@@ -203,8 +210,17 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                 selectedIndex: _order.contains(_index)
                     ? _order.indexOf(_index)
                     : 0,
-                onDestinationSelected: (i) =>
-                    setState(() => _index = _order[i]),
+                onDestinationSelected: (i) {
+                  if (i == 6) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const SportsNewsScreen(),
+                      ),
+                    );
+                    return;
+                  }
+                  setState(() => _index = _order[i]);
+                },
                 destinations: [
                   NavigationDestination(
                     icon: const Icon(Icons.sensors_rounded),
@@ -229,6 +245,16 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     icon: const Icon(Icons.auto_awesome_outlined),
                     selectedIcon: const Icon(Icons.auto_awesome_rounded),
                     label: 'AI Predict'.tr,
+                  ),
+                  NavigationDestination(
+                    icon: const Icon(Icons.person_outline_rounded),
+                    selectedIcon: const Icon(Icons.person_rounded),
+                    label: 'Profile'.tr,
+                  ),
+                  NavigationDestination(
+                    icon: const Icon(Icons.search_rounded),
+                    selectedIcon: const Icon(Icons.search_rounded),
+                    label: 'Search'.tr,
                   ),
                 ],
               ),
