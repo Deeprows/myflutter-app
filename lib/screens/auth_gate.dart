@@ -6,7 +6,7 @@ import '../services/auth_service.dart';
 import '../services/ad_scheduler.dart';
 import '../theme/app_theme.dart';
 import 'auth_screen.dart';
-import 'experience_hub.dart';
+import 'shell_screen.dart';
 
 /// Signed-in users choose the live-football or community experience.
 class AuthGate extends StatefulWidget {
@@ -71,9 +71,10 @@ class _AuthGateState extends State<AuthGate> {
     if (!auth.signedIn) {
       return const AuthScreen();
     }
+    // Skip the separate Experience page and open the main app directly.
     return KeyedSubtree(
       key: ValueKey(auth.user!.id),
-      child: const ExperienceHub(),
+      child: const ShellScreen(),
     );
   }
 }
