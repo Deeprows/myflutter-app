@@ -2561,7 +2561,16 @@ async function fanSyncResults(env) {
       const end=new Date(row.kickoff+86400000).toISOString().slice(0,10).replaceAll('-','');
       const league=/^[a-z0-9.]{1,40}$/.test(f.scoreLeague || '')?f.scoreLeague:(FAN_RESULT_LEAGUES[fanResultName(f.league)] || 'all');
       const url=`https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/scoreboard?dates=${start}-${end}&limit=1000`;
-      result=fanEspnFinal(f,await load(url));
+      const leagueData=await load(url);
+      result=fanEspnFinal(f,leagueData);
+      // Some cups and lower divisions are not exposed by their expected ESPN
+      // league slug. Retry the same date against ESPN's all-soccer scoreboard
+      // before leaving a completed match pending. fanEspnFinal still requires
+      // a unique team/date match and a confirmed full-time score.
+      if(!result && league!=='all') {
+        const allUrl=`https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates=${start}-${end}&limit=1000`;
+        result=fanEspnFinal(f,await load(allUrl));
+      }
       // Optional existing API-Football binding gives verified 90-minute scores after ET/penalties too.
       const team=fanTeamId(f.homeTeamId ?? f.homeLogo);
       if(!result && env.API_FOOTBALL_KEY && team) {
