@@ -2188,7 +2188,7 @@ async function fanAiPredict(request,env,id) {
   if(!fixture)return fail('This match is no longer listed. Refresh matches.',404);
   const kickoff=new Date(fixture.kickoff).getTime();
   if(kickoff<=Date.now())return fail('Choose a match that has not started.');
-  const homeId=fanTeamId(fixture.homeTeamId ?? fixture.homeLogo),awayId=fanTeamId(fixture.awayTeamId ?? fixture.awayLogo);
+  const homeId=fanVerifiedTeamId(fixture.homeTeamId ?? fixture.homeLogo,fixture.home),awayId=fanVerifiedTeamId(fixture.awayTeamId ?? fixture.awayLogo,fixture.away);
   if(!homeId || !awayId || homeId===awayId)return fail('Verified API-Football team IDs are missing for this fixture. Ask the administrator to update it.',422);
   if(!await fanSocialBudget(env.DB,id,'ai-attempt',30))return fail('Analysis request limit reached. Retry after the next UTC hour.',429);
   let timeout;
@@ -2224,6 +2224,24 @@ function fanTeamId(raw) {
   if(/^[1-9]\d{0,7}$/.test(value))return value;
   const match=/^https:\/\/media\.api-sports\.io\/football\/teams\/([1-9]\d{0,7})\.png$/.exec(value);
   return match?.[1] ?? null;
+}
+// Verified API-Football team IDs for commonly listed clubs. Use only when the
+// fixture does not already provide a numeric ID or an API-Football team-logo URL.
+function fanVerifiedTeamId(raw,name) {
+  const supplied=fanTeamId(raw);
+  if(supplied)return supplied;
+  const key=String(name ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const ids={
+    'liverpool':'40','liverpool fc':'40','chelsea':'49','chelsea fc':'49',
+    'afc bournemouth':'35','bournemouth':'35','aston villa':'66','fulham':'36',
+    'crystal palace':'52','sunderland':'746','brentford':'55',
+    'arsenal':'42','manchester city':'50','manchester united':'33','tottenham':'47',
+    'newcastle united':'34','everton':'45','west ham':'48','brighton':'51',
+    'genoa':'107','juventus':'496','monza':'1579','napoli':'492',
+    'as roma':'497','roma':'497','cagliari':'490','torino':'503','como 1907':'895',
+    'paris saint germain':'85','psg':'85','lyon':'80'
+  };
+  return ids[key] ?? null;
 }
 async function fanRecentForm(env,teamId,kickoff) {
   const now=Date.now();
@@ -2525,7 +2543,7 @@ export function fanEspnFinal(f,data) {
   return out.length===1?out[0]:null;
 }
 export function fanApiFinal(f,data) {
-  const home=fanTeamId(f.homeTeamId ?? f.homeLogo),away=fanTeamId(f.awayTeamId ?? f.awayLogo);
+  const home=fanVerifiedTeamId(f.homeTeamId ?? f.homeLogo,f.home),away=fanVerifiedTeamId(f.awayTeamId ?? f.awayLogo,f.away);
   if(!home || !away || !Array.isArray(data?.response) || (data.errors && Object.keys(data.errors).length))return null;
   const found=[];
   for(const e of data.response) {
@@ -2589,7 +2607,7 @@ async function fanSyncResults(env) {
         result=fanEspnFinal(f,await load(allUrl));
       }
       // Optional existing API-Football binding gives verified 90-minute scores after ET/penalties too.
-      const team=fanTeamId(f.homeTeamId ?? f.homeLogo);
+      const team=fanVerifiedTeamId(f.homeTeamId ?? f.homeLogo,f.home);
       if(!result && env.API_FOOTBALL_KEY && team) {
         const day=new Date(row.kickoff).toISOString().slice(0,10);
         result=fanApiFinal(f,await load(`https://v3.football.api-sports.io/fixtures?team=${team}&date=${day}`,{'x-apisports-key':env.API_FOOTBALL_KEY}));
