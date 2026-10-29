@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import '../utils/safe_error_message.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -44,7 +45,7 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
         });
     } catch (e) {
       if (mounted)
-        setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+        setState(() => _error = safeErrorMessage(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -53,7 +54,7 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
   void _notice(Object e) {
     if (mounted)
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(content: Text(safeErrorMessage(e))),
       );
   }
 
@@ -562,7 +563,7 @@ class _EditFanProfileState extends State<_EditFanProfile> {
       });
     } catch (e) {
       if (mounted) {
-        setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+        setState(() => _error = safeErrorMessage(e));
       }
     } finally {
       if (mounted) setState(() => _picking = false);
@@ -598,7 +599,7 @@ class _EditFanProfileState extends State<_EditFanProfile> {
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
-        setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+        setState(() => _error = safeErrorMessage(e));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -871,7 +872,7 @@ class _FanPeopleScreenState extends State<FanPeopleScreen> {
       });
     } catch (e) {
       if (mounted)
-        setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+        setState(() => _error = safeErrorMessage(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
