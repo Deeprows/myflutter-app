@@ -51,13 +51,32 @@ class _MatchChatState extends State<MatchChat> {
         _identityFailed = false;
       });
     try {
-      final name = AuthService.instance.signedIn
-          ? '${(await FanZoneService.call('social/profile'))['profile']['name']}'
-          : await Settings.chatName();
+      var name = '';
+      if (AuthService.instance.signedIn) {
+        final user = AuthService.instance.user;
+        name = (user?.name ?? '').trim();
+        if (name.isEmpty) {
+          final email = (user?.email ?? '').trim();
+          if (email.contains('@')) name = email.split('@').first;
+        }
+        // Profile API enriches the name, but must not block commenting when
+        // that endpoint is temporarily unavailable.
+        try {
+          final response = await FanZoneService.call('social/profile');
+          final profile = response['profile'];
+          if (profile is Map) {
+            final remoteName = '${profile['name'] ?? ''}'.trim();
+            if (remoteName.isNotEmpty) name = remoteName;
+          }
+        } catch (_) {}
+      } else {
+        name = (await Settings.chatName()).trim();
+      }
       if (mounted)
         setState(() {
           _username = name;
           _ready = true;
+          _identityFailed = false;
         });
     } catch (_) {
       if (mounted)
