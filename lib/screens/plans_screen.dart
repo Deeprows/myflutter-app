@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../utils/safe_error_message.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -143,7 +144,7 @@ class _PlansScreenState extends State<PlansScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+        setState(() => _error = safeErrorMessage(e));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
