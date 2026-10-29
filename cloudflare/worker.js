@@ -2189,7 +2189,7 @@ async function fanAiPredict(request,env,id) {
   const kickoff=new Date(fixture.kickoff).getTime();
   if(kickoff<=Date.now())return fail('Choose a match that has not started.');
   const homeId=fanVerifiedTeamId(fixture.homeTeamId ?? fixture.homeLogo,fixture.home),awayId=fanVerifiedTeamId(fixture.awayTeamId ?? fixture.awayLogo,fixture.away);
-  if(!homeId || !awayId || homeId===awayId)return fail('Verified API-Football team IDs are missing for this fixture. Ask the administrator to update it.',422);
+  if(homeId && awayId && homeId===awayId)return fail('The fixture has conflicting team IDs. Refresh the match list or contact the administrator.',422);
   if(!await fanSocialBudget(env.DB,id,'ai-attempt',30))return fail('Analysis request limit reached. Retry after the next UTC hour.',429);
   let timeout;
   try {
@@ -2758,6 +2758,12 @@ async function fanEspnRecentForm(env,fixture,name,kickoff) {
 }
 async function fanAnalysisForm(env,fixture,teamId,name,kickoff) {
   let original;
+  // Missing API-Football IDs should not block analysis: resolve the club through
+  // the fixture's verified ESPN league and team directory instead of querying team=null.
+  if(!teamId) {
+    try { return await fanEspnRecentForm(env,fixture,name,kickoff); }
+    catch(e) { throw e instanceof FanFormError ? e : new FanFormError('Recent-results source could not be reached.'); }
+  }
   try{const form=await fanRecentForm(env,teamId,kickoff);if(form.matches.length>=3)return form;original=new FanFormError('Not enough recent results are available for this club.','insufficient_results');}
   catch(e){original=e instanceof FanFormError?e:new FanFormError('Recent-results source could not be reached.');}
   try{return await fanEspnRecentForm(env,fixture,name,kickoff);}catch(e){
