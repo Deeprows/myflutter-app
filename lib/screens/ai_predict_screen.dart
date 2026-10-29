@@ -135,86 +135,468 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     return '${d.day}/${d.month}/${d.year}';
   }
 
-  Widget _form(String title, Map<String, dynamic> form) => ExpansionTile(
-    tilePadding: EdgeInsets.zero,
-    title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-    subtitle: Text(
-      '${form['source'] ?? 'API-Football'} · ${form['wins']}W · ${form['draws']}D · ${form['losses']}L | ${form['goalsFor']} scored / ${form['goalsAgainst']} conceded',
-    ),
+  static const _maxPicks = 3;
+
+  Color _resultColor(String r) => r == 'W'
+      ? Ui.green
+      : r == 'L'
+      ? const Color(0xFFEF5350)
+      : const Color(0xFFFFB300);
+
+  Widget _formDots(Map<String, dynamic> form) => Row(
+    mainAxisSize: MainAxisSize.min,
     children: [
-      for (final match in FanZoneService.rows(form['matches']))
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: CircleAvatar(
-            radius: 17,
-            backgroundColor: match['result'] == 'W'
-                ? Ui.green.withValues(alpha: .2)
-                : Ui.card,
-            child: Text('${match['result']}'),
+      for (final m in FanZoneService.rows(form['matches']))
+        Container(
+          width: 20,
+          height: 20,
+          margin: const EdgeInsets.only(right: 4),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _resultColor('${m['result']}').withValues(alpha: .2),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: _resultColor('${m['result']}').withValues(alpha: .6),
+            ),
           ),
-          title: Text(
-            '${match['opponent']}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          child: Text(
+            '${m['result']}',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              color: _resultColor('${m['result']}'),
+            ),
           ),
-          subtitle: Text('${_date(match['date'])} · ${match['venue']}'),
-          trailing: Text('${match['goalsFor']}–${match['goalsAgainst']}'),
         ),
     ],
   );
+
+  Widget _stat(String label, Object? value) => Expanded(
+    child: Column(
+      children: [
+        Text(
+          '$value',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+        ),
+        Text(label, style: TextStyle(fontSize: 10, color: Ui.muted)),
+      ],
+    ),
+  );
+
+  Widget _form(String logo, String title, Map<String, dynamic> form) =>
+      Container(
+        margin: const EdgeInsets.only(top: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .04),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Ui.line),
+        ),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+            childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            leading: TeamCrest(logo: logo, size: 34),
+            title: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _formDots(form),
+              ),
+            ),
+            children: [
+              Row(
+                children: [
+                  _stat('Won', form['wins']),
+                  _stat('Drawn', form['draws']),
+                  _stat('Lost', form['losses']),
+                  _stat('Scored', form['goalsFor']),
+                  _stat('Conceded', form['goalsAgainst']),
+                ],
+              ),
+              const SizedBox(height: 6),
+              for (final match in FanZoneService.rows(form['matches']))
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _resultColor(
+                            '${match['result']}',
+                          ).withValues(alpha: .2),
+                        ),
+                        child: Text(
+                          '${match['result']}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: _resultColor('${match['result']}'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${match['opponent']}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                            Text(
+                              '${_date(match['date'])} · ${match['venue']}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 11, color: Ui.muted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        '${match['goalsFor']}–${match['goalsAgainst']}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+
   Widget _result(Fixture f, Map<String, dynamic> data) => Container(
-    margin: const EdgeInsets.only(top: 16),
-    padding: const EdgeInsets.all(18),
-    decoration: fanBox(radius: 20),
+    margin: const EdgeInsets.only(top: 14),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: const Color(0xFF713DDA).withValues(alpha: .45)),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [const Color(0xFF713DDA).withValues(alpha: .22), Ui.card],
+      ),
+    ),
+    padding: const EdgeInsets.all(14),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          f.title,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+        Row(
+          children: [
+            TeamCrest(logo: f.homeLogo, size: 34),
+            const SizedBox(width: 4),
+            TeamCrest(logo: f.awayLogo, size: 34),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                f.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  height: 1.15,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Text(
-          'Recent results: ${data['dataSource'] ?? 'Verified match results'} · Analysis ${_date(data['generatedAt'])}',
-          style: TextStyle(color: Ui.muted, fontSize: 12),
+          '${data['dataSource'] ?? 'Verified match results'} · ${_date(data['generatedAt'])}',
+          style: TextStyle(color: Ui.muted, fontSize: 11),
         ),
         _form(
+          f.homeLogo,
           '${f.home} · last ${data['home']['played']}',
           Map<String, dynamic>.from(data['home'] as Map),
         ),
         _form(
+          f.awayLogo,
           '${f.away} · last ${data['away']['played']}',
           Map<String, dynamic>.from(data['away'] as Map),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            const Icon(
+              Icons.auto_awesome_rounded,
+              size: 16,
+              color: Color(0xFFB39DFF),
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              'AI ANALYSIS',
+              style: TextStyle(
+                fontSize: 11,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFFB39DFF),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
         SelectableText(
           '${data['analysis']}',
-          style: const TextStyle(height: 1.6),
+          style: const TextStyle(height: 1.55, fontSize: 14),
         ),
         const SizedBox(height: 10),
         Text(
           'Historical form is a limited sample, not a guaranteed outcome. Injuries, lineups and odds are not included.',
-          style: TextStyle(color: Ui.muted, fontSize: 12),
+          style: TextStyle(color: Ui.muted, fontSize: 11),
         ),
-        TextButton.icon(
-          onPressed: () async {
-            try {
-              await Share.share(
-                'Deeprowss AI Predict\n${f.title}\n\n${data['analysis']}\n\nSource: ${data['dataSource'] ?? 'Verified recent results'}. Outcomes are uncertain.',
-              );
-            } catch (_) {
-              if (mounted)
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Could not open sharing.')),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () async {
+              try {
+                await Share.share(
+                  'Deeprowss AI Predict\n${f.title}\n\n${data['analysis']}\n\nSource: ${data['dataSource'] ?? 'Verified recent results'}. Outcomes are uncertain.',
                 );
-            }
-          },
-          icon: const Icon(Icons.ios_share_rounded),
-          label: const Text('Share analysis'),
+              } catch (_) {
+                if (mounted)
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Could not open sharing.')),
+                  );
+              }
+            },
+            icon: const Icon(Icons.ios_share_rounded, size: 18),
+            label: const Text('Share analysis'),
+          ),
         ),
       ],
     ),
   );
+
+  Widget _hero() => Container(
+    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(20),
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF713DDA), Color(0xFF007FAD)],
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF713DDA).withValues(alpha: .28),
+          blurRadius: 20,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withValues(alpha: .18),
+          ),
+          child: const Icon(
+            Icons.auto_awesome_rounded,
+            color: Colors.white,
+            size: 24,
+          ),
+        ),
+        const SizedBox(width: 14),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'You choose. AI analyses.',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Pick up to 3 matches. We study the last 5 results of each team: form, goals and likely outcomes.',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12.5,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _matchTile(Fixture f) {
+    final key = FanZoneService.matchKey(f);
+    final on = _selected.contains(key);
+    const accent = Color(0xFF8E6BFF);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: _busy ? null : () => _select(f, !on),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: on ? accent.withValues(alpha: .14) : Ui.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: on ? accent.withValues(alpha: .8) : Ui.line,
+                width: on ? 1.4 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                TeamCrest(logo: f.homeLogo, size: 36),
+                const SizedBox(width: 4),
+                TeamCrest(logo: f.awayLogo, size: 36),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        f.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14.5,
+                          height: 1.15,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        f.league.isEmpty ? 'Football' : f.league,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: Ui.muted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.schedule_rounded, size: 12, color: Ui.dim),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${fanClock(f.kickoff)} · ${_date(f.kickoff.toIso8601String())}',
+                            style: TextStyle(fontSize: 11.5, color: Ui.dim),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: on ? accent : Colors.transparent,
+                    border: Border.all(
+                      color: on ? accent : Ui.dim,
+                      width: 1.6,
+                    ),
+                  ),
+                  child: on
+                      ? const Icon(
+                          Icons.check_rounded,
+                          size: 17,
+                          color: Colors.white,
+                        )
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _actionBar() {
+    final n = _selected.length;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      decoration: BoxDecoration(
+        color: Ui.bg,
+        border: Border(top: BorderSide(color: Ui.line)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_busy)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  minHeight: 4,
+                  value: _total == 0 ? null : (_done / _total).clamp(0.0, 1.0),
+                ),
+              ),
+            ),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF7C4DFF),
+                disabledBackgroundColor: Ui.card,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              onPressed: _busy || n == 0 ? null : _analyse,
+              icon: const Icon(Icons.auto_awesome_rounded, size: 20),
+              label: Text(
+                _busy
+                    ? 'Analysing… $_done/$_total'
+                    : n == 0
+                    ? 'Select matches to analyse'
+                    : 'Analyse $n match${n == 1 ? '' : 'es'}',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Colors.transparent,
@@ -243,91 +625,87 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         ),
       ],
     ),
-    body: RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF713DDA), Color(0xFF007FAD)],
-              ),
-            ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    body: Column(
+      children: [
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _load,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               children: [
-                Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 32),
-                SizedBox(height: 10),
-                Text(
-                  'You choose. AI analyses.',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
+                _hero(),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Text(
+                      'UPCOMING MATCHES',
+                      style: TextStyle(
+                        fontSize: 11,
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFB39DFF),
+                      ),
+                    ),
+                    const Spacer(),
+                    FanPill(
+                      text: '${_selected.length}/$_maxPicks selected',
+                      color: _selected.isEmpty
+                          ? Ui.muted
+                          : const Color(0xFF8E6BFF),
+                      icon: Icons.check_circle_outline_rounded,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (_loading && _fixtures.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: LinearProgressIndicator(),
+                  )
+                else if (_loading)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 10),
+                    child: LinearProgressIndicator(),
                   ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Select up to 3 matches. We fetch up to 5 recent completed results for each team and analyse form, goals and possible outcomes automatically.',
-                  style: TextStyle(color: Colors.white, height: 1.5),
-                ),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(_error!),
+                  ),
+                if (!_loading && _fixtures.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text(
+                        'No upcoming matches yet. Pull down to refresh.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                for (final f in _fixtures) _matchTile(f),
+                for (final f in _fixtures.where(
+                  (f) => _selected.contains(FanZoneService.matchKey(f)),
+                )) ...[
+                  if (_failures.containsKey(FanZoneService.matchKey(f)))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Text(
+                        '${f.title}: ${_failures[FanZoneService.matchKey(f)]}',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  if (_results.containsKey(FanZoneService.matchKey(f)))
+                    _result(f, _results[FanZoneService.matchKey(f)]!),
+                ],
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          if (_loading) const LinearProgressIndicator(),
-          if (_error != null) Text(_error!),
-          if (!_loading && _fixtures.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Text('No upcoming matches yet. Pull down to refresh.'),
-            ),
-          for (final f in _fixtures)
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: Text(f.title),
-              subtitle: Text(
-                '${f.league} · ${fanClock(f.kickoff)} · ${_date(f.kickoff.toIso8601String())}',
-              ),
-              value: _selected.contains(FanZoneService.matchKey(f)),
-              onChanged: _busy ? null : (v) => _select(f, v ?? false),
-            ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: _busy || _selected.isEmpty ? null : _analyse,
-            icon: const Icon(Icons.auto_awesome_rounded),
-            label: Text(
-              _busy
-                  ? 'Fetching results & analysing… $_done/$_total'
-                  : 'Analyse ${_selected.length} selected match${_selected.length == 1 ? '' : 'es'}',
-            ),
-          ),
-          if (_busy)
-            const Padding(
-              padding: EdgeInsets.only(top: 12),
-              child: LinearProgressIndicator(),
-            ),
-          for (final f in _fixtures.where(
-            (f) => _selected.contains(FanZoneService.matchKey(f)),
-          )) ...[
-            if (_failures.containsKey(FanZoneService.matchKey(f)))
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  '${f.title}: ${_failures[FanZoneService.matchKey(f)]}',
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
-            if (_results.containsKey(FanZoneService.matchKey(f)))
-              _result(f, _results[FanZoneService.matchKey(f)]!),
-          ],
-        ],
-      ),
+        ),
+        _actionBar(),
+      ],
     ),
   );
 }
