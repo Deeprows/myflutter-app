@@ -201,12 +201,24 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
               decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: Ui.line)),
               ),
-              child: NavigationBar(
-                height: 62,
+              child: NavigationBarTheme(
+                data: NavigationBarThemeData(
+                  labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>(
+                    (states) => TextStyle(
+                      fontSize: 10,
+                      height: 1.0,
+                      fontWeight: states.contains(WidgetState.selected)
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                child: NavigationBar(
+                height: 72,
                 backgroundColor: Ui.bg,
                 indicatorColor: Colors.transparent,
                 labelBehavior:
-                    NavigationDestinationLabelBehavior.onlyShowSelected,
+                    NavigationDestinationLabelBehavior.alwaysShow,
                 selectedIndex: _order.contains(_index)
                     ? _order.indexOf(_index)
                     : 0,
@@ -257,6 +269,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     label: 'Search'.tr,
                   ),
                 ],
+                ),
               ),
             ),
           ],
