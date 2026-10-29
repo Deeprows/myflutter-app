@@ -8,8 +8,9 @@ import '../models/fixture.dart';
 import '../services/content_sync.dart';
 import '../services/fan_zone_service.dart';
 import '../services/feed_service.dart';
+import '../services/remote_config.dart';
+import 'player_screen.dart';
 import '../theme/app_theme.dart';
-import '../utils/safe_error_message.dart';
 import 'fan_posts_feed.dart';
 import 'fan_profile_screen.dart';
 import 'fan_widgets.dart';
@@ -19,7 +20,7 @@ import 'tv_screen.dart';
 import 'content_shortcut_screen.dart';
 import 'sports_news_screen.dart';
 
-String _error(Object e) => safeErrorMessage(e);
+String _error(Object e) => e.toString().replaceFirst('Exception: ', '');
 
 enum FanZonePage { predict, ranks, banter }
 
@@ -212,6 +213,21 @@ class _FanZoneScreenState extends State<FanZoneScreen>
           name: _name,
           myId: _myId,
           onJoin: _profile,
+        ),
+      ),
+    );
+  }
+
+  void _openPredictionMatch(Fixture f) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PlayerScreen(
+          title: f.title,
+          subtitle: '${f.league.isEmpty ? 'Football' : f.league} • ${fanClock(f.kickoff)}',
+          url: f.url,
+          altUrl: f.hasAlt ? f.altUrl : null,
+          isLive: f.phaseAt(DateTime.now()) == MatchPhase.live,
+          chatMatch: f.title,
         ),
       ),
     );
@@ -1065,7 +1081,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                       ),
                     IconButton.outlined(
                       tooltip: 'Match chat',
-                      onPressed: () => _discussion(key, f.title),
+                      onPressed: () => _openPredictionMatch(f),
                       icon: const Icon(
                         Icons.chat_bubble_outline_rounded,
                         size: 18,
@@ -1138,7 +1154,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
           IconButton(
             tooltip: 'Match chat',
             visualDensity: VisualDensity.compact,
-            onPressed: () => _discussion(key, f.title),
+            onPressed: () => _openPredictionMatch(f),
             icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
           ),
         ],
