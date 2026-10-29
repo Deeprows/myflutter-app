@@ -648,9 +648,9 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   Widget _portraitBody(Widget video) {
     final s = _stream;
-    // Live chat can be switched off in app_config.json (chat.enabled).
-    final match =
-        widget.chatMatch != null && RemoteConfig.instance.chatEnabled;
+    // Match prediction cards explicitly pass chatMatch. Keep comments available
+    // on that match page even if a stale remote config disables global chat.
+    final match = widget.chatMatch != null;
     return SafeArea(
       child: Column(
         children: [
