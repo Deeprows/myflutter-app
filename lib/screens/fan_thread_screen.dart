@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/safe_error_message.dart';
 import '../services/fan_zone_service.dart';
 import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
@@ -37,7 +38,7 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
   void _notice(Object e) {
     if (mounted)
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(content: Text(safeErrorMessage(e))),
       );
   }
 
@@ -71,7 +72,7 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
     } catch (e) {
       if (mounted)
         setState(() {
-          _error = e.toString().replaceFirst('Exception: ', '');
+          _error = safeErrorMessage(e);
           if (!more) {
             _post = null;
             _comments = [];
