@@ -22,6 +22,26 @@ class _FanPostVideoState extends State<FanPostVideo>
   WebViewController? _controller;
   bool _loading = false, _failed = false;
   String get _url => fanVideoUrl(widget.url);
+
+  String? get _youtubeThumbnail {
+    final uri = Uri.tryParse(_url);
+    if (uri == null) return null;
+    final host = uri.host.toLowerCase();
+    if (!host.contains('youtube.com') && host != 'youtu.be') return null;
+    String? id;
+    if (host == 'youtu.be' && uri.pathSegments.isNotEmpty) {
+      id = uri.pathSegments.first;
+    } else if (uri.pathSegments.length > 1 &&
+        ['embed', 'shorts', 'live'].contains(uri.pathSegments.first)) {
+      id = uri.pathSegments[1];
+    } else {
+      id = uri.queryParameters['v'];
+    }
+    if (id == null || !RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(id)) {
+      return null;
+    }
+    return 'https://img.youtube.com/vi/$id/hqdefault.jpg';
+  }
   @override
   void initState() {
     super.initState();
@@ -148,36 +168,43 @@ class _FanPostVideoState extends State<FanPostVideo>
                 )
               : InkWell(
                   onTap: _play,
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.play_circle_fill_rounded,
-                          size: 56,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _failed
-                              ? 'Retry video'
-                              : widget.inline
-                              ? 'Play video'
-                              : 'Open video',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    alignment: Alignment.center,
+                    children: [
+                      if (_youtubeThumbnail != null)
+                        Image.network(
+                          _youtubeThumbnail!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const ColoredBox(
+                            color: Color(0xFF171A20),
                           ),
+                        )
+                      else
+                        const ColoredBox(color: Color(0xFF171A20)),
+                      const ColoredBox(color: Color(0x55000000)),
+                      Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.play_circle_fill_rounded,
+                              size: 58,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _failed ? 'Retry video' : 'Play video',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                shadows: [Shadow(blurRadius: 5, color: Colors.black)],
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          Uri.parse(widget.url).host,
-                          style: const TextStyle(
-                            color: Colors.white60,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
         ),
