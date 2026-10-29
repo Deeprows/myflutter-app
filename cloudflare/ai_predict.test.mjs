@@ -55,9 +55,11 @@ env.API_FOOTBALL_KEY='test-secret';env.AI={async run(model,input){
  runs++;assert.equal(model,'@cf/meta/llama-3.1-8b-instruct-fp8');
  const data=JSON.parse(input.messages[1].content);
  assert.equal(data.home.played,5);assert.equal(data.away.played,5);
- assert.equal(data.home.matches[0].goalsFor,1,'AET uses 90-minute score');
- assert.equal(data.home.matches[0].result,'D');
- assert.equal(data.home.goalsFor,9);assert.equal(data.home.goalsAgainst,5);
+ if(data.home.source==='API-Football') {
+  assert.equal(data.home.matches[0].goalsFor,1,'AET uses 90-minute score');
+  assert.equal(data.home.matches[0].result,'D');
+  assert.equal(data.home.goalsFor,9);assert.equal(data.home.goalsAgainst,5);
+ }
  assert.equal('userProvidedStats' in data,false);assert.equal(JSON.stringify(data).includes('invented-user-data'),false);
  return {response:'Home lean based on the fetched recent results; uncertain outcome.'};
 }};
@@ -67,11 +69,15 @@ assert.equal((await call('ai-predict',{body,bearer:alice,e:{...env,AI:undefined}
 assert.equal((await call('ai-predict',{body,bearer:alice,e:{...env,API_FOOTBALL_KEY:undefined}})).status,503);
 assert.equal((await call('ai-predict',{bearer:alice})).status,405);
 assert.equal((await call('ai-predict',{body:{key:'missing'},bearer:alice})).status,404);
-const savedLogo=fixture.homeLogo;fixture.homeLogo='';assert.equal((await call('ai-predict',{body,bearer:alice})).status,422);fixture.homeLogo=savedLogo;
 let response=await call('ai-predict',{body:{...body,stats:'invented-user-data'},bearer:alice});assert.equal(response.status,200);
 const result=await response.json();assert.match(result.dataSource,/API-Football/);assert.equal(result.home.matches.length,5);assert.equal(JSON.stringify(result).includes('test-secret'),false);
 assert.equal(providerCalls,2);
-for(let i=1;i<10;i++)assert.equal((await call('ai-predict',{body,bearer:alice})).status,200);
+// A missing API-Football team ID should fall back to ESPN rather than block analysis.
+const savedLogo=fixture.homeLogo;fixture.homeLogo='';espnEnabled=true;
+response=await call('ai-predict',{body,bearer:alice});assert.equal(response.status,200);
+const missingId=await response.json();assert.match(missingId.home.teamId,/^espn:/);assert.match(missingId.dataSource,/ESPN/);
+fixture.homeLogo=savedLogo;espnEnabled=false;
+for(let i=2;i<10;i++)assert.equal((await call('ai-predict',{body,bearer:alice})).status,200);
 assert.equal(providerCalls,2,'Server cache reuses recent results');
 assert.equal((await call('ai-predict',{body,bearer:alice})).status,429);assert.equal(runs,10);
 assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM fan_picks').get().n,0,'AI does not submit user picks');
@@ -83,7 +89,7 @@ console.log('Automatic AI: verified access, binding/key setup, real server-sourc
 
 // Rejected provider plans use real normalized ESPN data; API-Sports IDs are not reused as ESPN IDs.
 sql.exec('DELETE FROM fan_ai_limits; DELETE FROM fan_form_cache; DELETE FROM fan_espn_form_cache; DELETE FROM fan_social_limits');
-smallSample=false;providerError={plan:'Free plan does not allow this query'};espnEnabled=true;
+espnCalls=0;smallSample=false;providerError={plan:'Free plan does not allow this query'};espnEnabled=true;
 env.AI={async run(model,input){runs++;const data=JSON.parse(input.messages[1].content);assert.equal(data.home.source,'ESPN');assert.equal(data.home.teamId,'espn:101');assert.equal(data.away.teamId,'espn:202');assert.equal(data.home.played,5);assert.equal(data.home.goalsFor,10);assert.equal(data.home.goalsAgainst,5);return {response:'Analysis from verified ESPN recent results.'};}};
 response=await call('ai-predict',{body,bearer:alice});assert.equal(response.status,200);let fallback=await response.json();assert.equal(fallback.dataSource,'ESPN');assert.equal(fallback.home.played,5);assert.equal(espnCalls,3,'Shared team lookup and two schedules');
 const used=espnCalls;await call('ai-predict',{body,bearer:alice});assert.equal(espnCalls,used,'ESPN forms are cached');
