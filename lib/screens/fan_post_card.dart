@@ -1,4 +1,5 @@
 import '../widgets/fan_match_link.dart';
+import '../utils/safe_error_message.dart';
 import '../widgets/fan_post_video.dart';
 import '../models/fan_post_link.dart';
 import 'package:flutter/material.dart';
@@ -83,7 +84,7 @@ class _FanPostCardState extends State<FanPostCard> {
         });
       if (mounted) widget.onChanged?.call();
     } catch (e) {
-      _notice(e.toString().replaceFirst('Exception: ', ''));
+      _notice(safeErrorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -144,7 +145,7 @@ class _FanPostCardState extends State<FanPostCard> {
       if (mounted) widget.onChanged?.call();
       _notice(action == 'delete' ? 'Post deleted.' : 'Report sent for review.');
     } catch (e) {
-      _notice(e.toString().replaceFirst('Exception: ', ''));
+      _notice(safeErrorMessage(e));
     }
   }
 
@@ -186,7 +187,7 @@ class _FanPostCardState extends State<FanPostCard> {
         widget.onChanged?.call();
       }
     } catch (e) {
-      _notice(e.toString().replaceFirst('Exception: ', ''));
+      _notice(safeErrorMessage(e));
     } finally {
       if (mounted) setState(() => _followBusy = false);
     }
