@@ -1,5 +1,4 @@
 import '../widgets/fan_match_link.dart';
-import '../utils/safe_error_message.dart';
 import '../widgets/fan_post_video.dart';
 import '../models/fan_post_link.dart';
 import 'package:flutter/material.dart';
@@ -84,7 +83,7 @@ class _FanPostCardState extends State<FanPostCard> {
         });
       if (mounted) widget.onChanged?.call();
     } catch (e) {
-      _notice(safeErrorMessage(e));
+      _notice(e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -145,7 +144,7 @@ class _FanPostCardState extends State<FanPostCard> {
       if (mounted) widget.onChanged?.call();
       _notice(action == 'delete' ? 'Post deleted.' : 'Report sent for review.');
     } catch (e) {
-      _notice(safeErrorMessage(e));
+      _notice(e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -187,7 +186,7 @@ class _FanPostCardState extends State<FanPostCard> {
         widget.onChanged?.call();
       }
     } catch (e) {
-      _notice(safeErrorMessage(e));
+      _notice(e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _followBusy = false);
     }
@@ -291,6 +290,13 @@ class _FanPostCardState extends State<FanPostCard> {
     final kindKey = '${_post['kind']}';
     final kind = FanKind.of(kindKey);
     final text = '${_post['text']}';
+    final videoLinks = fanPostLinks(text);
+    // Video URLs are rendered as embedded preview cards, not as raw links.
+    var displayText = text;
+    for (final link in videoLinks) {
+      displayText = displayText.replaceAll(link, '').replaceAll(RegExp(r'[ \t]+\n'), '\n');
+    }
+    displayText = displayText.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
     final style = TextStyle(fontSize: detail ? 21 : 15.5, height: 1.42);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -309,14 +315,14 @@ class _FanPostCardState extends State<FanPostCard> {
             padding: EdgeInsets.only(top: detail ? 12 : 2),
             child: detail
                 ? SelectableText.rich(
-                    TextSpan(children: xRichSpans(text, base: style)),
+                    TextSpan(children: xRichSpans(displayText, base: style)),
                   )
-                : Text.rich(TextSpan(children: xRichSpans(text, base: style))),
+                : Text.rich(TextSpan(children: xRichSpans(displayText, base: style))),
           ),
         FanMatchLink(snapshot: '${_post['match_json'] ?? ''}', text: text),
         if (_post['has_image'] == 1) _media(detail),
-        for (final link in fanPostLinks(text))
-          FanPostVideo(key: ValueKey(link), url: link, inline: detail),
+        for (final link in videoLinks)
+          FanPostVideo(key: ValueKey(link), url: link, inline: true),
       ],
     );
   }
