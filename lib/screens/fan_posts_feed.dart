@@ -9,6 +9,7 @@ import '../models/fixture.dart';
 import '../services/fan_zone_service.dart';
 import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
+import '../utils/safe_error_message.dart';
 import 'fan_widgets.dart';
 import 'fan_post_card.dart';
 import 'fan_x_widgets.dart';
@@ -25,7 +26,7 @@ const _filterIcons = {
   'betslip': Icons.receipt_long_rounded,
   'banter': Icons.forum_rounded,
 };
-String _error(Object e) => e.toString().replaceFirst('Exception: ', '');
+String _error(Object e) => safeErrorMessage(e);
 
 class FanPostsFeed extends StatefulWidget {
   final bool active;
