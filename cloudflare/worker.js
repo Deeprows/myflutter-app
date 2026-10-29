@@ -2544,13 +2544,20 @@ export function fanEspnFinal(f,data) {
 }
 export function fanApiFinal(f,data) {
   const home=fanVerifiedTeamId(f.homeTeamId ?? f.homeLogo,f.home),away=fanVerifiedTeamId(f.awayTeamId ?? f.awayLogo,f.away);
-  if(!home || !away || !Array.isArray(data?.response) || (data.errors && Object.keys(data.errors).length))return null;
+  if(!Array.isArray(data?.response) || (data.errors && Object.keys(data.errors).length))return null;
+  // When a fixture has no configured API-Football IDs, use exact normalized
+  // team names from the provider response as a safe fallback. Kickoff proximity,
+  // full-time status and uniqueness are still mandatory; ambiguous matches stay pending.
+  const teamMatches=(expected,id,actual)=>id
+    ? String(actual?.id ?? '')===id
+    : fanResultName(expected)!=='' && fanResultName(actual?.name)===fanResultName(expected);
   const found=[];
   for(const e of data.response) {
     if(!['FT','AET','PEN'].includes(e?.fixture?.status?.short))continue;
-    if(Math.abs(new Date(e.fixture.date).getTime()-new Date(f.kickoff).getTime())>4*3600000 || !Number.isFinite(new Date(e.fixture.date).getTime()))continue;
-    const straight=String(e.teams?.home?.id)===home && String(e.teams?.away?.id)===away;
-    const reverse=String(e.teams?.home?.id)===away && String(e.teams?.away?.id)===home;
+    const at=new Date(e.fixture.date).getTime(),kickoff=new Date(f.kickoff).getTime();
+    if(!Number.isFinite(at) || !Number.isFinite(kickoff) || Math.abs(at-kickoff)>4*3600000)continue;
+    const straight=teamMatches(f.home,home,e.teams?.home) && teamMatches(f.away,away,e.teams?.away);
+    const reverse=teamMatches(f.home,home,e.teams?.away) && teamMatches(f.away,away,e.teams?.home);
     if(!straight && !reverse)continue;
     // Fulltime is the 90-minute score; never use goals/extra-time/penalty totals.
     const h=fanResultScore(e.score?.fulltime?.home),a=fanResultScore(e.score?.fulltime?.away);
@@ -2608,9 +2615,14 @@ async function fanSyncResults(env) {
       }
       // Optional existing API-Football binding gives verified 90-minute scores after ET/penalties too.
       const team=fanVerifiedTeamId(f.homeTeamId ?? f.homeLogo,f.home);
-      if(!result && env.API_FOOTBALL_KEY && team) {
+      if(!result && env.API_FOOTBALL_KEY) {
         const day=new Date(row.kickoff).toISOString().slice(0,10);
-        result=fanApiFinal(f,await load(`https://v3.football.api-sports.io/fixtures?team=${team}&date=${day}`,{'x-apisports-key':env.API_FOOTBALL_KEY}));
+        // Team-filtered requests are cheaper and preferred. If no verified ID
+        // exists, search that date and accept only one exact name/date/final match.
+        const apiUrl=team
+          ? `https://v3.football.api-sports.io/fixtures?team=${team}&date=${day}`
+          : `https://v3.football.api-sports.io/fixtures?date=${day}`;
+        result=fanApiFinal(f,await load(apiUrl,{'x-apisports-key':env.API_FOOTBALL_KEY}));
       }
       if(result) {
         const write=await db.prepare('INSERT OR IGNORE INTO fan_results(match_key,home,away) VALUES(?,?,?)').bind(row.match_key,result.home,result.away).run();
