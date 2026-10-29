@@ -9,6 +9,7 @@ import '../services/content_sync.dart';
 import '../services/fan_zone_service.dart';
 import '../services/feed_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/safe_error_message.dart';
 import 'fan_posts_feed.dart';
 import 'fan_profile_screen.dart';
 import 'fan_widgets.dart';
@@ -18,7 +19,7 @@ import 'tv_screen.dart';
 import 'content_shortcut_screen.dart';
 import 'sports_news_screen.dart';
 
-String _error(Object e) => e.toString().replaceFirst('Exception: ', '');
+String _error(Object e) => safeErrorMessage(e);
 
 enum FanZonePage { predict, ranks, banter }
 
