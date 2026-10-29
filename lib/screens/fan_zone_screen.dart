@@ -820,24 +820,24 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     ),
   );
 
-  Widget _team(String name, String logo, {double size = 58}) => Expanded(
+  Widget _team(String name, String logo, {double size = 42}) => Expanded(
     child: Column(
       children: [
         Container(
-          padding: const EdgeInsets.all(3),
+          padding: const EdgeInsets.all(2),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
                 color: Colors.white.withValues(alpha: .06),
-                blurRadius: 16,
+                blurRadius: 12,
                 spreadRadius: 1,
               ),
             ],
           ),
           child: TeamCrest(logo: logo, size: size),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 5),
         Text(
           name,
           maxLines: 2,
@@ -845,8 +845,8 @@ class _FanZoneScreenState extends State<FanZoneScreen>
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             fontWeight: FontWeight.w800,
-            fontSize: 14,
-            height: 1.15,
+            fontSize: 13,
+            height: 1.1,
           ),
         ),
       ],
@@ -858,7 +858,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     final until = f.kickoff.difference(now);
     return FanHero(
       color: const Color(0xFFFFB300),
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
       child: Column(
         children: [
           Row(
@@ -884,20 +884,20 @@ class _FanZoneScreenState extends State<FanZoneScreen>
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _team(f.home, f.homeLogo, size: 64),
+              _team(f.home, f.homeLogo, size: 50),
               SizedBox(
                 width: 70,
                 child: Column(
                   children: [
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 6),
                     Text(
                       fanClock(f.kickoff),
                       style: const TextStyle(
-                        fontSize: 24,
+                        fontSize: 20,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -908,13 +908,13 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                   ],
                 ),
               ),
-              _team(f.away, f.awayLogo, size: 64),
+              _team(f.away, f.awayLogo, size: 50),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
-            height: 48,
+            height: 40,
             child: FilledButton.icon(
               onPressed: !_saving && _failure == null ? () => _pick(f) : null,
               icon: const Icon(Icons.sports_score_rounded, size: 18),
@@ -933,10 +933,10 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     final soon = until.inHours < 24;
     final accent = pick != null ? Ui.green : Ui.red;
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Ui.card,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: pick != null ? Ui.green.withValues(alpha: .5) : Ui.line,
         ),
@@ -945,7 +945,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [accent.withValues(alpha: .20), Colors.transparent],
@@ -978,7 +978,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 6, 14, 14),
+            padding: const EdgeInsets.fromLTRB(12, 2, 12, 10),
             child: Column(
               children: [
                 Row(
@@ -986,15 +986,15 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                   children: [
                     _team(f.home, f.homeLogo),
                     SizedBox(
-                      width: 88,
+                      width: 76,
                       child: pick != null
                           ? Column(
                               children: [
-                                const SizedBox(height: 6),
+                                const SizedBox(height: 2),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
+                                    horizontal: 10,
+                                    vertical: 3,
                                   ),
                                   decoration: BoxDecoration(
                                     color: Ui.green.withValues(alpha: .16),
@@ -1008,7 +1008,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                                     child: Text(
                                       fanPredictionLabel(pick),
                                       style: TextStyle(
-                                        fontSize: 24,
+                                        fontSize: 19,
                                         fontWeight: FontWeight.w900,
                                         color: Ui.green,
                                       ),
@@ -1029,11 +1029,11 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                             )
                           : Column(
                               children: [
-                                const SizedBox(height: 10),
+                                const SizedBox(height: 4),
                                 Text(
                                   'VS',
                                   style: TextStyle(
-                                    fontSize: 22,
+                                    fontSize: 17,
                                     fontWeight: FontWeight.w900,
                                     color: Ui.dim,
                                   ),
@@ -1051,11 +1051,20 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                     _team(f.away, f.awayLogo),
                   ],
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
                       child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 38),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          visualDensity: VisualDensity.compact,
+                          textStyle: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                         onPressed: !_saving && _failure == null
                             ? () => _pick(f)
                             : null,
@@ -1073,6 +1082,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                     const SizedBox(width: 8),
                     if (pick != null)
                       IconButton.outlined(
+                        visualDensity: VisualDensity.compact,
                         tooltip: 'Share my pick',
                         onPressed: () => Share.share(
                           'My prediction: ${f.title}: ${fanPredictionLabel(pick)}. Join me on Deeprowss!',
@@ -1080,6 +1090,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                         icon: const Icon(Icons.ios_share_rounded, size: 18),
                       ),
                     IconButton.outlined(
+                      visualDensity: VisualDensity.compact,
                       tooltip: 'Match chat',
                       onPressed: () => _openPredictionMatch(f),
                       icon: const Icon(
