@@ -228,7 +228,28 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.zero,
               children: [
-                if (_error != null)
+                if (_error != null && _post == null && !_loading)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 90, 24, 24),
+                    child: Column(
+                      children: [
+                        Icon(Icons.cloud_off_rounded, size: 46, color: Ui.dim),
+                        const SizedBox(height: 14),
+                        Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Ui.muted, height: 1.4),
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _load,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Try again'),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (_error != null && _post != null)
                   Padding(
                     padding: const EdgeInsets.all(12),
                     child: Text(_error!),
