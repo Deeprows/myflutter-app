@@ -2194,7 +2194,8 @@ async function fanAiPredict(request,env,id) {
   const kickoff=new Date(fixture.kickoff).getTime();
   if(kickoff<=Date.now())return fail('Choose a match that has not started.');
   const homeId=fanTeamId(fixture.homeTeamId ?? fixture.homeLogo),awayId=fanTeamId(fixture.awayTeamId ?? fixture.awayLogo);
-  if(!homeId || !awayId || homeId===awayId)return fail('Verified API-Football team IDs are missing for this fixture. Ask the administrator to update it.',422);
+  // A missing API-Football ID is fine: that side falls back to ESPN results by team name.
+  if(homeId && awayId && homeId===awayId)return fail('Choose a fixture with two different teams.',422);
   if(!await fanSocialBudget(env.DB,id,'ai-attempt',30))return fail('Analysis request limit reached. Retry after the next UTC hour.',429);
   try {
     const [home,away]=await Promise.all([fanAnalysisForm(env,fixture,homeId,fixture.home,kickoff),fanAnalysisForm(env,fixture,awayId,fixture.away,kickoff)]);
@@ -2903,7 +2904,8 @@ async function fanEspnScheduleForm(env,league,id,kickoff) {
 }
 async function fanAnalysisForm(env,fixture,teamId,name,kickoff) {
   let original;
-  try{const form=await fanRecentForm(env,teamId,kickoff);if(form.matches.length>=3)return form;original=new FanFormError('Not enough recent results are available for this club.','insufficient_results');}
+  if(!teamId)original=new FanFormError('No API-Football team ID is set for this club.','team_unavailable');
+  else try{const form=await fanRecentForm(env,teamId,kickoff);if(form.matches.length>=3)return form;original=new FanFormError('Not enough recent results are available for this club.','insufficient_results');}
   catch(e){original=e instanceof FanFormError?e:new FanFormError('Recent-results source could not be reached.');}
   try{return await fanEspnRecentForm(env,fixture,name,kickoff);}catch(e){
     if(original.code==='insufficient_results' || e instanceof FanFormError && e.code==='insufficient_results')return {source:'API-Football',teamId,fetchedAt:Date.now(),matches:[],played:0,wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0};
