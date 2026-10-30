@@ -18,10 +18,9 @@ import 'highlights_screen.dart';
 import 'movies_screen.dart';
 import 'tv_screen.dart';
 import 'content_shortcut_screen.dart';
-import '../utils/safe_error_message.dart';
 import 'sports_news_screen.dart';
 
-String _error(Object e) => safeErrorMessage(e);
+String _error(Object e) => e.toString().replaceFirst('Exception: ', '');
 
 enum FanZonePage { predict, ranks, banter }
 
@@ -1225,7 +1224,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    'Waiting for the final score',
+                                    'Checking final score automatically',
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: Ui.dim,
@@ -1235,6 +1234,16 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                               ],
                             ],
                           ),
+                          if (!settled &&
+                              (_data['result_sync'] as Map?)?['status'] ==
+                                  'unavailable')
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                'Score provider unavailable. Retrying automatically.',
+                                style: TextStyle(fontSize: 11, color: Ui.dim),
+                              ),
+                            ),
                         ],
                       ),
                     ),
