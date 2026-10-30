@@ -19,6 +19,19 @@ class AiPredictScreen extends StatefulWidget {
 
 class _AiPredictScreenState extends State<AiPredictScreen> {
   List<Fixture> _fixtures = [];
+
+  /// Upcoming matches from other sources (the server's ESPN feed) that are not
+  /// in the app's own fixture list.
+  List<Fixture> _external = [];
+
+  /// Matchups the user typed in themselves. Teams are resolved on the server.
+  final List<Fixture> _custom = [];
+  final TextEditingController _typed = TextEditingController();
+  final ScrollController _scroll = ScrollController();
+  String _leagueFilter = '';
+  int _extShown = 20;
+  bool _extLoading = false;
+  String? _extError;
   final Set<String> _selected = {};
   final Map<String, Map<String, dynamic>> _results = {};
   final Map<String, String> _failures = {};
@@ -45,12 +58,45 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   @override
   void dispose() {
     ContentSync.tick.removeListener(_sync);
+    _typed.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  List<Fixture> get _all => [..._custom, ..._fixtures, ..._external];
+  static bool _isCustom(Fixture f) => f.id.startsWith('custom:');
+  static bool _isExternal(Fixture f) => f.id.startsWith('ext:');
+
+  static String _n(String s) =>
+      s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  static bool _like(String a, String b) {
+    final x = _n(a), y = _n(b);
+    if (x.isEmpty || y.isEmpty) return false;
+    return x == y ||
+        (x.length >= 4 && y.length >= 4 && (x.contains(y) || y.contains(x)));
+  }
+
+  /// The same real-world match listed by two sources.
+  static bool _sameMatch(Fixture a, Fixture b) =>
+      _like(a.home, b.home) &&
+      _like(a.away, b.away) &&
+      a.kickoff.difference(b.kickoff).abs() < const Duration(hours: 18);
+
+  /// External matches that the app's own list does not already contain.
+  List<Fixture> get _extFresh => _external
+      .where((e) => !_fixtures.any((f) => _sameMatch(f, e)))
+      .toList();
+
+  void _prune() {
+    final keys = _all.map(FanZoneService.matchKey).toSet();
+    _selected.retainAll(keys);
   }
 
   Future<void> _load() async {
     if (!mounted || _loading || _busy) return;
     setState(() => _loading = true);
+    // Other sources load in parallel and can never break the app's own list.
+    final external = _loadExternal();
     try {
       final fixtures = await FeedService().loadFixtures(remote: true);
       if (!mounted) return;
@@ -60,7 +106,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             if (f.kickoff.isAfter(DateTime.now()))
               FanZoneService.matchKey(f): f,
         }.values.toList();
-        _selected.retainAll(_fixtures.map(FanZoneService.matchKey));
         _error = null;
       });
     } catch (_) {
@@ -68,6 +113,36 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         setState(() => _error = 'Could not load matches. Pull down to retry.');
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+    await external;
+    if (mounted) setState(_prune);
+  }
+
+  Future<void> _loadExternal() async {
+    if (_extLoading) return;
+    if (mounted) setState(() => _extLoading = true);
+    try {
+      final data = await FanZoneService.call(
+        'ai-predict/matches',
+        timeout: const Duration(seconds: 30),
+      );
+      final parsed = <Fixture>[];
+      for (final m in FanZoneService.rows(data['matches'])) {
+        final f = Fixture.tryParse({...m, 'id': 'ext:${m['id']}'});
+        if (f != null && f.kickoff.isAfter(DateTime.now())) parsed.add(f);
+      }
+      parsed.sort((a, b) => a.kickoff.compareTo(b.kickoff));
+      if (!mounted) return;
+      setState(() {
+        _external = parsed;
+        _extError = null;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _extError = 'More matches could not be loaded.');
+      }
+    } finally {
+      if (mounted) setState(() => _extLoading = false);
     }
   }
 
@@ -88,9 +163,97 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     });
   }
 
+  static final RegExp _vs = RegExp(
+    r'\s+(?:vs\.?|v|x|-|–|—)\s+',
+    caseSensitive: false,
+  );
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _addCustom() {
+    if (_busy) return;
+    final parts = _typed.text.trim().split(_vs).map((e) => e.trim()).toList();
+    if (parts.length != 2 ||
+        parts.any((e) => e.length < 2 || e.length > 60)) {
+      _snack('Type two teams like: Arsenal vs Chelsea');
+      return;
+    }
+    final id = 'custom:${_n(parts[0])}|${_n(parts[1])}';
+    final existing = _custom.where((c) => c.id == id).toList();
+    final f = existing.isNotEmpty
+        ? existing.first
+        : Fixture(
+            id: id,
+            home: parts[0],
+            away: parts[1],
+            league: 'Typed by you',
+            // Typed matchups have no fixed kick-off; this only keeps the key stable.
+            kickoff: DateTime.utc(2099),
+          );
+    final key = FanZoneService.matchKey(f);
+    if (!_selected.contains(key) && _selected.length >= _maxPicks) {
+      _snack('Select up to 3 matches at a time.');
+      return;
+    }
+    setState(() {
+      if (existing.isEmpty) _custom.insert(0, f);
+      _selected.add(key);
+      _typed.clear();
+    });
+    FocusScope.of(context).unfocus();
+  }
+
+  void _removeCustom(Fixture f) {
+    if (_busy) return;
+    final key = FanZoneService.matchKey(f);
+    setState(() {
+      _custom.removeWhere((c) => c.id == f.id);
+      _selected.remove(key);
+      _results.remove(key);
+      _failures.remove(key);
+    });
+  }
+
+  Map<String, dynamic> _bodyFor(Fixture f) {
+    if (_isExternal(f)) return {'ext': f.id.substring(4)};
+    if (_isCustom(f)) {
+      return {
+        'custom': {'home': f.home, 'away': f.away},
+      };
+    }
+    return {'key': FanZoneService.matchKey(f)};
+  }
+
+  /// Matches from other sources and typed matchups get the server's own
+  /// plain-language reason (e.g. "Be more specific: Real Madrid, Real
+  /// Sociedad"); the app's own fixtures keep the generic wording.
+  String _failText(Fixture f, Object e) {
+    var message = safeErrorMessage(e);
+    final raw = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '').trim();
+    if (raw.contains('setup needed')) {
+      return 'Automatic analysis is being configured. Please contact the administrator.';
+    }
+    if ((_isCustom(f) || _isExternal(f)) &&
+        e is Exception &&
+        raw.isNotEmpty &&
+        raw.length <= 240 &&
+        !RegExp(
+          r'https?://|/fan/|worker|secret|api.?key|binding|exception',
+          caseSensitive: false,
+        ).hasMatch(raw)) {
+      message = raw;
+    }
+    return message;
+  }
+
   Future<void> _analyse() async {
     if (_busy || _selected.isEmpty) return;
-    final queue = _fixtures
+    final queue = _all
         .where((f) => _selected.contains(FanZoneService.matchKey(f)))
         .toList();
     setState(() {
@@ -98,6 +261,13 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       _done = 0;
       _total = queue.length;
     });
+    if (_scroll.hasClients) {
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOut,
+      );
+    }
     for (final f in queue) {
       final key = FanZoneService.matchKey(f);
       if (!mounted) return;
@@ -108,18 +278,34 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       try {
         final data = await FanZoneService.call(
           'ai-predict',
-          body: {'key': key},
+          body: _bodyFor(f),
           timeout: const Duration(seconds: 120),
         );
         if (!mounted) return;
-        setState(() => _results[key] = data);
+        setState(() {
+          _results[key] = data;
+          // Show the real clubs (and crests) the server resolved for a typed matchup.
+          final info = data['fixture'];
+          final i = _custom.indexWhere((c) => c.id == f.id);
+          if (i >= 0 && info is Map) {
+            final h = '${info['home'] ?? ''}'.trim();
+            final a = '${info['away'] ?? ''}'.trim();
+            if (h.isNotEmpty && a.isNotEmpty) {
+              _custom[i] = Fixture(
+                id: f.id,
+                home: h,
+                away: a,
+                homeLogo: '${info['homeLogo'] ?? ''}',
+                awayLogo: '${info['awayLogo'] ?? ''}',
+                league: f.league,
+                kickoff: f.kickoff,
+              );
+            }
+          }
+        });
       } catch (e) {
         if (!mounted) return;
-        var message = safeErrorMessage(e);
-        if (message.contains('setup needed:'))
-          message =
-              'Automatic analysis is being configured. Please contact the administrator.';
-        setState(() => _failures[key] = message);
+        setState(() => _failures[key] = _failText(f, e));
       }
       if (mounted) setState(() => _done++);
     }
@@ -434,7 +620,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               ),
               SizedBox(height: 4),
               Text(
-                'Pick up to 3 matches. We study the last 5 results of each team: form, goals and likely outcomes.',
+                'Pick up to 3 matches from our list or other leagues, or type your own. We study the last 5 results of each team: form, goals and likely outcomes.',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 12.5,
@@ -504,11 +690,23 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(Icons.schedule_rounded, size: 12, color: Ui.dim),
+                          Icon(
+                            _isCustom(f)
+                                ? Icons.edit_rounded
+                                : Icons.schedule_rounded,
+                            size: 12,
+                            color: Ui.dim,
+                          ),
                           const SizedBox(width: 4),
-                          Text(
-                            '${fanClock(f.kickoff)} · ${_date(f.kickoff.toIso8601String())}',
-                            style: TextStyle(fontSize: 11.5, color: Ui.dim),
+                          Flexible(
+                            child: Text(
+                              _isCustom(f)
+                                  ? 'Teams are verified when analysing'
+                                  : '${fanClock(f.kickoff)} · ${_date(f.kickoff.toIso8601String())}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 11.5, color: Ui.dim),
+                            ),
                           ),
                         ],
                       ),
@@ -516,6 +714,13 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
+                if (_isCustom(f))
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Remove',
+                    onPressed: _busy ? null : () => _removeCustom(f),
+                    icon: Icon(Icons.close_rounded, size: 18, color: Ui.dim),
+                  ),
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   width: 26,
@@ -542,6 +747,178 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         ),
       ),
     );
+  }
+
+  /// Slim one-line box: type "Arsenal vs Chelsea" and add it to the picks.
+  Widget _typeBox() {
+    const accent = Color(0xFF8E6BFF);
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.only(left: 14, right: 4),
+      decoration: BoxDecoration(
+        color: Ui.card,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Ui.line),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.search_rounded, size: 20, color: Ui.dim),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _typed,
+              enabled: !_busy,
+              maxLength: 130,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _addCustom(),
+              style: const TextStyle(fontSize: 14),
+              decoration: InputDecoration(
+                isDense: true,
+                filled: false,
+                counterText: '',
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                hintText: 'Type a match, e.g. Arsenal vs Chelsea',
+                hintStyle: TextStyle(fontSize: 13.5, color: Ui.dim),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Add match',
+            onPressed: _busy ? null : _addCustom,
+            icon: const Icon(Icons.add_circle_rounded, color: accent),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _leagueChips(List<String> leagues, String active) {
+    const accent = Color(0xFF8E6BFF);
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final l in ['', ...leagues])
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(l.isEmpty ? 'All' : l),
+                selected: active == l,
+                selectedColor: accent.withValues(alpha: .28),
+                labelStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) => setState(() {
+                  _leagueFilter = l;
+                  _extShown = 20;
+                }),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Analyses (and failures) for the matches that are currently selected.
+  List<Widget> _resultWidgets() {
+    final out = <Widget>[];
+    for (final f in _all.where(
+      (f) => _selected.contains(FanZoneService.matchKey(f)),
+    )) {
+      final key = FanZoneService.matchKey(f);
+      if (_failures.containsKey(key)) {
+        out.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Text(
+              '${f.title}: ${_failures[key]}',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        );
+      }
+      if (_results.containsKey(key)) out.add(_result(f, _results[key]!));
+    }
+    return out;
+  }
+
+  List<Widget> _moreMatches() {
+    final fresh = _extFresh;
+    final counts = <String, int>{};
+    for (final f in fresh) {
+      if (f.league.isNotEmpty) counts[f.league] = (counts[f.league] ?? 0) + 1;
+    }
+    final leagues = counts.keys.toList()
+      ..sort((a, b) => counts[b]!.compareTo(counts[a]!));
+    final active = leagues.contains(_leagueFilter) ? _leagueFilter : '';
+    final shown = fresh
+        .where((f) => active.isEmpty || f.league == active)
+        .toList();
+    final visible = shown.take(_extShown).toList();
+    return [
+      const SizedBox(height: 18),
+      Row(
+        children: [
+          const Text(
+            'MORE MATCHES · OTHER LEAGUES',
+            style: TextStyle(
+              fontSize: 11,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFFB39DFF),
+            ),
+          ),
+          const Spacer(),
+          if (_extLoading)
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Text(
+        'Fixtures from other sources that are not in our list. You can analyse them too.',
+        style: TextStyle(fontSize: 11.5, color: Ui.muted),
+      ),
+      const SizedBox(height: 10),
+      if (_extError != null && fresh.isEmpty)
+        Row(
+          children: [
+            Expanded(child: Text(_extError!)),
+            TextButton(
+              onPressed: _extLoading ? null : _loadExternal,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      if (leagues.length > 1) ...[
+        _leagueChips(leagues, active),
+        const SizedBox(height: 10),
+      ],
+      for (final f in visible) _matchTile(f),
+      if (shown.length > visible.length)
+        Center(
+          child: TextButton(
+            onPressed: () => setState(() => _extShown += 20),
+            child: Text('Show more (${shown.length - visible.length})'),
+          ),
+        ),
+      if (!_extLoading && _extError == null && fresh.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'No other upcoming matches found right now.',
+            style: TextStyle(color: Ui.muted),
+          ),
+        ),
+    ];
   }
 
   Widget _actionBar() {
@@ -631,10 +1008,18 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           child: RefreshIndicator(
             onRefresh: _load,
             child: ListView(
+              controller: _scroll,
               physics: const AlwaysScrollableScrollPhysics(),
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               children: [
                 _hero(),
+                const SizedBox(height: 12),
+                _typeBox(),
+                if (_custom.isNotEmpty) const SizedBox(height: 10),
+                for (final f in _custom) _matchTile(f),
+                ..._resultWidgets(),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -678,28 +1063,13 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                     padding: EdgeInsets.symmetric(vertical: 24),
                     child: Center(
                       child: Text(
-                        'No upcoming matches yet. Pull down to refresh.',
+                        'No upcoming matches in our list yet. Try the other leagues below, or type a match above.',
                         textAlign: TextAlign.center,
                       ),
                     ),
                   ),
                 for (final f in _fixtures) _matchTile(f),
-                for (final f in _fixtures.where(
-                  (f) => _selected.contains(FanZoneService.matchKey(f)),
-                )) ...[
-                  if (_failures.containsKey(FanZoneService.matchKey(f)))
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Text(
-                        '${f.title}: ${_failures[FanZoneService.matchKey(f)]}',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  if (_results.containsKey(FanZoneService.matchKey(f)))
-                    _result(f, _results[FanZoneService.matchKey(f)]!),
-                ],
+                ..._moreMatches(),
               ],
             ),
           ),
