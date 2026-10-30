@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../player/mini_player.dart';
 import '../services/content_sync.dart';
@@ -32,9 +33,11 @@ class ShellScreen extends StatefulWidget {
 
 class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   int _index = 0;
-  // Bottom bar order: Live, Home, Predict, Ranks, AI Predict.
-  // Profile and Search are no longer bottom-bar tabs.
-  static const _order = [0, 3, 1, 2, 4];
+  // Bottom bar order: Live, Home, Predict, AI Predict, Profile.
+  // Ranks (index 2) now lives on the Predict page instead of the bottom bar.
+  static const _order = [0, 3, 1, 4, 5];
+  bool _profilePrompting = false;
+  int _profileRev = 0;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   DateTime? _lastBack;
   Timer? _autoRefresh;
@@ -128,6 +131,31 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     });
   }
 
+  // The first time a person taps Home, show their profile editor. After that
+  // it never appears again; they use the Profile tab to edit later.
+  Future<void> _maybeShowFirstProfile() async {
+    if (_profilePrompting) return;
+    final uid = AuthService.instance.user?.id ?? '';
+    if (uid.isEmpty) return;
+    _profilePrompting = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'profile_setup_seen_$uid';
+      if (prefs.getBool(key) ?? false) return;
+      if (!mounted) return;
+      final result = await showFirstTimeProfileEditor(context, uid);
+      if (result == null) return; // could not open (offline): ask next time
+      await prefs.setBool(key, true);
+      if (result && mounted) {
+        setState(() => _profileRev++);
+        ContentSync.request(force: true);
+      }
+    } catch (_) {
+    } finally {
+      _profilePrompting = false;
+    }
+  }
+
   void _onBack() {
     final state = _scaffoldKey.currentState;
     if (state != null && state.isDrawerOpen) {
@@ -174,15 +202,15 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
               children: [
                 const LiveScreen(),
                 FanZoneScreen(active: _index == 1),
-                FanZoneScreen(
-                  active: _index == 2,
-                  page: FanZonePage.ranks,
-                  onPredict: () => setState(() => _index = 1),
-                ),
+                // Index 2 (Ranks) is no longer a tab; keep the slot so the
+                // other indexes (and notification targets) stay the same.
+                const SizedBox.shrink(),
                 FanZoneScreen(active: _index == 3, page: FanZonePage.banter),
                 AiPredictScreen(active: _index == 4),
                 FanProfileScreen(
-                  key: ValueKey('profile-${AuthService.instance.user?.id ?? ''}'),
+                  key: ValueKey(
+                    'profile-${AuthService.instance.user?.id ?? ''}-$_profileRev',
+                  ),
                   userId: AuthService.instance.user?.id ?? '',
                 ),
               ],
@@ -232,7 +260,9 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     ? _order.indexOf(_index)
                     : 0,
                 onDestinationSelected: (i) {
-                  setState(() => _index = _order[i]);
+                  final target = _order[i];
+                  setState(() => _index = target);
+                  if (target == 3) _maybeShowFirstProfile();
                 },
                 destinations: [
                   NavigationDestination(
@@ -250,14 +280,14 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     label: 'Predict'.tr,
                   ),
                   NavigationDestination(
-                    icon: const Icon(Icons.leaderboard_outlined),
-                    selectedIcon: const Icon(Icons.leaderboard_rounded),
-                    label: 'Ranks'.tr,
-                  ),
-                  NavigationDestination(
                     icon: const Icon(Icons.auto_awesome_outlined),
                     selectedIcon: const Icon(Icons.auto_awesome_rounded),
                     label: 'AI Predict'.tr,
+                  ),
+                  NavigationDestination(
+                    icon: const Icon(Icons.person_outline_rounded),
+                    selectedIcon: const Icon(Icons.person_rounded),
+                    label: 'Profile'.tr,
                   ),
                 ],
                 ),
