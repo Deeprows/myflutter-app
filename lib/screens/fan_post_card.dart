@@ -322,7 +322,14 @@ class _FanPostCardState extends State<FanPostCard> {
         FanMatchLink(snapshot: '${_post['match_json'] ?? ''}', text: text),
         if (_post['has_image'] == 1) _media(detail),
         for (final link in videoLinks)
-          FanPostVideo(key: ValueKey(link), url: link, inline: true),
+          FanPostVideo(
+            key: ValueKey(link),
+            url: link,
+            inline: true,
+            // Feed: tap opens the post. Post page: video plays in place.
+            onTapPreview: widget.openThread ? _thread : null,
+            autoPlay: !widget.openThread && link == videoLinks.first,
+          ),
       ],
     );
   }
