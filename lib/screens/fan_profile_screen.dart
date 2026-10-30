@@ -3,6 +3,7 @@ import '../utils/safe_error_message.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 import '../services/fan_zone_service.dart';
 import '../services/content_sync.dart';
 import '../widgets/fan_club_picker.dart';
@@ -12,6 +13,33 @@ import 'fan_widgets.dart';
 import 'fan_x_widgets.dart';
 
 void _noTab(int index) {}
+
+/// Opens the profile editor straight away (used the first time a new user
+/// taps Home). Returns true when saved, false when closed without saving, and
+/// null when the profile could not be loaded so the editor never opened.
+Future<bool?> showFirstTimeProfileEditor(
+  BuildContext context,
+  String userId,
+) async {
+  Map<String, dynamic> profile;
+  try {
+    final data = await FanZoneService.call(
+      'social/profile',
+      query: {'id': userId},
+    );
+    profile = Map<String, dynamic>.from(data['profile'] as Map);
+  } catch (_) {
+    return null;
+  }
+  if (!context.mounted) return null;
+  final saved = await Navigator.of(context).push<bool>(
+    MaterialPageRoute<bool>(
+      fullscreenDialog: true,
+      builder: (_) => _EditFanProfile(userId: userId, profile: profile),
+    ),
+  );
+  return saved == true;
+}
 
 class FanProfileScreen extends StatefulWidget {
   final String userId;
@@ -56,6 +84,27 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(safeErrorMessage(e))),
       );
+  }
+
+  Future<void> _logout() async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log out of Deeprowss?'),
+        content: const Text('You can log in again with your Gmail account.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (yes == true) await AuthService.instance.signOut();
   }
 
   Future<void> _follow() async {
@@ -451,6 +500,13 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
           onPressed: _loading ? null : _load,
           icon: const Icon(Icons.refresh_rounded),
         ),
+        if (widget.userId.isNotEmpty &&
+            widget.userId == AuthService.instance.user?.id)
+          IconButton(
+            tooltip: 'Log out',
+            onPressed: _logout,
+            icon: const Icon(Icons.logout_rounded),
+          ),
       ],
     ),
     body: Column(
