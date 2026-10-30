@@ -13,7 +13,6 @@ import '../widgets/app_drawer.dart';
 import '../widgets/brand_tag.dart';
 import 'fan_zone_screen.dart';
 import 'fan_profile_screen.dart';
-import 'sports_news_screen.dart';
 import '../services/auth_service.dart';
 import 'ai_predict_screen.dart';
 import 'content_shortcut_screen.dart';
@@ -33,9 +32,9 @@ class ShellScreen extends StatefulWidget {
 
 class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   int _index = 0;
-  // Bottom bar order: Live, Home, Predict, Ranks, AI Predict, Profile.
-  // Search is an action that opens the sports news/search page.
-  static const _order = [0, 3, 1, 2, 4, 5];
+  // Bottom bar order: Live, Home, Predict, Ranks, AI Predict.
+  // Profile and Search are no longer bottom-bar tabs.
+  static const _order = [0, 3, 1, 2, 4];
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   DateTime? _lastBack;
   Timer? _autoRefresh;
@@ -204,12 +203,22 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
               child: NavigationBarTheme(
                 data: NavigationBarThemeData(
                   labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>(
-                    (states) => TextStyle(
-                      fontSize: 10,
-                      height: 1.0,
-                      fontWeight: states.contains(WidgetState.selected)
-                          ? FontWeight.w600
-                          : FontWeight.w500,
+                    (states) {
+                      final on = states.contains(WidgetState.selected);
+                      return TextStyle(
+                        fontSize: 11,
+                        height: 1.0,
+                        fontWeight: on ? FontWeight.w700 : FontWeight.w500,
+                        color: on ? Ui.red : Ui.dim,
+                      );
+                    },
+                  ),
+                  iconTheme: WidgetStateProperty.resolveWith<IconThemeData?>(
+                    (states) => IconThemeData(
+                      size: 26,
+                      color: states.contains(WidgetState.selected)
+                          ? Ui.red
+                          : Ui.dim,
                     ),
                   ),
                 ),
@@ -223,14 +232,6 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     ? _order.indexOf(_index)
                     : 0,
                 onDestinationSelected: (i) {
-                  if (i == 6) {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const SportsNewsScreen(),
-                      ),
-                    );
-                    return;
-                  }
                   setState(() => _index = _order[i]);
                 },
                 destinations: [
@@ -257,16 +258,6 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     icon: const Icon(Icons.auto_awesome_outlined),
                     selectedIcon: const Icon(Icons.auto_awesome_rounded),
                     label: 'AI Predict'.tr,
-                  ),
-                  NavigationDestination(
-                    icon: const Icon(Icons.person_outline_rounded),
-                    selectedIcon: const Icon(Icons.person_rounded),
-                    label: 'Profile'.tr,
-                  ),
-                  NavigationDestination(
-                    icon: const Icon(Icons.search_rounded),
-                    selectedIcon: const Icon(Icons.search_rounded),
-                    label: 'Search'.tr,
                   ),
                 ],
                 ),
