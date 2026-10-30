@@ -3,16 +3,29 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../models/fan_post_link.dart';
-import '../screens/player_screen.dart';
 import '../services/player_html.dart';
 import '../services/stream_resolver.dart';
 import '../theme/app_theme.dart';
 
-/// A lightweight play card until tapped. Full playback uses the existing player.
+/// A lightweight play card. In the feed, tapping it opens the post (like a
+/// Twitter timeline); inside the post, the video plays right there.
 class FanPostVideo extends StatefulWidget {
   final String url;
   final bool inline;
-  const FanPostVideo({super.key, required this.url, required this.inline});
+
+  /// When set, tapping the preview calls this (e.g. open the post) instead of
+  /// starting playback.
+  final VoidCallback? onTapPreview;
+
+  /// Start playing as soon as the card is shown (used on the post page).
+  final bool autoPlay;
+  const FanPostVideo({
+    super.key,
+    required this.url,
+    required this.inline,
+    this.onTapPreview,
+    this.autoPlay = false,
+  });
   @override
   State<FanPostVideo> createState() => _FanPostVideoState();
 }
@@ -46,6 +59,11 @@ class _FanPostVideoState extends State<FanPostVideo>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.autoPlay) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _controller == null) _play();
+      });
+    }
   }
 
   @override
@@ -77,20 +95,7 @@ class _FanPostVideoState extends State<FanPostVideo>
     super.dispose();
   }
 
-  Future<void> _full() async {
-    _stop();
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => PlayerScreen(title: 'Community video', url: _url),
-      ),
-    );
-  }
-
   Future<void> _play() async {
-    if (!widget.inline) {
-      await _full();
-      return;
-    }
     setState(() {
       _loading = true;
       _failed = false;
@@ -164,10 +169,24 @@ class _FanPostVideoState extends State<FanPostVideo>
                   children: [
                     WebViewWidget(controller: _controller!),
                     if (_loading) const LinearProgressIndicator(),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: IconButton.filled(
+                        visualDensity: VisualDensity.compact,
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.black54,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: _stop,
+                        tooltip: 'Stop video',
+                        icon: const Icon(Icons.close, size: 18),
+                      ),
+                    ),
                   ],
                 )
               : InkWell(
-                  onTap: _play,
+                  onTap: widget.onTapPreview ?? _play,
                   child: Stack(
                     fit: StackFit.expand,
                     alignment: Alignment.center,
@@ -208,23 +227,6 @@ class _FanPostVideoState extends State<FanPostVideo>
                   ),
                 ),
         ),
-        if (widget.inline)
-          Row(
-            children: [
-              if (_controller != null)
-                IconButton(
-                  onPressed: _stop,
-                  tooltip: 'Stop video',
-                  icon: const Icon(Icons.close),
-                ),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: _full,
-                icon: const Icon(Icons.fullscreen),
-                label: const Text('Open full player'),
-              ),
-            ],
-          ),
       ],
     ),
   );
