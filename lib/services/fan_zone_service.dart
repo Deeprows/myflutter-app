@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -31,21 +32,32 @@ class FanZoneService {
         'content-type': 'application/json',
         'authorization': 'Bearer $token',
       };
-      final response =
-          await (body == null
-                  ? http.get(uri, headers: headers)
-                  : http.post(uri, headers: headers, body: jsonEncode(body)))
-              .timeout(timeout);
+      // Reads are safe to repeat: one quiet retry on a slow/dropped connection.
+      http.Response response;
+      try {
+        response =
+            await (body == null
+                    ? http.get(uri, headers: headers)
+                    : http.post(uri, headers: headers, body: jsonEncode(body)))
+                .timeout(timeout);
+      } on TimeoutException {
+        if (body != null) rethrow;
+        response = await http.get(uri, headers: headers).timeout(timeout);
+      } on http.ClientException {
+        if (body != null) rethrow;
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        response = await http.get(uri, headers: headers).timeout(timeout);
+      }
       final data = jsonDecode(utf8.decode(response.bodyBytes));
       if (data is! Map<String, dynamic>) {
-        throw Exception('Fan Zone received an invalid response.');
+        throw Exception('Fan Zone is unavailable right now. Please try again later.');
       }
       if (response.statusCode != 200) {
         throw Exception(data['error'] ?? 'Fan Zone is unavailable.');
       }
       return data;
     } on FormatException {
-      throw Exception('Fan Zone needs the updated Cloudflare Worker.');
+      throw Exception('Fan Zone is unavailable right now. Please try again later.');
     }
   }
 
@@ -94,7 +106,7 @@ class FanZoneService {
     try {
       data = jsonDecode(body) as Map<String, dynamic>;
     } catch (_) {
-      throw Exception('Photo uploads need the updated Cloudflare Worker.');
+      throw Exception('Photo upload is unavailable right now. Please try again later.');
     }
     if (response.statusCode != 200) {
       throw Exception(data['error'] ?? 'Could not upload your photo.');
@@ -133,7 +145,7 @@ class FanZoneService {
     try {
       data = jsonDecode(body) as Map<String, dynamic>;
     } catch (_) {
-      throw Exception('Uploads need the updated Cloudflare Worker.');
+      throw Exception('Upload is unavailable right now. Please try again later.');
     }
     if (response.statusCode != 200) {
       throw Exception(data['error'] ?? 'Could not publish your post.');
