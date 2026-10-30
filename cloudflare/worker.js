@@ -2188,8 +2188,8 @@ async function fanAiPredict(request,env,id) {
   if(!fixture)return fail('This match is no longer listed. Refresh matches.',404);
   const kickoff=new Date(fixture.kickoff).getTime();
   if(kickoff<=Date.now())return fail('Choose a match that has not started.');
-  const homeId=fanVerifiedTeamId(fixture.homeTeamId ?? fixture.homeLogo,fixture.home),awayId=fanVerifiedTeamId(fixture.awayTeamId ?? fixture.awayLogo,fixture.away);
-  if(homeId && awayId && homeId===awayId)return fail('The fixture has conflicting team IDs. Refresh the match list or contact the administrator.',422);
+  const homeId=fanTeamId(fixture.homeTeamId ?? fixture.homeLogo),awayId=fanTeamId(fixture.awayTeamId ?? fixture.awayLogo);
+  if(!homeId || !awayId || homeId===awayId)return fail('Verified API-Football team IDs are missing for this fixture. Ask the administrator to update it.',422);
   if(!await fanSocialBudget(env.DB,id,'ai-attempt',30))return fail('Analysis request limit reached. Retry after the next UTC hour.',429);
   let timeout;
   try {
@@ -2224,24 +2224,6 @@ function fanTeamId(raw) {
   if(/^[1-9]\d{0,7}$/.test(value))return value;
   const match=/^https:\/\/media\.api-sports\.io\/football\/teams\/([1-9]\d{0,7})\.png$/.exec(value);
   return match?.[1] ?? null;
-}
-// Verified API-Football team IDs for commonly listed clubs. Use only when the
-// fixture does not already provide a numeric ID or an API-Football team-logo URL.
-function fanVerifiedTeamId(raw,name) {
-  const supplied=fanTeamId(raw);
-  if(supplied)return supplied;
-  const key=String(name ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-  const ids={
-    'liverpool':'40','liverpool fc':'40','chelsea':'49','chelsea fc':'49',
-    'afc bournemouth':'35','bournemouth':'35','aston villa':'66','fulham':'36',
-    'crystal palace':'52','sunderland':'746','brentford':'55',
-    'arsenal':'42','manchester city':'50','manchester united':'33','tottenham':'47',
-    'newcastle united':'34','everton':'45','west ham':'48','brighton':'51',
-    'genoa':'107','juventus':'496','monza':'1579','napoli':'492',
-    'as roma':'497','roma':'497','cagliari':'490','torino':'503','como 1907':'895',
-    'paris saint germain':'85','psg':'85','lyon':'80'
-  };
-  return ids[key] ?? null;
 }
 async function fanRecentForm(env,teamId,kickoff) {
   const now=Date.now();
@@ -2494,24 +2476,6 @@ function fanResultName(raw) {
   const stop=new Set(['fc','cf','afc','sc','ac','as','ssc','cd','ud','fk','sk','bk','club','the','sv']);
   return String(raw || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(t=>t && !stop.has(t)).map(t=>aliases[t] || t).join(' ');
 }
-const FAN_TEAM_GENERIC=new Set(['al','united','city','town','real','athletic','sporting','inter','saint','rovers','wanderers','county','dynamo','olympic','racing','atletico']);
-const FAN_TEAM_SUFFIX=new Set(['town','city','united','hotspur','albion','rovers','wanderers','county','athletic']);
-// Exact normalized equality, or the same club written with a founding year or
-// a plain club suffix ("Como" / "Como 1907", "Mainz" / "Mainz 05",
-// "Fleetwood" / "Fleetwood Town"). Women's, youth and reserve sides never
-// match ("Paris Saint-Germain" is not "Paris Saint-Germain Women"), and
-// callers still require BOTH teams, kickoff within 4 hours and one candidate.
-function fanSameTeam(expected,actual) {
-  const a=fanResultName(expected),b=fanResultName(actual);
-  if(!a || !b)return false;
-  if(a===b)return true;
-  const ta=a.split(' '),tb=b.split(' ');
-  const [small,big]=ta.length<=tb.length?[ta,tb]:[tb,ta];
-  if(!small.every(t=>big.includes(t)))return false;
-  const extra=big.filter(t=>!small.includes(t));
-  if(!extra.every(t=>/^\d+$/.test(t) || FAN_TEAM_SUFFIX.has(t)))return false;
-  return small.some(t=>t.length>=4 && !/^\d+$/.test(t) && !FAN_TEAM_GENERIC.has(t));
-}
 function fanResultScore(value) {
   if(typeof value==='number')return Number.isInteger(value) && value>=0 && value<=50?value:null;
   return typeof value==='string' && /^\d{1,2}$/.test(value.trim()) && Number(value)<=50?Number(value):null;
@@ -2520,7 +2484,7 @@ function fanEspnHasFixture(f,data) {
   if(!fanFootballFixture(f) || !Array.isArray(data?.events))return false;
   const kickoff=new Date(f.kickoff).getTime();
   if(!Number.isFinite(kickoff))return false;
-  const same=(name,team)=>['displayName','shortDisplayName','name','location'].some(k=>fanSameTeam(name,team?.[k]));
+  const same=(name,team)=>['displayName','shortDisplayName','name','location'].some(k=>fanResultName(team?.[k])===fanResultName(name));
   return data.events.some(e=>{
     const c=e?.competitions?.[0];
     const at=new Date(e?.date || c?.date).getTime();
@@ -2541,29 +2505,19 @@ export function fanEspnFinal(f,data) {
   for(const e of data.events) {
     const c=e?.competitions?.[0],status=c?.status || e?.status,t=status?.type;
     // Do not use an elapsed clock or post-state alone as proof of completion.
-    if(!c || t?.completed!==true || t.state!=='post' || !['STATUS_FULL_TIME','STATUS_FINAL','STATUS_FINAL_AET','STATUS_FINAL_PEN','STATUS_FINAL_ET'].includes(t.name))continue;
-    const extra=Number(status.period)>2 || /AET|PEN|_ET/.test(String(t.name));
+    if(!c || t?.completed!==true || t.state!=='post' || !['STATUS_FULL_TIME','STATUS_FINAL'].includes(t.name) || (Number(status.period)>2))continue;
     const at=new Date(e.date || c.date).getTime();
     if(!Number.isFinite(at) || Math.abs(at-kickoff)>4*3600000)continue;
     if(!Array.isArray(c.competitors))continue;
     const h=c.competitors.find(x=>x?.homeAway==='home'),a=c.competitors.find(x=>x?.homeAway==='away');
     if(!h || !a)continue;
-    const matches=(name,team)=>['displayName','shortDisplayName','name','location'].some(k=>fanSameTeam(name,team?.[k]));
+    const matches=(name,team)=>['displayName','shortDisplayName','name','location'].some(k=>fanResultName(team?.[k])===fanResultName(name));
     const straight=matches(f.home,h.team) && matches(f.away,a.team);
     const reverse=matches(f.home,a.team) && matches(f.away,h.team);
     if(!straight && !reverse)continue;
     const wanted=String(f.espnEventId || f.scoreEventId || '');
     if(wanted && String(e.id)!==wanted)continue;
-    // Predictions are for the 90 minutes: after extra time/penalties, add up
-    // the first two period line scores instead of using the final tally.
-    const ninety=x=>{
-      if(!extra)return fanResultScore(x.score);
-      const ls=Array.isArray(x.linescores)?x.linescores:[];
-      if(ls.length<2)return null;
-      const v=ls.slice(0,2).map(l=>fanResultScore(l?.value));
-      return v.some(n=>n===null)?null:v[0]+v[1];
-    };
-    const home=ninety(h),away=ninety(a);
+    const home=fanResultScore(h.score),away=fanResultScore(a.score);
     if(home===null || away===null)continue;
     out.push({home:straight?home:away,away:straight?away:home,source:'ESPN',eventId:String(e.id || '')});
   }
@@ -2571,21 +2525,14 @@ export function fanEspnFinal(f,data) {
   return out.length===1?out[0]:null;
 }
 export function fanApiFinal(f,data) {
-  const home=fanVerifiedTeamId(f.homeTeamId ?? f.homeLogo,f.home),away=fanVerifiedTeamId(f.awayTeamId ?? f.awayLogo,f.away);
-  if(!Array.isArray(data?.response) || (data.errors && Object.keys(data.errors).length))return null;
-  // When a fixture has no configured API-Football IDs, use exact normalized
-  // team names from the provider response as a safe fallback. Kickoff proximity,
-  // full-time status and uniqueness are still mandatory; ambiguous matches stay pending.
-  const teamMatches=(expected,id,actual)=>id
-    ? String(actual?.id ?? '')===id
-    : fanSameTeam(expected,actual?.name);
+  const home=fanTeamId(f.homeTeamId ?? f.homeLogo),away=fanTeamId(f.awayTeamId ?? f.awayLogo);
+  if(!home || !away || !Array.isArray(data?.response) || (data.errors && Object.keys(data.errors).length))return null;
   const found=[];
   for(const e of data.response) {
     if(!['FT','AET','PEN'].includes(e?.fixture?.status?.short))continue;
-    const at=new Date(e.fixture.date).getTime(),kickoff=new Date(f.kickoff).getTime();
-    if(!Number.isFinite(at) || !Number.isFinite(kickoff) || Math.abs(at-kickoff)>4*3600000)continue;
-    const straight=teamMatches(f.home,home,e.teams?.home) && teamMatches(f.away,away,e.teams?.away);
-    const reverse=teamMatches(f.home,home,e.teams?.away) && teamMatches(f.away,away,e.teams?.home);
+    if(Math.abs(new Date(e.fixture.date).getTime()-new Date(f.kickoff).getTime())>4*3600000 || !Number.isFinite(new Date(e.fixture.date).getTime()))continue;
+    const straight=String(e.teams?.home?.id)===home && String(e.teams?.away?.id)===away;
+    const reverse=String(e.teams?.home?.id)===away && String(e.teams?.away?.id)===home;
     if(!straight && !reverse)continue;
     // Fulltime is the 90-minute score; never use goals/extra-time/penalty totals.
     const h=fanResultScore(e.score?.fulltime?.home),a=fanResultScore(e.score?.fulltime?.away);
@@ -2599,7 +2546,6 @@ async function fanResultJson(url,headers={}) {
   if(!response.ok)throw new Error('Final-score provider unavailable');
   return response.json();
 }
-const fanApiPause={until:0};
 async function fanSyncResults(env) {
   const db=env.DB,now=Date.now();
   // Shared D1 lease bounds provider traffic across Worker isolates and all users.
@@ -2610,14 +2556,12 @@ async function fanSyncResults(env) {
   let rows=await db.prepare(`SELECT p.match_key,MIN(p.kickoff) AS kickoff,MAX(p.title) AS title,j.fixture_json,COALESCE(j.checked_at,0) AS checked_at
     FROM fan_picks p LEFT JOIN fan_result_jobs j ON j.match_key=p.match_key
     WHERE p.kickoff<=? AND NOT EXISTS(SELECT 1 FROM fan_results r WHERE r.match_key=p.match_key) AND COALESCE(j.checked_at,0)<=?
-    GROUP BY p.match_key ORDER BY COALESCE(j.checked_at,0) ASC,MIN(p.kickoff) DESC LIMIT 8`).bind(now-90*60000,now-300000).all();
+    GROUP BY p.match_key ORDER BY COALESCE(j.checked_at,0) ASC,MIN(p.kickoff) DESC LIMIT 4`).bind(now-90*60000,now-300000).all();
   if(!rows.results.length)return {status:'waiting',message:'Final scores are checked automatically. Awaiting a verified result.'};
   let fixtures=[];
   try{fixtures=await fanFixtures(env,2500);}catch{} // Historical picks still work after feed removal/outage.
   const cache=new Map();let settled=0,unavailable=false;
-  // A failing paid API (quota/limit) must not mark every pending pick as
-  // "provider unavailable" while the free source works; only ESPN failures count.
-  const load=(url,headers)=>{if(!cache.has(url))cache.set(url,fanResultJson(url,headers).catch(()=>{if(!headers || !headers['x-apisports-key'])unavailable=true;return null;}));return cache.get(url);};
+  const load=(url,headers)=>{if(!cache.has(url))cache.set(url,fanResultJson(url,headers).catch(()=>{unavailable=true;return null;}));return cache.get(url);};
   await Promise.all(rows.results.map(async row=> {
     let f;try{f=JSON.parse(row.fixture_json || 'null');}catch{}
     const titleParts=row.title.split(' vs ');
@@ -2645,18 +2589,10 @@ async function fanSyncResults(env) {
         result=fanEspnFinal(f,await load(allUrl));
       }
       // Optional existing API-Football binding gives verified 90-minute scores after ET/penalties too.
-      const team=fanVerifiedTeamId(f.homeTeamId ?? f.homeLogo,f.home);
-      if(!result && env.API_FOOTBALL_KEY && Date.now()>fanApiPause.until) {
+      const team=fanTeamId(f.homeTeamId ?? f.homeLogo);
+      if(!result && env.API_FOOTBALL_KEY && team) {
         const day=new Date(row.kickoff).toISOString().slice(0,10);
-        // Team-filtered requests are cheaper and preferred. If no verified ID
-        // exists, search that date and accept only one exact name/date/final match.
-        const apiUrl=team
-          ? `https://v3.football.api-sports.io/fixtures?team=${team}&date=${day}`
-          : `https://v3.football.api-sports.io/fixtures?date=${day}`;
-        const apiData=await load(apiUrl,{'x-apisports-key':env.API_FOOTBALL_KEY});
-        // Rate-limit/quota replies: stop spending requests on it for 30 minutes.
-        if(!apiData || (apiData.errors && Object.keys(apiData.errors).length))fanApiPause.until=Date.now()+30*60000;
-        result=fanApiFinal(f,apiData);
+        result=fanApiFinal(f,await load(`https://v3.football.api-sports.io/fixtures?team=${team}&date=${day}`,{'x-apisports-key':env.API_FOOTBALL_KEY}));
       }
       if(result) {
         const write=await db.prepare('INSERT OR IGNORE INTO fan_results(match_key,home,away) VALUES(?,?,?)').bind(row.match_key,result.home,result.away).run();
@@ -2804,12 +2740,6 @@ async function fanEspnRecentForm(env,fixture,name,kickoff) {
 }
 async function fanAnalysisForm(env,fixture,teamId,name,kickoff) {
   let original;
-  // Missing API-Football IDs should not block analysis: resolve the club through
-  // the fixture's verified ESPN league and team directory instead of querying team=null.
-  if(!teamId) {
-    try { return await fanEspnRecentForm(env,fixture,name,kickoff); }
-    catch(e) { throw e instanceof FanFormError ? e : new FanFormError('Recent-results source could not be reached.'); }
-  }
   try{const form=await fanRecentForm(env,teamId,kickoff);if(form.matches.length>=3)return form;original=new FanFormError('Not enough recent results are available for this club.','insufficient_results');}
   catch(e){original=e instanceof FanFormError?e:new FanFormError('Recent-results source could not be reached.');}
   try{return await fanEspnRecentForm(env,fixture,name,kickoff);}catch(e){
