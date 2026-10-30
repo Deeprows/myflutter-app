@@ -29,6 +29,10 @@ class FanZoneScreen extends StatefulWidget {
   final FanZonePage page;
   final VoidCallback? onPredict, onOpenMenu, onExit;
 
+  /// Hides the app bar when this page is shown inside another screen that
+  /// already has one (e.g. Ranks opened from the Predict page).
+  final bool embedded;
+
   const FanZoneScreen({
     super.key,
     required this.active,
@@ -36,6 +40,7 @@ class FanZoneScreen extends StatefulWidget {
     this.onPredict,
     this.onOpenMenu,
     this.onExit,
+    this.embedded = false,
   });
   @override
   State<FanZoneScreen> createState() => _FanZoneScreenState();
@@ -256,7 +261,9 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     };
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
+      appBar: widget.embedded
+          ? null
+          : AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -329,6 +336,23 @@ class _FanZoneScreenState extends State<FanZoneScreen>
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const SportsNewsScreen(),
+                ),
+              ),
+            ),
+          if (widget.page == FanZonePage.predict)
+            IconButton(
+              tooltip: 'Ranks',
+              icon: const Icon(Icons.leaderboard_rounded),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const ContentShortcutScreen(
+                    title: 'Ranks',
+                    child: FanZoneScreen(
+                      active: true,
+                      page: FanZonePage.ranks,
+                      embedded: true,
+                    ),
+                  ),
                 ),
               ),
             ),
