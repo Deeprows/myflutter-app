@@ -2,6 +2,7 @@
 /// Never render raw socket/client exceptions, URLs, hostnames, backend/setup
 /// details or stack traces in the UI.
 const _offline = 'No connection. Check your internet and try again.';
+const _slow = 'This is taking too long. Check your connection and try again.';
 
 String safeErrorMessage(
   Object error, {
@@ -13,6 +14,12 @@ String safeErrorMessage(
     '',
   );
   final lower = message.toLowerCase();
+
+  if (lower.contains('timeoutexception') ||
+      lower.contains('timed out') ||
+      lower.contains('future not completed')) {
+    return _slow;
+  }
 
   // Connectivity problems get a friendly, specific message.
   const network = [
@@ -28,8 +35,6 @@ String safeErrorMessage(
     'network is unreachable',
     'handshakeexception',
     'tlsexception',
-    'timeoutexception',
-    'timed out',
     'os error:',
     'errno',
   ];
