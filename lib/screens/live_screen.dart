@@ -299,6 +299,7 @@ class _LiveScreenState extends State<LiveScreen> {
                 '${f.league.isEmpty ? '' : ' · ${f.league}'}',
             url: f.url,
             altUrl: f.hasAlt ? f.altUrl : null,
+              moreUrls: f.moreUrls,
             isLive: phase == MatchPhase.live,
             chatMatch: f.title,
           ),
@@ -807,7 +808,7 @@ class _Header extends StatelessWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                'Watch Highlights'.tr,
+                                'Highlights'.tr,
                                 style: const TextStyle(
                                   fontSize: 11,
                                   height: 1.1,
