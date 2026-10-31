@@ -20,16 +20,11 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
 
   /// Upcoming matches from other sources (the server's ESPN feed) that are not
   /// in the app's own fixture list.
-  List<Fixture> _external = [];
 
   /// Matchups the user typed in themselves. Teams are resolved on the server.
   final List<Fixture> _custom = [];
   final TextEditingController _typed = TextEditingController();
   final ScrollController _scroll = ScrollController();
-  String _leagueFilter = '';
-  int _extShown = 20;
-  bool _extLoading = false;
-  String? _extError;
   final Set<String> _selected = {};
   final Map<String, Map<String, dynamic>> _results = {};
   final Map<String, String> _failures = {};
@@ -61,30 +56,12 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     super.dispose();
   }
 
-  List<Fixture> get _all => [..._custom, ..._fixtures, ..._external];
+  List<Fixture> get _all => [..._custom, ..._fixtures];
   static bool _isCustom(Fixture f) => f.id.startsWith('custom:');
   static bool _isExternal(Fixture f) => f.id.startsWith('ext:');
 
   static String _n(String s) =>
       s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-  static bool _like(String a, String b) {
-    final x = _n(a), y = _n(b);
-    if (x.isEmpty || y.isEmpty) return false;
-    return x == y ||
-        (x.length >= 4 && y.length >= 4 && (x.contains(y) || y.contains(x)));
-  }
-
-  /// The same real-world match listed by two sources.
-  static bool _sameMatch(Fixture a, Fixture b) =>
-      _like(a.home, b.home) &&
-      _like(a.away, b.away) &&
-      a.kickoff.difference(b.kickoff).abs() < const Duration(hours: 18);
-
-  /// External matches that the app's own list does not already contain.
-  List<Fixture> get _extFresh => _external
-      .where((e) => !_fixtures.any((f) => _sameMatch(f, e)))
-      .toList();
-
   void _prune() {
     final keys = _all.map(FanZoneService.matchKey).toSet();
     _selected.retainAll(keys);
@@ -93,8 +70,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   Future<void> _load() async {
     if (!mounted || _loading || _busy) return;
     setState(() => _loading = true);
-    // Other sources load in parallel and can never break the app's own list.
-    final external = _loadExternal();
     try {
       final fixtures = await FeedService().loadFixtures(remote: true);
       if (!mounted) return;
@@ -112,50 +87,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-    await external;
     if (mounted) setState(_prune);
-  }
-
-  Future<void> _loadExternal() async {
-    if (_extLoading) return;
-    if (mounted) setState(() => _extLoading = true);
-    try {
-      final data = await FanZoneService.call(
-        'ai-predict/matches',
-        timeout: const Duration(seconds: 30),
-      );
-      final parsed = <Fixture>[];
-      for (final m in FanZoneService.rows(data['matches'])) {
-        final f = Fixture.tryParse({...m, 'id': 'ext:${m['id']}'});
-        if (f != null && f.kickoff.isAfter(DateTime.now())) parsed.add(f);
-      }
-      parsed.sort((a, b) => a.kickoff.compareTo(b.kickoff));
-      if (!mounted) return;
-      setState(() {
-        _external = parsed;
-        _extError = null;
-      });
-    } catch (e) {
-      // The real reason goes to the log; users get a short plain-language line.
-      debugPrint('AI Predict: other-league matches failed: $e');
-      final raw = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '').trim();
-      final notDeployed = raw.toLowerCase() == 'not found' ||
-          raw.toLowerCase().contains('method not allowed');
-      if (mounted) {
-        setState(
-          () => _extError = notDeployed
-              ? 'More matches are not available yet. Please try again later.'
-              : (raw.isNotEmpty &&
-                        raw.length <= 120 &&
-                        !RegExp(r'https?://|worker|secret', caseSensitive: false)
-                            .hasMatch(raw)
-                    ? raw
-                    : 'More matches could not be loaded.'),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _extLoading = false);
-    }
   }
 
   void _select(Fixture f, bool selected) {
@@ -632,7 +564,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               ),
               SizedBox(height: 4),
               Text(
-                'Pick up to 3 matches from our list or other leagues, or type your own. We study the last 5 results of each team: form, goals and likely outcomes.',
+                'Pick up to 3 matches from our list, or type your own. We study the last 5 results of each team: form, goals and likely outcomes.',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 12.5,
@@ -807,35 +739,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     );
   }
 
-  Widget _leagueChips(List<String> leagues, String active) {
-    const accent = Color(0xFF8E6BFF);
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (final l in ['', ...leagues])
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                label: Text(l.isEmpty ? 'All' : l),
-                selected: active == l,
-                selectedColor: accent.withValues(alpha: .28),
-                labelStyle: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-                visualDensity: VisualDensity.compact,
-                onSelected: (_) => setState(() {
-                  _leagueFilter = l;
-                  _extShown = 20;
-                }),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   /// Analyses (and failures) for the matches that are currently selected.
   List<Widget> _resultWidgets() {
     final out = <Widget>[];
@@ -857,80 +760,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       if (_results.containsKey(key)) out.add(_result(f, _results[key]!));
     }
     return out;
-  }
-
-  List<Widget> _moreMatches() {
-    final fresh = _extFresh;
-    final counts = <String, int>{};
-    for (final f in fresh) {
-      if (f.league.isNotEmpty) counts[f.league] = (counts[f.league] ?? 0) + 1;
-    }
-    final leagues = counts.keys.toList()
-      ..sort((a, b) => counts[b]!.compareTo(counts[a]!));
-    final active = leagues.contains(_leagueFilter) ? _leagueFilter : '';
-    final shown = fresh
-        .where((f) => active.isEmpty || f.league == active)
-        .toList();
-    final visible = shown.take(_extShown).toList();
-    return [
-      const SizedBox(height: 18),
-      Row(
-        children: [
-          const Text(
-            'MORE MATCHES · OTHER LEAGUES',
-            style: TextStyle(
-              fontSize: 11,
-              letterSpacing: 1.2,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFFB39DFF),
-            ),
-          ),
-          const Spacer(),
-          if (_extLoading)
-            const SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-        ],
-      ),
-      const SizedBox(height: 4),
-      Text(
-        'Fixtures from other sources that are not in our list. You can analyse them too.',
-        style: TextStyle(fontSize: 11.5, color: Ui.muted),
-      ),
-      const SizedBox(height: 10),
-      if (_extError != null && fresh.isEmpty)
-        Row(
-          children: [
-            Expanded(child: Text(_extError!)),
-            TextButton(
-              onPressed: _extLoading ? null : _loadExternal,
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      if (leagues.length > 1) ...[
-        _leagueChips(leagues, active),
-        const SizedBox(height: 10),
-      ],
-      for (final f in visible) _matchTile(f),
-      if (shown.length > visible.length)
-        Center(
-          child: TextButton(
-            onPressed: () => setState(() => _extShown += 20),
-            child: Text('Show more (${shown.length - visible.length})'),
-          ),
-        ),
-      if (!_extLoading && _extError == null && fresh.isEmpty)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Text(
-            'No other upcoming matches found right now.',
-            style: TextStyle(color: Ui.muted),
-          ),
-        ),
-    ];
   }
 
   Widget _actionBar() {
@@ -1063,13 +892,12 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                     padding: EdgeInsets.symmetric(vertical: 24),
                     child: Center(
                       child: Text(
-                        'No upcoming matches in our list yet. Try the other leagues below, or type a match above.',
+                        'No upcoming matches in our list yet. Type a match above.',
                         textAlign: TextAlign.center,
                       ),
                     ),
                   ),
                 for (final f in _fixtures) _matchTile(f),
-                ..._moreMatches(),
               ],
             ),
           ),
