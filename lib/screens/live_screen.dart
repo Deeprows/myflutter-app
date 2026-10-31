@@ -732,19 +732,6 @@ class _Header extends StatelessWidget {
                   ),
 
                   round(
-                    Icons.play_circle_outline_rounded,
-                    'Highlights'.tr,
-                    () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const ContentShortcutScreen(
-                          title: 'Highlights',
-                          child: HighlightsScreen(),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  round(
                     Icons.add_link_rounded,
                     'Play a link'.tr,
                     onLink,
@@ -790,6 +777,46 @@ class _Header extends StatelessWidget {
                         fontSize: 18,
                         height: 1.1,
                         fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const Spacer(),
+                    Material(
+                      color: Colors.white.withValues(alpha: .08),
+                      shape: const StadiumBorder(),
+                      child: InkWell(
+                        customBorder: const StadiumBorder(),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ContentShortcutScreen(
+                              title: 'Highlights',
+                              child: HighlightsScreen(),
+                            ),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.play_circle_outline_rounded,
+                                size: 13,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Highlights'.tr,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  height: 1.1,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ],
