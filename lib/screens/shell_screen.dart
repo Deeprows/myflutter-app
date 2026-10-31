@@ -21,6 +21,7 @@ import 'highlights_screen.dart';
 import 'live_screen.dart';
 import 'movies_screen.dart';
 import 'tv_screen.dart';
+import 'search_screen.dart';
 import '../utils/l10n.dart';
 
 /// Live, predictions, weekly ranks, community posts and AI analysis.
@@ -36,11 +37,12 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   int _index = 0;
   // Bottom bar order: Live, Thread, TV, Movies, AI Predict.
   // Stack slots keep their old numbers so notification targets still work:
-  // 0 Live, 3 Thread, 4 AI Predict, 6 TV, 7 Movies. Predict (1) and Profile
+  // 0 Live, 3 Thread, 4 AI Predict, 6 TV, 7 Movies, 8 Search. Predict (1) and Profile
   // now open from the Thread header; Highlights from the Live header.
-  static const _order = [0, 3, 6, 7, 4];
+  static const _order = [0, 3, 4, 6, 7, 8];
   static const _tvTab = 6;
   static const _moviesTab = 7;
+  static const _searchTab = 8;
   final Set<int> _visited = {0};
   bool _profilePrompting = false;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -218,6 +220,9 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                 _visited.contains(_moviesTab)
                     ? const MoviesScreen()
                     : const SizedBox.shrink(),
+                _visited.contains(_searchTab)
+                    ? const SearchScreen()
+                    : const SizedBox.shrink(),
               ],
             ),
             // Small brand mark on Live.
@@ -283,6 +288,11 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     label: 'Thread'.tr,
                   ),
                   NavigationDestination(
+                    icon: const Icon(Icons.auto_awesome_outlined),
+                    selectedIcon: const Icon(Icons.auto_awesome_rounded),
+                    label: 'AI Predict'.tr,
+                  ),
+                  NavigationDestination(
                     icon: const Icon(Icons.live_tv_outlined),
                     selectedIcon: const Icon(Icons.live_tv_rounded),
                     label: 'TV'.tr,
@@ -293,9 +303,8 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     label: 'Movies'.tr,
                   ),
                   NavigationDestination(
-                    icon: const Icon(Icons.auto_awesome_outlined),
-                    selectedIcon: const Icon(Icons.auto_awesome_rounded),
-                    label: 'AI Predict'.tr,
+                    icon: const Icon(Icons.search_rounded),
+                    label: 'Search'.tr,
                   ),
                 ],
                 ),
