@@ -1683,6 +1683,7 @@ const FAN_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS fan_espn_form_cache (cache_key TEXT PRIMARY KEY, data TEXT NOT NULL, fetched_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_result_jobs (match_key TEXT PRIMARY KEY, fixture_json TEXT NOT NULL DEFAULT '', checked_at INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '')`,
   `CREATE TABLE IF NOT EXISTS fan_result_sync (id INTEGER PRIMARY KEY, next_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS fan_week_winners (week INTEGER NOT NULL, rank INTEGER NOT NULL, user_id TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', points INTEGER NOT NULL DEFAULT 0, played INTEGER NOT NULL DEFAULT 0, won INTEGER NOT NULL DEFAULT 0, finalized_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(week,rank))`,
   `CREATE TABLE IF NOT EXISTS fan_clubs (user_id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', logo TEXT NOT NULL DEFAULT '')`,
   `CREATE TABLE IF NOT EXISTS fan_post_matches (post_id TEXT PRIMARY KEY, fixture_json TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_users (id TEXT PRIMARY KEY, name TEXT NOT NULL, last_post INTEGER NOT NULL DEFAULT 0)`,
@@ -1781,6 +1782,8 @@ async function fanZone(request, env, url) {
       headers.set('content-security-policy',"default-src 'none'; sandbox");
       return new Response(image.body,{headers});
     }
+    // A static page (no data, no secret) that talks to the header-protected admin routes below.
+    if (url.pathname === '/fan/admin' && request.method === 'GET') return fanAdminPage();
     // Admin routes use a secret in the header, never a URL or the app.
     if (url.pathname.startsWith('/fan/admin/')) {
       const secret = env.ADMIN_TOKEN || env.STATS_TOKEN;
@@ -1789,6 +1792,7 @@ async function fanZone(request, env, url) {
         const rows = await db.prepare('SELECT match_key,title,kickoff,COUNT(*) AS picks FROM fan_picks GROUP BY match_key ORDER BY kickoff DESC LIMIT 300').all();
         return json({matches:rows.results});
       }
+      if (url.pathname === '/fan/admin/week' && request.method === 'GET') return await fanWeekAdmin(db,url,null);
       if (url.pathname === '/fan/admin/reports' && request.method === 'GET') {
         const rows = await db.prepare(`SELECT r.message_id,r.reason,m.text,m.room,u.name,COUNT(*) AS reports FROM fan_reports r JOIN fan_messages m ON m.id=r.message_id JOIN fan_users u ON u.id=m.user_id WHERE m.hidden=0 GROUP BY r.message_id ORDER BY reports DESC LIMIT 100`).all();
         const posts = await db.prepare(`SELECT r.post_id,p.text,p.kind,p.image_key,u.name,COUNT(*) AS reports FROM fan_post_reports r JOIN fan_posts p ON p.id=r.post_id JOIN fan_users u ON u.id=p.user_id WHERE p.hidden=0 GROUP BY r.post_id ORDER BY reports DESC LIMIT 100`).all();
@@ -1797,6 +1801,7 @@ async function fanZone(request, env, url) {
       }
       if (request.method !== 'POST') return fail('Method not allowed',405);
       const b = await request.json();
+      if (url.pathname === '/fan/admin/week/finalize' || url.pathname === '/fan/admin/week/unpublish') return await fanWeekAdmin(db,url,b);
       if (url.pathname === '/fan/admin/hide-post') {
         if(typeof b.id!=='string' || b.id.length>100)return fail('Invalid post');
         const post=await db.prepare('SELECT image_key FROM fan_posts WHERE id=?').bind(b.id).first();
@@ -1850,7 +1855,7 @@ async function fanZone(request, env, url) {
       const week = fanWeek();
       const board = await fanLeagueTable(db,week,0);
       const media=await db.prepare('SELECT avatar_at FROM fan_profile_media WHERE user_id=?').bind(id).first();
-      return json({id,name:user?.name || '',avatar_at:media?.avatar_at || 0,week,leaderboard:board.rows,board_next:board.next,result_sync:resultSync,picks:picks.results});
+      return json({id,name:user?.name || '',avatar_at:media?.avatar_at || 0,week,leaderboard:board.rows,board_next:board.next,result_sync:resultSync,winners:await fanWinners(db,8),picks:picks.results});
     }
     if(request.method==='GET' && url.pathname==='/fan/leaderboard') {
       const offset=Number(url.searchParams.get('offset') || 0),week=fanWeek();
@@ -2600,10 +2605,163 @@ const FAN_PICK_POINTS_SQL=`CASE WHEN r.home IS NULL OR r.away IS NULL THEN NULL
  WHEN p.market='btts' THEN CASE WHEN (p.selection='yes' AND r.home>0 AND r.away>0) OR (p.selection='no' AND (r.home=0 OR r.away=0)) THEN 1 ELSE 0 END
  WHEN p.market='totals' THEN CASE WHEN SUBSTR(p.selection,1,5)='over_' THEN CASE WHEN r.home+r.away=CAST(SUBSTR(p.selection,6) AS REAL) THEN NULL WHEN r.home+r.away>CAST(SUBSTR(p.selection,6) AS REAL) THEN 1 ELSE 0 END ELSE CASE WHEN r.home+r.away=CAST(SUBSTR(p.selection,7) AS REAL) THEN NULL WHEN r.home+r.away<CAST(SUBSTR(p.selection,7) AS REAL) THEN 1 ELSE 0 END END ELSE 0 END`;
 
-async function fanLeagueTable(db,week,offset) {
+// ---- Weekly winners: the running table never resets; each week the admin publishes the top three. ----
+const FAN_WEEK_MS=604800000;
+function fanWeekArg(raw) {
+  const week=Number(raw);
+  return Number.isSafeInteger(week) && week>0 && week===fanWeek(new Date(week))?week:null;
+}
+async function fanWinners(db,limit=8) {
+  const rows=await db.prepare(`SELECT week,rank,user_id AS id,name,points,played,won FROM fan_week_winners
+    WHERE week IN (SELECT DISTINCT week FROM fan_week_winners ORDER BY week DESC LIMIT ?) ORDER BY week DESC,rank ASC`).bind(limit).all();
+  const weeks=[];
+  for(const r of rows.results) {
+    let w=weeks[weeks.length-1];
+    if(!w || w.week!==r.week){w={week:r.week,ends:r.week+FAN_WEEK_MS,winners:[]};weeks.push(w);}
+    w.winners.push({rank:r.rank,id:r.id,name:r.name,points:r.points,played:r.played,won:r.won});
+  }
+  return weeks;
+}
+async function fanWeekReport(db,week) {
+  const now=Date.now(),end=week+FAN_WEEK_MS;
+  const table=await fanLeagueTable(db,week,0,[week,end]);
+  const waiting=await db.prepare('SELECT COUNT(DISTINCT p.match_key) AS n FROM fan_picks p WHERE p.kickoff>=? AND p.kickoff<? AND p.kickoff<=? AND NOT EXISTS(SELECT 1 FROM fan_results r WHERE r.match_key=p.match_key)').bind(week,end,now).first();
+  const published=await db.prepare('SELECT rank,user_id AS id,name,points,played,won FROM fan_week_winners WHERE week=? ORDER BY rank').bind(week).all();
+  return {week,starts:week,ends:end,ended:end<=now,waiting:Number(waiting?.n || 0),standings:table.rows.filter(r=>r.played>0),published:published.results};
+}
+async function fanWeekAdmin(db,url,b) {
+  const fail=(error,status=400,extra={})=>json({error,...extra},status);
+  if(!b) {
+    const current=fanWeek(),raw=url.searchParams.get('week');
+    const week=raw===null?current-FAN_WEEK_MS:fanWeekArg(raw);
+    if(!week)return fail('Choose a valid week');
+    const report=await fanWeekReport(db,week);
+    report.weeks=Array.from({length:8},(_,i)=>{const w=current-i*FAN_WEEK_MS;return {week:w,ended:w+FAN_WEEK_MS<=Date.now()};});
+    return json(report);
+  }
+  const week=fanWeekArg(b.week);
+  if(!week)return fail('Choose a valid week');
+  if(url.pathname==='/fan/admin/week/unpublish') {
+    await db.prepare('DELETE FROM fan_week_winners WHERE week=?').bind(week).run();
+    return json({ok:true});
+  }
+  if(week+FAN_WEEK_MS>Date.now())return fail('This week has not ended yet. Publish its winners after Sunday ends (UTC).');
+  const report=await fanWeekReport(db,week);
+  if(report.waiting>0 && b.force!==true)return fail(`${report.waiting} match(es) from this week are still waiting for a confirmed final score.`,409,{code:'waiting',waiting:report.waiting});
+  let chosen;
+  if(b.winners===undefined)chosen=report.standings.slice(0,3).map(r=>r.id);
+  else {
+    if(!Array.isArray(b.winners) || b.winners.length<1 || b.winners.length>3 || new Set(b.winners).size!==b.winners.length || b.winners.some(x=>typeof x!=='string' || !x || x.length>80))return fail('Choose 1 to 3 different winners.');
+    chosen=b.winners;
+  }
+  if(!chosen.length)return fail('There are no settled predictions in this week, so there is nobody to rank.');
+  const statements=[db.prepare('DELETE FROM fan_week_winners WHERE week=?').bind(week)],now=Date.now();
+  for(const [i,id] of chosen.entries()) {
+    const member=await db.prepare('SELECT name FROM fan_users WHERE id=? UNION ALL SELECT SUBSTR(name,1,30) FROM fan_accounts WHERE id=? LIMIT 1').bind(id,id).first();
+    if(!member)return fail('One of the chosen winners is not a registered fan.');
+    const stat=report.standings.find(r=>r.id===id) || {points:0,played:0,won:0};
+    statements.push(db.prepare('INSERT INTO fan_week_winners(week,rank,user_id,name,points,played,won,finalized_at) VALUES(?,?,?,?,?,?,?,?)').bind(week,i+1,id,String(member.name || 'Fan').slice(0,30),stat.points,stat.played,stat.won,now));
+  }
+  await db.batch(statements);
+  return json({ok:true,week,winners:(await fanWeekReport(db,week)).published});
+}
+const FAN_ADMIN_PAGE=`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deeprowss admin - weekly winners</title>
+<style>
+:root{color-scheme:light dark;--bg:#fff;--fg:#14171c;--mut:#667085;--line:#d9dde3;--acc:#6d4aff;--card:#f6f7f9}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1116;--fg:#eef0f3;--mut:#98a2b3;--line:#2a313c;--card:#161b22}}
+body{margin:0;padding:20px;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,sans-serif;max-width:760px;margin-inline:auto}
+h1{font-size:22px;margin:0 0 4px}p{color:var(--mut);margin:4px 0 14px}
+input,select,button{font:inherit;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg)}
+button{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:700;cursor:pointer}button.ghost{background:transparent;color:var(--fg);border-color:var(--line)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.row>input{flex:1;min-width:200px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:14px 0}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line)}th{color:var(--mut);font-size:12px}
+.msg{padding:10px 12px;border-radius:10px;margin:10px 0}.err{background:#fde8e8;color:#8a1c1c}.ok{background:#e3f6e8;color:#14532d}.warn{background:#fff4d6;color:#7a4b00}
+.pods{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}.pods label{display:block;color:var(--mut);font-size:13px;margin-bottom:4px}.pods select{width:100%}
+</style></head><body>
+<h1>Weekly winners</h1>
+<p>Paste your admin token to review a finished week and publish the top three. The token stays in this page and is only sent to this server.</p>
+<div class="row"><input id="tok" type="password" placeholder="Admin token" autocomplete="off"><button id="load">Load weeks</button></div>
+<div class="row"><select id="week" disabled></select></div>
+<div id="msg"></div><div id="out"></div>
+<script>
+var $=function(i){return document.getElementById(i)};
+function el(t,x,c){var e=document.createElement(t);if(x!==undefined)e.textContent=x;if(c)e.className=c;return e}
+function say(text,kind){var m=$('msg');m.textContent='';if(text){var d=el('div',text,'msg '+kind);m.appendChild(d)}}
+function day(ms){return new Date(ms).toISOString().slice(0,10)}
+function api(path,body){
+  var o={headers:{authorization:'Bearer '+$('tok').value.trim(),'content-type':'application/json'}};
+  if(body){o.method='POST';o.body=JSON.stringify(body)}
+  return fetch(path,o).then(function(r){return r.json().catch(function(){return {}}).then(function(d){
+    if(!r.ok){var e=new Error(d.error||('Error '+r.status));e.data=d;e.status=r.status;throw e}return d})});
+}
+function loadWeeks(){
+  say('Loading...','warn');
+  api('/fan/admin/week').then(function(d){
+    var s=$('week');s.textContent='';
+    d.weeks.forEach(function(w){var o=el('option',day(w.week)+' to '+day(w.week+6*86400000)+(w.ended?'':' (in progress)'));o.value=String(w.week);s.appendChild(o)});
+    s.disabled=false;s.value=String(d.week);show(d);say('','');
+  }).catch(function(e){say(e.status===401?'Wrong admin token.':e.message,'err')});
+}
+function loadWeek(){
+  api('/fan/admin/week?week='+encodeURIComponent($('week').value)).then(function(d){show(d);say('','')}).catch(function(e){say(e.message,'err')});
+}
+function show(d){
+  var out=$('out');out.textContent='';
+  var c=el('div','','card');
+  c.appendChild(el('div','Week '+day(d.starts)+' to '+day(d.ends-86400000)+' (UTC) - '+(d.ended?'finished':'still in progress'),''));
+  if(d.waiting>0)c.appendChild(el('div',d.waiting+' match(es) from this week are still waiting for a confirmed final score.','msg warn'));
+  if(d.published.length){var p=el('div','','msg ok');p.textContent='Published: '+d.published.map(function(w){return w.rank+'. '+w.name+' ('+w.points+' pts)'}).join('   ');c.appendChild(p)}
+  out.appendChild(c);
+  var t=el('table');var h=el('tr');['#','Fan','Pts','Played','Won','Lost'].forEach(function(x){h.appendChild(el('th',x))});t.appendChild(h);
+  d.standings.forEach(function(r,i){var tr=el('tr');[i+1,r.name,r.points,r.played,r.won,r.lost].forEach(function(x){tr.appendChild(el('td',String(x)))});t.appendChild(tr)});
+  var tc=el('div','','card');tc.appendChild(el('strong','Standings for this week'));
+  if(!d.standings.length)tc.appendChild(el('p','No settled predictions in this week yet.'));else tc.appendChild(t);
+  out.appendChild(tc);
+  if(!d.standings.length)return;
+  var pc=el('div','','card');pc.appendChild(el('strong','Top three (you decide)'));
+  pc.appendChild(el('p','Pre-filled from the standings. Change any place if you want a different winner.'));
+  var g=el('div','','pods');var sels=[];
+  ['1st','2nd','3rd'].forEach(function(label,i){
+    var box=el('div');box.appendChild(el('label',label+' place'));
+    var s=el('select');var none=el('option','- nobody -');none.value='';s.appendChild(none);
+    d.standings.forEach(function(r){var o=el('option',r.name+' - '+r.points+' pts');o.value=r.id;s.appendChild(o)});
+    s.value=d.published.length?((d.published[i]||{}).id||''):((d.standings[i]||{}).id||'');
+    sels.push(s);box.appendChild(s);g.appendChild(box)});
+  pc.appendChild(g);
+  var row=el('div','','row');
+  var pub=el('button','Publish winners');
+  pub.onclick=function(){
+    if(!sels[0].value)return say('Choose 1st place.','err');
+    var ids=sels.map(function(s){return s.value}).filter(Boolean);
+    send({week:d.week,winners:ids},false);
+  };
+  function send(body,force){
+    if(force)body.force=true;
+    api('/fan/admin/week/finalize',body).then(function(r){say('Published. Fans can now see these winners in the app.','ok');loadWeek()}).catch(function(e){
+      if(e.status===409&&e.data&&e.data.code==='waiting'){if(confirm(e.message+'\\n\\nPublish anyway?'))send(body,true)}
+      else say(e.message,'err')});
+  }
+  row.appendChild(pub);
+  if(d.published.length){var un=el('button','Unpublish','ghost');un.onclick=function(){if(confirm('Remove the published winners for this week?'))api('/fan/admin/week/unpublish',{week:d.week}).then(function(){say('Unpublished.','ok');loadWeek()}).catch(function(e){say(e.message,'err')})};row.appendChild(un)}
+  pc.appendChild(row);out.appendChild(pc);
+}
+$('load').onclick=loadWeeks;$('week').onchange=loadWeek;
+</script></body></html>
+`;
+function fanAdminPage() {
+  return new Response(FAN_ADMIN_PAGE,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-robots-tag':'noindex',
+    'content-security-policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",'x-frame-options':'DENY','referrer-policy':'no-referrer'}});
+}
+
+// A running table: every settled prediction counts from the day it was made, with no weekly or monthly
+// cut-off. Points appear as soon as a match's verified result is saved (the table is computed live).
+async function fanLeagueTable(db,week,offset,range=null) {
   const result=await db.prepare(`WITH scores AS (
     SELECT p.user_id,${FAN_PICK_POINTS_SQL} AS earned FROM fan_picks p
-    LEFT JOIN fan_results r ON r.match_key=p.match_key WHERE p.kickoff>=? AND p.kickoff<?
+    LEFT JOIN fan_results r ON r.match_key=p.match_key${range?' WHERE p.kickoff>=? AND p.kickoff<?':''}
   ), members AS (
     SELECT id,name FROM fan_users UNION ALL
     SELECT a.id,SUBSTR(a.name,1,30) FROM fan_accounts a WHERE NOT EXISTS(SELECT 1 FROM fan_users u WHERE u.id=a.id)
@@ -2611,7 +2769,7 @@ async function fanLeagueTable(db,week,offset) {
     COALESCE(SUM(CASE WHEN s.earned>0 THEN 1 ELSE 0 END),0) AS won,
     COALESCE(SUM(CASE WHEN s.earned=0 THEN 1 ELSE 0 END),0) AS lost
     FROM members u LEFT JOIN scores s ON s.user_id=u.id GROUP BY u.id
-    ORDER BY points DESC,won DESC,lost ASC,u.id ASC LIMIT 51 OFFSET ?`).bind(week,week+604800000,offset).all();
+    ORDER BY points DESC,won DESC,lost ASC,u.id ASC LIMIT 51 OFFSET ?`).bind(...(range||[]),offset).all();
   return {rows:result.results.slice(0,50),next:result.results.length>50?offset+50:null};
 }
 
@@ -2738,7 +2896,7 @@ async function fanSyncResults(env) {
   let rows=await db.prepare(`SELECT p.match_key,MIN(p.kickoff) AS kickoff,MAX(p.title) AS title,j.fixture_json,COALESCE(j.checked_at,0) AS checked_at
     FROM fan_picks p LEFT JOIN fan_result_jobs j ON j.match_key=p.match_key
     WHERE p.kickoff<=? AND NOT EXISTS(SELECT 1 FROM fan_results r WHERE r.match_key=p.match_key) AND COALESCE(j.checked_at,0)<=?
-    GROUP BY p.match_key ORDER BY COALESCE(j.checked_at,0) ASC,MIN(p.kickoff) DESC LIMIT 10`).bind(now-90*60000,now-300000).all();
+    GROUP BY p.match_key ORDER BY COALESCE(j.checked_at,0) ASC,MIN(p.kickoff) DESC LIMIT 10`).bind(now-90*60000,now-120000).all();
   if(!rows.results.length)return {status:'waiting',message:'Final scores are checked automatically. Awaiting a verified result.'};
   let fixtures=[];
   try{fixtures=await fanFixtures(env,2500);}catch{} // Historical picks still work after feed removal/outage.
