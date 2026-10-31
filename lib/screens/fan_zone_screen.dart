@@ -19,6 +19,7 @@ import 'movies_screen.dart';
 import 'tv_screen.dart';
 import 'content_shortcut_screen.dart';
 import 'sports_news_screen.dart';
+import '../services/auth_service.dart';
 
 String _error(Object e) => e.toString().replaceFirst('Exception: ', '');
 
@@ -33,6 +34,13 @@ class FanZoneScreen extends StatefulWidget {
   /// already has one (e.g. Ranks opened from the Predict page).
   final bool embedded;
 
+  /// Thread tab in the main shell: profile avatar and a Predict button in
+  /// the header (Movies now has its own bottom tab).
+  final bool threadHeader;
+
+  /// Opened as a pushed page: show a normal back button instead of the avatar.
+  final bool pushed;
+
   const FanZoneScreen({
     super.key,
     required this.active,
@@ -41,6 +49,8 @@ class FanZoneScreen extends StatefulWidget {
     this.onOpenMenu,
     this.onExit,
     this.embedded = false,
+    this.threadHeader = false,
+    this.pushed = false,
   });
   @override
   State<FanZoneScreen> createState() => _FanZoneScreenState();
@@ -267,18 +277,20 @@ class _FanZoneScreenState extends State<FanZoneScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        titleSpacing: 0,
+        titleSpacing: widget.pushed ? null : 0,
         toolbarHeight: 62,
-        leadingWidth: 60,
-        leading: Padding(
+        leadingWidth: widget.pushed ? null : 60,
+        leading: widget.pushed ? null : Padding(
           padding: const EdgeInsets.only(left: 12),
           child: IconButton(
             tooltip: widget.onOpenMenu != null
                 ? 'Account menu'
                 : 'Your public profile',
-            onPressed:
-                widget.onOpenMenu ??
-                (_myId.isEmpty ? null : () => _openProfile(_myId)),
+            onPressed: widget.onOpenMenu ??
+                () {
+                  final id = AuthService.instance.user?.id ?? _myId;
+                  if (id.isNotEmpty) _openProfile(id);
+                },
             icon: _name.isEmpty
                 ? const Icon(Icons.person_add_alt_1_rounded)
                 : FanAvatar(
@@ -339,6 +351,20 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                 ),
               ),
             ),
+          if (widget.threadHeader)
+            IconButton(
+              tooltip: 'Predict',
+              icon: const Icon(Icons.sports_soccer_rounded),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const FanZoneScreen(
+                    active: true,
+                    page: FanZonePage.predict,
+                    pushed: true,
+                  ),
+                ),
+              ),
+            ),
           if (widget.page == FanZonePage.predict)
             IconButton(
               tooltip: 'Ranks',
@@ -362,6 +388,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
               onPressed: widget.onExit,
               icon: const Icon(Icons.apps_rounded),
             ),
+          if (!widget.threadHeader)
           IconButton(
             tooltip: shortcut,
             icon: Icon(icon),
