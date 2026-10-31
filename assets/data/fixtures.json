@@ -8,6 +8,8 @@
     "duration": 130,
     "url": "https://ch.nexa.st/stream?id=9",
     "altUrl": "https://forprivateuse.sbs/embedextra/tv/9.php",
+    "altUrl2": "https://s1.kora.st/ch.php?id=9",
+    "altUrl3": "",
     "homeLogo": "49",
     "awayLogo": "33"
   },
@@ -20,6 +22,8 @@
     "duration": 130,
     "url": "https://matchora.to/embed/match/2494081",
     "altUrl": "",
+    "altUrl2": "",
+    "altUrl3": "",
     "homeLogo": "35",
     "awayLogo": "63"
   },
@@ -32,6 +36,8 @@
     "duration": 130,
     "url": "https://matchora.to/embed/match/2494086",
     "altUrl": "",
+    "altUrl2": "",
+    "altUrl3": "",
     "homeLogo": "55",
     "awayLogo": "65"
   },
@@ -44,6 +50,8 @@
     "duration": 130,
     "url": "https://matchora.to/embed/match/2494089",
     "altUrl": "",
+    "altUrl2": "",
+    "altUrl3": "",
     "homeLogo": "1346",
     "awayLogo": "746"
   },
@@ -56,6 +64,8 @@
     "duration": 130,
     "url": "https://matchora.to/embed/match/2494087",
     "altUrl": "",
+    "altUrl2": "",
+    "altUrl3": "",
     "homeLogo": "64",
     "awayLogo": "57"
   },
@@ -68,6 +78,8 @@
     "duration": 130,
     "url": "https://matchora.to/embed/match/2494085",
     "altUrl": "https://forprivateuse.sbs/embedextra/tv/9.php",
+    "altUrl2": "https://ch.nexa.st/stream?id=9",
+    "altUrl3": "https://s1.kora.st/ch.php?id=9",
     "homeLogo": "50",
     "awayLogo": "51"
   },
@@ -80,6 +92,8 @@
     "duration": 130,
     "url": "https://forprivateuse.sbs/embedextra/tv/9.php",
     "altUrl": "https://streamtp99a.sbs/global1.php?stream=espn1cl",
+    "altUrl2": "https://ch.nexa.st/stream?id=9",
+    "altUrl3": "https://s1.kora.st/ch.php?id=9",
     "homeLogo": "47",
     "awayLogo": "52"
   },
@@ -92,6 +106,8 @@
     "duration": 130,
     "url": "https://s1.kora.st/ch.php?id=9",
     "altUrl": "https://forprivateuse.sbs/embedextra/tv/9.php",
+    "altUrl2": "https://ch.nexa.st/stream?id=9",
+    "altUrl3": "",
     "homeLogo": "66",
     "awayLogo": "36"
   },
@@ -104,6 +120,8 @@
     "duration": 130,
     "url": "https://forprivateuse.sbs/embedextra/tv/31.php",
     "altUrl": "https://s1.kora.st/ch.php?id=31",
+    "altUrl2": "",
+    "altUrl3": "",
     "homeLogo": "489",
     "awayLogo": "505"
   },
@@ -116,6 +134,8 @@
     "duration": 130,
     "url": "https://matchora.to/embed/match/2506276",
     "altUrl": "",
+    "altUrl2": "",
+    "altUrl3": "",
     "homeLogo": "728",
     "awayLogo": "538"
   },
@@ -128,6 +148,8 @@
     "duration": 130,
     "url": "https://matchora.to/embed/match/2506273",
     "altUrl": "",
+    "altUrl2": "",
+    "altUrl3": "",
     "homeLogo": "543",
     "awayLogo": "573"
   },
@@ -140,6 +162,8 @@
     "duration": 130,
     "url": "https://s1.kora.st/ch.php?id=32",
     "altUrl": "https://forprivateuse.sbs/embedextra/tv/32.php",
+    "altUrl2": "",
+    "altUrl3": "",
     "homeLogo": "529",
     "awayLogo": "542"
   }
