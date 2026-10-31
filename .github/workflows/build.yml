@@ -245,6 +245,7 @@ jobs:
         run: |
           node cloudflare/fan_auth.test.mjs
           node cloudflare/ai_predict.test.mjs
+          node cloudflare/ai_predict_any.test.mjs
           node cloudflare/fan_zone.test.mjs
           node cloudflare/fan_auto_results.test.mjs
           node cloudflare/sports_news.test.mjs
