@@ -413,6 +413,395 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         ),
       );
 
+  // ---------------------------------------------------------------------------
+  // CHARTS
+  // ---------------------------------------------------------------------------
+
+  static const _homeColor = Color(0xFF8E6BFF);
+  static const _awayColor = Color(0xFF26C6DA);
+
+  List<Map<String, dynamic>> _matchesOf(Map form) =>
+      FanZoneService.rows(form['matches']);
+
+  num _count(Map form, bool Function(Map<String, dynamic>) test) =>
+      _matchesOf(form).where(test).length;
+
+  Widget _cmpRow(String label, num h, num a, {int decimals = 0}) {
+    String fmt(num v) => v.toStringAsFixed(decimals);
+    final total = h + a;
+    final hf = total <= 0 ? .5 : (h / total).toDouble();
+    final left = (hf * 1000).round().clamp(40, 960);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 11),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 44,
+                child: Text(
+                  fmt(h),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Ui.muted, fontSize: 11.5),
+                ),
+              ),
+              SizedBox(
+                width: 44,
+                child: Text(
+                  fmt(a),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: SizedBox(
+              height: 6,
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: left,
+                    child: const ColoredBox(color: _homeColor),
+                  ),
+                  const SizedBox(width: 2),
+                  Expanded(
+                    flex: 1000 - left,
+                    child: const ColoredBox(color: _awayColor),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _panel({required String title, required Widget child}) => Container(
+    margin: const EdgeInsets.only(top: 12),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: .04),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: Ui.line),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title.toUpperCase(),
+          style: TextStyle(
+            fontSize: 10.5,
+            letterSpacing: 1.1,
+            fontWeight: FontWeight.w900,
+            color: Ui.muted,
+          ),
+        ),
+        const SizedBox(height: 10),
+        child,
+      ],
+    ),
+  );
+
+  Widget _legend(Fixture f) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: _homeColor,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            f.home,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            f.away,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: _awayColor,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _comparison(Fixture f, Map data) {
+    final h = Map<String, dynamic>.from(data['home'] as Map);
+    final a = Map<String, dynamic>.from(data['away'] as Map);
+    final hp = (h['played'] as num?)?.toInt() ?? 0;
+    final ap = (a['played'] as num?)?.toInt() ?? 0;
+    double per(num v, int n) => n == 0 ? 0 : v / n;
+    final extras = data['extras'] is Map ? data['extras'] as Map : null;
+    final hc = extras?['home'] is Map ? (extras!['home'] as Map)['cards'] : null;
+    final ac = extras?['away'] is Map ? (extras!['away'] as Map)['cards'] : null;
+    int pts(Map m) => ((m['wins'] as num?) ?? 0).toInt() * 3 +
+        ((m['draws'] as num?) ?? 0).toInt();
+
+    return _panel(
+      title: 'Head to head form',
+      child: Column(
+        children: [
+          _legend(f),
+          _cmpRow('Points (last 5)', pts(h), pts(a)),
+          _cmpRow('Wins', (h['wins'] as num?) ?? 0, (a['wins'] as num?) ?? 0),
+          _cmpRow(
+            'Goals scored per match',
+            per((h['goalsFor'] as num?) ?? 0, hp),
+            per((a['goalsFor'] as num?) ?? 0, ap),
+            decimals: 1,
+          ),
+          _cmpRow(
+            'Goals conceded per match',
+            per((h['goalsAgainst'] as num?) ?? 0, hp),
+            per((a['goalsAgainst'] as num?) ?? 0, ap),
+            decimals: 1,
+          ),
+          _cmpRow(
+            'Clean sheets',
+            _count(h, (m) => m['goalsAgainst'] == 0),
+            _count(a, (m) => m['goalsAgainst'] == 0),
+          ),
+          _cmpRow(
+            'Both teams scored',
+            _count(h, (m) => (m['goalsFor'] as num) > 0 && (m['goalsAgainst'] as num) > 0),
+            _count(a, (m) => (m['goalsFor'] as num) > 0 && (m['goalsAgainst'] as num) > 0),
+          ),
+          _cmpRow(
+            'Over 2.5 goals',
+            _count(h, (m) => (m['goalsFor'] as num) + (m['goalsAgainst'] as num) > 2.5),
+            _count(a, (m) => (m['goalsFor'] as num) + (m['goalsAgainst'] as num) > 2.5),
+          ),
+          if (hc is Map && ac is Map) ...[
+            _cmpRow(
+              'Yellow cards per match',
+              per((hc['yellow'] as num?) ?? 0, ((hc['matches'] as num?) ?? 0).toInt()),
+              per((ac['yellow'] as num?) ?? 0, ((ac['matches'] as num?) ?? 0).toInt()),
+              decimals: 1,
+            ),
+            _cmpRow(
+              'Red cards (last 5)',
+              (hc['red'] as num?) ?? 0,
+              (ac['red'] as num?) ?? 0,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Scored (team colour) and conceded (red) goals for the last matches,
+  /// oldest on the left.
+  Widget _goalsChart(String name, Color color, Map form) {
+    final matches = _matchesOf(form).reversed.toList();
+    var top = 3;
+    for (final m in matches) {
+      final gf = (m['goalsFor'] as num).toInt();
+      final ga = (m['goalsAgainst'] as num).toInt();
+      if (gf > top) top = gf;
+      if (ga > top) top = ga;
+    }
+    const maxH = 64.0;
+    Widget bar(int v, Color c) => Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Text('$v', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 2),
+        Container(
+          width: 11,
+          height: v == 0 ? 2 : (v / top) * maxH,
+          decoration: BoxDecoration(
+            color: c,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+      ],
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (final m in matches)
+                Column(
+                  children: [
+                    SizedBox(
+                      height: maxH + 16,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          bar((m['goalsFor'] as num).toInt(), color),
+                          const SizedBox(width: 3),
+                          bar((m['goalsAgainst'] as num).toInt(), const Color(0xFFEF5350)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      width: 20,
+                      height: 20,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _resultColor('${m['result']}').withValues(alpha: .2),
+                      ),
+                      child: Text(
+                        '${m['result']}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          color: _resultColor('${m['result']}'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _goals(Fixture f, Map data) => _panel(
+    title: 'Goals in last 5 matches',
+    child: Column(
+      children: [
+        _goalsChart(f.home, _homeColor, data['home'] as Map),
+        const SizedBox(height: 8),
+        _goalsChart(f.away, _awayColor, data['away'] as Map),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(width: 9, height: 9, color: Ui.muted),
+            const SizedBox(width: 5),
+            Text('Scored', style: TextStyle(color: Ui.muted, fontSize: 11)),
+            const SizedBox(width: 14),
+            Container(width: 9, height: 9, color: const Color(0xFFEF5350)),
+            const SizedBox(width: 5),
+            Text('Conceded', style: TextStyle(color: Ui.muted, fontSize: 11)),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  Widget _injuriesPanel(Fixture f, Map data) {
+    final extras = data['extras'] is Map ? data['extras'] as Map : null;
+    if (extras == null) return const SizedBox.shrink();
+    List? listOf(String side) {
+      final m = extras[side];
+      return m is Map && m['injuries'] is List ? m['injuries'] as List : null;
+    }
+
+    final home = listOf('home'), away = listOf('away');
+    if (home == null && away == null) return const SizedBox.shrink();
+
+    Widget team(String name, Color color, List? list) => Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            name,
+            style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          if (list == null)
+            Text('Not available', style: TextStyle(color: Ui.muted, fontSize: 12))
+          else if (list.isEmpty)
+            Text('No injuries reported', style: TextStyle(color: Ui.muted, fontSize: 12))
+          else
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final i in list.whereType<Map>())
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF5350).withValues(alpha: .12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: const Color(0xFFEF5350).withValues(alpha: .35),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.healing_rounded, size: 12, color: Color(0xFFEF5350)),
+                        const SizedBox(width: 5),
+                        Text(
+                          '${i['player']}${'${i['reason'] ?? ''}'.isEmpty ? '' : ' · ${i['reason']}'}',
+                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+
+    return _panel(
+      title: 'Injuries & absences',
+      child: Column(
+        children: [
+          team(f.home, _homeColor, home),
+          team(f.away, _awayColor, away),
+        ],
+      ),
+    );
+  }
+
   Widget _result(Fixture f, Map<String, dynamic> data) => Container(
     margin: const EdgeInsets.only(top: 14),
     decoration: BoxDecoration(
@@ -463,17 +852,21 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           '${f.away} · last ${data['away']['played']}',
           Map<String, dynamic>.from(data['away'] as Map),
         ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            const Icon(
+        _comparison(f, data),
+        _goals(f, data),
+        _injuriesPanel(f, data),
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(bottom: 6),
+            leading: const Icon(
               Icons.auto_awesome_rounded,
-              size: 16,
+              size: 18,
               color: Color(0xFFB39DFF),
             ),
-            const SizedBox(width: 6),
-            const Text(
-              'AI ANALYSIS',
+            title: const Text(
+              'TEXT ANALYSIS',
               style: TextStyle(
                 fontSize: 11,
                 letterSpacing: 1.2,
@@ -481,16 +874,26 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                 color: Color(0xFFB39DFF),
               ),
             ),
-          ],
+            subtitle: Text(
+              'Tap to read the AI write-up',
+              style: TextStyle(color: Ui.muted, fontSize: 11),
+            ),
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: SelectableText(
+                  '${data['analysis']}'.replaceAll('**', '').replaceAll('##', '').trim(),
+                  style: const TextStyle(height: 1.55, fontSize: 14),
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 8),
-        SelectableText(
-          '${data['analysis']}',
-          style: const TextStyle(height: 1.55, fontSize: 14),
-        ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 4),
         Text(
-          'Historical form is a limited sample, not a guaranteed outcome. Injuries, lineups and odds are not included.',
+          data['extras'] is Map
+              ? 'Historical form is a limited sample, not a guaranteed outcome. Injury and card data comes from the provider and may be incomplete. Lineups and odds are not included.'
+              : 'Historical form is a limited sample, not a guaranteed outcome. Injuries, cards, lineups and odds are not available for this match.',
           style: TextStyle(color: Ui.muted, fontSize: 11),
         ),
         const SizedBox(height: 4),
@@ -500,7 +903,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             onPressed: () async {
               try {
                 await Share.share(
-                  'Deeprowss AI Predict\n${f.title}\n\n${data['analysis']}\n\nSource: ${data['dataSource'] ?? 'Verified recent results'}. Outcomes are uncertain.',
+                  'Deeprowss AI Predict\n${f.title}\n\n${'${data['analysis']}'.replaceAll('**', '')}\n\nSource: ${data['dataSource'] ?? 'Verified recent results'}. Outcomes are uncertain.',
                 );
               } catch (_) {
                 if (mounted)
