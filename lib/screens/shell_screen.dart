@@ -13,13 +13,13 @@ import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/brand_tag.dart';
 import 'fan_zone_screen.dart';
-import 'fan_profile_screen.dart';
 import '../services/auth_service.dart';
 import 'ai_predict_screen.dart';
 import 'content_shortcut_screen.dart';
 import 'highlights_screen.dart';
 import 'live_screen.dart';
 import 'movies_screen.dart';
+import 'tv_screen.dart';
 import '../utils/l10n.dart';
 
 /// Live, predictions, weekly ranks, community posts and AI analysis.
@@ -33,16 +33,19 @@ class ShellScreen extends StatefulWidget {
 
 class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   int _index = 0;
-  // Bottom bar order: Live, Home, Predict, AI Predict, Profile.
-  // Ranks (index 2) now lives on the Predict page instead of the bottom bar.
-  static const _order = [0, 3, 1, 4, 5];
+  // Bottom bar order: Live, Thread, TV, Movies, AI Predict.
+  // Stack slots keep their old numbers so notification targets still work:
+  // 0 Live, 3 Thread, 4 AI Predict, 6 TV, 7 Movies. Predict (1) and Profile
+  // now open from the Thread header; Highlights from the Live header.
+  static const _order = [0, 3, 6, 7, 4];
+  static const _tvTab = 6;
+  static const _moviesTab = 7;
+  final Set<int> _visited = {0};
   bool _profilePrompting = false;
-  int _profileRev = 0;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   DateTime? _lastBack;
   Timer? _autoRefresh;
   bool _highlightsOpen = false;
-  bool _moviesOpen = false;
 
   @override
   void initState() {
@@ -50,10 +53,10 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     // A notification tap that launched the app, or one tapped while open.
     final pending = PushService.instance.tabRequest.value;
     if (pending != null) {
-      _index = pending;
+      _index = _tabFor(pending);
+      _visited.add(_index);
       PushService.instance.tabRequest.value = null;
       if (pending == 1) _openHighlights();
-      if (pending == 3) _openMovies();
     }
     PushService.instance.tabRequest.addListener(_openRequestedTab);
 
@@ -87,9 +90,28 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     final tab = PushService.instance.tabRequest.value;
     if (tab == null) return;
     PushService.instance.tabRequest.value = null;
-    if (mounted && tab != _index) setState(() => _index = tab);
+    final target = _tabFor(tab);
+    if (mounted && target != _index) {
+      setState(() {
+        _index = target;
+        _visited.add(target);
+      });
+    }
     if (tab == 1) _openHighlights();
-    if (tab == 3) _openMovies();
+  }
+
+  // Old notification tab numbers -> the tabs that exist now.
+  int _tabFor(int tab) {
+    switch (tab) {
+      case 3:
+        return _moviesTab; // Movies notifications land on the Movies tab
+      case 1:
+      case 2:
+      case 5:
+        return 0; // Highlights open on top of Live
+      default:
+        return tab;
+    }
   }
 
   // Highlight notifications still open their original content after tab 1
@@ -111,26 +133,6 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     });
   }
 
-  void _openMovies() {
-    if (_moviesOpen) return;
-    _moviesOpen = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      try {
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => const ContentShortcutScreen(
-              title: 'Movies',
-              child: MoviesScreen(),
-            ),
-          ),
-        );
-      } finally {
-        _moviesOpen = false;
-      }
-    });
-  }
-
   // The first time a person taps Home, show their profile editor. After that
   // it never appears again; they use the Profile tab to edit later.
   Future<void> _maybeShowFirstProfile() async {
@@ -146,10 +148,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
       final result = await showFirstTimeProfileEditor(context, uid);
       if (result == null) return; // could not open (offline): ask next time
       await prefs.setBool(key, true);
-      if (result && mounted) {
-        setState(() => _profileRev++);
-        ContentSync.request(force: true);
-      }
+      if (result && mounted) ContentSync.request(force: true);
     } catch (_) {
     } finally {
       _profilePrompting = false;
@@ -201,18 +200,23 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
               index: _index,
               children: [
                 const LiveScreen(),
-                FanZoneScreen(active: _index == 1),
-                // Index 2 (Ranks) is no longer a tab; keep the slot so the
-                // other indexes (and notification targets) stay the same.
+                // Slots 1, 2 and 5 are no longer tabs; kept so the other
+                // indexes (and notification targets) stay the same.
                 const SizedBox.shrink(),
-                FanZoneScreen(active: _index == 3, page: FanZonePage.banter),
-                AiPredictScreen(active: _index == 4),
-                FanProfileScreen(
-                  key: ValueKey(
-                    'profile-${AuthService.instance.user?.id ?? ''}-$_profileRev',
-                  ),
-                  userId: AuthService.instance.user?.id ?? '',
+                const SizedBox.shrink(),
+                FanZoneScreen(
+                  active: _index == 3,
+                  page: FanZonePage.banter,
+                  threadHeader: true,
                 ),
+                AiPredictScreen(active: _index == 4),
+                const SizedBox.shrink(),
+                _visited.contains(_tvTab)
+                    ? const TvScreen()
+                    : const SizedBox.shrink(),
+                _visited.contains(_moviesTab)
+                    ? const MoviesScreen()
+                    : const SizedBox.shrink(),
               ],
             ),
             // Small brand mark on Live.
@@ -261,7 +265,10 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     : 0,
                 onDestinationSelected: (i) {
                   final target = _order[i];
-                  setState(() => _index = target);
+                  setState(() {
+                    _index = target;
+                    _visited.add(target);
+                  });
                   if (target == 3) _maybeShowFirstProfile();
                 },
                 destinations: [
@@ -270,24 +277,24 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     label: 'Live'.tr,
                   ),
                   NavigationDestination(
-                    icon: const Icon(Icons.home_outlined),
-                    selectedIcon: const Icon(Icons.home_rounded),
-                    label: 'Home'.tr,
+                    icon: const Icon(Icons.forum_outlined),
+                    selectedIcon: const Icon(Icons.forum_rounded),
+                    label: 'Thread'.tr,
                   ),
                   NavigationDestination(
-                    icon: const Icon(Icons.sports_soccer_outlined),
-                    selectedIcon: const Icon(Icons.sports_soccer_rounded),
-                    label: 'Predict'.tr,
+                    icon: const Icon(Icons.live_tv_outlined),
+                    selectedIcon: const Icon(Icons.live_tv_rounded),
+                    label: 'TV'.tr,
+                  ),
+                  NavigationDestination(
+                    icon: const Icon(Icons.movie_outlined),
+                    selectedIcon: const Icon(Icons.movie_rounded),
+                    label: 'Movies'.tr,
                   ),
                   NavigationDestination(
                     icon: const Icon(Icons.auto_awesome_outlined),
                     selectedIcon: const Icon(Icons.auto_awesome_rounded),
                     label: 'AI Predict'.tr,
-                  ),
-                  NavigationDestination(
-                    icon: const Icon(Icons.person_outline_rounded),
-                    selectedIcon: const Icon(Icons.person_rounded),
-                    label: 'Profile'.tr,
                   ),
                 ],
                 ),
