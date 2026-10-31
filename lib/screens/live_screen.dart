@@ -21,6 +21,8 @@ import '../services/support_gate.dart';
 import '../widgets/link_sheet.dart';
 import '../widgets/news_ticker.dart';
 import '../widgets/pitch_painter.dart';
+import 'content_shortcut_screen.dart';
+import 'highlights_screen.dart';
 import 'player_screen.dart';
 import 'support_browser_screen.dart';
 import '../utils/l10n.dart';
@@ -725,6 +727,19 @@ class _Header extends StatelessWidget {
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.4,
+                      ),
+                    ),
+                  ),
+
+                  round(
+                    Icons.play_circle_outline_rounded,
+                    'Highlights'.tr,
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ContentShortcutScreen(
+                          title: 'Highlights',
+                          child: HighlightsScreen(),
+                        ),
                       ),
                     ),
                   ),
