@@ -807,7 +807,7 @@ class _Header extends StatelessWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                'Highlights'.tr,
+                                'Watch Highlights'.tr,
                                 style: const TextStyle(
                                   fontSize: 11,
                                   height: 1.1,
