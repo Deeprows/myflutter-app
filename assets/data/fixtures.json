@@ -1,1 +1,146 @@
-
+[
+  {
+    "id": "1",
+    "home": "Chelsea",
+    "away": "Manchester United",
+    "league": "Premier League",
+    "kickoff": "2026-10-31T13:30:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2494084",
+    "altUrl": "",
+    "homeLogo": "49",
+    "awayLogo": "33"
+  },
+  {
+    "id": "2",
+    "home": "AFC Bournemouth",
+    "away": "Leeds United",
+    "league": "Premier League",
+    "kickoff": "2026-10-31T16:00:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2494081",
+    "altUrl": "",
+    "homeLogo": "35",
+    "awayLogo": "63"
+  },
+  {
+    "id": "3",
+    "home": "Brentford",
+    "away": "Nottingham Forest",
+    "league": "Premier League",
+    "kickoff": "2026-10-31T16:00:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2494086",
+    "altUrl": "",
+    "homeLogo": "55",
+    "awayLogo": "65"
+  },
+  {
+    "id": "4",
+    "home": "Coventry City",
+    "away": "Sunderland",
+    "league": "Premier League",
+    "kickoff": "2026-10-31T16:00:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2494089",
+    "altUrl": "",
+    "homeLogo": "1346",
+    "awayLogo": "746"
+  },
+  {
+    "id": "5",
+    "home": "Hull City",
+    "away": "Ipswich Town",
+    "league": "Premier League",
+    "kickoff": "2026-10-31T16:00:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2494087",
+    "altUrl": "",
+    "homeLogo": "64",
+    "awayLogo": "57"
+  },
+  {
+    "id": "6",
+    "home": "Manchester City",
+    "away": "Brighton",
+    "league": "Premier League",
+    "kickoff": "2026-10-31T16:00:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2494085",
+    "altUrl": "",
+    "homeLogo": "50",
+    "awayLogo": "51"
+  },
+  {
+    "id": "7",
+    "home": "Tottenham Hotspur",
+    "away": "Crystal Palace",
+    "league": "Premier League",
+    "kickoff": "2026-10-31T18:30:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2494083",
+    "altUrl": "",
+    "homeLogo": "47",
+    "awayLogo": "52"
+  },
+  {
+    "id": "8",
+    "home": "Aston Villa",
+    "away": "Fulham",
+    "league": "Premier League",
+    "kickoff": "2026-10-31T21:00:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2494088",
+    "altUrl": "",
+    "homeLogo": "66",
+    "awayLogo": "36"
+  },
+  {
+    "id": "9",
+    "home": "Levante",
+    "away": "Atletico Madrid",
+    "league": "LaLiga",
+    "kickoff": "2026-10-31T14:00:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2506272",
+    "altUrl": "",
+    "homeLogo": "539",
+    "awayLogo": "530"
+  },
+  {
+    "id": "10",
+    "home": "Rayo Vallecano",
+    "away": "Celta Vigo",
+    "league": "LaLiga",
+    "kickoff": "2026-10-31T16:15:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2506276",
+    "altUrl": "",
+    "homeLogo": "728",
+    "awayLogo": "538"
+  },
+  {
+    "id": "11",
+    "home": "Real Betis",
+    "away": "Malaga",
+    "league": "LaLiga",
+    "kickoff": "2026-10-31T18:30:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2506273",
+    "altUrl": "",
+    "homeLogo": "543",
+    "awayLogo": "573"
+  },
+  {
+    "id": "13",
+    "home": "Barcelona",
+    "away": "Deportivo Alaves",
+    "league": "LaLiga",
+    "kickoff": "2026-10-31T21:00:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2506269",
+    "altUrl": "",
+    "homeLogo": "529",
+    "awayLogo": "542"
+  }
+]
