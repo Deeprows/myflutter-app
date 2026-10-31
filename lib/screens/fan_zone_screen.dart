@@ -305,7 +305,9 @@ class _FanZoneScreenState extends State<FanZoneScreen>
           ),
         ),
         centerTitle: widget.page == FanZonePage.banter,
-        title: widget.page == FanZonePage.banter
+        title: widget.threadHeader
+            ? null
+            : widget.page == FanZonePage.banter
             ? const Text(
                 'Deeprowss',
                 style: TextStyle(
@@ -341,7 +343,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                 ],
               ),
         actions: [
-          if (widget.page == FanZonePage.banter)
+          if (widget.page == FanZonePage.banter && !widget.threadHeader)
             IconButton(
               tooltip: 'Explore sports news',
               icon: const Icon(Icons.search_rounded),
@@ -352,16 +354,33 @@ class _FanZoneScreenState extends State<FanZoneScreen>
               ),
             ),
           if (widget.threadHeader)
-            IconButton(
-              tooltip: 'Predict',
-              icon: const Icon(Icons.sports_soccer_rounded),
-              onPressed: () => Navigator.of(context).push(
+            InkResponse(
+              onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const FanZoneScreen(
                     active: true,
                     page: FanZonePage.predict,
                     pushed: true,
                   ),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.sports_soccer_rounded, size: 24),
+                    SizedBox(height: 2),
+                    Text(
+                      'Predict',
+                      style: TextStyle(
+                        fontSize: 10,
+                        height: 1.1,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
