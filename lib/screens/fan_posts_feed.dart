@@ -37,6 +37,9 @@ class FanPostsFeed extends StatefulWidget {
   final List<Fixture> fixtures;
   final void Function(Fixture) onOpenMatch;
 
+  /// Bumped by the Thread header's Match Rooms button to open the rooms sheet.
+  final ValueNotifier<int>? roomsTrigger;
+
   /// Signed-in fan, shown in the "What's happening?" box.
   final String viewerName;
   final dynamic viewerAvatarAt;
@@ -52,6 +55,7 @@ class FanPostsFeed extends StatefulWidget {
     required this.onOpenLounge,
     required this.fixtures,
     required this.onOpenMatch,
+    this.roomsTrigger,
   });
   @override
   State<FanPostsFeed> createState() => _FanPostsFeedState();
@@ -72,6 +76,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     ContentSync.tick.addListener(_sync);
+    widget.roomsTrigger?.addListener(_roomsRequested);
     if (widget.active) _load();
     _poll = Timer.periodic(const Duration(seconds: 45), (_) {
       if (widget.active &&
@@ -101,6 +106,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
   @override
   void dispose() {
     ContentSync.tick.removeListener(_sync);
+    widget.roomsTrigger?.removeListener(_roomsRequested);
     _poll?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -170,6 +176,10 @@ class _FanPostsFeedState extends State<FanPostsFeed>
   // ---------------------------------------------------------------------------
   // PIECES
   // ---------------------------------------------------------------------------
+
+  void _roomsRequested() {
+    if (mounted && widget.active) _showRooms();
+  }
 
   void _showRooms() {
     showModalBottomSheet<void>(
