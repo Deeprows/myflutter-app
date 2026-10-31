@@ -102,8 +102,53 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     WidgetsBinding.instance.removeObserver(this);
     ContentSync.tick.removeListener(_sync);
     _timer?.cancel();
+    _roomsTrigger.dispose();
     super.dispose();
   }
+
+  final ValueNotifier<int> _roomsTrigger = ValueNotifier<int>(0);
+
+  /// Header action: icon with its name written underneath.
+  Widget _labeled(
+    IconData icon,
+    String label,
+    VoidCallback onTap, {
+    bool bold = false,
+  }) => InkResponse(
+    onTap: onTap,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 9),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 24),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              height: 1.1,
+              fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  void _openRanks() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => const ContentShortcutScreen(
+        title: 'Ranks',
+        child: FanZoneScreen(
+          active: true,
+          page: FanZonePage.ranks,
+          embedded: true,
+        ),
+      ),
+    ),
+  );
 
   String get _name => (_data['name'] ?? '').toString();
   String get _myId => (_data['id'] ?? '').toString();
@@ -279,8 +324,50 @@ class _FanZoneScreenState extends State<FanZoneScreen>
         scrolledUnderElevation: 0,
         titleSpacing: widget.pushed ? null : 0,
         toolbarHeight: 62,
-        leadingWidth: widget.pushed ? null : 60,
-        leading: widget.pushed ? null : Padding(
+        leadingWidth: widget.pushed ? null : (widget.threadHeader ? 66 : 60),
+        leading: widget.pushed
+            ? null
+            : widget.threadHeader
+            ? Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: InkResponse(
+                  onTap: () {
+                    final id = AuthService.instance.user?.id ?? _myId;
+                    if (_name.isEmpty && id.isEmpty) {
+                      _profile();
+                    } else if (id.isNotEmpty) {
+                      _openProfile(id);
+                    }
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _name.isEmpty
+                          ? const Icon(Icons.person_add_alt_1_rounded, size: 24)
+                          : FanAvatar(
+                              name: _name,
+                              seed: _myId,
+                              size: 26,
+                              imageUrl: FanZoneService.avatarUrl(
+                                _myId,
+                                _data['avatar_at'],
+                              ),
+                            ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Profile',
+                        style: TextStyle(
+                          fontSize: 10,
+                          height: 1.1,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : Padding(
           padding: const EdgeInsets.only(left: 12),
           child: IconButton(
             tooltip: widget.onOpenMenu != null
@@ -353,9 +440,17 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                 ),
               ),
             ),
-          if (widget.threadHeader)
-            InkResponse(
-              onTap: () => Navigator.of(context).push(
+          if (widget.threadHeader) ...[
+            _labeled(Icons.leaderboard_rounded, 'Ranks', _openRanks),
+            _labeled(
+              Icons.forum_outlined,
+              'Match Rooms',
+              () => _roomsTrigger.value++,
+            ),
+            _labeled(
+              Icons.sports_soccer_rounded,
+              'Predict',
+              () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const FanZoneScreen(
                     active: true,
@@ -364,42 +459,14 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                   ),
                 ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.sports_soccer_rounded, size: 24),
-                    SizedBox(height: 2),
-                    Text(
-                      'Predict',
-                      style: TextStyle(
-                        fontSize: 10,
-                        height: 1.1,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
+          ],
           if (widget.page == FanZonePage.predict)
-            IconButton(
-              tooltip: 'Ranks',
-              icon: const Icon(Icons.leaderboard_rounded),
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const ContentShortcutScreen(
-                    title: 'Ranks',
-                    child: FanZoneScreen(
-                      active: true,
-                      page: FanZonePage.ranks,
-                      embedded: true,
-                    ),
-                  ),
-                ),
-              ),
+            _labeled(
+              Icons.leaderboard_rounded,
+              'Ranks',
+              _openRanks,
+              bold: true,
             ),
           if (widget.onExit != null)
             IconButton(
@@ -407,7 +474,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
               onPressed: widget.onExit,
               icon: const Icon(Icons.apps_rounded),
             ),
-          if (!widget.threadHeader)
+          if (!widget.threadHeader && widget.page != FanZonePage.predict)
           IconButton(
             tooltip: shortcut,
             icon: Icon(icon),
@@ -1614,6 +1681,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     onOpenLounge: () => _discussion('lounge', 'Fan lounge'),
     fixtures: _fixtures,
     onOpenMatch: (f) => _discussion(FanZoneService.matchKey(f), f.title),
+    roomsTrigger: _roomsTrigger,
   );
 }
 
