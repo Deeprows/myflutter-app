@@ -207,6 +207,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 '${f.league.isEmpty ? '' : ' · ${f.league}'}',
             url: f.url,
             altUrl: f.hasAlt ? f.altUrl : null,
+              moreUrls: f.moreUrls,
             isLive: phase == MatchPhase.live,
             chatMatch: f.title,
           ),
