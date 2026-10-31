@@ -13,6 +13,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/brand_tag.dart';
 import 'fan_zone_screen.dart';
+import 'fan_profile_screen.dart';
 import '../services/auth_service.dart';
 import 'ai_predict_screen.dart';
 import 'content_shortcut_screen.dart';
