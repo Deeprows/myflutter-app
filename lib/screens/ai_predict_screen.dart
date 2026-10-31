@@ -137,9 +137,23 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         _external = parsed;
         _extError = null;
       });
-    } catch (_) {
+    } catch (e) {
+      // The real reason goes to the log; users get a short plain-language line.
+      debugPrint('AI Predict: other-league matches failed: $e');
+      final raw = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '').trim();
+      final notDeployed = raw.toLowerCase() == 'not found' ||
+          raw.toLowerCase().contains('method not allowed');
       if (mounted) {
-        setState(() => _extError = 'More matches could not be loaded.');
+        setState(
+          () => _extError = notDeployed
+              ? 'More matches are not available yet. Please try again later.'
+              : (raw.isNotEmpty &&
+                        raw.length <= 120 &&
+                        !RegExp(r'https?://|worker|secret', caseSensitive: false)
+                            .hasMatch(raw)
+                    ? raw
+                    : 'More matches could not be loaded.'),
+        );
       }
     } finally {
       if (mounted) setState(() => _extLoading = false);
