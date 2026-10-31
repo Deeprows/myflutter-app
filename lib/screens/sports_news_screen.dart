@@ -151,6 +151,7 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
               title: f.title,
               url: f.url,
               altUrl: f.hasAlt ? f.altUrl : null,
+              moreUrls: f.moreUrls,
               isLive: f.phaseAt(DateTime.now()) == MatchPhase.live,
               chatMatch: f.title,
             ),
