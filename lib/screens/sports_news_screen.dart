@@ -15,7 +15,17 @@ import 'player_screen.dart';
 
 /// Explore-style sports news, with publisher attribution and actual timestamps.
 class SportsNewsScreen extends StatefulWidget {
-  const SportsNewsScreen({super.key});
+  /// Embedded in the Search tab: no Scaffold, app bar or search box. The
+  /// Search tab's own box drives [query]; [leading] is shown above the news.
+  final bool embedded;
+  final String query;
+  final List<Widget> leading;
+  const SportsNewsScreen({
+    super.key,
+    this.embedded = false,
+    this.query = '',
+    this.leading = const [],
+  });
   @override
   State<SportsNewsScreen> createState() => _SportsNewsScreenState();
 }
@@ -38,7 +48,7 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
     _load();
     unawaited(_matches());
     _timer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (_foreground) {
+      if (_foreground && TickerMode.of(context)) {
         _load();
         unawaited(_matches());
       }
@@ -324,7 +334,10 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
   );
   @override
   Widget build(BuildContext context) {
-    final feed = _feeds[_category], query = _search.text.trim().toLowerCase();
+    final feed = _feeds[_category],
+        query = (widget.embedded ? widget.query : _search.text)
+            .trim()
+            .toLowerCase();
     final items = (feed?.items ?? const <SportsNewsArticle>[])
         .where(
           (a) =>
@@ -334,6 +347,7 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
         .toList();
     final today = items.where((a) => _today(a.publishedAt)).toList(),
         earlier = items.where((a) => !_today(a.publishedAt)).toList();
+    if (widget.embedded) return _body(feed, query, today, earlier, items);
     return Scaffold(
       backgroundColor: Ui.bg,
       appBar: AppBar(
@@ -375,7 +389,18 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
           ),
         ],
       ),
-      body: Column(
+      body: _body(feed, query, today, earlier, items),
+    );
+  }
+
+  Widget _body(
+    SportsNewsFeed? feed,
+    String query,
+    List<SportsNewsArticle> today,
+    List<SportsNewsArticle> earlier,
+    List<SportsNewsArticle> items,
+  ) {
+    return Column(
         children: [
           XTabBar(
             labels: const ['All sports', 'Football', 'Cricket', 'F1'],
@@ -394,7 +419,10 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
               },
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 children: [
+                  ...widget.leading,
                   if (query.isEmpty &&
                       (_tab == 0 || _tab == 1) &&
                       _fixtures.isNotEmpty) ...[
@@ -469,7 +497,6 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
             ),
           ),
         ],
-      ),
     );
   }
 }
