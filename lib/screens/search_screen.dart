@@ -18,6 +18,7 @@ import 'fan_thread_screen.dart';
 import 'fan_widgets.dart';
 import 'fan_x_widgets.dart';
 import 'player_screen.dart';
+import 'sports_news_screen.dart';
 
 /// Search tab: live football matches, movies and series, people and posts,
 /// plus a tray of trending hashtags when the search box is empty.
@@ -262,7 +263,7 @@ class _SearchScreenState extends State<SearchScreen> {
               _run(v);
             },
             decoration: InputDecoration(
-              hintText: 'Search matches, movies, people, posts'.tr,
+              hintText: 'Search matches, movies, people, news'.tr,
               prefixIcon: const Icon(Icons.search_rounded),
               suffixIcon: _query.isEmpty
                   ? null
@@ -285,17 +286,22 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ),
         Expanded(
-          child: searching ? _results() : _home(),
+          // Sports news (headlines, matches strip, tabs) lives under the box,
+          // like Explore on X. Typing filters the headlines and adds matches,
+          // movies, people and posts above them.
+          child: SportsNewsScreen(
+            embedded: true,
+            query: searching ? _query : '',
+            leading: searching ? _resultWidgets() : _trendingWidgets(),
+          ),
         ),
       ],
     );
   }
 
-  Widget _home() {
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        XSectionHeader('Trending'.tr, icon: Icons.trending_up_rounded),
+  List<Widget> _trendingWidgets() {
+    return [
+              XSectionHeader('Trending'.tr, icon: Icons.trending_up_rounded),
         if (!_trendingLoaded)
           const Padding(
             padding: EdgeInsets.all(24),
@@ -363,49 +369,15 @@ class _SearchScreenState extends State<SearchScreen> {
               },
             ),
           ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
-          child: Text(
-            'Search live football matches, movies and series, other fans and community posts.'
-                .tr,
-            style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.4),
-          ),
-        ),
-      ],
-    );
+    ];
   }
 
-  Widget _results() {
+  List<Widget> _resultWidgets() {
     final matches = _matchHits;
     final movies = _allMovieHits;
-    final empty = matches.isEmpty &&
-        movies.isEmpty &&
-        _users.isEmpty &&
-        _posts.isEmpty;
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      children: [
+    return [
         if (_busy) const LinearProgressIndicator(minHeight: 2),
-        if (empty && !_busy)
-          Padding(
-            padding: const EdgeInsets.only(top: 60),
-            child: Column(
-              children: [
-                Icon(Icons.search_off_rounded, size: 44, color: Ui.dim),
-                const SizedBox(height: 10),
-                Text(
-                  'Nothing found'.tr,
-                  style: TextStyle(
-                    color: Ui.muted,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
         if (matches.isNotEmpty) ...[
           XSectionHeader('Matches'.tr, icon: Icons.sports_soccer_rounded),
           for (final f in matches) _matchTile(f),
@@ -422,8 +394,7 @@ class _SearchScreenState extends State<SearchScreen> {
           XSectionHeader('Posts'.tr, icon: Icons.forum_outlined),
           for (final p in _posts) _postTile(p),
         ],
-      ],
-    );
+    ];
   }
 
   Widget _tile({
