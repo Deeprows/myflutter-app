@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import '../utils/safe_error_message.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/fixture.dart';
-import '../player/player_hub_screen.dart';
 import '../services/content_sync.dart';
 import '../services/fan_zone_service.dart';
 import '../services/feed_service.dart';
 import '../theme/app_theme.dart';
-import 'content_shortcut_screen.dart';
 import 'fan_widgets.dart';
 
 class AiPredictScreen extends StatefulWidget {
@@ -997,18 +995,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         style: TextStyle(fontWeight: FontWeight.w900),
       ),
       actions: [
-        IconButton(
-          tooltip: 'Player',
-          icon: const Icon(Icons.video_library_outlined),
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const ContentShortcutScreen(
-                title: 'Player',
-                child: PlayerHubScreen(active: true),
-              ),
-            ),
-          ),
-        ),
         IconButton(
           tooltip: 'Refresh matches',
           icon: const Icon(Icons.refresh_rounded),
