@@ -2632,8 +2632,22 @@ const FAN_RESULT_LEAGUES={
 function fanResultName(raw) {
   const aliases={man:'manchester',utd:'united',st:'saint',nottm:'nottingham',spurs:'tottenham',wolves:'wolverhampton'};
   const stop=new Set(['fc','cf','afc','sc','ac','as','ssc','cd','ud','fk','sk','bk','club','the','sv']);
-  return String(raw || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(t=>t && !stop.has(t)).map(t=>aliases[t] || t).join(' ');
+  return String(raw || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(t=>t && !stop.has(t) && !/^(?:1[89]\d\d|20[0-2]\d|0\d)$/.test(t)).map(t=>aliases[t] || t).join(' ');
 }
+// Providers name clubs differently ("Como 1907" / "Como", "Al-Kholood" / "Al Kholood"). Two names match when they
+// are equal, or one is a whole-word subset of the other and carries a distinctive word.
+const FAN_GENERIC_TOKENS=new Set(['al','united','city','town','real','sporting','athletic','saint','rovers','wanderers','county','albion','borough','rangers','hotspur','dynamo','inter','olympique','racing','deportivo','atletico','de','la','el','le']);
+function fanNameLike(a,b) {
+  const x=fanResultName(a),y=fanResultName(b);
+  if(!x || !y)return false;
+  if(x===y)return true;
+  const [short,long]=x.length<=y.length?[x,y]:[y,x],have=new Set(long.split(' ')),words=short.split(' ');
+  if(!words.every(w=>have.has(w)) || !words.some(w=>w.length>=3 && !FAN_GENERIC_TOKENS.has(w)))return false;
+  // Never let a women's, youth or reserve side inherit the first team's score.
+  return !long.split(' ').some(w=>!words.includes(w) && /^(?:w|women|womens|ladies|feminin\w*|femenin\w*|femminile|frauen|u\d{2}|ii|iii|b|reserves?|youth|academy|juniors?)$/.test(w));
+}
+// A feed kick-off can differ from the provider's (time zones, reschedules); the team pair must still be unique.
+const FAN_RESULT_WINDOW=20*3600000;
 function fanResultScore(value) {
   if(typeof value==='number')return Number.isInteger(value) && value>=0 && value<=50?value:null;
   return typeof value==='string' && /^\d{1,2}$/.test(value.trim()) && Number(value)<=50?Number(value):null;
@@ -2642,11 +2656,11 @@ function fanEspnHasFixture(f,data) {
   if(!fanFootballFixture(f) || !Array.isArray(data?.events))return false;
   const kickoff=new Date(f.kickoff).getTime();
   if(!Number.isFinite(kickoff))return false;
-  const same=(name,team)=>['displayName','shortDisplayName','name','location'].some(k=>fanResultName(team?.[k])===fanResultName(name));
+  const same=(name,team)=>['displayName','shortDisplayName','name','location'].some(k=>fanNameLike(team?.[k],name));
   return data.events.some(e=>{
     const c=e?.competitions?.[0];
     const at=new Date(e?.date || c?.date).getTime();
-    if(!c || !Number.isFinite(at) || Math.abs(at-kickoff)>4*3600000 || !Array.isArray(c.competitors))return false;
+    if(!c || !Number.isFinite(at) || Math.abs(at-kickoff)>FAN_RESULT_WINDOW || !Array.isArray(c.competitors))return false;
     const h=c.competitors.find(x=>x?.homeAway==='home'),a=c.competitors.find(x=>x?.homeAway==='away');
     if(!h || !a)return false;
     const straight=same(f.home,h.team) && same(f.away,a.team);
@@ -2663,19 +2677,29 @@ export function fanEspnFinal(f,data) {
   for(const e of data.events) {
     const c=e?.competitions?.[0],status=c?.status || e?.status,t=status?.type;
     // Do not use an elapsed clock or post-state alone as proof of completion.
-    if(!c || t?.completed!==true || t.state!=='post' || !['STATUS_FULL_TIME','STATUS_FINAL'].includes(t.name) || (Number(status.period)>2))continue;
+    if(!c || t?.completed!==true || t.state!=='post')continue;
+    // Ties settled in extra time or on penalties (cups) are graded on the 90-minute score, built from the two half line-scores.
+    const extra=['STATUS_FINAL_AET','STATUS_FINAL_PEN'].includes(t.name) || (t.name==='STATUS_FINAL' && Number(status.period)>2);
+    if(!extra && (!['STATUS_FULL_TIME','STATUS_FINAL'].includes(t.name) || Number(status.period)>2))continue;
     const at=new Date(e.date || c.date).getTime();
-    if(!Number.isFinite(at) || Math.abs(at-kickoff)>4*3600000)continue;
+    if(!Number.isFinite(at) || Math.abs(at-kickoff)>FAN_RESULT_WINDOW)continue;
     if(!Array.isArray(c.competitors))continue;
     const h=c.competitors.find(x=>x?.homeAway==='home'),a=c.competitors.find(x=>x?.homeAway==='away');
     if(!h || !a)continue;
-    const matches=(name,team)=>['displayName','shortDisplayName','name','location'].some(k=>fanResultName(team?.[k])===fanResultName(name));
+    const matches=(name,team)=>['displayName','shortDisplayName','name','location'].some(k=>fanNameLike(team?.[k],name));
     const straight=matches(f.home,h.team) && matches(f.away,a.team);
     const reverse=matches(f.home,a.team) && matches(f.away,h.team);
     if(!straight && !reverse)continue;
     const wanted=String(f.espnEventId || f.scoreEventId || '');
     if(wanted && String(e.id)!==wanted)continue;
-    const home=fanResultScore(h.score),away=fanResultScore(a.score);
+    const ninety=team=>{
+      if(!extra)return fanResultScore(team.score);
+      const lines=Array.isArray(team.linescores)?team.linescores:[];
+      if(lines.length<3)return null;
+      const half=lines.slice(0,2).map(l=>fanResultScore(typeof l?.value==='number'?Math.round(l.value):l?.value));
+      return half.includes(null)?null:half[0]+half[1];
+    };
+    const home=ninety(h),away=ninety(a);
     if(home===null || away===null)continue;
     out.push({home:straight?home:away,away:straight?away:home,source:'ESPN',eventId:String(e.id || '')});
   }
@@ -2714,7 +2738,7 @@ async function fanSyncResults(env) {
   let rows=await db.prepare(`SELECT p.match_key,MIN(p.kickoff) AS kickoff,MAX(p.title) AS title,j.fixture_json,COALESCE(j.checked_at,0) AS checked_at
     FROM fan_picks p LEFT JOIN fan_result_jobs j ON j.match_key=p.match_key
     WHERE p.kickoff<=? AND NOT EXISTS(SELECT 1 FROM fan_results r WHERE r.match_key=p.match_key) AND COALESCE(j.checked_at,0)<=?
-    GROUP BY p.match_key ORDER BY COALESCE(j.checked_at,0) ASC,MIN(p.kickoff) DESC LIMIT 4`).bind(now-90*60000,now-300000).all();
+    GROUP BY p.match_key ORDER BY COALESCE(j.checked_at,0) ASC,MIN(p.kickoff) DESC LIMIT 10`).bind(now-90*60000,now-300000).all();
   if(!rows.results.length)return {status:'waiting',message:'Final scores are checked automatically. Awaiting a verified result.'};
   let fixtures=[];
   try{fixtures=await fanFixtures(env,2500);}catch{} // Historical picks still work after feed removal/outage.
@@ -2723,7 +2747,7 @@ async function fanSyncResults(env) {
   await Promise.all(rows.results.map(async row=> {
     let f;try{f=JSON.parse(row.fixture_json || 'null');}catch{}
     const titleParts=row.title.split(' vs ');
-    const sameTitle=f=>titleParts.length===2 && fanResultName(f.home)===fanResultName(titleParts[0]) && fanResultName(f.away)===fanResultName(titleParts[1]);
+    const sameTitle=f=>titleParts.length===2 && fanNameLike(f.home,titleParts[0]) && fanNameLike(f.away,titleParts[1]);
     if(f && !sameTitle(f))f=null;
     f=f || fixtures.find(f=>fanKey(f)===row.match_key && sameTitle(f));
     if(!f) {
