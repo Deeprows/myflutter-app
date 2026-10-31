@@ -14,6 +14,10 @@ class Fixture {
   final String url;
   final String altUrl;
 
+  /// Extra backup streams (3rd, 4th). With [url] and [altUrl] a match can
+  /// have up to 4 sources the player switches between (1/4 ... 4/4).
+  final List<String> moreUrls;
+
   /// Optional ESPN league code (e.g. `eng.1`) used to find the live score if
   /// the general feed does not list this match.
   final String scoreLeague;
@@ -29,6 +33,7 @@ class Fixture {
     this.durationMin = AppConfig.defaultMatchMinutes,
     this.url = '',
     this.altUrl = '',
+    this.moreUrls = const [],
     this.scoreLeague = '',
   });
 
@@ -69,8 +74,22 @@ class Fixture {
       kickoff: kickoff,
       durationMin:
           int.tryParse(s('duration')) ?? AppConfig.defaultMatchMinutes,
-      url: s('url'),
-      altUrl: s('altUrl'),
+      url: s('url').isNotEmpty
+          ? s('url')
+          : (raw['urls'] is List && (raw['urls'] as List).isNotEmpty
+                ? '${(raw['urls'] as List)[0]}'.trim()
+                : ''),
+      altUrl: s('altUrl').isNotEmpty
+          ? s('altUrl')
+          : (raw['urls'] is List && (raw['urls'] as List).length > 1
+                ? '${(raw['urls'] as List)[1]}'.trim()
+                : ''),
+      moreUrls: [
+        if (raw['urls'] is List)
+          for (final u in (raw['urls'] as List).skip(2)) '$u'.trim(),
+        s('altUrl2'),
+        s('altUrl3'),
+      ].where((u) => u.isNotEmpty).toList(),
       scoreLeague: s('scoreLeague'),
     );
   }
