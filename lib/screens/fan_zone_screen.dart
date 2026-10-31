@@ -581,7 +581,11 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     for (final f in open) {
       groups.putIfAbsent(fanDayLabel(f.kickoff, now), () => []).add(f);
     }
-    final history = _showAllHistory ? picks : picks.take(5).toList();
+    // Pending predictions are not listed; only settled ones (and pushes).
+    final settledPicks = picks
+        .where((p) => fanPickPoints(p) != null || fanPredictionPush(p))
+        .toList();
+    final history = _showAllHistory ? settledPicks : settledPicks.take(5).toList();
     final pending = picks.where((p) => fanPickPoints(p) == null).length;
     final nextUp = openAll.firstOrNull;
 
@@ -665,12 +669,14 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             ),
             for (final f in started) _closedFixture(f, picks),
           ],
-          if (picks.isNotEmpty) ...[
+          if (settledPicks.isNotEmpty) ...[
             FanSectionTitle(
               'Your predictions',
               icon: Icons.history_rounded,
-              trailing: picks.length > 5
-                  ? (_showAllHistory ? 'Show less' : 'Show all ${picks.length}')
+              trailing: settledPicks.length > 5
+                  ? (_showAllHistory
+                        ? 'Show less'
+                        : 'Show all ${settledPicks.length}')
                   : null,
               onTrailing: () =>
                   setState(() => _showAllHistory = !_showAllHistory),
