@@ -13,6 +13,8 @@ import '../theme/app_theme.dart';
 import '../widgets/app_refresh.dart';
 import '../widgets/link_sheet.dart';
 import '../widgets/pitch_painter.dart';
+import '../player/player_hub_screen.dart';
+import 'content_shortcut_screen.dart';
 import 'native_player_screen.dart';
 import 'player_screen.dart';
 import '../utils/l10n.dart';
@@ -388,6 +390,18 @@ class _TvScreenState extends State<TvScreen> {
                             fontSize: 26,
                             height: 1.1,
                             fontWeight: FontWeight.w900)),
+                  ),
+                  IconButton(
+                    tooltip: 'Player',
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ContentShortcutScreen(
+                          title: 'Player',
+                          child: PlayerHubScreen(active: true),
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.video_library_outlined),
                   ),
                   IconButton(
                     tooltip: 'Play a link',
