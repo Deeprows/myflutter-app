@@ -286,6 +286,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
           subtitle: '${f.league.isEmpty ? 'Football' : f.league} • ${fanClock(f.kickoff)}',
           url: f.url,
           altUrl: f.hasAlt ? f.altUrl : null,
+              moreUrls: f.moreUrls,
           isLive: f.phaseAt(DateTime.now()) == MatchPhase.live,
           chatMatch: f.title,
         ),
