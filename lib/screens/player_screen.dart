@@ -36,6 +36,10 @@ class PlayerScreen extends StatefulWidget {
   final String? subtitle;
   final String url;
   final String? altUrl;
+
+  /// 3rd and 4th stream sources (the player then shows Switch 1/4 and
+  /// a numbered picker).
+  final List<String> moreUrls;
   final bool isLive;
 
   /// Optional per-stream headers (IPTV Nexus). The referer becomes the
@@ -59,6 +63,7 @@ class PlayerScreen extends StatefulWidget {
     required this.url,
     this.subtitle,
     this.altUrl,
+    this.moreUrls = const [],
     this.referer,
     this.userAgent,
     this.altReferer,
@@ -77,21 +82,25 @@ class _PlayerScreenState extends State<PlayerScreen>
   late final WebViewController _wc;
   final GlobalKey _videoKey = GlobalKey();
 
-  late final List<String> _sources = [
-    widget.url,
-    if (widget.altUrl != null &&
-        widget.altUrl!.trim().isNotEmpty &&
-        widget.altUrl!.trim() != widget.url.trim())
-      widget.altUrl!,
-  ];
-  late final List<String?> _referers = [
-    widget.referer,
-    if (_sources.length > 1) widget.altReferer,
-  ];
-  late final List<String?> _agents = [
-    widget.userAgent,
-    if (_sources.length > 1) widget.altUserAgent,
-  ];
+  late final List<({String url, String? ref, String? ua})> _entries = () {
+    final out = <({String url, String? ref, String? ua})>[
+      (url: widget.url, ref: widget.referer, ua: widget.userAgent),
+    ];
+    void add(String? u, {String? ref, String? ua}) {
+      final t = (u ?? '').trim();
+      if (t.isEmpty || out.any((e) => e.url.trim() == t)) return;
+      out.add((url: u!, ref: ref, ua: ua));
+    }
+
+    add(widget.altUrl, ref: widget.altReferer, ua: widget.altUserAgent);
+    for (final u in widget.moreUrls) {
+      add(u);
+    }
+    return out;
+  }();
+  late final List<String> _sources = [for (final e in _entries) e.url];
+  late final List<String?> _referers = [for (final e in _entries) e.ref];
+  late final List<String?> _agents = [for (final e in _entries) e.ua];
   int _srcIdx = 0;
 
   /// Page origin for the built-in player. Uses the stream's own referer when
@@ -380,6 +389,55 @@ class _PlayerScreenState extends State<PlayerScreen>
     _start();
   }
 
+  void _pickSource(int i) {
+    if (i == _srcIdx || i < 0 || i >= _sources.length) return;
+    setState(() => _srcIdx = i);
+    _start();
+  }
+
+  /// Numbered stream picker: 1 2 3 4 (shown when a match has 3+ sources).
+  Widget _sourcePicker() {
+    return Row(
+      children: [
+        Text(
+          'Stream',
+          style: TextStyle(
+            color: Ui.muted,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(width: 10),
+        for (var i = 0; i < _sources.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: InkWell(
+              onTap: () => _pickSource(i),
+              borderRadius: BorderRadius.circular(99),
+              child: Container(
+                width: 38,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: i == _srcIdx ? Ui.red : Ui.card,
+                  borderRadius: BorderRadius.circular(99),
+                  border: Border.all(color: i == _srcIdx ? Ui.red : Ui.line),
+                ),
+                child: Text(
+                  '${i + 1}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: i == _srcIdx ? Colors.white : Ui.muted,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   Future<void> _enterPip() async {
     try {
       if (await PipService.isAvailable() && await PipService.enter()) return;
@@ -510,6 +568,22 @@ class _PlayerScreenState extends State<PlayerScreen>
   Widget _compactControls({double side = 10, double top = 6}) {
     return Padding(
       padding: EdgeInsets.fromLTRB(side, top, side, 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_sources.length > 2) ...[
+            Align(alignment: Alignment.centerLeft, child: _sourcePicker()),
+            const SizedBox(height: 8),
+          ],
+          _compactRow(),
+        ],
+      ),
+    );
+  }
+
+  Widget _compactRow() {
+    return Padding(
+      padding: EdgeInsets.zero,
       child: Row(
         children: [
           Expanded(
@@ -741,6 +815,10 @@ class _PlayerScreenState extends State<PlayerScreen>
                           label: 'Stream ${_srcIdx + 1} of ${_sources.length}'),
                   ],
                 ),
+                if (_sources.length > 2) ...[
+                  const SizedBox(height: 12),
+                  _sourcePicker(),
+                ],
                 const SizedBox(height: 18),
                 Row(
                   children: [
@@ -754,7 +832,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                     Expanded(
                       child: _Action(
                           icon: Icons.swap_horiz_rounded,
-                          label: 'Switch',
+                          label: _sources.length > 1
+                              ? 'Switch ${_srcIdx + 1}/${_sources.length}'
+                              : 'Switch',
                           enabled: _sources.length > 1,
                           onTap: _switchSource),
                     ),
