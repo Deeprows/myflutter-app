@@ -95,6 +95,7 @@ class _TaggedMatchState extends State<_TaggedMatch> {
               title: f.title,
               url: f.url,
               altUrl: f.hasAlt ? f.altUrl : null,
+              moreUrls: f.moreUrls,
               isLive: f.phaseAt(DateTime.now()) == MatchPhase.live,
               chatMatch: f.title,
             ),
