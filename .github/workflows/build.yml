@@ -248,6 +248,9 @@ jobs:
           node cloudflare/ai_predict_any.test.mjs
           node cloudflare/fan_zone.test.mjs
           node cloudflare/fan_auto_results.test.mjs
+          node cloudflare/fan_results_matching.test.mjs
+          node cloudflare/fan_running_table.test.mjs
+          node cloudflare/fan_week_winners.test.mjs
           node cloudflare/sports_news.test.mjs
           node cloudflare/fan_markets.test.mjs
           node cloudflare/fan_social.test.mjs
