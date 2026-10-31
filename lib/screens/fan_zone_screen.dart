@@ -317,7 +317,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                     switch (widget.page) {
                       FanZonePage.predict =>
                         'Pick winners, draws or goals. Earn points.',
-                      FanZonePage.ranks => 'This week\'s best fans',
+                      FanZonePage.ranks => 'Points count as matches end',
                       FanZonePage.banter => 'Deeprowss community',
                     },
                     style: TextStyle(
@@ -643,7 +643,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                     const SizedBox(height: 6),
                     if (_name.isEmpty)
                       Text(
-                        'Make your predictions and climb the weekly league table.',
+                        'Make your predictions and climb the league table.',
                         style: TextStyle(
                           color: Ui.muted,
                           fontSize: 13,
@@ -1342,6 +1342,110 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     }
   }
 
+  static const _monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  String _weekLabel(dynamic ms) {
+    final start = DateTime.fromMillisecondsSinceEpoch(
+      (ms as num).toInt(),
+      isUtc: true,
+    );
+    final end = start.add(const Duration(days: 6));
+    return '${start.day} ${_monthNames[start.month - 1]} – '
+        '${end.day} ${_monthNames[end.month - 1]}';
+  }
+
+  /// The top three the admin published for a finished week.
+  Widget _weekWinners(Map<String, dynamic> week, {required bool latest}) {
+    const medals = ['🥇', '🥈', '🥉'];
+    final winners = FanZoneService.rows(week['winners']);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: fanBox(radius: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.emoji_events_rounded,
+                size: 18,
+                color: Color(0xFFFFC857),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  latest
+                      ? 'Weekly winners · ${_weekLabel(week['week'])}'
+                      : _weekLabel(week['week']),
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final w in winners)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Text(
+                    medals[(((w['rank'] as num?) ?? 1).toInt() - 1)
+                        .clamp(0, 2)
+                        .toInt()],
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${w['name']}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  Text(
+                    '${w['points']} pts',
+                    style: TextStyle(
+                      color: Ui.muted,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _winnerCards() {
+    final weeks = FanZoneService.rows(_data['winners']);
+    if (weeks.isEmpty) return const [];
+    return [
+      _weekWinners(weeks.first, latest: true),
+      if (weeks.length > 1)
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: Text(
+              'Earlier weeks',
+              style: TextStyle(color: Ui.muted, fontWeight: FontWeight.w800),
+            ),
+            children: [
+              for (final w in weeks.skip(1)) _weekWinners(w, latest: false),
+            ],
+          ),
+        ),
+      const SizedBox(height: 6),
+    ];
+  }
+
   Widget _rankings() {
     final rows = FanZoneService.rows(_data['leaderboard']);
     return RefreshIndicator(
@@ -1356,10 +1460,11 @@ class _FanZoneScreenState extends State<FanZoneScreen>
           ),
           const SizedBox(height: 6),
           Text(
-            'Every registered fan starts on zero. Confirmed results update the table each week.',
+            'Every registered fan starts on zero. Points are added as soon as a match ends and its final score is confirmed.',
             style: TextStyle(color: Ui.muted),
           ),
           const SizedBox(height: 16),
+          ..._winnerCards(),
           if (!_loadedOnce) const LinearProgressIndicator(),
           Container(
             decoration: fanBox(radius: 14),
