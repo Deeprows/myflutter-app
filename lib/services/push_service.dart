@@ -101,8 +101,19 @@ class PushService {
   /// The Live, Highlights and Movies screens open it and then clear it.
   final ValueNotifier<PushTarget?> target = ValueNotifier<PushTarget?>(null);
 
+  /// Opens what a notification (or an inbox entry) points at, exactly like a
+  /// tap on a real push notification would.
+  void open(PushTarget t) => _dispatch(t);
+
+  /// Switches the main screen to a bottom-bar slot (see ShellScreen).
+  void openTab(int tab) {
+    tabRequest.value = null; // so asking for the same slot twice still fires
+    tabRequest.value = tab;
+  }
+
   void _dispatch(PushTarget? t) {
     if (t == null) return;
+    tabRequest.value = null;
     tabRequest.value = t.tab;
     target.value = t.hasItem ? t : null;
   }
