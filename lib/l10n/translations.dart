@@ -4,6 +4,8 @@ const Map<String, Map<String, String>> kTranslations = {
   'fr': {
     'Live': 'En direct',
     'Highlights': 'Résumés',
+    'Profile': 'Profil',
+    'Watch Highlights': 'Voir les résumés',
     'TV': 'TV',
     'Movies': 'Films',
     'Player': 'Lecteur',
@@ -135,6 +137,8 @@ const Map<String, Map<String, String>> kTranslations = {
   'es': {
     'Live': 'En vivo',
     'Highlights': 'Resúmenes',
+    'Profile': 'Perfil',
+    'Watch Highlights': 'Ver resúmenes',
     'TV': 'TV',
     'Movies': 'Películas',
     'Player': 'Reproductor',
@@ -266,6 +270,8 @@ const Map<String, Map<String, String>> kTranslations = {
   'pt': {
     'Live': 'Ao vivo',
     'Highlights': 'Melhores momentos',
+    'Profile': 'Perfil',
+    'Watch Highlights': 'Ver melhores momentos',
     'TV': 'TV',
     'Movies': 'Filmes',
     'Player': 'Player',
@@ -397,6 +403,8 @@ const Map<String, Map<String, String>> kTranslations = {
   'ar': {
     'Live': 'مباشر',
     'Highlights': 'الملخصات',
+    'Profile': 'الملف الشخصي',
+    'Watch Highlights': 'شاهد الملخصات',
     'TV': 'التلفاز',
     'Movies': 'أفلام',
     'Player': 'المشغّل',
@@ -528,6 +536,8 @@ const Map<String, Map<String, String>> kTranslations = {
   'sw': {
     'Live': 'Moja kwa moja',
     'Highlights': 'Vivutio',
+    'Profile': 'Wasifu',
+    'Watch Highlights': 'Tazama Muhtasari',
     'TV': 'TV',
     'Movies': 'Filamu',
     'Player': 'Kicheza',
