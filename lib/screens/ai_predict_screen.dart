@@ -108,9 +108,15 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   }
 
   static final RegExp _vs = RegExp(
-    r'\s+(?:vs\.?|v|x|-|–|—)\s+',
+    r'\s+(?:vs\.?|versus|against|v|x|-|–|—)\s+|\s*[×/|]\s*',
     caseSensitive: false,
   );
+
+  /// Team names come out clean: no quotes, brackets or stray punctuation.
+  static String _cleanTeam(String s) => s
+      .replaceAll(RegExp('["“”‘’`«»()\\[\\]]'), '')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceAll(RegExp(r'^[\s.,;:!?-]+|[\s.,;:!?-]+$'), '');
 
   void _snack(String message) {
     if (!mounted) return;
@@ -121,7 +127,12 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
 
   void _addCustom() {
     if (_busy) return;
-    final parts = _typed.text.trim().split(_vs).map((e) => e.trim()).toList();
+    final parts = _typed.text
+        .trim()
+        .split(_vs)
+        .map(_cleanTeam)
+        .where((e) => e.isNotEmpty)
+        .toList();
     if (parts.length != 2 ||
         parts.any((e) => e.length < 2 || e.length > 60)) {
       _snack('Type two teams like: Arsenal vs Chelsea');
@@ -619,6 +630,13 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               (hc['red'] as num?) ?? 0,
               (ac['red'] as num?) ?? 0,
             ),
+            if (hc['corners'] != null && ac['corners'] != null)
+              _cmpRow(
+                'Corners per match',
+                per((hc['corners'] as num?) ?? 0, ((hc['matches'] as num?) ?? 0).toInt()),
+                per((ac['corners'] as num?) ?? 0, ((ac['matches'] as num?) ?? 0).toInt()),
+                decimals: 1,
+              ),
           ],
         ],
       ),
@@ -802,6 +820,292 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // AI PICKS, ODDS AND LINEUPS
+  // ---------------------------------------------------------------------------
+
+  Color _confColor(String c) => switch (c) {
+    'high' => const Color(0xFF66BB6A),
+    'medium' => const Color(0xFFFFB74D),
+    _ => Ui.muted,
+  };
+
+  Widget _picksPanel(Map data) {
+    final picks = FanZoneService.rows(data['picks']);
+    if (picks.isEmpty) return const SizedBox.shrink();
+    return _panel(
+      title: 'AI picks',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final p in picks)
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(11),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .04),
+                borderRadius: BorderRadius.circular(12),
+                border: Border(
+                  left: BorderSide(
+                    color: _confColor('${p['confidence']}'),
+                    width: 3,
+                  ),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${p['market']}',
+                          style: TextStyle(
+                            color: Ui.muted,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${p['confidence']}'.toUpperCase(),
+                        style: TextStyle(
+                          color: _confColor('${p['confidence']}'),
+                          fontSize: 10.5,
+                          letterSpacing: .8,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${p['pick']}',
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${p['reason']}',
+                    style: TextStyle(color: Ui.muted, fontSize: 12.5, height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+          Text(
+            'Opinions from recent form and the data below, not guaranteed outcomes.',
+            style: TextStyle(color: Ui.dim, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _oddChip(String label, Object? odd) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: .06),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: TextStyle(color: Ui.muted, fontSize: 12)),
+        const SizedBox(width: 8),
+        Text(
+          '$odd',
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
+        ),
+      ],
+    ),
+  );
+
+  Widget _oddsPanel(Fixture f, Map data) {
+    final extras = data['extras'] is Map ? data['extras'] as Map : null;
+    final odds = extras?['odds'] is Map ? extras!['odds'] as Map : null;
+    if (odds == null) return const SizedBox.shrink();
+    final w = odds['winner'] is Map ? odds['winner'] as Map : null;
+    final g = odds['goals25'] is Map ? odds['goals25'] as Map : null;
+    final b = odds['btts'] is Map ? odds['btts'] as Map : null;
+    final c = odds['corners'] is Map ? odds['corners'] as Map : null;
+    final k = odds['cards'] is Map ? odds['cards'] as Map : null;
+
+    Widget winner() {
+      final h = (w!['home'] as num).toDouble();
+      final d = (w['draw'] as num).toDouble();
+      final a = (w['away'] as num).toDouble();
+      final t = 1 / h + 1 / d + 1 / a;
+      Widget col(String label, double odd, Color color) => Expanded(
+        child: Column(
+          children: [
+            Text(
+              '${(100 / odd / t).round()}%',
+              style: TextStyle(
+                color: color,
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Ui.muted, fontSize: 11.5),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              odd.toStringAsFixed(2),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      );
+      return Row(
+        children: [
+          col(f.home, h, _homeColor),
+          col('Draw', d, Ui.muted),
+          col(f.away, a, _awayColor),
+        ],
+      );
+    }
+
+    return _panel(
+      title: 'Odds · ${odds['bookmaker'] ?? 'Bookmaker'}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (w != null) ...[
+            winner(),
+            const SizedBox(height: 4),
+            Text(
+              'Percentages are what the odds imply, not an AI estimate.',
+              style: TextStyle(color: Ui.dim, fontSize: 10.5),
+            ),
+            const SizedBox(height: 12),
+          ],
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (g != null) ...[
+                _oddChip('Over 2.5', g['over']),
+                _oddChip('Under 2.5', g['under']),
+              ],
+              if (b != null) ...[
+                _oddChip('BTTS Yes', b['yes']),
+                _oddChip('BTTS No', b['no']),
+              ],
+              if (c != null) ...[
+                _oddChip('Corners over ${c['line']}', c['over']),
+                _oddChip('under ${c['line']}', c['under']),
+              ],
+              if (k != null) ...[
+                _oddChip('Cards over ${k['line']}', k['over']),
+                _oddChip('under ${k['line']}', k['under']),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _lineupsPanel(Fixture f, Map data) {
+    final extras = data['extras'] is Map ? data['extras'] as Map : null;
+    Map? lineupOf(String side) {
+      final m = extras?[side];
+      return m is Map && m['lineup'] is Map ? m['lineup'] as Map : null;
+    }
+
+    final home = lineupOf('home'), away = lineupOf('away');
+    if (home == null && away == null) return const SizedBox.shrink();
+
+    Widget team(String name, Color color, Map? l) {
+      if (l == null) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Text(
+            '$name: lineup not available',
+            style: TextStyle(color: Ui.muted, fontSize: 12),
+          ),
+        );
+      }
+      final players = FanZoneService.rows(l['players']);
+      String line(String pos, String label) {
+        final names = players
+            .where((p) => '${p['pos']}' == pos)
+            .map((p) => '${p['name']}')
+            .toList();
+        return names.isEmpty ? '' : '$label  ${names.join(', ')}';
+      }
+
+      final rows = [
+        line('G', 'GK'),
+        line('D', 'DEF'),
+        line('M', 'MID'),
+        line('F', 'FWD'),
+      ].where((e) => e.isNotEmpty).toList();
+      final confirmed = l['source'] == 'confirmed';
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    name,
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+                if ('${l['formation']}'.isNotEmpty)
+                  Text(
+                    '${l['formation']}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12.5,
+                    ),
+                  ),
+              ],
+            ),
+            Text(
+              confirmed ? 'Confirmed XI' : 'Probable XI (from last match)',
+              style: TextStyle(
+                color: confirmed ? const Color(0xFF66BB6A) : Ui.muted,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            for (final r in rows)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Text(r, style: const TextStyle(fontSize: 12.5, height: 1.35)),
+              ),
+          ],
+        ),
+      );
+    }
+
+    return _panel(
+      title: 'Possible lineups',
+      child: Column(
+        children: [
+          team(f.home, _homeColor, home),
+          team(f.away, _awayColor, away),
+        ],
+      ),
+    );
+  }
+
   Widget _result(Fixture f, Map<String, dynamic> data) => Container(
     margin: const EdgeInsets.only(top: 14),
     decoration: BoxDecoration(
@@ -852,8 +1156,11 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           '${f.away} · last ${data['away']['played']}',
           Map<String, dynamic>.from(data['away'] as Map),
         ),
+        _picksPanel(data),
         _comparison(f, data),
         _goals(f, data),
+        _oddsPanel(f, data),
+        _lineupsPanel(f, data),
         _injuriesPanel(f, data),
         Theme(
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -892,8 +1199,8 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         const SizedBox(height: 4),
         Text(
           data['extras'] is Map
-              ? 'Historical form is a limited sample, not a guaranteed outcome. Injury and card data comes from the provider and may be incomplete. Lineups and odds are not included.'
-              : 'Historical form is a limited sample, not a guaranteed outcome. Injuries, cards, lineups and odds are not available for this match.',
+              ? 'Historical form is a limited sample, not a guaranteed outcome. Injuries, cards, lineups and odds come from the data provider and may be incomplete or change before kick-off.'
+              : 'Historical form is a limited sample, not a guaranteed outcome. Injuries, cards, lineups and odds are not available for this match, so picks use recent form only.',
           style: TextStyle(color: Ui.muted, fontSize: 11),
         ),
         const SizedBox(height: 4),
