@@ -30,10 +30,10 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   final Map<String, Map<String, dynamic>> _results = {};
   final Map<String, String> _failures = {};
 
-  /// Per result: the market chip chosen on the top-pick card, and whether the
-  /// full analysis below it is open.
+  /// Per result: the market chip chosen on the match's page. [_rev] makes the
+  /// pushed match page rebuild when a chip is tapped.
   final Map<String, String> _market = {};
-  final Set<String> _open = {};
+  final ValueNotifier<int> _rev = ValueNotifier<int>(0);
   bool _loading = false, _busy = false;
   String? _error;
   int _done = 0, _total = 0;
@@ -59,6 +59,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     ContentSync.tick.removeListener(_sync);
     _typed.dispose();
     _scroll.dispose();
+    _rev.dispose();
     super.dispose();
   }
 
@@ -1277,7 +1278,10 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         final c = _chips[i], on = c == selected;
         return InkWell(
           borderRadius: BorderRadius.circular(99),
-          onTap: () => setState(() => _market[key] = c),
+          onTap: () {
+            setState(() => _market[key] = c);
+            _rev.value++;
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             alignment: Alignment.center,
@@ -1300,44 +1304,53 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     ),
   );
 
-  Widget _topPick(Fixture f, Map<String, dynamic> data) {
-    final key = FanZoneService.matchKey(f);
+  /// What the ring and text show for the chosen market chip.
+  ({double value, String center, String label, String title, String sub, Color? color}) _resolve(
+    Map<String, dynamic> data,
+    String chosen,
+  ) {
     final picks = _sortedPicks(data);
-    var selected = _market[key] ?? 'AI pick';
-
-    // Resolve what the card shows.
-    double value;
-    String center, label, title, sub;
-    Color? color;
+    var selected = chosen;
     final top = picks.isEmpty ? null : picks.first;
     if (selected == 'AI pick' && top != null) {
       final gm = _goalsMarketOf(top);
       final r = gm == null ? null : _rate(data, gm);
       final conf = '${top['confidence']}';
-      value = r != null ? r.pct / 100 : _confRank(conf) / 3;
-      center = r != null ? '${r.pct}%' : conf.toUpperCase();
-      color = r == null ? _confColor(conf) : null;
-      label = 'AI PREDICTION · ${'${top['market']}'.toUpperCase()}';
-      title = '${top['pick']}';
-      sub = r != null
-          ? 'Hit in ${r.hits} of ${r.total} recent matches · ${conf.toUpperCase()} confidence'
-          : '${top['reason']}';
-    } else {
-      if (selected == 'AI pick') {
-        // No AI picks came back: show the strongest goals market from form.
-        selected = _chips.skip(1).reduce(
-          (a, b) => (_rate(data, a)?.pct ?? 0) >= (_rate(data, b)?.pct ?? 0) ? a : b,
-        );
-      }
-      final r = _rate(data, selected);
-      value = (r?.pct ?? 0) / 100;
-      center = '${r?.pct ?? 0}%';
-      label = 'FORM HIT RATE';
-      title = selected == 'BTTS' ? 'Both teams to score' : '$selected goals';
-      sub = r == null
-          ? 'Not enough results'
-          : 'Hit in ${r.hits} of ${r.total} recent matches of both teams';
+      return (
+        value: r != null ? r.pct / 100 : _confRank(conf) / 3,
+        center: r != null ? '${r.pct}%' : conf.toUpperCase(),
+        label: 'AI PREDICTION · ${'${top['market']}'.toUpperCase()}',
+        title: '${top['pick']}',
+        sub: r != null
+            ? 'Hit in ${r.hits} of ${r.total} recent matches · ${conf.toUpperCase()} confidence'
+            : '${top['reason']}',
+        color: r == null ? _confColor(conf) : null,
+      );
     }
+    if (selected == 'AI pick') {
+      // No AI picks came back: show the strongest goals market from form.
+      selected = _chips.skip(1).reduce(
+        (a, b) => (_rate(data, a)?.pct ?? 0) >= (_rate(data, b)?.pct ?? 0) ? a : b,
+      );
+    }
+    final r = _rate(data, selected);
+    return (
+      value: (r?.pct ?? 0) / 100,
+      center: '${r?.pct ?? 0}%',
+      label: 'FORM HIT RATE',
+      title: selected == 'BTTS' ? 'Both teams to score' : '$selected goals',
+      sub: r == null
+          ? 'Not enough results'
+          : 'Hit in ${r.hits} of ${r.total} recent matches of both teams',
+      color: null,
+    );
+  }
+
+  Widget _topPick(Fixture f, Map<String, dynamic> data) {
+    final key = FanZoneService.matchKey(f);
+    final v = _resolve(data, _market[key] ?? 'AI pick');
+    final value = v.value, center = v.center, label = v.label, title = v.title, sub = v.sub;
+    final color = v.color;
 
     final typed = f.kickoff.year >= 2099;
     final now = DateTime.now();
@@ -1472,30 +1485,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: _accent,
-                foregroundColor: const Color(0xFF05140B),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-              onPressed: () => setState(() {
-                _open.contains(key) ? _open.remove(key) : _open.add(key);
-              }),
-              icon: Icon(
-                _open.contains(key) ? Icons.keyboard_arrow_up_rounded : Icons.arrow_forward_rounded,
-                size: 20,
-              ),
-              iconAlignment: IconAlignment.end,
-              label: Text(
-                _open.contains(key) ? 'Hide full analysis' : 'View full analysis',
-                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -1578,14 +1567,150 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     );
   }
 
+  /// Compact card on the AI Predict page; tapping opens the match's own page.
   Widget _result(Fixture f, Map<String, dynamic> data) {
     final key = FanZoneService.matchKey(f);
-    return Column(
-      children: [
-        _topPick(f, data),
-        _picksList(data),
-        if (_open.contains(key)) _fullAnalysis(f, data),
-      ],
+    final v = _resolve(data, 'AI pick');
+    final typed = f.kickoff.year >= 2099;
+    final k = f.kickoff.toLocal();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => _openMatchPage(f, key),
+          child: Ink(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: _accent.withValues(alpha: .28)),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [const Color(0xFF0F3D26), Ui.card],
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.auto_awesome_rounded, size: 13, color: _accent),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        f.league.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Ui.muted,
+                          fontSize: 10.5,
+                          letterSpacing: 1.1,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      typed ? 'YOUR MATCHUP' : '${dayLabel(k, DateTime.now())} · ${fmtTime(k)}',
+                      style: TextStyle(color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    TeamCrest(logo: f.homeLogo, size: 38),
+                    const SizedBox(width: 4),
+                    TeamCrest(logo: f.awayLogo, size: 38),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        f.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, height: 1.15),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: .28),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      _ring(v.value, v.center, size: 54, color: v.color),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'TOP PICK',
+                              style: TextStyle(
+                                color: Ui.muted,
+                                fontSize: 10,
+                                letterSpacing: 1.1,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            Text(
+                              v.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right_rounded, color: _accent),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Full page for one analysed match: top pick card, more picks and the full analysis.
+  void _openMatchPage(Fixture f, String key) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ValueListenableBuilder<int>(
+          valueListenable: _rev,
+          builder: (ctx, _, _) {
+            final data = _results[key];
+            return Scaffold(
+              backgroundColor: Ui.bg,
+              appBar: AppBar(
+                title: Text(
+                  f.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
+                ),
+              ),
+              body: data == null
+                  ? const SizedBox.shrink()
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(14, 0, 14, 28),
+                      children: [
+                        _topPick(f, data),
+                        _picksList(data),
+                        _fullAnalysis(f, data),
+                      ],
+                    ),
+            );
+          },
+        ),
+      ),
     );
   }
 
