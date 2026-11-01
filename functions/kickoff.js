@@ -105,6 +105,15 @@ export function buildMessage(group, nowMs, topic = "kickoff") {
       tab: "live",
       phase,
       matchIds: matches.map((m) => m.id).join(",").slice(0, 500),
+      // One match: tell the app exactly which one, so tapping the
+      // notification opens that match (FCM data values must be strings).
+      ...(n === 1
+        ? {
+            home: matches[0].home,
+            away: matches[0].away,
+            kickoffMs: String(matches[0].kickoffMs),
+          }
+        : {}),
     },
     android: {
       priority: "high",
