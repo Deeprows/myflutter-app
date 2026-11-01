@@ -108,7 +108,21 @@ export function buildMessage(topic, items) {
   return {
     topic,
     notification: { title, body, ...(imageUrl ? { imageUrl } : {}) },
-    data: { type: topic, tab: topic === "kickoff" ? "live" : topic },
+    data: {
+      type: topic,
+      tab: topic === "kickoff" ? "live" : topic,
+      // A single new item: tell the app which one, so a tap opens it directly.
+      ...(n === 1 && topic === "kickoff"
+        ? {
+            home: str(first.home),
+            away: str(first.away),
+            ...(Number.isNaN(Date.parse(kickoffIso(first.kickoff)))
+              ? {}
+              : { kickoffMs: String(Date.parse(kickoffIso(first.kickoff))) }),
+          }
+        : {}),
+      ...(n === 1 && topic !== "kickoff" ? { url: str(first.url) } : {}),
+    },
     android: topic === "kickoff"
       ? { priority: "high", notification: { channelId: "kickoff" } }
       : { priority: "high", notification: { channelId: "content" } },
