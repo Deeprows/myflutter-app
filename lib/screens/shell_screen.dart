@@ -16,6 +16,7 @@ import 'fan_zone_screen.dart';
 import 'fan_profile_screen.dart';
 import '../services/auth_service.dart';
 import 'ai_predict_screen.dart';
+import 'auth_screen.dart';
 import 'content_shortcut_screen.dart';
 import 'highlights_screen.dart';
 import 'live_screen.dart';
@@ -35,20 +36,22 @@ class ShellScreen extends StatefulWidget {
 
 class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   int _index = 0;
-  // Bottom bar order: Live, Thread, TV, Movies, AI Predict.
+  // Bottom bar order: Live, Thread, AI Predict, TV, Profile, Search.
   // Stack slots keep their old numbers so notification targets still work:
-  // 0 Live, 3 Thread, 4 AI Predict, 6 TV, 7 Movies, 8 Search. Predict (1) and Profile
-  // now open from the Thread header; Highlights from the Live header.
-  static const _order = [0, 3, 4, 6, 7, 8];
+  // 0 Live, 3 Thread, 4 AI Predict, 6 TV, 8 Search, 9 Profile. Movies (7) is
+  // no longer a tab: it opens from the TV Channels header. Predict (1) opens
+  // from the Thread header; Highlights from the Live header.
+  static const _order = [0, 3, 4, 6, 9, 8];
   static const _tvTab = 6;
-  static const _moviesTab = 7;
   static const _searchTab = 8;
+  static const _profileTab = 9;
   final Set<int> _visited = {0};
   bool _profilePrompting = false;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   DateTime? _lastBack;
   Timer? _autoRefresh;
   bool _highlightsOpen = false;
+  bool _moviesOpen = false;
 
   @override
   void initState() {
@@ -60,6 +63,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
       _visited.add(_index);
       PushService.instance.tabRequest.value = null;
       if (pending == 1) _openHighlights();
+      if (pending == 3) _openMovies();
     }
     PushService.instance.tabRequest.addListener(_openRequestedTab);
 
@@ -101,17 +105,17 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
       });
     }
     if (tab == 1) _openHighlights();
+    if (tab == 3) _openMovies();
   }
 
   // Old notification tab numbers -> the tabs that exist now.
   int _tabFor(int tab) {
     switch (tab) {
       case 3:
-        return _moviesTab; // Movies notifications land on the Movies tab
       case 1:
       case 2:
       case 5:
-        return 0; // Highlights open on top of Live
+        return 0; // Highlights and Movies open on top of Live
       default:
         return tab;
     }
@@ -134,6 +138,46 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
       );
       _highlightsOpen = false;
     });
+  }
+
+  // Movie notifications open the Movies page on top of the current tab.
+  void _openMovies() {
+    if (_moviesOpen) return;
+    _moviesOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const ContentShortcutScreen(
+            title: 'Movies',
+            child: MoviesScreen(),
+          ),
+        ),
+      );
+      _moviesOpen = false;
+    });
+  }
+
+  Widget _profilePage() {
+    final id = AuthService.instance.user?.id ?? '';
+    if (id.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: Text('Profile'.tr)),
+        body: Center(
+          child: FilledButton.icon(
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const AuthScreen()),
+              );
+              if (mounted) setState(() {});
+            },
+            icon: const Icon(Icons.login_rounded),
+            label: const Text('Sign in'),
+          ),
+        ),
+      );
+    }
+    return FanProfileScreen(key: ValueKey(id), userId: id, embedded: true);
   }
 
   // The first time a person taps Home, show their profile editor. After that
@@ -217,11 +261,13 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                 _visited.contains(_tvTab)
                     ? const TvScreen()
                     : const SizedBox.shrink(),
-                _visited.contains(_moviesTab)
-                    ? const MoviesScreen()
-                    : const SizedBox.shrink(),
+                // Slot 7 (Movies) is no longer a tab.
+                const SizedBox.shrink(),
                 _visited.contains(_searchTab)
                     ? const SearchScreen()
+                    : const SizedBox.shrink(),
+                _visited.contains(_profileTab)
+                    ? _profilePage()
                     : const SizedBox.shrink(),
               ],
             ),
@@ -298,9 +344,9 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     label: 'TV'.tr,
                   ),
                   NavigationDestination(
-                    icon: const Icon(Icons.movie_outlined),
-                    selectedIcon: const Icon(Icons.movie_rounded),
-                    label: 'Movies'.tr,
+                    icon: const Icon(Icons.person_outline_rounded),
+                    selectedIcon: const Icon(Icons.person_rounded),
+                    label: 'Profile'.tr,
                   ),
                   NavigationDestination(
                     icon: const Icon(Icons.search_rounded),
