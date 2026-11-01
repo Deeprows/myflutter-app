@@ -8,6 +8,8 @@ import '../models/fixture.dart';
 import '../services/content_sync.dart';
 import '../services/fan_zone_service.dart';
 import '../services/feed_service.dart';
+import '../services/support_gate.dart';
+import '../widgets/status_pill.dart';
 import '../services/remote_config.dart';
 import 'player_screen.dart';
 import '../theme/app_theme.dart';
@@ -264,12 +266,13 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     if (mounted) _refresh();
   }
 
-  void _discussion(String room, String title) {
+  void _discussion(String room, String title, {Fixture? match}) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => _FanDiscussion(
           room: room,
           title: title,
+          match: match,
           name: _name,
           myId: _myId,
           onJoin: _profile,
@@ -1687,7 +1690,8 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     },
     onOpenLounge: () => _discussion('lounge', 'Fan lounge'),
     fixtures: _fixtures,
-    onOpenMatch: (f) => _discussion(FanZoneService.matchKey(f), f.title),
+    onOpenMatch: (f) =>
+        _discussion(FanZoneService.matchKey(f), f.title, match: f),
     roomsTrigger: _roomsTrigger,
   );
 }
@@ -1978,9 +1982,14 @@ class _PickSheetState extends State<_PickSheet> {
 class _FanDiscussion extends StatefulWidget {
   final String room, title, name, myId;
   final Future<bool> Function() onJoin;
+
+  /// The match this room belongs to (null for the fan lounge): shown as a
+  /// card at the top so people can jump from the chat to watching it.
+  final Fixture? match;
   const _FanDiscussion({
     required this.room,
     required this.title,
+    this.match,
     required this.name,
     required this.myId,
     required this.onJoin,
@@ -2240,6 +2249,98 @@ class _FanDiscussionState extends State<_FanDiscussion>
     );
   }
 
+  void _watchMatch(Fixture f) {
+    SupportGate.guard(context, () {
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PlayerScreen(
+            title: f.title,
+            subtitle:
+                '${f.league.isEmpty ? 'Football' : f.league} • ${fanClock(f.kickoff)}',
+            url: f.url,
+            altUrl: f.hasAlt ? f.altUrl : null,
+            moreUrls: f.moreUrls,
+            isLive: f.phaseAt(DateTime.now()) == MatchPhase.live,
+            chatMatch: f.title,
+          ),
+        ),
+      );
+    });
+  }
+
+  /// The exact match this room is about, with a button to watch it.
+  Widget _matchCard(Fixture f) {
+    final phase = f.phaseAt(DateTime.now());
+    final canWatch = f.hasStream && phase != MatchPhase.ended;
+    return InkWell(
+      onTap: canWatch ? () => _watchMatch(f) : null,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+        decoration: BoxDecoration(
+          color: Ui.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Ui.line),
+        ),
+        child: Row(
+          children: [
+            TeamCrest(logo: f.homeLogo, size: 38),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    f.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.2,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      StatusPill(phase: phase),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${f.league.isEmpty ? 'Football' : f.league} • ${fanClock(f.kickoff)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 11, color: Ui.muted),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            TeamCrest(logo: f.awayLogo, size: 38),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              onPressed: canWatch ? () => _watchMatch(f) : null,
+              style: FilledButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+              icon: const Icon(Icons.play_arrow_rounded, size: 18),
+              label: Text(
+                phase == MatchPhase.ended ? 'Ended' : 'Watch',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final visible = _messages
@@ -2296,6 +2397,7 @@ class _FanDiscussionState extends State<_FanDiscussion>
       body: SafeArea(
         child: Column(
           children: [
+            if (widget.match != null) _matchCard(widget.match!),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
