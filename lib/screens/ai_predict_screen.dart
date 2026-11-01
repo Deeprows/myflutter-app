@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/safe_error_message.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/fixture.dart';
 import '../services/content_sync.dart';
 import '../services/fan_zone_service.dart';
+import '../services/subscription_service.dart';
 import '../services/feed_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import 'fan_widgets.dart';
+import 'remove_ads_screen.dart';
+import 'plans_screen.dart';
 
 class AiPredictScreen extends StatefulWidget {
   final bool active;
@@ -27,6 +31,8 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   final TextEditingController _typed = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final Set<String> _selected = {};
+  final Set<String> _dailyFreePicks = {};
+  bool _dailyPicksLoaded = false;
   final Map<String, Map<String, dynamic>> _results = {};
   final Map<String, String> _failures = {};
 
@@ -40,6 +46,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   @override
   void initState() {
     super.initState();
+    _loadDailyFreePicks();
     ContentSync.tick.addListener(_sync);
     if (widget.active) _load();
   }
@@ -97,21 +104,91 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     if (mounted) setState(_prune);
   }
 
-  void _select(Fixture f, bool selected) {
-    if (_busy) return;
-    if (selected && _selected.length >= 3) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select up to 3 matches at a time.')),
-      );
-      return;
+  static const _maxPicks = 3;
+  static const _dailyPicksDayKey = 'ai_predict_free_picks_day';
+  static const _dailyPicksListKey = 'ai_predict_free_picks_list';
+
+  String get _todayKey {
+    final now = DateTime.now();
+    return '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _loadDailyFreePicks() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedDay = prefs.getString(_dailyPicksDayKey);
+      final picks = savedDay == _todayKey
+          ? (prefs.getStringList(_dailyPicksListKey) ?? const <String>[])
+          : const <String>[];
+      if (savedDay != _todayKey) {
+        await prefs.setString(_dailyPicksDayKey, _todayKey);
+        await prefs.setStringList(_dailyPicksListKey, const <String>[]);
+      }
+      if (!mounted) return;
+      setState(() {
+        _dailyFreePicks
+          ..clear()
+          ..addAll(picks);
+        _dailyPicksLoaded = true;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _dailyPicksLoaded = true);
     }
-    setState(() {
-      final key = FanZoneService.matchKey(f);
-      if (selected)
-        _selected.add(key);
-      else
-        _selected.remove(key);
-    });
+  }
+
+  Future<void> _saveDailyFreePick(String key) async {
+    _dailyFreePicks.add(key);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_dailyPicksDayKey, _todayKey);
+      await prefs.setStringList(
+        _dailyPicksListKey,
+        _dailyFreePicks.toList(),
+      );
+    } catch (_) {}
+  }
+
+  Future<bool> _showPremiumUpgrade() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SubscriptionService.instance.visible
+            ? const PlansScreen()
+            : const RemoveAdsScreen(),
+      ),
+    );
+    if (!mounted) return false;
+    await SubscriptionService.instance.refresh(force: true);
+    return SubscriptionService.instance.isPremium;
+  }
+
+  Future<bool> _select(Fixture f, bool selected) async {
+    if (_busy) return false;
+    final key = FanZoneService.matchKey(f);
+    if (!selected) {
+      setState(() => _selected.remove(key));
+      return true;
+    }
+    if (_selected.contains(key)) return true;
+
+    if (!_dailyPicksLoaded) await _loadDailyFreePicks();
+    if (!mounted) return false;
+
+    final premium = SubscriptionService.instance.isPremium;
+    if (!premium && !_dailyFreePicks.contains(key) &&
+        _dailyFreePicks.length >= _maxPicks) {
+      _snack('You have used your 3 free AI match selections for today. Upgrade to Premium for more selections.');
+      await _showPremiumUpgrade();
+      if (!mounted || !SubscriptionService.instance.isPremium) return false;
+    }
+
+    if (!SubscriptionService.instance.isPremium) {
+      await _saveDailyFreePick(key);
+    }
+    if (!mounted) return false;
+    setState(() => _selected.add(key));
+    return true;
   }
 
   static final RegExp _vs = RegExp(
@@ -132,7 +209,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _addCustom() {
+  Future<void> _addCustom() async {
     if (_busy) return;
     final parts = _typed.text
         .trim()
@@ -157,14 +234,10 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             // Typed matchups have no fixed kick-off; this only keeps the key stable.
             kickoff: DateTime.utc(2099),
           );
-    final key = FanZoneService.matchKey(f);
-    if (!_selected.contains(key) && _selected.length >= _maxPicks) {
-      _snack('Select up to 3 matches at a time.');
-      return;
-    }
+    final added = await _select(f, true);
+    if (!added || !mounted) return;
     setState(() {
       if (existing.isEmpty) _custom.insert(0, f);
-      _selected.add(key);
       _typed.clear();
     });
     FocusScope.of(context).unfocus();
@@ -282,8 +355,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     final d = date.toLocal();
     return '${d.day}/${d.month}/${d.year}';
   }
-
-  static const _maxPicks = 3;
 
   Color _resultColor(String r) => r == 'W'
       ? Ui.green
@@ -1785,7 +1856,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: _busy ? null : () => _select(f, !on),
+          onTap: _busy ? null : () { _select(f, !on); },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -2060,7 +2131,9 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                     ),
                     const Spacer(),
                     FanPill(
-                      text: '${_selected.length}/$_maxPicks selected',
+                      text: SubscriptionService.instance.isPremium
+                          ? '${_selected.length} selected · Premium'
+                          : '${_selected.length}/$_maxPicks selected · ${(_maxPicks - _dailyFreePicks.length).clamp(0, _maxPicks)} left today',
                       color: _selected.isEmpty
                           ? Ui.muted
                           : const Color(0xFF8E6BFF),
