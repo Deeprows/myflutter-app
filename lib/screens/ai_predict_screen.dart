@@ -9,7 +9,12 @@ import '../services/subscription_service.dart';
 import '../services/feed_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
+import '../services/auth_service.dart';
+import '../services/notification_center.dart';
+import 'auth_screen.dart';
+import 'fan_profile_screen.dart';
 import 'fan_widgets.dart';
+import 'notifications_screen.dart';
 import 'remove_ads_screen.dart';
 import 'plans_screen.dart';
 
@@ -48,6 +53,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     super.initState();
     _loadDailyFreePicks();
     ContentSync.tick.addListener(_sync);
+    NotificationCenter.instance.refreshBadge();
     if (widget.active) _load();
   }
 
@@ -58,7 +64,19 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   }
 
   void _sync() {
+    // Keep the bell's unread count current even when this tab is not open.
+    NotificationCenter.instance.refreshBadge();
     if (widget.active && !_busy) _load();
+  }
+
+  void _openProfile() {
+    final id = AuthService.instance.user?.id ?? '';
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            id.isEmpty ? const AuthScreen() : FanProfileScreen(userId: id),
+      ),
+    );
   }
 
   @override
@@ -2092,6 +2110,12 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         style: TextStyle(fontWeight: FontWeight.w900),
       ),
       actions: [
+        const NotificationBell(),
+        IconButton(
+          tooltip: 'Profile',
+          icon: const Icon(Icons.person_outline_rounded),
+          onPressed: _openProfile,
+        ),
         IconButton(
           tooltip: 'Refresh matches',
           icon: const Icon(Icons.refresh_rounded),
