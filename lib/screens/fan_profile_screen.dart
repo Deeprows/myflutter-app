@@ -43,7 +43,14 @@ Future<bool?> showFirstTimeProfileEditor(
 
 class FanProfileScreen extends StatefulWidget {
   final String userId;
-  const FanProfileScreen({super.key, required this.userId});
+
+  /// Shown as a bottom-bar tab: no back arrow.
+  final bool embedded;
+  const FanProfileScreen({
+    super.key,
+    required this.userId,
+    this.embedded = false,
+  });
   @override
   State<FanProfileScreen> createState() => _FanProfileScreenState();
 }
@@ -473,6 +480,7 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Ui.bg,
     appBar: AppBar(
+      automaticallyImplyLeading: !widget.embedded,
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
