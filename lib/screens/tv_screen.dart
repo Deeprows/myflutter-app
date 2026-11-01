@@ -15,6 +15,7 @@ import '../widgets/link_sheet.dart';
 import '../widgets/pitch_painter.dart';
 import '../player/player_hub_screen.dart';
 import 'content_shortcut_screen.dart';
+import 'movies_screen.dart';
 import 'native_player_screen.dart';
 import 'player_screen.dart';
 import '../utils/l10n.dart';
@@ -366,6 +367,32 @@ class _TvScreenState extends State<TvScreen> {
     );
   }
 
+  /// Header action: the icon with its name written boldly underneath.
+  Widget _headerAction(IconData icon, String label, VoidCallback onTap) =>
+      InkResponse(
+        onTap: onTap,
+        radius: 28,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 24),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11,
+                  height: 1.1,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
   Widget _header(double top, int shown) {
     return Container(
       padding: EdgeInsets.fromLTRB(16, top + 16, 8, 12),
@@ -391,9 +418,22 @@ class _TvScreenState extends State<TvScreen> {
                             height: 1.1,
                             fontWeight: FontWeight.w900)),
                   ),
-                  IconButton(
-                    tooltip: 'Player',
-                    onPressed: () => Navigator.of(context).push(
+                  _headerAction(
+                    Icons.movie_rounded,
+                    'Movies'.tr,
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ContentShortcutScreen(
+                          title: 'Movies',
+                          child: MoviesScreen(),
+                        ),
+                      ),
+                    ),
+                  ),
+                  _headerAction(
+                    Icons.video_library_outlined,
+                    'Player'.tr,
+                    () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => const ContentShortcutScreen(
                           title: 'Player',
@@ -401,7 +441,6 @@ class _TvScreenState extends State<TvScreen> {
                         ),
                       ),
                     ),
-                    icon: const Icon(Icons.video_library_outlined),
                   ),
                   IconButton(
                     tooltip: 'Play a link',
