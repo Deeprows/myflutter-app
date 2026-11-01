@@ -796,21 +796,21 @@ class _Header extends StatelessWidget {
                         ),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
+                            horizontal: 12,
+                            vertical: 6,
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(
                                 Icons.play_circle_outline_rounded,
-                                size: 13,
+                                size: 16,
                               ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: 5),
                               Text(
-                                'Highlights'.tr,
+                                'Watch Highlights'.tr,
                                 style: const TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 13,
                                   height: 1.1,
                                   fontWeight: FontWeight.w700,
                                 ),
