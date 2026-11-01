@@ -6,6 +6,7 @@ import '../services/content_sync.dart';
 import '../services/fan_zone_service.dart';
 import '../services/feed_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/format.dart';
 import 'fan_widgets.dart';
 
 class AiPredictScreen extends StatefulWidget {
@@ -28,6 +29,11 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   final Set<String> _selected = {};
   final Map<String, Map<String, dynamic>> _results = {};
   final Map<String, String> _failures = {};
+
+  /// Per result: the market chip chosen on the top-pick card, and whether the
+  /// full analysis below it is open.
+  final Map<String, String> _market = {};
+  final Set<String> _open = {};
   bool _loading = false, _busy = false;
   String? _error;
   int _done = 0, _total = 0;
@@ -830,79 +836,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     _ => Ui.muted,
   };
 
-  Widget _picksPanel(Map data) {
-    final picks = FanZoneService.rows(data['picks']);
-    if (picks.isEmpty) return const SizedBox.shrink();
-    return _panel(
-      title: 'AI picks',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final p in picks)
-            Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(11),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .04),
-                borderRadius: BorderRadius.circular(12),
-                border: Border(
-                  left: BorderSide(
-                    color: _confColor('${p['confidence']}'),
-                    width: 3,
-                  ),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${p['market']}',
-                          style: TextStyle(
-                            color: Ui.muted,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '${p['confidence']}'.toUpperCase(),
-                        style: TextStyle(
-                          color: _confColor('${p['confidence']}'),
-                          fontSize: 10.5,
-                          letterSpacing: .8,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '${p['pick']}',
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${p['reason']}',
-                    style: TextStyle(color: Ui.muted, fontSize: 12.5, height: 1.4),
-                  ),
-                ],
-              ),
-            ),
-          Text(
-            'Opinions from recent form and the data below, not guaranteed outcomes.',
-            style: TextStyle(color: Ui.dim, fontSize: 11),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _oddChip(String label, Object? odd) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
     decoration: BoxDecoration(
@@ -1106,8 +1039,8 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     );
   }
 
-  Widget _result(Fixture f, Map<String, dynamic> data) => Container(
-    margin: const EdgeInsets.only(top: 14),
+  Widget _fullAnalysis(Fixture f, Map<String, dynamic> data) => Container(
+    margin: const EdgeInsets.only(top: 12),
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(20),
       border: Border.all(color: const Color(0xFF713DDA).withValues(alpha: .45)),
@@ -1156,7 +1089,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           '${f.away} · last ${data['away']['played']}',
           Map<String, dynamic>.from(data['away'] as Map),
         ),
-        _picksPanel(data),
         _comparison(f, data),
         _goals(f, data),
         _oddsPanel(f, data),
@@ -1226,6 +1158,436 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       ],
     ),
   );
+
+  // ---------------------------------------------------------------------------
+  // TOP PICK CARD
+  // ---------------------------------------------------------------------------
+
+  static const _accent = Color(0xFF21E07A);
+  static const _chips = ['AI pick', 'Over 1.5', 'Over 2.5', 'BTTS', 'Under 2.5'];
+
+  /// How often a goals market landed in the last matches of both teams.
+  /// This is a plain hit rate from the verified results, not an AI estimate.
+  ({int hits, int total, int pct})? _rate(Map data, String market) {
+    final all = [..._matchesOf(data['home'] as Map), ..._matchesOf(data['away'] as Map)];
+    if (all.isEmpty) return null;
+    bool test(Map<String, dynamic> m) {
+      final gf = (m['goalsFor'] as num), ga = (m['goalsAgainst'] as num);
+      final t = gf + ga;
+      return switch (market) {
+        'Over 1.5' => t > 1.5,
+        'Over 2.5' => t > 2.5,
+        'Under 2.5' => t < 2.5,
+        'BTTS' => gf > 0 && ga > 0,
+        'No BTTS' => !(gf > 0 && ga > 0),
+        _ => false,
+      };
+    }
+
+    final hits = all.where(test).length;
+    return (hits: hits, total: all.length, pct: (hits / all.length * 100).round());
+  }
+
+  /// The goals market an AI pick refers to, when it can be checked against form.
+  String? _goalsMarketOf(Map<String, dynamic> p) {
+    final market = '${p['market']}', pick = '${p['pick']}'.toLowerCase();
+    if (market == 'Over/Under 2.5 goals') {
+      return pick.contains('under') ? 'Under 2.5' : 'Over 2.5';
+    }
+    if (market == 'Both teams to score') {
+      return pick.startsWith('no') ? 'No BTTS' : 'BTTS';
+    }
+    return null;
+  }
+
+  int _confRank(String c) => switch (c) { 'high' => 3, 'medium' => 2, _ => 1 };
+
+  List<Map<String, dynamic>> _sortedPicks(Map data) {
+    final picks = FanZoneService.rows(data['picks']);
+    final indexed = [for (var i = 0; i < picks.length; i++) (i, picks[i])];
+    indexed.sort((a, b) {
+      final c = _confRank('${b.$2['confidence']}').compareTo(_confRank('${a.$2['confidence']}'));
+      return c != 0 ? c : a.$1.compareTo(b.$1);
+    });
+    return [for (final e in indexed) e.$2];
+  }
+
+  Color _ringColor(double v) => v >= .65
+      ? _accent
+      : v >= .45
+      ? const Color(0xFFFFB74D)
+      : const Color(0xFFEF5350);
+
+  Widget _ring(double value, String center, {double size = 72, Color? color}) {
+    final c = color ?? _ringColor(value);
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox(
+            width: size,
+            height: size,
+            child: CircularProgressIndicator(
+              value: value.clamp(0, 1),
+              strokeWidth: size * .09,
+              strokeCap: StrokeCap.round,
+              backgroundColor: Colors.white.withValues(alpha: .10),
+              valueColor: AlwaysStoppedAnimation(c),
+            ),
+          ),
+          Text(
+            center,
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: size * .27),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _crestColumn(String logo, String name, String side) => Expanded(
+    child: Column(
+      children: [
+        TeamCrest(logo: logo, size: 52),
+        const SizedBox(height: 8),
+        Text(
+          name,
+          maxLines: 2,
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, height: 1.15),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          side,
+          style: TextStyle(color: Ui.muted, fontSize: 10, letterSpacing: 1.1),
+        ),
+      ],
+    ),
+  );
+
+  Widget _marketChips(String key, String selected) => SizedBox(
+    height: 36,
+    child: ListView.separated(
+      scrollDirection: Axis.horizontal,
+      itemCount: _chips.length,
+      separatorBuilder: (_, _) => const SizedBox(width: 8),
+      itemBuilder: (_, i) {
+        final c = _chips[i], on = c == selected;
+        return InkWell(
+          borderRadius: BorderRadius.circular(99),
+          onTap: () => setState(() => _market[key] = c),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: on ? _accent : Colors.white.withValues(alpha: .06),
+              borderRadius: BorderRadius.circular(99),
+              border: Border.all(color: on ? _accent : Ui.line),
+            ),
+            child: Text(
+              c,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 12.5,
+                color: on ? const Color(0xFF05140B) : Ui.muted,
+              ),
+            ),
+          ),
+        );
+      },
+    ),
+  );
+
+  Widget _topPick(Fixture f, Map<String, dynamic> data) {
+    final key = FanZoneService.matchKey(f);
+    final picks = _sortedPicks(data);
+    var selected = _market[key] ?? 'AI pick';
+
+    // Resolve what the card shows.
+    double value;
+    String center, label, title, sub;
+    Color? color;
+    final top = picks.isEmpty ? null : picks.first;
+    if (selected == 'AI pick' && top != null) {
+      final gm = _goalsMarketOf(top);
+      final r = gm == null ? null : _rate(data, gm);
+      final conf = '${top['confidence']}';
+      value = r != null ? r.pct / 100 : _confRank(conf) / 3;
+      center = r != null ? '${r.pct}%' : conf.toUpperCase();
+      color = r == null ? _confColor(conf) : null;
+      label = 'AI PREDICTION · ${'${top['market']}'.toUpperCase()}';
+      title = '${top['pick']}';
+      sub = r != null
+          ? 'Hit in ${r.hits} of ${r.total} recent matches · ${conf.toUpperCase()} confidence'
+          : '${top['reason']}';
+    } else {
+      if (selected == 'AI pick') {
+        // No AI picks came back: show the strongest goals market from form.
+        selected = _chips.skip(1).reduce(
+          (a, b) => (_rate(data, a)?.pct ?? 0) >= (_rate(data, b)?.pct ?? 0) ? a : b,
+        );
+      }
+      final r = _rate(data, selected);
+      value = (r?.pct ?? 0) / 100;
+      center = '${r?.pct ?? 0}%';
+      label = 'FORM HIT RATE';
+      title = selected == 'BTTS' ? 'Both teams to score' : '$selected goals';
+      sub = r == null
+          ? 'Not enough results'
+          : 'Hit in ${r.hits} of ${r.total} recent matches of both teams';
+    }
+
+    final typed = f.kickoff.year >= 2099;
+    final now = DateTime.now();
+    final k = f.kickoff.toLocal();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _accent.withValues(alpha: .28)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [const Color(0xFF0F3D26), Ui.card],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _accent.withValues(alpha: .10),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _marketChips(key, _market[key] ?? 'AI pick'),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded, size: 14, color: _accent),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'TOP PICK · ${f.league.toUpperCase()}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Ui.muted,
+                    fontSize: 10.5,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .08),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  typed ? 'YOUR MATCHUP' : 'UPCOMING',
+                  style: TextStyle(
+                    color: Ui.muted,
+                    fontSize: 10,
+                    letterSpacing: .8,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _crestColumn(f.homeLogo, f.home, 'HOME'),
+              SizedBox(
+                width: 84,
+                child: Column(
+                  children: [
+                    const SizedBox(height: 8),
+                    Text(
+                      typed ? 'VS' : fmtTime(k),
+                      style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900),
+                    ),
+                    if (!typed)
+                      Text(
+                        dayLabel(k, now),
+                        style: TextStyle(color: Ui.muted, fontSize: 11),
+                      ),
+                  ],
+                ),
+              ),
+              _crestColumn(f.awayLogo, f.away, 'AWAY'),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: .28),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: .06)),
+            ),
+            child: Row(
+              children: [
+                _ring(value, center, color: color),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Ui.muted,
+                          fontSize: 10,
+                          letterSpacing: 1.1,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        title,
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, height: 1.15),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        sub,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.35),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: _accent,
+                foregroundColor: const Color(0xFF05140B),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              onPressed: () => setState(() {
+                _open.contains(key) ? _open.remove(key) : _open.add(key);
+              }),
+              icon: Icon(
+                _open.contains(key) ? Icons.keyboard_arrow_up_rounded : Icons.arrow_forward_rounded,
+                size: 20,
+              ),
+              iconAlignment: IconAlignment.end,
+              label: Text(
+                _open.contains(key) ? 'Hide full analysis' : 'View full analysis',
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The other AI picks as compact rows with a small ring each.
+  Widget _picksList(Map<String, dynamic> data) {
+    final picks = _sortedPicks(data);
+    if (picks.length < 2) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Ui.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Ui.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'MORE AI PICKS',
+            style: TextStyle(
+              color: Ui.muted,
+              fontSize: 10.5,
+              letterSpacing: 1.1,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (final p in picks.skip(1)) _pickRow(data, p),
+          Text(
+            'Opinions from recent form and the data in the full analysis, not guaranteed outcomes.',
+            style: TextStyle(color: Ui.dim, fontSize: 10.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pickRow(Map<String, dynamic> data, Map<String, dynamic> p) {
+    final conf = '${p['confidence']}';
+    final gm = _goalsMarketOf(p);
+    final r = gm == null ? null : _rate(data, gm);
+    final value = r != null ? r.pct / 100 : _confRank(conf) / 3;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ring(
+            value,
+            r != null ? '${r.pct}%' : conf.substring(0, 1).toUpperCase(),
+            size: 46,
+            color: r == null ? _confColor(conf) : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${p['market']}',
+                  style: TextStyle(color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  '${p['pick']}',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${p['reason']}',
+                  style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.35),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _result(Fixture f, Map<String, dynamic> data) {
+    final key = FanZoneService.matchKey(f);
+    return Column(
+      children: [
+        _topPick(f, data),
+        _picksList(data),
+        if (_open.contains(key)) _fullAnalysis(f, data),
+      ],
+    );
+  }
 
   Widget _hero() => Container(
     padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
