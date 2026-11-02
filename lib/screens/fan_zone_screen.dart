@@ -12,6 +12,7 @@ import '../services/support_gate.dart';
 import '../widgets/status_pill.dart';
 import '../services/remote_config.dart';
 import 'player_screen.dart';
+import 'notifications_screen.dart';
 import '../theme/app_theme.dart';
 import 'fan_posts_feed.dart';
 import 'fan_profile_screen.dart';
@@ -446,6 +447,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             ),
           if (widget.threadHeader) ...[
             _labeled(Icons.leaderboard_rounded, 'Ranks', _openRanks),
+            const NotificationBell(label: 'Alerts'),
             _labeled(
               Icons.forum_outlined,
               'Match Rooms',
@@ -1797,6 +1799,48 @@ class _NicknameSheetState extends State<_NicknameSheet> {
 // -----------------------------------------------------------------------------
 // SCORE PICKER SHEET
 // -----------------------------------------------------------------------------
+
+/// Saves the signed-in user's prediction for [f] (asks for a Fan Zone name
+/// first if needed). The server verifies the result against the ESPN final
+/// score and the points appear in the Ranks table. Returns the saved
+/// prediction label, or null if the user closed the sheet.
+Future<String?> saveFanPrediction(BuildContext context, Fixture f) async {
+  final data = await FanZoneService.call('state');
+  if (!context.mounted) return null;
+  if ('${data['name'] ?? ''}'.isEmpty) {
+    final name = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: Ui.panel,
+      builder: (_) => const _NicknameSheet(initial: ''),
+    );
+    if (name == null) return null;
+    await FanZoneService.call('profile', body: {'name': name});
+    if (!context.mounted) return null;
+  }
+  final key = FanZoneService.matchKey(f);
+  final old = FanZoneService.rows(
+    data['picks'],
+  ).where((p) => p['match_key'] == key).firstOrNull;
+  final result = await showModalBottomSheet<Map<String, dynamic>>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    backgroundColor: Ui.panel,
+    builder: (_) => _PickSheet(
+      fixture: f,
+      home: (old?['home'] as num?)?.toInt() ?? 0,
+      away: (old?['away'] as num?)?.toInt() ?? 0,
+      editing: old != null,
+      market: old == null ? 'result' : old['market'] as String? ?? 'score',
+      selection: old == null ? '1' : old['selection'] as String? ?? '',
+    ),
+  );
+  if (result == null) return null;
+  await FanZoneService.call('pick', body: {'key': key, ...result});
+  return fanPredictionLabel(result);
+}
 
 class _PickSheet extends StatefulWidget {
   final Fixture fixture;
