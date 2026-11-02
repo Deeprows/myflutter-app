@@ -58,29 +58,5 @@
     "altUrl": "",
     "homeLogo": "97",
     "awayLogo": "106"
-  },
-  {
-    "id": "6",
-    "home": "Pakhtakor Tashkent",
-    "away": "Al Nassr",
-    "league": "AFC Champions League Elite",
-    "kickoff": "2026-11-02T14:45:00+01:00",
-    "duration": 130,
-    "url": "",
-    "altUrl": "",
-    "homeLogo": "",
-    "awayLogo": "2939"
-  },
-  {
-    "id": "10",
-    "home": "Al Ittihad",
-    "away": "Al-Ain",
-    "league": "AFC Champions League Elite",
-    "kickoff": "2026-11-02T19:15:00+01:00",
-    "duration": 130,
-    "url": "",
-    "altUrl": "",
-    "homeLogo": "",
-    "awayLogo": ""
   }
 ]
