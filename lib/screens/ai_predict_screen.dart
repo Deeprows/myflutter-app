@@ -28,7 +28,12 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   List<Fixture> _fixtures = [];
 
   /// Upcoming matches from other sources (the server's ESPN feed) that are not
-  /// in the app's own fixture list.
+  /// in the app's own fixture list. Any league ESPN lists can be picked here.
+  List<Fixture> _ext = [];
+  bool _extLoading = false;
+  String? _extError;
+  String _extLeague = 'All';
+  int _extShown = 15;
 
   /// Matchups the user typed in themselves. Teams are resolved on the server.
   final List<Fixture> _custom = [];
@@ -84,7 +89,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     super.dispose();
   }
 
-  List<Fixture> get _all => [..._custom, ..._fixtures];
+  List<Fixture> get _all => [..._custom, ..._fixtures, ..._ext];
   static bool _isCustom(Fixture f) => f.id.startsWith('custom:');
   static bool _isExternal(Fixture f) => f.id.startsWith('ext:');
 
@@ -115,7 +120,132 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+    await _loadExt();
     if (mounted) setState(_prune);
+  }
+
+  /// Upcoming matches from ESPN across all leagues, so any match can be picked
+  /// and analysed (not just the ones in the app's own list).
+  Future<void> _loadExt() async {
+    if (!mounted || _extLoading) return;
+    setState(() {
+      _extLoading = true;
+      _extError = null;
+    });
+    try {
+      final data = await FanZoneService.call('ai-predict/matches');
+      final own = {for (final f in _fixtures) '${_n(f.home)}|${_n(f.away)}'};
+      final list = <Fixture>[];
+      for (final m in FanZoneService.rows(data['matches'])) {
+        final id = '${m['id'] ?? ''}';
+        final kickoff = DateTime.tryParse('${m['kickoff'] ?? ''}');
+        final home = '${m['home'] ?? ''}', away = '${m['away'] ?? ''}';
+        if (id.isEmpty || kickoff == null || home.isEmpty || away.isEmpty) {
+          continue;
+        }
+        if (!kickoff.isAfter(DateTime.now())) continue;
+        // Already in the app's own list: don't show the same match twice.
+        if (own.contains('${_n(home)}|${_n(away)}')) continue;
+        list.add(
+          Fixture(
+            id: 'ext:$id',
+            home: home,
+            away: away,
+            homeLogo: '${m['homeLogo'] ?? ''}',
+            awayLogo: '${m['awayLogo'] ?? ''}',
+            league: '${m['league'] ?? ''}',
+            kickoff: kickoff,
+          ),
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _ext = list;
+        if (_extLeague != 'All' && !list.any((f) => f.league == _extLeague)) {
+          _extLeague = 'All';
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _extError = 'Could not load more matches from ESPN.');
+      }
+    } finally {
+      if (mounted) setState(() => _extLoading = false);
+    }
+  }
+
+  /// ESPN matches with a league filter and a "show more" button.
+  List<Widget> _extSection() {
+    if (_ext.isEmpty && !_extLoading && _extError == null) return const [];
+    final leagues = <String>{for (final f in _ext) f.league}.toList()..sort();
+    final shown = _extLeague == 'All'
+        ? _ext
+        : _ext.where((f) => f.league == _extLeague).toList();
+    return [
+      const SizedBox(height: 14),
+      Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'MORE MATCHES · ALL LEAGUES (ESPN)',
+              style: TextStyle(
+                fontSize: 11,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFFB39DFF),
+              ),
+            ),
+          ),
+          if (_extLoading)
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      if (leagues.length > 1)
+        SizedBox(
+          height: 36,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final l in ['All', ...leagues])
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(l, style: const TextStyle(fontSize: 12)),
+                    selected: _extLeague == l,
+                    onSelected: (_) => setState(() {
+                      _extLeague = l;
+                      _extShown = 15;
+                    }),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      const SizedBox(height: 10),
+      if (_extError != null && _ext.isEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            children: [
+              Expanded(child: Text(_extError!)),
+              TextButton(onPressed: _loadExt, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      for (final f in shown.take(_extShown)) _matchTile(f),
+      if (shown.length > _extShown)
+        Center(
+          child: TextButton(
+            onPressed: () => setState(() => _extShown += 15),
+            child: Text('Show more (${shown.length - _extShown} left)'),
+          ),
+        ),
+    ];
   }
 
   static const _maxPicks = 3;
@@ -2211,7 +2341,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Text(_error!),
                   ),
-                if (!_loading && _fixtures.isEmpty)
+                if (!_loading && _fixtures.isEmpty && _ext.isEmpty && !_extLoading)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
                     child: Center(
@@ -2222,6 +2352,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                     ),
                   ),
                 for (final f in _fixtures) _matchTile(f),
+                ..._extSection(),
               ],
             ),
           ),
