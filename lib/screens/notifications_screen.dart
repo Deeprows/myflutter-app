@@ -289,21 +289,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 }
 
 /// Header bell with an unread count; opens the notification inbox.
+/// With [label] it is drawn like the Thread header actions (icon + name).
 class NotificationBell extends StatelessWidget {
-  const NotificationBell({super.key});
+  final String? label;
+  const NotificationBell({super.key, this.label});
+
+  Future<void> _open(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
+    );
+    NotificationCenter.instance.refreshBadge();
+  }
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<int>(
     valueListenable: NotificationCenter.instance.unread,
-    builder: (context, n, _) => IconButton(
-      tooltip: 'Notifications',
-      onPressed: () async {
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
-        );
-        NotificationCenter.instance.refreshBadge();
-      },
-      icon: Badge(
+    builder: (context, n, _) {
+      final icon = Badge(
         isLabelVisible: n > 0,
         label: Text(n > 9 ? '9+' : '$n'),
         backgroundColor: Ui.red,
@@ -311,8 +313,38 @@ class NotificationBell extends StatelessWidget {
           n > 0
               ? Icons.notifications_active_rounded
               : Icons.notifications_none_rounded,
+          size: label == null ? null : 24,
         ),
-      ),
-    ),
+      );
+      if (label == null) {
+        return IconButton(
+          tooltip: 'Notifications',
+          onPressed: () => _open(context),
+          icon: icon,
+        );
+      }
+      return InkResponse(
+        onTap: () => _open(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 9),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              icon,
+              const SizedBox(height: 2),
+              Text(
+                label!,
+                style: const TextStyle(
+                  fontSize: 10,
+                  height: 1.1,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
   );
 }
