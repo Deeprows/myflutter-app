@@ -10,11 +10,10 @@ import '../services/feed_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import '../services/auth_service.dart';
-import '../services/notification_center.dart';
 import 'auth_screen.dart';
 import 'fan_profile_screen.dart';
 import 'fan_widgets.dart';
-import 'notifications_screen.dart';
+import 'fan_zone_screen.dart' show saveFanPrediction;
 import 'remove_ads_screen.dart';
 import 'plans_screen.dart';
 
@@ -53,7 +52,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     super.initState();
     _loadDailyFreePicks();
     ContentSync.tick.addListener(_sync);
-    NotificationCenter.instance.refreshBadge();
     if (widget.active) _load();
   }
 
@@ -64,8 +62,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   }
 
   void _sync() {
-    // Keep the bell's unread count current even when this tab is not open.
-    NotificationCenter.instance.refreshBadge();
     if (widget.active && !_busy) _load();
   }
 
@@ -1435,6 +1431,40 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     );
   }
 
+  /// The user's own prediction: verified against the ESPN final score and
+  /// counted in the Ranks table.
+  Widget _savePrediction(Fixture f) => Padding(
+    padding: const EdgeInsets.only(top: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FilledButton.icon(
+          onPressed: () async {
+            try {
+              final label = await saveFanPrediction(context, f);
+              if (label != null) {
+                _snack('Prediction saved: $label. Points appear in Ranks after the final whistle.');
+              }
+            } catch (e) {
+              _snack(e.toString().replaceFirst('Exception: ', ''));
+            }
+          },
+          icon: const Icon(Icons.how_to_vote_rounded, size: 18),
+          label: const Text(
+            'Make my own prediction',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Checked against the ESPN final score. Points go to the Ranks table.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 11, color: Ui.muted),
+        ),
+      ],
+    ),
+  );
+
   Widget _topPick(Fixture f, Map<String, dynamic> data) {
     final key = FanZoneService.matchKey(f);
     final v = _resolve(data, _market[key] ?? 'AI pick');
@@ -1792,6 +1822,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                       padding: const EdgeInsets.fromLTRB(14, 0, 14, 28),
                       children: [
                         _topPick(f, data),
+                        if (!_isCustom(f)) _savePrediction(f),
                         _picksList(data),
                         _fullAnalysis(f, data),
                       ],
@@ -2110,7 +2141,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         style: TextStyle(fontWeight: FontWeight.w900),
       ),
       actions: [
-        const NotificationBell(),
         IconButton(
           tooltip: 'Profile',
           icon: const Icon(Icons.person_outline_rounded),
