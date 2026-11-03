@@ -1900,7 +1900,9 @@ async function fanZone(request, env, url) {
         const list=await fanAiUpcoming(env);
         const m=list.find(x=>`ext:${x.id}|${Date.parse(x.kickoff)}`===b.key);
         if (!m) return fail('Match is no longer available. Refresh the fixtures.');
-        f={id:`ext:${m.id}`,home:m.home,away:m.away,league:m.league,kickoff:m.kickoff,homeLogo:m.homeLogo,awayLogo:m.awayLogo,scoreLeague:m.leagueCode,espnEventId:String(m.id).split(':')[1]};
+        f={id:`ext:${m.id}`,home:m.home,away:m.away,league:m.league,kickoff:m.kickoff,homeLogo:m.homeLogo,awayLogo:m.awayLogo};
+        // ESPN-sourced matches are verified against that exact ESPN game; others by team names and time.
+        if(m.source!=='tsdb'){f.scoreLeague=m.leagueCode;f.espnEventId=String(m.id).split(':')[1];}
       } else {
         const fixtures = await fanFixtures(env);
         f = fixtures.find(f => fanKey(f)===b.key);
@@ -2472,7 +2474,7 @@ const FAN_AI_DOMESTIC=new Set(FAN_AI_LEAGUES.slice(0,16).map(l=>l[0]));
 // Team lookup only needs domestic leagues plus the continental competitions (for clubs from other leagues).
 const FAN_AI_TEAM_LEAGUES=FAN_AI_LEAGUES.slice(0,20);
 const FAN_AI_UPCOMING_DAYS=10;
-function fanAiLogo(raw){return typeof raw==='string' && /^https:\/\/[a-z0-9.-]+\.espncdn\.com\//i.test(raw) && raw.length<300?raw:'';}
+function fanAiLogo(raw){return typeof raw==='string' && /^https:\/\/(?:[a-z0-9.-]+\.espncdn\.com|(?:[a-z0-9-]+\.)?thesportsdb\.com)\//i.test(raw) && raw.length<300?raw:'';}
 // Small D1-backed cache (one row per key). A failed or empty rebuild falls back to the stale copy.
 async function fanAiCached(env,key,ttl,build) {
   const now=Date.now(),row=await env.DB.prepare('SELECT data,fetched_at FROM fan_espn_form_cache WHERE cache_key=?').bind(key).first();
@@ -2498,8 +2500,46 @@ async function fanAiEspn(path) {
   if(!response.ok)throw new Error('ESPN '+response.status);
   return response.json();
 }
+// Free fallback 1: ESPN's all-soccer scoreboard (every league ESPN covers, in one request per few days).
+async function fanAiEspnAllUpcoming(now,day) {
+  const rows=[],spans=[[0,3],[4,7],[8,FAN_AI_UPCOMING_DAYS]];
+  const parts=await Promise.allSettled(spans.map(([a,b])=>fanAiEspn(`all/scoreboard?dates=${day(now+a*86400000)}-${day(now+b*86400000)}&limit=1000`)));
+  for(const part of parts) {
+    if(part.status!=='fulfilled')continue;
+    for(const e of Array.isArray(part.value?.events)?part.value.events:[]) {
+      const comp=e?.competitions?.[0],status=comp?.status || e?.status,type=status?.type;
+      if(type?.state!=='pre' || /POSTPONED|CANCEL|SUSPEND|ABANDON/i.test(String(type?.name || '')))continue;
+      const at=Date.parse(e.date || comp?.date);
+      if(!Number.isFinite(at) || at<=now || !/^\d{1,12}$/.test(String(e.id)) || !Array.isArray(comp?.competitors))continue;
+      const h=comp.competitors.find(c=>c?.homeAway==='home')?.team,a=comp.competitors.find(c=>c?.homeAway==='away')?.team;
+      if(!h || !a || !/^\d{1,9}$/.test(String(h.id)) || !/^\d{1,9}$/.test(String(a.id)) || !h.displayName || !a.displayName || String(h.id)===String(a.id))continue;
+      rows.push({id:`all:${e.id}`,home:String(h.displayName).slice(0,80),away:String(a.displayName).slice(0,80),homeId:String(h.id),awayId:String(a.id),homeLogo:fanAiLogo(h.logo),awayLogo:fanAiLogo(a.logo),league:String(e.leagueName || comp?.league?.name || 'Other leagues').slice(0,60),leagueCode:'all',kickoff:new Date(at).toISOString()});
+    }
+  }
+  return rows;
+}
+// Free fallback 2: TheSportsDB (public test key, no sign-up). Results are checked later by team names and time.
+async function fanAiTsdbUpcoming(now,day) {
+  const rows=[];
+  const dates=Array.from({length:7},(_,i)=>new Date(now+i*86400000).toISOString().slice(0,10));
+  const parts=await Promise.allSettled(dates.map(async d=>{
+    const r=await fetch(`https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=${d}&s=Soccer`,{signal:AbortSignal.timeout(7000)});
+    if(!r.ok)throw new Error('TheSportsDB '+r.status);
+    return r.json();
+  }));
+  for(const part of parts) {
+    if(part.status!=='fulfilled')continue;
+    for(const e of Array.isArray(part.value?.events)?part.value.events:[]) {
+      const at=Date.parse(e.strTimestamp?`${String(e.strTimestamp).replace(' ','T')}${/[zZ]|[+-]\d\d:?\d\d$/.test(e.strTimestamp)?'':'Z'}`:`${e.dateEvent}T${e.strTime || '00:00:00'}Z`);
+      if(e.strSport!=='Soccer' || !Number.isFinite(at) || at<=now || !/^\d{1,12}$/.test(String(e.idEvent)) || !e.strHomeTeam || !e.strAwayTeam)continue;
+      if(/^(?:FT|AET|PEN|PST|CANC|ABD|AWD|WO|1H|2H|HT|LIVE|ET)$/i.test(String(e.strStatus || '')))continue;
+      rows.push({id:`tsdb:${e.idEvent}`,home:String(e.strHomeTeam).slice(0,80),away:String(e.strAwayTeam).slice(0,80),homeId:String(e.idHomeTeam || '0').replace(/\D/g,'').slice(0,9) || '0',awayId:String(e.idAwayTeam || '1').replace(/\D/g,'').slice(0,9) || '1',homeLogo:fanAiLogo(e.strHomeTeamBadge),awayLogo:fanAiLogo(e.strAwayTeamBadge),league:String(e.strLeague || 'Other leagues').slice(0,60),leagueCode:'tsdb',kickoff:new Date(at).toISOString(),source:'tsdb'});
+    }
+  }
+  return rows;
+}
 function fanAiUpcoming(env) {
-  return fanAiCached(env,'ai-upcoming:v1',1800000,async()=>{
+  return fanAiCached(env,'ai-upcoming:v2',1800000,async()=>{
     const now=Date.now(),day=t=>new Date(t).toISOString().slice(0,10).replace(/-/g,'');
     const range=`${day(now)}-${day(now+FAN_AI_UPCOMING_DAYS*86400000)}`;
     const settled=await Promise.allSettled(FAN_AI_LEAGUES.map(async([slug,name])=>[slug,name,await fanAiEspn(`${slug}/scoreboard?dates=${range}&limit=300`)]));
@@ -2517,7 +2557,16 @@ function fanAiUpcoming(env) {
         out.set(`${slug}:${e.id}`,{id:`${slug}:${e.id}`,home:String(h.displayName).slice(0,80),away:String(a.displayName).slice(0,80),homeId:String(h.id),awayId:String(a.id),homeLogo:fanAiLogo(h.logo),awayLogo:fanAiLogo(a.logo),league:name,leagueCode:slug,kickoff:new Date(at).toISOString()});
       }
     }
-    return {rows:[...out.values()].sort((x,y)=>Date.parse(x.kickoff)-Date.parse(y.kickoff)).slice(0,200),complete:settled.filter(i=>i.status==='fulfilled').length>=Math.ceil(settled.length*.8)};
+    let complete=settled.filter(i=>i.status==='fulfilled').length>=Math.ceil(settled.length*.8);
+    // Fewer matches than expected (or ESPN's league feeds failed): add other free sources, skipping duplicates.
+    if(out.size<25 || !complete) {
+      const seen=new Set([...out.values()].map(r=>`${fanResultName(r.home)}|${fanResultName(r.away)}|${r.kickoff.slice(0,10)}`));
+      const add=rows=>{for(const r of rows){const k=`${fanResultName(r.home)}|${fanResultName(r.away)}|${r.kickoff.slice(0,10)}`;if(!seen.has(k)){seen.add(k);out.set(r.id,r);}}};
+      try{add(await fanAiEspnAllUpcoming(now,day));}catch(e){console.error('ESPN all upcoming failed',e?.message);}
+      if(out.size<15) {try{add(await fanAiTsdbUpcoming(now,day));}catch(e){console.error('TheSportsDB upcoming failed',e?.message);}}
+      complete=out.size>0;
+    }
+    return {rows:[...out.values()].sort((x,y)=>Date.parse(x.kickoff)-Date.parse(y.kickoff)).slice(0,300),complete};
   });
 }
 function fanAiTeams(env) {
@@ -2568,7 +2617,7 @@ async function fanAiMatches(request,env,id) {
   if(request.method!=='GET')return json({error:'Method not allowed'},405);
   const list=await fanAiUpcoming(env);
   if(!list.length)return json({error:'More matches are unavailable right now. Please retry later.'},503);
-  return json({matches:list.map(({homeId,awayId,leagueCode,...m})=>m)});
+  return json({matches:list.map(({homeId,awayId,leagueCode,source,...m})=>m)});
 }
 async function fanAiAnyMatch(env,id,b) {
   const fail=(error,status=400,extra={})=>json({error,...extra},status);
