@@ -165,9 +165,14 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           _extLeague = 'All';
         }
       });
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
-        setState(() => _extError = 'Could not load more matches from ESPN.');
+        final why = e.toString().replaceFirst('Exception: ', '');
+        setState(
+          () => _extError = why.isEmpty || why.length > 120
+              ? 'Could not load more matches. Pull to retry.'
+              : 'Could not load more matches: $why',
+        );
       }
     } finally {
       if (mounted) setState(() => _extLoading = false);
@@ -187,7 +192,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         children: [
           const Expanded(
             child: Text(
-              'MORE MATCHES · ALL LEAGUES (ESPN)',
+              'MORE MATCHES · ALL LEAGUES',
               style: TextStyle(
                 fontSize: 11,
                 letterSpacing: 1.2,
