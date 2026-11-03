@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/safe_error_message.dart';
@@ -13,7 +15,9 @@ import '../services/auth_service.dart';
 import 'auth_screen.dart';
 import 'fan_profile_screen.dart';
 import 'fan_widgets.dart';
-import 'fan_zone_screen.dart' show saveFanPrediction;
+import '../models/fan_prediction.dart';
+import 'content_shortcut_screen.dart';
+import 'fan_zone_screen.dart' show FanZonePage, FanZoneScreen, saveFanPrediction;
 import 'remove_ads_screen.dart';
 import 'plans_screen.dart';
 
@@ -29,6 +33,8 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
 
   /// Upcoming matches from other sources (the server's ESPN feed) that are not
   /// in the app's own fixture list. Any league ESPN lists can be picked here.
+  /// The user's own saved predictions with their ESPN-verified results.
+  List<Map<String, dynamic>> _myPicks = [];
   List<Fixture> _ext = [];
   bool _extLoading = false;
   String? _extError;
@@ -121,7 +127,108 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       if (mounted) setState(() => _loading = false);
     }
     await _loadExt();
+    unawaited(_loadMyPicks());
     if (mounted) setState(_prune);
+  }
+
+  /// Loading the state also makes the server check any finished matches.
+  Future<void> _loadMyPicks() async {
+    if (!AuthService.instance.signedIn) return;
+    try {
+      final data = await FanZoneService.call('state');
+      if (!mounted) return;
+      setState(() => _myPicks = FanZoneService.rows(data['picks']).take(40).toList());
+    } catch (_) {}
+  }
+
+  Widget _myPredictions() {
+    if (_myPicks.isEmpty) return const SizedBox.shrink();
+    final shown = _myPicks.take(5).toList();
+    final pending = _myPicks.where((p) => fanPredictionScore(p) == null && !fanPredictionPush(p)).length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Ui.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Ui.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'MY PREDICTIONS',
+                    style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w900, color: Color(0xFFB39DFF)),
+                  ),
+                ),
+                if (pending > 0)
+                  Text('$pending awaiting final score', style: TextStyle(fontSize: 11, color: Ui.muted)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            for (final p in shown) _myPickRow(p),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ContentShortcutScreen(
+                      title: 'Ranks',
+                      child: FanZoneScreen(active: true, page: FanZonePage.ranks, embedded: true),
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.leaderboard_rounded, size: 16),
+                label: const Text('See Ranks'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _myPickRow(Map<String, dynamic> p) {
+    final pts = fanPredictionScore(p);
+    final push = fanPredictionPush(p);
+    final (Color c, String badge) = switch (pts) {
+      3 => (Ui.green, '+3 Exact'),
+      1 => (const Color(0xFF42A5F5), '+1 Correct'),
+      0 => (const Color(0xFFEF5350), '0 Missed'),
+      _ => (Ui.muted, push ? 'Refunded' : 'Pending'),
+    };
+    final settled = p['result_home'] != null;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${p['title']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+                Text(
+                  'My pick: ${fanPredictionLabel(p)}${settled ? '  •  Final ${p['result_home']}–${p['result_away']}' : ''}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11, color: Ui.muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(color: c.withValues(alpha: .16), borderRadius: BorderRadius.circular(20)),
+            child: Text(badge, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: c)),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Upcoming matches from ESPN across all leagues, so any match can be picked
@@ -1579,6 +1686,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               final label = await saveFanPrediction(context, f);
               if (label != null) {
                 _snack('Prediction saved: $label. Points appear in Ranks after the final whistle.');
+                unawaited(_loadMyPicks());
               }
             } catch (e) {
               _snack(e.toString().replaceFirst('Exception: ', ''));
@@ -2301,6 +2409,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               children: [
                 _hero(),
+                _myPredictions(),
                 const SizedBox(height: 12),
                 _typeBox(),
                 if (_custom.isNotEmpty) const SizedBox(height: 10),
