@@ -71,6 +71,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case InboxKind.trending:
         Navigator.of(context).pop();
         push.openTab(8); // Search tab, where trending tags live
+      case InboxKind.prediction:
       case InboxKind.result:
         Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -88,11 +89,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   static const _sections = <InboxKind, (String, IconData, Color)>{
+    InboxKind.prediction: ('My predictions', Icons.how_to_vote_rounded, Color(0xFF7C4DFF)),
     InboxKind.live: ('Live matches', Icons.sports_soccer_rounded, Color(0xFFE53935)),
     InboxKind.highlight: ('Highlights', Icons.play_circle_rounded, Color(0xFFFFA000)),
     InboxKind.movie: ('Latest movies', Icons.movie_rounded, Color(0xFF8E6BFF)),
     InboxKind.trending: ('Trending hashtags', Icons.tag_rounded, Color(0xFF1E88E5)),
-    InboxKind.result: ('Prediction results', Icons.emoji_events_rounded, Color(0xFF43A047)),
+    InboxKind.result: ('Weekly winners', Icons.emoji_events_rounded, Color(0xFF43A047)),
   };
 
   String _ago(DateTime? t) {
