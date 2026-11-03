@@ -1,14 +1,18 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/fan_prediction.dart';
 import '../models/fixture.dart';
 import 'fan_zone_service.dart';
+import 'auth_service.dart';
 import 'feed_service.dart';
+import 'native_notifier.dart';
 
 /// What an inbox entry is about (also decides its icon, colour and section).
-enum InboxKind { live, highlight, movie, trending, result }
+enum InboxKind { prediction, live, highlight, movie, trending, result }
 
 /// One line in the in-app notification inbox.
 class InboxItem {
@@ -53,6 +57,8 @@ class NotificationCenter {
   // Network parts are remembered for the session so the badge can count them.
   List<InboxItem> _trending = const [];
   List<InboxItem> _results = const [];
+  List<InboxItem> _predictions = const [];
+  DateTime _picksCheckedAt = DateTime.fromMillisecondsSinceEpoch(0);
   List<InboxItem> _last = const [];
 
   Future<Set<String>> _seen() async {
@@ -165,8 +171,9 @@ class NotificationCenter {
 
     // ---- Trending hashtags + weekly prediction results ----------------------
     if (network) {
-      await Future.wait([_loadTrending(), _loadResults()]);
+      await Future.wait([_loadTrending(), _loadResults(), checkPredictions(force: true)]);
     }
+    items.insertAll(0, _predictions);
     items.addAll(_trending);
     items.addAll(_results);
 
@@ -228,14 +235,105 @@ class NotificationCenter {
     // Matches further ahead than an hour are only a heads-up, not "new".
     final fresh = list.where((i) =>
         !seen.contains(i.id) &&
-        !(i.kind == InboxKind.live && i.id.endsWith(':later')));
+        !(i.kind == InboxKind.live && i.id.endsWith(':later')) &&
+        !(i.kind == InboxKind.prediction &&
+            (i.id.endsWith(':saved') || i.id.endsWith(':wait'))));
     unread.value = fresh.length;
   }
 
   /// Quick badge update without opening the inbox (cached feeds only).
   Future<void> refreshBadge() async {
     try {
+      await checkPredictions();
       await load();
+    } catch (_) {}
+  }
+
+  static const _notifiedKey = 'pred_result_notified';
+
+  /// Reads the user's predictions (this also makes the server check ESPN for
+  /// finished matches), lists them in the inbox and shows a phone notification
+  /// once for each prediction that has just been settled.
+  Future<void> checkPredictions({bool force = false}) async {
+    if (!AuthService.instance.signedIn) return;
+    final waiting = _predictions.any((e) => e.ref == 'pending');
+    final every = waiting || _predictions.isEmpty
+        ? const Duration(minutes: 3)
+        : const Duration(minutes: 20);
+    if (!force && DateTime.now().difference(_picksCheckedAt) < every) return;
+    _picksCheckedAt = DateTime.now();
+    try {
+      final data = await FanZoneService.call('state');
+      final picks = FanZoneService.rows(data['picks']);
+      final cutoff = DateTime.now().subtract(const Duration(days: 4));
+      final prefs = await SharedPreferences.getInstance();
+      final notified = (prefs.getStringList(_notifiedKey) ?? <String>[]).toSet();
+      final items = <InboxItem>[];
+      for (final p in picks) {
+        final ko = DateTime.fromMillisecondsSinceEpoch(
+          ((p['kickoff'] as num?) ?? 0).toInt(),
+        );
+        if (ko.isBefore(cutoff)) continue;
+        final key = '${p['match_key']}';
+        final title = '${p['title']}';
+        final mine = fanPredictionLabel(p);
+        final pts = fanPredictionScore(p);
+        final settled = p['result_home'] != null;
+        if (!settled) {
+          // Only matches that have already kicked off are "waiting".
+          if (ko.isAfter(DateTime.now())) {
+            items.add(InboxItem(
+              id: 'pick:$key:saved',
+              kind: InboxKind.prediction,
+              title: '🗳️ Prediction saved: $title',
+              body: 'Your pick: $mine',
+              at: ko,
+              ref: 'upcoming',
+            ));
+          } else {
+            items.add(InboxItem(
+              id: 'pick:$key:wait',
+              kind: InboxKind.prediction,
+              title: '⏳ Waiting for the final score: $title',
+              body: 'Your pick: $mine. Verified with ESPN, then added to Ranks.',
+              at: ko,
+              ref: 'pending',
+            ));
+          }
+          continue;
+        }
+        final score = '${p['result_home']}–${p['result_away']}';
+        final head = switch (pts) {
+          3 => '🎯 Exact score! +3 points',
+          1 => '✅ Correct! +1 point',
+          0 => '❌ Missed, 0 points',
+          _ => '↩️ Refunded (push)',
+        };
+        items.add(InboxItem(
+          id: 'pick:$key:done',
+          kind: InboxKind.prediction,
+          title: '$head: $title',
+          body: 'Final score $score. Your pick: $mine. Ranks updated.',
+          at: ko,
+          ref: 'done',
+        ));
+        if (!notified.contains(key)) {
+          notified.add(key);
+          unawaited(NativeNotifier.show(
+            title: head,
+            body: '$title finished $score. Your pick: $mine.',
+            channel: 'content',
+            payload: '{}',
+          ));
+        }
+      }
+      items.sort((a, b) => (b.at ?? DateTime(2000)).compareTo(a.at ?? DateTime(2000)));
+      _predictions = items;
+      final keep = notified.toList();
+      await prefs.setStringList(
+        _notifiedKey,
+        keep.length > 200 ? keep.sublist(keep.length - 200) : keep,
+      );
     } catch (_) {}
   }
 
