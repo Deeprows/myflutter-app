@@ -22,6 +22,7 @@ import 'fan_profile_screen.dart';
 import 'fan_widgets.dart';
 import '../models/fan_prediction.dart';
 import 'content_shortcut_screen.dart';
+import 'prediction_results_screen.dart';
 import 'fan_zone_screen.dart' show FanZonePage, FanZoneScreen, saveFanPrediction;
 import 'remove_ads_screen.dart';
 import 'plans_screen.dart';
@@ -202,20 +203,31 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             ),
             const SizedBox(height: 6),
             for (final p in shown) _myPickRow(p),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ContentShortcutScreen(
-                      title: 'Ranks',
-                      child: FanZoneScreen(active: true, page: FanZonePage.ranks, embedded: true),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const PredictionResultsScreen(),
                     ),
                   ),
+                  icon: const Icon(Icons.fact_check_rounded, size: 16),
+                  label: const Text('All results'),
                 ),
-                icon: const Icon(Icons.leaderboard_rounded, size: 16),
-                label: const Text('See Ranks'),
-              ),
+                TextButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ContentShortcutScreen(
+                        title: 'Ranks',
+                        child: FanZoneScreen(active: true, page: FanZonePage.ranks, embedded: true),
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.leaderboard_rounded, size: 16),
+                  label: const Text('See Ranks'),
+                ),
+              ],
             ),
           ],
         ),
@@ -352,25 +364,27 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     String ymd(DateTime d) =>
         '${d.year}${d.month.toString().padLeft(2, '0')}${d.day.toString().padLeft(2, '0')}';
     final now = DateTime.now().toUtc();
-    final spans = <(int, int)>[(0, 2), (3, 5), (6, 8), (9, 10)];
-    final parts = await Future.wait(
-      spans.map((sp) async {
+    // One request per day, exactly like the Live screen's score lookups.
+    Future<List<dynamic>> day(int offset) async {
+      final d = ymd(now.add(Duration(days: offset)));
+      const base =
+          'https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard';
+      for (final q in ['?dates=$d&limit=500', '?dates=$d']) {
         try {
-          final uri = Uri.parse(
-            'https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard'
-            '?dates=${ymd(now.add(Duration(days: sp.$1)))}-${ymd(now.add(Duration(days: sp.$2)))}&limit=1000',
-          );
-          final r = await http.get(uri).timeout(const Duration(seconds: 10));
-          if (r.statusCode != 200) return const <dynamic>[];
-          final data = jsonDecode(r.body);
-          return (data is Map && data['events'] is List)
-              ? data['events'] as List
-              : const <dynamic>[];
-        } catch (_) {
-          return const <dynamic>[];
-        }
-      }),
-    );
+          final r = await http
+              .get(Uri.parse('$base$q'))
+              .timeout(const Duration(seconds: 10));
+          if (r.statusCode != 200) continue;
+          final data = jsonDecode(utf8.decode(r.bodyBytes));
+          if (data is Map && data['events'] is List) {
+            return data['events'] as List;
+          }
+        } catch (_) {}
+      }
+      return const <dynamic>[];
+    }
+
+    final parts = await Future.wait([for (var i = 0; i <= 8; i++) day(i)]);
     final own = {for (final f in _fixtures) '${_n(f.home)}|${_n(f.away)}'};
     final seen = <String>{};
     final out = <Fixture>[];
@@ -380,7 +394,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       final comp = comps is List && comps.isNotEmpty && comps.first is Map
           ? comps.first as Map
           : null;
-      final state = ((comp?['status'] ?? e['status']) as Map?)?['type']?['state'];
+      final state = ((e['status'] ?? comp?['status']) as Map?)?['type']?['state'];
       final kickoff = DateTime.tryParse('${e['date'] ?? ''}');
       if (comp == null || state != 'pre' || kickoff == null) continue;
       if (!kickoff.isAfter(DateTime.now())) continue;
