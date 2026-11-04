@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../models/fixture.dart';
 import '../models/live_score.dart';
 import 'remote_config.dart';
+import 'result_reporter.dart';
 
 /// One match as reported by the score feed.
 class ScoreEvent {
@@ -90,6 +91,8 @@ class ScoreService {
       if (found.isEmpty) return;
       final next = {...scores.value, ...found};
       if (!mapEquals(next, scores.value)) scores.value = next;
+      // Finished matches: let the Fan Zone settle predictions from them.
+      unawaited(ResultReporter.instance.submit(targets, next));
     } catch (_) {
       // Keep whatever we already show.
     } finally {
