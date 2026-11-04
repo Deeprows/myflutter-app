@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../widgets/notification_settings.dart';
 import 'content_shortcut_screen.dart';
 import 'fan_zone_screen.dart';
+import 'prediction_results_screen.dart';
 
 /// In-app notification inbox: live matches and kick-offs, new highlights,
 /// latest movies, trending hashtags and the weekly prediction results.
@@ -72,6 +73,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         Navigator.of(context).pop();
         push.openTab(8); // Search tab, where trending tags live
       case InboxKind.prediction:
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const PredictionResultsScreen(),
+          ),
+        );
       case InboxKind.result:
         Navigator.of(context).push(
           MaterialPageRoute<void>(
