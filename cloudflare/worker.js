@@ -3296,11 +3296,20 @@ async function fanSyncResults(env) {
       // One request per day (the day before, the day of and the day after kick-off), exactly like the
       // Live screen reads ESPN: multi-day ranges and big limits are not reliable on ESPN's feeds.
       const espnDays=async slug=>{
-        const days=[-1,0,1].map(d=>new Date(row.kickoff+d*86400000).toISOString().slice(0,10).replaceAll('-',''));
-        const parts=await Promise.all(days.map(async d=>{
+        // Start with the fixture's UTC calendar date. Adjacent dates are only
+        // queried when the primary response does not contain this fixture;
+        // this avoids three provider requests for the common case while still
+        // handling timezone-boundary and rescheduled fixtures safely.
+        const primaryDay=new Date(row.kickoff).toISOString().slice(0,10).replaceAll('-','');
+        const fetchDay=async d=>{
           const base=`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${d}`;
           return (await load(`${base}&limit=500`)) || (await load(base));
-        }));
+        };
+        const primary=await fetchDay(primaryDay);
+        if(primary && fanEspnHasFixture(f,primary))return primary;
+        const adjacentDays=[-1,1].map(offset=>new Date(row.kickoff+offset*86400000).toISOString().slice(0,10).replaceAll('-',''));
+        const adjacent=await Promise.all(adjacentDays.map(fetchDay));
+        const parts=[primary,...adjacent];
         if(parts.every(x=>x===null))return null;
         const seen=new Set(),events=[];
         for(const part of parts)for(const e of Array.isArray(part?.events)?part.events:[]){const k=String(e?.id ?? events.length);if(!seen.has(k)){seen.add(k);events.push(e);}}
