@@ -1514,6 +1514,193 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     );
   }
 
+  /// Turns the generated PICKS text into readable, individual market cards.
+  /// The original wording is retained; this only changes its presentation.
+  Widget _formattedAiAnalysis(String raw) {
+    final cleaned = raw.replaceAll('**', '').replaceAll('##', '').trim();
+    final lines = cleaned.split('\n');
+    final picks = <String>[];
+    final intro = <String>[];
+    final other = <String>[];
+    String? current;
+    bool inPicks = false;
+
+    for (final sourceLine in lines) {
+      final line = sourceLine.trim();
+      if (line.isEmpty) {
+        if (current != null) current = '$current\n';
+        continue;
+      }
+      if (RegExp(r'^PICKS\s*$', caseSensitive: false).hasMatch(line)) {
+        inPicks = true;
+        continue;
+      }
+      if (RegExp(r'^\d+\.\s+').hasMatch(line)) {
+        if (current != null) picks.add(current.trim());
+        current = line;
+      } else if (current != null && inPicks) {
+        current = '$current\n$line';
+      } else if (inPicks) {
+        other.add(line);
+      } else {
+        intro.add(line);
+      }
+    }
+    if (current != null) picks.add(current.trim());
+
+    if (picks.isEmpty) {
+      return SelectableText(
+        cleaned,
+        style: const TextStyle(height: 1.55, fontSize: 14),
+      );
+    }
+
+    Widget paragraph(String value) => Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SelectableText(
+        value,
+        style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.45),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (intro.isNotEmpty) paragraph(intro.join('\n')),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(13, 13, 13, 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFF171A32),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF8B70FF).withValues(alpha: .28)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: const [
+                  Icon(Icons.auto_awesome_rounded, color: Color(0xFFB39DFF), size: 17),
+                  SizedBox(width: 8),
+                  Text(
+                    'AI PICKS',
+                    style: TextStyle(
+                      color: Color(0xFFCEC1FF),
+                      fontSize: 12,
+                      letterSpacing: 1.15,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              for (var i = 0; i < picks.length; i++)
+                _aiPickAnalysisCard(i + 1, picks[i]),
+            ],
+          ),
+        ),
+        if (other.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          paragraph(other.join('\n')),
+        ],
+      ],
+    );
+  }
+
+  Widget _aiPickAnalysisCard(int number, String source) {
+    final text = source.replaceFirst(RegExp(r'^\d+\.\s*'), '').trim();
+    final reasonIndex = text.toLowerCase().indexOf('reason:');
+    final pickText = reasonIndex >= 0 ? text.substring(0, reasonIndex).trim() : text;
+    final reason = reasonIndex >= 0
+        ? text.substring(reasonIndex + 'reason:'.length).trim()
+        : '';
+    final colon = pickText.indexOf(':');
+    final market = colon > 0 ? pickText.substring(0, colon).trim() : 'Prediction';
+    final selection = colon > 0 ? pickText.substring(colon + 1).trim() : pickText;
+    final confidenceMatch = RegExp(r'\((high|medium|low)\)', caseSensitive: false).firstMatch(selection);
+    final confidence = confidenceMatch?.group(1)?.toUpperCase();
+    final confidenceColor = switch (confidence) {
+      'HIGH' => const Color(0xFF48D597),
+      'MEDIUM' => const Color(0xFFFFC46B),
+      'LOW' => const Color(0xFF9EABC0),
+      _ => Ui.muted,
+    };
+    final cleanSelection = selection.replaceAll(RegExp(r'\s*\((high|medium|low)\)', caseSensitive: false), '').trim();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF222746),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: Colors.white.withValues(alpha: .075)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 27,
+                height: 27,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8065E8).withValues(alpha: .22),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('$number', style: const TextStyle(color: Color(0xFFD2C7FF), fontSize: 12, fontWeight: FontWeight.w900)),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  market,
+                  style: TextStyle(color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w800),
+                ),
+              ),
+              if (confidence != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: confidenceColor.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: confidenceColor.withValues(alpha: .3)),
+                  ),
+                  child: Text(confidence, style: TextStyle(color: confidenceColor, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: .5)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          SelectableText(
+            cleanSelection,
+            style: const TextStyle(fontSize: 15, height: 1.3, fontWeight: FontWeight.w800),
+          ),
+          if (reason.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(height: 1, color: Colors.white.withValues(alpha: .07)),
+            const SizedBox(height: 9),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 1),
+                  child: Icon(Icons.info_outline_rounded, size: 14, color: Color(0xFFB39DFF)),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: SelectableText(
+                    reason,
+                    style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.45),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _fullAnalysis(Fixture f, Map<String, dynamic> data) => Container(
     margin: const EdgeInsets.only(top: 12),
     decoration: BoxDecoration(
@@ -1595,10 +1782,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             children: [
               Align(
                 alignment: Alignment.centerLeft,
-                child: SelectableText(
-                  '${data['analysis']}'.replaceAll('**', '').replaceAll('##', '').trim(),
-                  style: const TextStyle(height: 1.55, fontSize: 14),
-                ),
+                child: _formattedAiAnalysis('${data['analysis']}'),
               ),
             ],
           ),
