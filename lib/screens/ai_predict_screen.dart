@@ -1514,96 +1514,394 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     );
   }
 
-  /// Turns the generated PICKS text into readable, individual market cards.
-  /// The original wording is retained; this only changes its presentation.
+  // ---------------------------------------------------------------------------
+  // COMPREHENSIVE AI ANALYSIS — sectioned, modern presentation
+  // ---------------------------------------------------------------------------
+
+  static const _aiViolet = Color(0xFF8B70FF);
+  static const _aiVioletSoft = Color(0xFFB39DFF);
+  static const _aiVerdict = Color(0xFF48D597);
+
+  static final RegExp _aiHeadingRe = RegExp(
+    r'^(?:\d+[\.\)]\s*)?(MATCH OVERVIEW|RECENT FORM|ATTACK\s+(?:vs\.?|VS\.?|and|&)\s+DEFEN[CS]E|TACTICAL MATCH-?UP|TEAM NEWS(?:\s*&\s*LINEUPS)?|ODDS(?:\s*&\s*MARKET VIEW)?|AI VERDICT|VERDICT)\b(.*)$',
+  );
+  static final RegExp _aiGenericHeadingRe = RegExp(r"^(?:\d+[\.\)]\s*)?[A-Z][A-Z0-9 &\-/']{5,38}:?$");
+
+  IconData _aiIconFor(String title) {
+    final t = title.toUpperCase();
+    if (t.contains('OVERVIEW')) return Icons.sports_soccer_rounded;
+    if (t.contains('FORM')) return Icons.show_chart_rounded;
+    if (t.contains('ATTACK')) return Icons.flash_on_rounded;
+    if (t.contains('TACTIC')) return Icons.track_changes_rounded;
+    if (t.contains('NEWS') || t.contains('LINEUP')) return Icons.groups_rounded;
+    if (t.contains('ODDS')) return Icons.insights_rounded;
+    if (t.contains('VERDICT')) return Icons.verified_rounded;
+    return Icons.auto_awesome_rounded;
+  }
+
+  /// Splits the generated read into headed sections and renders each as a
+  /// clean card. The original wording is kept; only the presentation changes.
   Widget _formattedAiAnalysis(String raw) {
-    final cleaned = raw.replaceAll('**', '').replaceAll('##', '').trim();
-    final lines = cleaned.split('\n');
+    var cleaned = raw.replaceAll('**', '').replaceAll('##', '').replaceAll('###', '').trim();
+
+    // Optional PICKS block (rendered as pick cards, as before).
     final picks = <String>[];
-    final intro = <String>[];
-    final other = <String>[];
-    String? current;
-    bool inPicks = false;
-
-    for (final sourceLine in lines) {
-      final line = sourceLine.trim();
-      if (line.isEmpty) {
-        if (current != null) current = '$current\n';
-        continue;
+    final picksMatch = RegExp(r'^\s*PICKS\s*$', multiLine: true, caseSensitive: false).firstMatch(cleaned);
+    if (picksMatch != null) {
+      final tail = cleaned.substring(picksMatch.end);
+      cleaned = cleaned.substring(0, picksMatch.start).trim();
+      String? cur;
+      for (final l in tail.split('\n')) {
+        final line = l.trim();
+        if (line.isEmpty) continue;
+        if (RegExp(r'^\d+\.\s+').hasMatch(line)) {
+          if (cur != null) picks.add(cur.trim());
+          cur = line;
+        } else if (cur != null) {
+          cur = '$cur\n$line';
+        }
       }
-      if (RegExp(r'^PICKS\s*$', caseSensitive: false).hasMatch(line)) {
-        inPicks = true;
-        continue;
-      }
-      if (RegExp(r'^\d+\.\s+').hasMatch(line)) {
-        if (current != null) picks.add(current.trim());
-        current = line;
-      } else if (current != null && inPicks) {
-        current = '$current\n$line';
-      } else if (inPicks) {
-        other.add(line);
-      } else {
-        intro.add(line);
-      }
-    }
-    if (current != null) picks.add(current.trim());
-
-    if (picks.isEmpty) {
-      return SelectableText(
-        cleaned,
-        style: const TextStyle(height: 1.55, fontSize: 14),
-      );
+      if (cur != null) picks.add(cur.trim());
     }
 
-    Widget paragraph(String value) => Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: SelectableText(
-        value,
-        style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.45),
-      ),
-    );
+    // Parse sections.
+    final sections = <({String title, String sub, List<String> lines})>[];
+    String? title;
+    String sub = '';
+    var lines = <String>[];
+    void flush() {
+      if (title != null || lines.isNotEmpty) {
+        sections.add((title: title ?? 'SUMMARY', sub: sub, lines: lines));
+      }
+      title = null;
+      sub = '';
+      lines = <String>[];
+    }
+
+    for (final l in cleaned.split('\n')) {
+      final line = l.trim();
+      if (line.isEmpty) continue;
+      final m = _aiHeadingRe.firstMatch(line);
+      if (m != null) {
+        flush();
+        title = m.group(1)!.replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+        var rest = (m.group(2) ?? '').trim();
+        rest = rest.replaceFirst(RegExp(r'^[,\-–—:]+\s*'), '').trim();
+        // A heading line may also carry body text after a colon.
+        final colon = rest.indexOf(':');
+        if (colon > 0 && colon < 60) {
+          final body = rest.substring(colon + 1).trim();
+          rest = rest.substring(0, colon).trim();
+          if (body.isNotEmpty) lines.add(body);
+        }
+        sub = rest.isEmpty ? '' : rest[0].toUpperCase() + rest.substring(1);
+        continue;
+      }
+      if (_aiGenericHeadingRe.hasMatch(line) && line.contains(' ')) {
+        flush();
+        title = line.replaceFirst(RegExp(r'^\d+[\.\)]\s*'), '').replaceAll(':', '').trim();
+        continue;
+      }
+      lines.add(line);
+    }
+    flush();
+
+    if (sections.isEmpty && picks.isEmpty) {
+      return SelectableText(cleaned, style: const TextStyle(height: 1.6, fontSize: 13.5));
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (intro.isNotEmpty) paragraph(intro.join('\n')),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(13, 13, 13, 5),
-          decoration: BoxDecoration(
-            color: const Color(0xFF171A32),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF8B70FF).withValues(alpha: .28)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: const [
-                  Icon(Icons.auto_awesome_rounded, color: Color(0xFFB39DFF), size: 17),
-                  SizedBox(width: 8),
-                  Text(
-                    'AI PICKS',
-                    style: TextStyle(
-                      color: Color(0xFFCEC1FF),
-                      fontSize: 12,
-                      letterSpacing: 1.15,
-                      fontWeight: FontWeight.w900,
+        for (var i = 0; i < sections.length; i++)
+          _aiSectionCard(i + 1, sections[i].title, sections[i].sub, sections[i].lines),
+        if (picks.isNotEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(13, 13, 13, 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFF171A32),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: _aiViolet.withValues(alpha: .28)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: const [
+                    Icon(Icons.auto_awesome_rounded, color: _aiVioletSoft, size: 16),
+                    SizedBox(width: 8),
+                    Text(
+                      'AI PICKS',
+                      style: TextStyle(
+                        color: Color(0xFFCEC1FF),
+                        fontSize: 11.5,
+                        letterSpacing: 1.6,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                const SizedBox(height: 12),
+                for (var i = 0; i < picks.length; i++) _aiPickAnalysisCard(i + 1, picks[i]),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _aiSectionCard(int number, String title, String sub, List<String> lines) {
+    final verdict = title.contains('VERDICT');
+    final accent = verdict ? _aiVerdict : _aiViolet;
+    final titleColor = verdict ? const Color(0xFF8FF0C2) : const Color(0xFFD2C7FF);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 11),
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accent.withValues(alpha: verdict ? .16 : .10),
+            Colors.white.withValues(alpha: .025),
+          ],
+        ),
+        border: Border.all(color: accent.withValues(alpha: verdict ? .38 : .16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: .18),
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: accent.withValues(alpha: .25)),
+                ),
+                child: Icon(_aiIconFor(title), size: 17, color: verdict ? _aiVerdict : _aiVioletSoft),
               ),
-              const SizedBox(height: 12),
-              for (var i = 0; i < picks.length; i++)
-                _aiPickAnalysisCard(i + 1, picks[i]),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: titleColor,
+                        fontSize: 12,
+                        height: 1.2,
+                        letterSpacing: 1.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (sub.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        sub,
+                        style: TextStyle(
+                          color: Ui.muted,
+                          fontSize: 11,
+                          height: 1.25,
+                          fontWeight: FontWeight.w300,
+                          letterSpacing: .2,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Text(
+                number.toString().padLeft(2, '0'),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .22),
+                  fontSize: 11,
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w300,
+                ),
+              ),
             ],
           ),
-        ),
-        if (other.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          paragraph(other.join('\n')),
+          const SizedBox(height: 12),
+          Container(
+            height: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [accent.withValues(alpha: .35), Colors.white.withValues(alpha: 0)],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (final l in lines) _aiBodyLine(l, verdict: verdict),
         ],
-      ],
+      ),
+    );
+  }
+
+  Widget _aiBodyLine(String line, {bool verdict = false}) {
+    final t = line.trim();
+
+    // Recent form strip, e.g. "Recent form: L-W-L"
+    final form = RegExp(r'^(?:recent\s+)?form\s*:\s*([WDL](?:\s*[-–,]?\s*[WDL]){0,9})\s*$', caseSensitive: false).firstMatch(t);
+    if (form != null) {
+      final results = RegExp(r'[WDLwdl]').allMatches(form.group(1)!).map((m) => m.group(0)!.toUpperCase()).toList();
+      return Padding(
+        padding: const EdgeInsets.only(top: 2, bottom: 10),
+        child: Row(
+          children: [
+            Text(
+              'FORM',
+              style: TextStyle(color: Ui.muted, fontSize: 10, letterSpacing: 1.4, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(width: 10),
+            for (final r in results)
+              Container(
+                width: 24,
+                height: 24,
+                margin: const EdgeInsets.only(right: 5),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: (r == 'W'
+                          ? const Color(0xFF48D597)
+                          : r == 'D'
+                              ? const Color(0xFFFFC46B)
+                              : const Color(0xFFFF6B6B))
+                      .withValues(alpha: .18),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: (r == 'W'
+                            ? const Color(0xFF48D597)
+                            : r == 'D'
+                                ? const Color(0xFFFFC46B)
+                                : const Color(0xFFFF6B6B))
+                        .withValues(alpha: .45),
+                  ),
+                ),
+                child: Text(
+                  r,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: r == 'W'
+                        ? const Color(0xFF7CE8B5)
+                        : r == 'D'
+                            ? const Color(0xFFFFD58F)
+                            : const Color(0xFFFF9A9A),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    // Team / sub label, e.g. "Manchester City:"
+    if (RegExp(r'^[^:]{1,40}:$').hasMatch(t)) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 4, bottom: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 3,
+              height: 13,
+              decoration: BoxDecoration(
+                color: _aiViolet,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                t.substring(0, t.length - 1),
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: .3),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Short stat rows, e.g. "Played 3 matches, won 1, lost 2"
+    if (RegExp(r'^(Played|Scored|Conceded|Won|Lost|Drawn|Goals|Average|Avg|Clean)\b', caseSensitive: false).hasMatch(t) &&
+        t.length < 70) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 7, left: 11),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 7),
+              child: Container(
+                width: 4,
+                height: 4,
+                decoration: BoxDecoration(color: _aiVioletSoft.withValues(alpha: .7), shape: BoxShape.circle),
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: SelectableText(
+                t,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.white.withValues(alpha: .86),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Numbered / bulleted lines
+    final bullet = RegExp(r'^(?:[-•*]|\d+[\.\)])\s+(.*)$').firstMatch(t);
+    if (bullet != null) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 7, left: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Container(
+                width: 4,
+                height: 4,
+                decoration: const BoxDecoration(color: _aiVioletSoft, shape: BoxShape.circle),
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: SelectableText(
+                bullet.group(1)!,
+                style: TextStyle(fontSize: 13.5, height: 1.55, color: Colors.white.withValues(alpha: .84)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Paragraph
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: SelectableText(
+        t,
+        style: TextStyle(
+          fontSize: 13.5,
+          height: 1.62,
+          fontWeight: verdict ? FontWeight.w500 : FontWeight.w400,
+          color: Colors.white.withValues(alpha: verdict ? .94 : .82),
+        ),
+      ),
     );
   }
 
@@ -1760,24 +2058,35 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
             tilePadding: EdgeInsets.zero,
-            childrenPadding: const EdgeInsets.only(bottom: 6),
-            leading: const Icon(
-              Icons.auto_awesome_rounded,
-              size: 18,
-              color: Color(0xFFB39DFF),
+            childrenPadding: const EdgeInsets.only(top: 8, bottom: 6),
+            leading: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF8B70FF), Color(0xFF5B3FD0)],
+                ),
+              ),
+              child: const Icon(Icons.auto_awesome_rounded, size: 18, color: Colors.white),
             ),
             title: const Text(
               'COMPREHENSIVE AI ANALYSIS',
               style: TextStyle(
-                fontSize: 11,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFFB39DFF),
+                fontSize: 12,
+                letterSpacing: 1.6,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFFCEC1FF),
               ),
             ),
-            subtitle: Text(
-              'Form · tactics · team news · lineups · odds · verdict',
-              style: TextStyle(color: Ui.muted, fontSize: 11),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                'Form · tactics · team news · lineups · odds · verdict',
+                style: TextStyle(color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w300, letterSpacing: .2),
+              ),
             ),
             children: [
               Align(
