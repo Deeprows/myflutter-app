@@ -13,6 +13,7 @@ import '../widgets/status_pill.dart';
 import '../services/remote_config.dart';
 import 'player_screen.dart';
 import 'notifications_screen.dart';
+import 'prediction_results_screen.dart';
 import '../theme/app_theme.dart';
 import 'fan_posts_feed.dart';
 import 'fan_profile_screen.dart';
@@ -688,6 +689,18 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                   setState(() => _showAllHistory = !_showAllHistory),
             ),
             for (final p in history) _historyCard(p),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const PredictionResultsScreen(),
+                  ),
+                ),
+                icon: const Icon(Icons.fact_check_rounded, size: 18),
+                label: const Text('Open my results board'),
+              ),
+            ),
           ],
         ],
       ),
