@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {fanTsdbFinal} from './worker.js';
+const f={home:'Deportivo A Coruna',away:'Osasuna',kickoff:'2026-11-02T20:00:00Z'};
+const ev=(o)=>({strSport:'Soccer',strStatus:'FT',strTimestamp:'2026-11-02T20:00:00',strHomeTeam:'Deportivo La Coruña',strAwayTeam:'Osasuna',intHomeScore:'2',intAwayScore:'1',...o});
+assert.deepEqual(fanTsdbFinal(f,[{events:[ev({})]}]),{home:2,away:1,source:'TheSportsDB'});
+assert.equal(fanTsdbFinal(f,[{events:[ev({strStatus:'AET'})]}]),null,'extra time is not a 90-minute score');
+assert.equal(fanTsdbFinal(f,[{events:[ev({strStatus:'NS'})]}]),null);
+assert.equal(fanTsdbFinal(f,[{events:[ev({}),ev({intHomeScore:'0'})]}]),null,'ambiguous results are never guessed');
+assert.deepEqual(fanTsdbFinal(f,[{events:[ev({strHomeTeam:'Osasuna',strAwayTeam:'Deportivo La Coruña',intHomeScore:'0',intAwayScore:'3'})]}]),{home:3,away:0,source:'TheSportsDB'});
+console.log('ok');
