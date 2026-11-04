@@ -2526,12 +2526,13 @@ async function fanAiEspn(path) {
 }
 // Free fallback 1: ESPN's all-soccer scoreboard (every league ESPN covers, in one request per few days).
 async function fanAiEspnAllUpcoming(now,day) {
-  const rows=[],spans=[[0,3],[4,7],[8,FAN_AI_UPCOMING_DAYS]];
-  const parts=await Promise.allSettled(spans.map(([a,b])=>fanAiEspn(`all/scoreboard?dates=${day(now+a*86400000)}-${day(now+b*86400000)}&limit=1000`)));
+  // One request per day, like the Live screen does (date ranges are not reliable on the all-soccer feed).
+  const rows=[],dayList=Array.from({length:FAN_AI_UPCOMING_DAYS+1},(_,i)=>day(now+i*86400000));
+  const parts=await Promise.allSettled(dayList.map(d=>fanAiEspn(`all/scoreboard?dates=${d}&limit=500`).catch(()=>fanAiEspn(`all/scoreboard?dates=${d}`))));
   for(const part of parts) {
     if(part.status!=='fulfilled')continue;
     for(const e of Array.isArray(part.value?.events)?part.value.events:[]) {
-      const comp=e?.competitions?.[0],status=comp?.status || e?.status,type=status?.type;
+      const comp=e?.competitions?.[0],status=e?.status || comp?.status,type=status?.type;
       if(type?.state!=='pre' || /POSTPONED|CANCEL|SUSPEND|ABANDON/i.test(String(type?.name || '')))continue;
       const at=Date.parse(e.date || comp?.date);
       if(!Number.isFinite(at) || at<=now || !/^\d{1,12}$/.test(String(e.id)) || !Array.isArray(comp?.competitors))continue;
