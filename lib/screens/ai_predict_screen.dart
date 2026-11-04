@@ -1580,7 +1580,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               color: Color(0xFFB39DFF),
             ),
             title: const Text(
-              'TEXT ANALYSIS',
+              'COMPREHENSIVE AI ANALYSIS',
               style: TextStyle(
                 fontSize: 11,
                 letterSpacing: 1.2,
@@ -1589,7 +1589,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               ),
             ),
             subtitle: Text(
-              'Tap to read the AI write-up',
+              'Form · tactics · team news · lineups · odds · verdict',
               style: TextStyle(color: Ui.muted, fontSize: 11),
             ),
             children: [
