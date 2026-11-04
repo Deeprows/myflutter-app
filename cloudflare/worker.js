@@ -2217,6 +2217,13 @@ async function fanAccountAuth(request,env) {
 }
 
 
+// AI Predict limits are per user and reset on UTC boundaries. Keep the attempt
+// ceiling higher than the completed-analysis ceiling so transient provider/data
+// failures do not consume the user's successful analysis allowance.
+const FAN_AI_ATTEMPT_LIMIT_PER_HOUR = 100;
+const FAN_AI_ANALYSIS_LIMIT_PER_HOUR = 30;
+const FAN_AI_ANALYSIS_LIMIT_PER_DAY = 100;
+
 // Automatic, server-sourced form analysis. Clients submit only a fixture key, an
 // id taken from the server's own upcoming-match list, or two typed team names
 // that the server resolves itself. Recent results always come from providers.
@@ -2238,7 +2245,7 @@ async function fanAiPredict(request,env,id) {
   const homeId=fanTeamId(fixture.homeTeamId ?? fixture.homeLogo),awayId=fanTeamId(fixture.awayTeamId ?? fixture.awayLogo);
   // A missing API-Football ID is fine: that side falls back to ESPN results by team name.
   if(homeId && awayId && homeId===awayId)return fail('Choose a fixture with two different teams.',422);
-  if(!await fanSocialBudget(env.DB,id,'ai-attempt',30))return fail('Analysis request limit reached. Retry after the next UTC hour.',429);
+  if(!await fanSocialBudget(env.DB,id,'ai-attempt',FAN_AI_ATTEMPT_LIMIT_PER_HOUR))return fail('Analysis request limit reached. Retry after the next UTC hour.',429);
   try {
     const [home,away]=await Promise.all([fanAnalysisForm(env,fixture,homeId,fixture.home,kickoff),fanAnalysisForm(env,fixture,awayId,fixture.away,kickoff)]);
     // Injuries and yellow/red cards are optional extras: any failure just leaves them out.
@@ -2279,7 +2286,7 @@ async function fanAiFinish(env,id,promptFixture,home,away,extra={}) {
       env.DB.prepare(`INSERT INTO fan_ai_limits(bucket,count,expires) VALUES(?,1,?) ON CONFLICT(bucket) DO UPDATE SET count=count+1 RETURNING count`).bind(`hour:${id}:${hour}`,(hour+1)*3600000),
       env.DB.prepare(`INSERT INTO fan_ai_limits(bucket,count,expires) VALUES(?,1,?) ON CONFLICT(bucket) DO UPDATE SET count=count+1 RETURNING count`).bind(`day:${id}:${day}`,(day+1)*86400000)
     ]);
-    if(limits[0].results[0].count>10 || limits[1].results[0].count>50)return fail('Analysis limit reached. Try again after the next UTC hour or day.',429);
+    if(limits[0].results[0].count>FAN_AI_ANALYSIS_LIMIT_PER_HOUR || limits[1].results[0].count>FAN_AI_ANALYSIS_LIMIT_PER_DAY)return fail('Analysis limit reached. Try again after the next UTC hour or day.',429);
     await env.DB.prepare('DELETE FROM fan_ai_limits WHERE expires<?').bind(now).run();
 
     const stats=fanAiStats(home,away,extra.extras);
@@ -2669,7 +2676,7 @@ async function fanAiAnyMatch(env,id,b) {
     } else {
       const c=b.custom;
       if(!c || typeof c!=='object' || typeof c.home!=='string' || typeof c.away!=='string' || c.home.trim().length<2 || c.away.trim().length<2 || c.home.length>60 || c.away.length>60)return fail('Type two teams, for example: Arsenal vs Chelsea.');
-      if(!await fanSocialBudget(env.DB,id,'ai-attempt',30))return fail('Analysis request limit reached. Retry after the next UTC hour.',429);
+      if(!await fanSocialBudget(env.DB,id,'ai-attempt',FAN_AI_ATTEMPT_LIMIT_PER_HOUR))return fail('Analysis request limit reached. Retry after the next UTC hour.',429);
       const index=await fanAiTeams(env);
       if(!index.length)return fail('Team lookup is unavailable right now. Please retry later.',503);
       const h=fanAiFindTeam(index,c.home),a=fanAiFindTeam(index,c.away);
@@ -2682,7 +2689,7 @@ async function fanAiAnyMatch(env,id,b) {
       home=ht;away=at;
       info={home:ht.name,away:at.name,homeLogo:ht.logo,awayLogo:at.logo,league:'Your matchup',kickoff:null};
     }
-    if(b.ext!==undefined && !await fanSocialBudget(env.DB,id,'ai-attempt',30))return fail('Analysis request limit reached. Retry after the next UTC hour.',429);
+    if(b.ext!==undefined && !await fanSocialBudget(env.DB,id,'ai-attempt',FAN_AI_ATTEMPT_LIMIT_PER_HOUR))return fail('Analysis request limit reached. Retry after the next UTC hour.',429);
     const formOf=async t=>{
       if(t.id && t.league) {
         try{return await fanEspnScheduleForm(env,t.league,t.id,kickoff);}
