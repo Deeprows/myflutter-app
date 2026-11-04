@@ -1680,6 +1680,7 @@ export function fanPoints(h, a, rh, ra) {
   return h === rh && a === ra ? 3 : Math.sign(h - a) === Math.sign(rh - ra) ? 1 : 0;
 }
 const FAN_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS fan_result_reports (match_key TEXT NOT NULL, user_id TEXT NOT NULL, home INTEGER NOT NULL, away INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(match_key,user_id))`,
   `CREATE TABLE IF NOT EXISTS fan_espn_form_cache (cache_key TEXT PRIMARY KEY, data TEXT NOT NULL, fetched_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_result_jobs (match_key TEXT PRIMARY KEY, fixture_json TEXT NOT NULL DEFAULT '', checked_at INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '')`,
   `CREATE TABLE IF NOT EXISTS fan_result_sync (id INTEGER PRIMARY KEY, next_at INTEGER NOT NULL)`,
@@ -1851,7 +1852,7 @@ async function fanZone(request, env, url) {
     }
     if (request.method === 'GET' && url.pathname === '/fan/state') {
       const resultSync=await fanSyncResults(env);
-      const picks = await db.prepare(`SELECT p.*,r.home AS result_home,r.away AS result_away FROM fan_picks p LEFT JOIN fan_results r ON r.match_key=p.match_key WHERE p.user_id=? ORDER BY p.kickoff DESC LIMIT 300`).bind(id).all();
+      const picks = await db.prepare(`SELECT p.*,r.home AS result_home,r.away AS result_away,(SELECT j.note FROM fan_result_jobs j WHERE j.match_key=p.match_key) AS result_note FROM fan_picks p LEFT JOIN fan_results r ON r.match_key=p.match_key WHERE p.user_id=? ORDER BY p.kickoff DESC LIMIT 300`).bind(id).all();
       const week = fanWeek();
       const board = await fanLeagueTable(db,week,0);
       const media=await db.prepare('SELECT avatar_at FROM fan_profile_media WHERE user_id=?').bind(id).first();
@@ -1886,6 +1887,28 @@ async function fanZone(request, env, url) {
       }
       await db.prepare('INSERT INTO fan_users(id,name) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name').bind(id,name).run();
       return json({ok:true});
+    }
+    // The app reads full-time scores from ESPN on the phone (the Live screen). When enough different
+    // people's apps report the same 90-minute score, predictions for that match are settled from it.
+    // Set FAN_REPORT_QUORUM (default 2) to 1 only for a very small user base.
+    if (url.pathname === '/fan/result-report') {
+      const home=b.home,away=b.away;
+      if(typeof b.key!=='string' || b.key.length>200 || !Number.isInteger(home) || !Number.isInteger(away) || home<0 || away<0 || home>25 || away>25)return fail('Invalid result report');
+      const picked=await db.prepare('SELECT MIN(kickoff) AS kickoff FROM fan_picks WHERE match_key=?').bind(b.key).first();
+      if(!picked || picked.kickoff===null)return json({status:'ignored'});
+      // A match cannot be over earlier than ~100 minutes after kick-off.
+      if(Date.now()<picked.kickoff+100*60000)return json({status:'too_early'});
+      if(await db.prepare('SELECT 1 AS x FROM fan_results WHERE match_key=?').bind(b.key).first())return json({status:'settled'});
+      await db.prepare('INSERT INTO fan_result_reports(match_key,user_id,home,away,at) VALUES(?,?,?,?,?) ON CONFLICT(match_key,user_id) DO UPDATE SET home=excluded.home,away=excluded.away,at=excluded.at').bind(b.key,id,home,away,Date.now()).run();
+      const groups=(await db.prepare('SELECT home,away,COUNT(*) AS n FROM fan_result_reports WHERE match_key=? GROUP BY home,away ORDER BY n DESC').bind(b.key).all()).results;
+      const quorum=Math.max(1,Math.min(10,Number(env.FAN_REPORT_QUORUM) || 2));
+      const top=groups[0],others=groups.slice(1).reduce((n,g)=>n+g.n,0);
+      // Needs enough agreeing reports and a clear majority: conflicting reports never settle a match.
+      if(top && top.n>=quorum && top.n>others) {
+        await db.prepare('INSERT OR IGNORE INTO fan_results(match_key,home,away) VALUES(?,?,?)').bind(b.key,top.home,top.away).run();
+        return json({status:'settled'});
+      }
+      return json({status:'recorded',reports:groups.reduce((n,g)=>n+g.n,0),needed:quorum});
     }
     if (!user) return fail('Choose your Fan Zone nickname first.',403);
     if (url.pathname === '/fan/pick') {
@@ -2495,8 +2518,9 @@ async function fanAiCached(env,key,ttl,build) {
   })();
   pending.set(key,task);try{return await task;}finally{pending.delete(key);}
 }
+const FAN_HTTP={'user-agent':'Mozilla/5.0 (compatible; FanZoneResults/1.0)',accept:'application/json'};
 async function fanAiEspn(path) {
-  const response=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${path}`,{signal:AbortSignal.timeout(7000)});
+  const response=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${path}`,{headers:FAN_HTTP,signal:AbortSignal.timeout(7000)});
   if(!response.ok)throw new Error('ESPN '+response.status);
   return response.json();
 }
@@ -2523,7 +2547,7 @@ async function fanAiTsdbUpcoming(now,day) {
   const rows=[];
   const dates=Array.from({length:7},(_,i)=>new Date(now+i*86400000).toISOString().slice(0,10));
   const parts=await Promise.allSettled(dates.map(async d=>{
-    const r=await fetch(`https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=${d}&s=Soccer`,{signal:AbortSignal.timeout(7000)});
+    const r=await fetch(`https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=${d}&s=Soccer`,{headers:FAN_HTTP,signal:AbortSignal.timeout(7000)});
     if(!r.ok)throw new Error('TheSportsDB '+r.status);
     return r.json();
   }));
@@ -2616,7 +2640,12 @@ function fanAiFindTeam(index,raw) {
 async function fanAiMatches(request,env,id) {
   if(request.method!=='GET')return json({error:'Method not allowed'},405);
   const list=await fanAiUpcoming(env);
-  if(!list.length)return json({error:'More matches are unavailable right now. Please retry later.'},503);
+  if(!list.length) {
+    // Say why, so a blocked or misconfigured source can be found quickly.
+    const probe=async url=>{try{const r=await fetch(url,{headers:FAN_HTTP,signal:AbortSignal.timeout(6000)});return r.ok?'reachable':`HTTP ${r.status}`;}catch(e){return String(e?.message || 'no connection').slice(0,40);}};
+    const [espn,tsdb]=await Promise.all([probe('https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard'),probe('https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d='+new Date().toISOString().slice(0,10)+'&s=Soccer')]);
+    return json({error:`No upcoming matches found (ESPN: ${espn}, TheSportsDB: ${tsdb}). Please retry later.`,detail:{espn,tsdb}},503);
+  }
   return json({matches:list.map(({homeId,awayId,leagueCode,source,...m})=>m)});
 }
 async function fanAiAnyMatch(env,id,b) {
@@ -3199,9 +3228,29 @@ export function fanApiFinal(f,data) {
   return found.length===1?found[0]:null;
 }
 async function fanResultJson(url,headers={}) {
-  const response=await fetch(url,{headers,signal:AbortSignal.timeout(4500)});
+  const response=await fetch(url,{headers:{...FAN_HTTP,...headers},signal:AbortSignal.timeout(8000)});
   if(!response.ok)throw new Error('Final-score provider unavailable');
   return response.json();
+}
+// Second free score source (TheSportsDB). Only plain full-time results count, so extra time and
+// penalties are never mistaken for the 90-minute score.
+export function fanTsdbFinal(f,datasets) {
+  if(!fanFootballFixture(f))return null;
+  const kickoff=new Date(f.kickoff).getTime();
+  if(!Number.isFinite(kickoff))return null;
+  const found=[];
+  for(const data of datasets)for(const e of Array.isArray(data?.events)?data.events:[]) {
+    if(e?.strSport!=='Soccer' || !/^(?:FT|Match Finished)$/i.test(String(e.strStatus || '')))continue;
+    const at=Date.parse(e.strTimestamp?`${String(e.strTimestamp).replace(' ','T')}${/[zZ]|[+-]\d\d:?\d\d$/.test(e.strTimestamp)?'':'Z'}`:`${e.dateEvent}T${e.strTime || '00:00:00'}Z`);
+    if(!Number.isFinite(at) || Math.abs(at-kickoff)>FAN_RESULT_WINDOW)continue;
+    const straight=fanNameLike(f.home,e.strHomeTeam) && fanNameLike(f.away,e.strAwayTeam),reverse=fanNameLike(f.home,e.strAwayTeam) && fanNameLike(f.away,e.strHomeTeam);
+    if(!straight && !reverse)continue;
+    const hs=fanResultScore(e.intHomeScore),as=fanResultScore(e.intAwayScore);
+    if(hs===null || as===null)continue;
+    found.push(straight?{home:hs,away:as,source:'TheSportsDB'}:{home:as,away:hs,source:'TheSportsDB'});
+  }
+  // One clear match only: never guess between two possible results.
+  return found.length===1?found[0]:null;
 }
 async function fanSyncResults(env) {
   const db=env.DB,now=Date.now();
@@ -3250,6 +3299,12 @@ async function fanSyncResults(env) {
       if(!result && env.API_FOOTBALL_KEY && team) {
         const day=new Date(row.kickoff).toISOString().slice(0,10);
         result=fanApiFinal(f,await load(`https://v3.football.api-sports.io/fixtures?team=${team}&date=${day}`,{'x-apisports-key':env.API_FOOTBALL_KEY}));
+      }
+      if(!result) {
+        const days=[-1,0,1].map(d=>new Date(row.kickoff+d*86400000).toISOString().slice(0,10));
+        const sets=await Promise.all(days.map(d=>load(`https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=${d}&s=Soccer`)));
+        result=fanTsdbFinal(f,sets);
+        if(!result)note=leagueData===null?'Score provider is not reachable from the server yet':'Not final on ESPN yet (will keep checking)';
       }
       if(result) {
         const write=await db.prepare('INSERT OR IGNORE INTO fan_results(match_key,home,away) VALUES(?,?,?)').bind(row.match_key,result.home,result.away).run();
@@ -3352,7 +3407,7 @@ async function fanEspnFormJson(env,key,url) {
   let pending=fanEspnRequests.get(env);if(!pending){pending=new Map();fanEspnRequests.set(env,pending);}
   if(pending.has(key))return pending.get(key);
   const task=(async()=>{
-    const response=await fetch(url,{signal:AbortSignal.timeout(7000)});
+    const response=await fetch(url,{headers:FAN_HTTP,signal:AbortSignal.timeout(7000)});
     if(!response.ok)throw new FanFormError('Recent-results sources are unavailable. Please retry later.');
     const data=await response.json();
     if(!data || typeof data!=='object' || (!Array.isArray(data.events) && !Array.isArray(data.sports)))throw new FanFormError('Recent-results source returned invalid data.');
@@ -3414,7 +3469,7 @@ async function fanEspnScanWindow(env,from,to,keep) {
       const row=await env.DB.prepare('SELECT data FROM fan_espn_form_cache WHERE cache_key=?').bind(key).first();
       if(row){try{return JSON.parse(row.data);}catch{}}
     }
-    const response=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates=${from}-${to}&limit=1000`,{signal:AbortSignal.timeout(8000)});
+    const response=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates=${from}-${to}&limit=1000`,{headers:FAN_HTTP,signal:AbortSignal.timeout(8000)});
     if(!response.ok)throw new FanFormError('Recent-results sources are unavailable. Please retry later.');
     const data=await response.json();
     if(!Array.isArray(data?.events))throw new FanFormError('Recent-results source returned invalid data.');
