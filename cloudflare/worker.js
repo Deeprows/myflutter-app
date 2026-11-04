@@ -1711,7 +1711,9 @@ const FAN_SCHEMA = [
   `CREATE INDEX IF NOT EXISTS fan_comments_post ON fan_comments(post_id,hidden,at DESC,id DESC)`,
   `CREATE TABLE IF NOT EXISTS fan_comment_reports (comment_id TEXT NOT NULL,user_id TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(comment_id,user_id))`,
   `CREATE TABLE IF NOT EXISTS fan_social_limits (bucket TEXT PRIMARY KEY,count INTEGER NOT NULL,expires INTEGER NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS fan_limits (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL)`
+  `CREATE TABLE IF NOT EXISTS fan_limits (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL)`,
+  // One-time clean slate: predictions made before the result-checking fix that never got a verified score.
+  `DELETE FROM fan_picks WHERE kickoff<1793786400000 AND NOT EXISTS(SELECT 1 FROM fan_results r WHERE r.match_key=fan_picks.match_key)`,
 ];
 const fanReady = new WeakMap();
 async function fanInit(db) {
@@ -3255,6 +3257,8 @@ export function fanTsdbFinal(f,datasets) {
 }
 async function fanSyncResults(env) {
   const db=env.DB,now=Date.now();
+  // Predictions that could not be verified within 30 hours are removed instead of staying pending forever.
+  try{await db.prepare('DELETE FROM fan_picks WHERE kickoff<? AND NOT EXISTS(SELECT 1 FROM fan_results r WHERE r.match_key=fan_picks.match_key)').bind(now-30*3600000).run();}catch{}
   // Shared D1 lease bounds provider traffic across Worker isolates and all users.
   const due=await db.prepare('SELECT match_key,MIN(kickoff) AS kickoff,MAX(title) AS title FROM fan_picks p WHERE kickoff<=? AND NOT EXISTS(SELECT 1 FROM fan_results r WHERE r.match_key=p.match_key) GROUP BY match_key LIMIT 1').bind(now-90*60000).first();
   if(!due)return {status:'idle',checked_at:now};
@@ -3281,19 +3285,28 @@ async function fanSyncResults(env) {
     }
     let result=null,note='Awaiting a verified final score';
     if(fanFootballFixture(f)) {
-      const start=new Date(row.kickoff-86400000).toISOString().slice(0,10).replaceAll('-','');
-      const end=new Date(row.kickoff+86400000).toISOString().slice(0,10).replaceAll('-','');
       const league=/^[a-z0-9.]{1,40}$/.test(f.scoreLeague || '')?f.scoreLeague:(FAN_RESULT_LEAGUES[fanResultName(f.league)] || 'all');
-      const url=`https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/scoreboard?dates=${start}-${end}&limit=1000`;
-      const leagueData=await load(url);
+      // One request per day (the day before, the day of and the day after kick-off), exactly like the
+      // Live screen reads ESPN: multi-day ranges and big limits are not reliable on ESPN's feeds.
+      const espnDays=async slug=>{
+        const days=[-1,0,1].map(d=>new Date(row.kickoff+d*86400000).toISOString().slice(0,10).replaceAll('-',''));
+        const parts=await Promise.all(days.map(async d=>{
+          const base=`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${d}`;
+          return (await load(`${base}&limit=500`)) || (await load(base));
+        }));
+        if(parts.every(x=>x===null))return null;
+        const seen=new Set(),events=[];
+        for(const part of parts)for(const e of Array.isArray(part?.events)?part.events:[]){const k=String(e?.id ?? events.length);if(!seen.has(k)){seen.add(k);events.push(e);}}
+        return {events};
+      };
+      const leagueData=await espnDays(league);
       result=fanEspnFinal(f,leagueData);
       // Some cups and lower divisions are not exposed by their expected ESPN
       // league slug. Retry the same date against ESPN's all-soccer scoreboard
       // before leaving a completed match pending. fanEspnFinal still requires
       // a unique team/date match and a confirmed full-time score.
       if(!result && league!=='all' && !fanEspnHasFixture(f,leagueData)) {
-        const allUrl=`https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates=${start}-${end}&limit=1000`;
-        result=fanEspnFinal(f,await load(allUrl));
+        result=fanEspnFinal(f,await espnDays('all'));
       }
       // Optional existing API-Football binding gives verified 90-minute scores after ET/penalties too.
       const team=fanTeamId(f.homeTeamId ?? f.homeLogo);
