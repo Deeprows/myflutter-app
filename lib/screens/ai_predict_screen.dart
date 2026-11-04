@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +9,8 @@ import '../utils/safe_error_message.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/fixture.dart';
 import '../services/content_sync.dart';
+import '../models/live_score.dart';
+import '../services/score_service.dart';
 import '../services/fan_zone_service.dart';
 import '../services/subscription_service.dart';
 import '../services/feed_service.dart';
@@ -99,6 +104,10 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   static bool _isCustom(Fixture f) => f.id.startsWith('custom:');
   static bool _isExternal(Fixture f) => f.id.startsWith('ext:');
 
+  /// Matches read straight from ESPN by the app (when the server's list is
+  /// unavailable). They are analysed by team names, like typed matchups.
+  static bool _isWeb(Fixture f) => f.id.startsWith('web:');
+
   static String _n(String s) =>
       s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
   void _prune() {
@@ -141,10 +150,32 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     } catch (_) {}
   }
 
-  Widget _myPredictions() {
+  /// A pick with the Live screen's full-time score filled in, so the result
+  /// shows straight away while the server confirms it for the Ranks table.
+  Map<String, dynamic> _withLiveResult(Map<String, dynamic> p) {
+    if (p['result_home'] != null) return p;
+    final key = '${p['match_key']}';
+    for (final f in _fixtures) {
+      if (FanZoneService.matchKey(f) != key) continue;
+      final s = ScoreService.instance.scoreFor(f.id);
+      if (s == null || !s.finished) return p;
+      final clock = s.clock.toUpperCase();
+      if (clock.isNotEmpty && clock != 'FT' && clock != 'FULL-TIME') return p;
+      return {...p, 'result_home': s.home, 'result_away': s.away, 'provisional': true};
+    }
+    return p;
+  }
+
+  Widget _myPredictions() => ValueListenableBuilder<Map<String, LiveScore>>(
+    valueListenable: ScoreService.instance.scores,
+    builder: (context, _, _) => _myPredictionsCard(),
+  );
+
+  Widget _myPredictionsCard() {
     if (_myPicks.isEmpty) return const SizedBox.shrink();
-    final shown = _myPicks.take(5).toList();
-    final pending = _myPicks.where((p) => fanPredictionScore(p) == null && !fanPredictionPush(p)).length;
+    final all = _myPicks.map(_withLiveResult).toList();
+    final shown = all.take(5).toList();
+    final pending = all.where((p) => fanPredictionScore(p) == null && !fanPredictionPush(p)).length;
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Container(
@@ -192,6 +223,20 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     );
   }
 
+  /// "My pick: …  •  Final 2–1", plus the server's reason when a finished
+  /// match is still waiting for a verified score.
+  String _pickSubtitle(Map<String, dynamic> p, bool settled) {
+    final mine = 'My pick: ${fanPredictionLabel(p)}';
+    if (settled) {
+      final sure = p['provisional'] == true ? ' (confirming…)' : '';
+      return '$mine  •  Final ${p['result_home']}–${p['result_away']}$sure';
+    }
+    final note = '${p['result_note'] ?? ''}';
+    final kickoff = ((p['kickoff'] as num?) ?? 0).toInt();
+    final late = DateTime.now().millisecondsSinceEpoch > kickoff + 3 * 3600000;
+    return note.isNotEmpty && late ? '$mine\n$note' : mine;
+  }
+
   Widget _myPickRow(Map<String, dynamic> p) {
     final pts = fanPredictionScore(p);
     final push = fanPredictionPush(p);
@@ -212,8 +257,8 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               children: [
                 Text('${p['title']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
                 Text(
-                  'My pick: ${fanPredictionLabel(p)}${settled ? '  •  Final ${p['result_home']}–${p['result_away']}' : ''}',
-                  maxLines: 1,
+                  _pickSubtitle(p, settled),
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 11, color: Ui.muted),
                 ),
@@ -273,10 +318,25 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         }
       });
     } catch (e) {
+      // The server's list is unavailable: read the matches from ESPN directly.
+      try {
+        final direct = await _loadExtDirect();
+        if (direct.isNotEmpty && mounted) {
+          setState(() {
+            _ext = direct;
+            _extError = null;
+            if (_extLeague != 'All' &&
+                !direct.any((f) => f.league == _extLeague)) {
+              _extLeague = 'All';
+            }
+          });
+          return;
+        }
+      } catch (_) {}
       if (mounted) {
         final why = e.toString().replaceFirst('Exception: ', '');
         setState(
-          () => _extError = why.isEmpty || why.length > 120
+          () => _extError = why.isEmpty || why.length > 220
               ? 'Could not load more matches. Pull to retry.'
               : 'Could not load more matches: $why',
         );
@@ -284,6 +344,79 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     } finally {
       if (mounted) setState(() => _extLoading = false);
     }
+  }
+
+  /// Upcoming matches for the next 10 days from ESPN's public all-soccer
+  /// scoreboard, read by the phone itself.
+  Future<List<Fixture>> _loadExtDirect() async {
+    String ymd(DateTime d) =>
+        '${d.year}${d.month.toString().padLeft(2, '0')}${d.day.toString().padLeft(2, '0')}';
+    final now = DateTime.now().toUtc();
+    final spans = <(int, int)>[(0, 2), (3, 5), (6, 8), (9, 10)];
+    final parts = await Future.wait(
+      spans.map((sp) async {
+        try {
+          final uri = Uri.parse(
+            'https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard'
+            '?dates=${ymd(now.add(Duration(days: sp.$1)))}-${ymd(now.add(Duration(days: sp.$2)))}&limit=1000',
+          );
+          final r = await http.get(uri).timeout(const Duration(seconds: 10));
+          if (r.statusCode != 200) return const <dynamic>[];
+          final data = jsonDecode(r.body);
+          return (data is Map && data['events'] is List)
+              ? data['events'] as List
+              : const <dynamic>[];
+        } catch (_) {
+          return const <dynamic>[];
+        }
+      }),
+    );
+    final own = {for (final f in _fixtures) '${_n(f.home)}|${_n(f.away)}'};
+    final seen = <String>{};
+    final out = <Fixture>[];
+    for (final e in parts.expand((x) => x)) {
+      if (e is! Map) continue;
+      final comps = e['competitions'];
+      final comp = comps is List && comps.isNotEmpty && comps.first is Map
+          ? comps.first as Map
+          : null;
+      final state = ((comp?['status'] ?? e['status']) as Map?)?['type']?['state'];
+      final kickoff = DateTime.tryParse('${e['date'] ?? ''}');
+      if (comp == null || state != 'pre' || kickoff == null) continue;
+      if (!kickoff.isAfter(DateTime.now())) continue;
+      final cs = comp['competitors'];
+      if (cs is! List) continue;
+      Map? team(String side) {
+        for (final c in cs) {
+          if (c is Map && c['homeAway'] == side && c['team'] is Map) {
+            return c['team'] as Map;
+          }
+        }
+        return null;
+      }
+
+      final h = team('home'), a = team('away');
+      final home = '${h?['displayName'] ?? ''}', away = '${a?['displayName'] ?? ''}';
+      if (home.isEmpty || away.isEmpty) continue;
+      final key = '${_n(home)}|${_n(away)}';
+      if (own.contains(key) || !seen.add('$key|${kickoff.toIso8601String().substring(0, 10)}')) {
+        continue;
+      }
+      final league = '${(e['leagueName'] ?? (comp['league'] is Map ? comp['league']['name'] : null)) ?? ''}';
+      out.add(
+        Fixture(
+          id: 'web:${e['id']}',
+          home: home,
+          away: away,
+          homeLogo: '${h?['logo'] ?? ''}',
+          awayLogo: '${a?['logo'] ?? ''}',
+          league: league.isEmpty ? 'Other leagues' : league,
+          kickoff: kickoff.toLocal(),
+        ),
+      );
+    }
+    out.sort((x, y) => x.kickoff.compareTo(y.kickoff));
+    return out.take(300).toList();
   }
 
   /// ESPN matches with a league filter and a "show more" button.
@@ -512,7 +645,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
 
   Map<String, dynamic> _bodyFor(Fixture f) {
     if (_isExternal(f)) return {'ext': f.id.substring(4)};
-    if (_isCustom(f)) {
+    if (_isCustom(f) || _isWeb(f)) {
       return {
         'custom': {'home': f.home, 'away': f.away},
       };
@@ -529,7 +662,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     if (raw.contains('setup needed')) {
       return 'Automatic analysis is being configured. Please contact the administrator.';
     }
-    if ((_isCustom(f) || _isExternal(f)) &&
+    if ((_isCustom(f) || _isExternal(f) || _isWeb(f)) &&
         e is Exception &&
         raw.isNotEmpty &&
         raw.length <= 240 &&
@@ -2065,7 +2198,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                       padding: const EdgeInsets.fromLTRB(14, 0, 14, 28),
                       children: [
                         _topPick(f, data),
-                        if (!_isCustom(f)) _savePrediction(f),
+                        if (!_isCustom(f) && !_isWeb(f)) _savePrediction(f),
                         _picksList(data),
                         _fullAnalysis(f, data),
                       ],
