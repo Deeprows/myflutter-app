@@ -966,14 +966,6 @@ class _MovieSheet extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 18),
-            FutureBuilder<MovieInfo?>(
-              future: infoFuture,
-              builder: (context, snapshot) => MovieInfoPanel(
-                movie: movie,
-                info: snapshot.data,
-                loading: snapshot.connectionState == ConnectionState.waiting,
-              ),
-            ),
             FutureBuilder<TmdbTrailer?>(
               future: trailerFuture,
               builder: (context, snapshot) {
@@ -1005,6 +997,14 @@ class _MovieSheet extends StatelessWidget {
                   ),
                 );
               },
+            ),
+            FutureBuilder<MovieInfo?>(
+              future: infoFuture,
+              builder: (context, snapshot) => MovieInfoPanel(
+                movie: movie,
+                info: snapshot.data,
+                loading: snapshot.connectionState == ConnectionState.waiting,
+              ),
             ),
             FutureBuilder<List<Movie>>(
               future: similarFuture,
