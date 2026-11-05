@@ -115,9 +115,21 @@ class SubscriptionService extends ChangeNotifier {
 
   static const _kExpires = 'sub_expires_ms';
   static const _kEmail = 'sub_email';
+  static const _kVerified = 'sub_verified_ms'; // last time the Worker confirmed
+  static const _kHigh = 'sub_clock_high_ms'; // latest time ever seen
+
+  /// How long the saved copy is trusted without hearing from the Worker. After
+  /// this, ad-free switches off until the phone is online again, so a phone
+  /// that blocks the network cannot keep a stopped / expired token forever.
+  static const _offlineGrace = Duration(days: 3);
 
   DateTime? _expires;
   DateTime? _lastRefresh;
+  DateTime? _verified; // last successful answer from the Worker
+  DateTime? _high; // clock high-water mark: stops "set the date back" tricks
+  Timer? _watch;
+  bool _wasPremium = false;
+  int _ticks = 0;
   bool _loaded = false;
 
   /// Plans + ads need the Worker address.
@@ -130,7 +142,24 @@ class SubscriptionService extends ChangeNotifier {
   /// Whether the "Remove ads" (token) feature is shown to people.
   bool get tokensVisible => enabled && AppConfig.showRemoveAds;
 
-  bool get isPremium => _expires != null && _expires!.isAfter(DateTime.now());
+  /// The phone's clock, but never earlier than the latest time we have already
+  /// seen (or the Worker told us). Setting the date back does not help.
+  DateTime _now() {
+    final n = DateTime.now();
+    final h = _high;
+    return (h != null && h.isAfter(n)) ? h : n;
+  }
+
+  bool get isPremium {
+    final e = _expires;
+    if (e == null) return false;
+    final now = _now();
+    if (!e.isAfter(now)) return false; // the days have run out
+    final v = _verified;
+    if (v == null || now.difference(v) > _offlineGrace) return false;
+    return true;
+  }
+
   DateTime? get expiresAt => _expires;
 
   /// "09/11/2026" while ad-free is active, else null.
@@ -160,8 +189,61 @@ class SubscriptionService extends ChangeNotifier {
       if (ms != null && ms > 0) {
         _expires = DateTime.fromMillisecondsSinceEpoch(ms);
       }
+      final v = prefs.getInt(_kVerified);
+      if (v != null && v > 0) _verified = DateTime.fromMillisecondsSinceEpoch(v);
+      final h = prefs.getInt(_kHigh);
+      if (h != null && h > 0) _high = DateTime.fromMillisecondsSinceEpoch(h);
+      // Phones updated from an older version have no "verified" stamp yet:
+      // give them one grace period, the Worker check below renews it.
+      if (_expires != null && _verified == null) {
+        _verified = DateTime.now();
+        await prefs.setInt(_kVerified, _verified!.millisecondsSinceEpoch);
+      }
     } catch (_) {}
+    _wasPremium = isPremium;
+    _startWatch();
     unawaited(refresh(force: true));
+  }
+
+  /// Every minute while ad-free is on: remember the latest time seen, switch
+  /// ads back on the moment the days run out (even with the app open), and ask
+  /// the Worker every 10 minutes so a stopped subscription ends quickly.
+  void _startWatch() {
+    _watch?.cancel();
+    _watch = Timer.periodic(const Duration(minutes: 1), (_) => _tick());
+  }
+
+  void _tick() {
+    final n = DateTime.now();
+    if (_high == null || n.isAfter(_high!)) {
+      _high = n;
+      unawaited(_saveInt(_kHigh, n.millisecondsSinceEpoch));
+    }
+    final now = isPremium;
+    if (now != _wasPremium) {
+      _wasPremium = now;
+      notifyListeners();
+    }
+    if (_expires != null && ++_ticks % 10 == 0) unawaited(refresh(force: true));
+  }
+
+  Future<void> _saveInt(String key, int v) async {
+    try {
+      await (await SharedPreferences.getInstance()).setInt(key, v);
+    } catch (_) {}
+  }
+
+  /// Marks a good answer from the Worker: restarts the offline grace and
+  /// trusts the Worker's clock over the phone's.
+  Future<void> _markVerified(Map<String, dynamic> j) async {
+    final server = (j['now'] as num?)?.toInt();
+    final trusted = server != null && server > 0
+        ? DateTime.fromMillisecondsSinceEpoch(server)
+        : DateTime.now();
+    _verified = trusted;
+    _high = trusted;
+    await _saveInt(_kVerified, trusted.millisecondsSinceEpoch);
+    await _saveInt(_kHigh, trusted.millisecondsSinceEpoch);
   }
 
   Uri _uri(String path, [Map<String, String>? query]) {
@@ -187,6 +269,9 @@ class SubscriptionService extends ChangeNotifier {
           .timeout(const Duration(seconds: 12));
       if (r.statusCode != 200) return;
       final j = jsonDecode(r.body) as Map<String, dynamic>;
+      await _markVerified(j);
+      // The Worker is the truth: 0 / a past date (expired or stopped by you)
+      // switches ad-free off on this phone straight away.
       await _setExpiresMs((j['expires_at'] as num?)?.toInt() ?? 0);
     } catch (_) {}
   }
@@ -203,7 +288,11 @@ class SubscriptionService extends ChangeNotifier {
         await prefs.setInt(_kExpires, ms);
       }
     } catch (_) {}
-    if (changed) notifyListeners();
+    final now = isPremium;
+    if (changed || now != _wasPremium) {
+      _wasPremium = now;
+      notifyListeners();
+    }
   }
 
   /// The person's own currency, from the phone's region setting.
@@ -284,6 +373,7 @@ class SubscriptionService extends ChangeNotifier {
           final j = jsonDecode(r.body) as Map<String, dynamic>;
           final status = (j['status'] ?? '').toString();
           if (status == 'success') {
+            await _markVerified(j);
             await _setExpiresMs((j['expires_at'] as num?)?.toInt() ?? 0);
             return isPremium ? PaymentResult.active : PaymentResult.failed;
           }
@@ -316,6 +406,7 @@ class SubscriptionService extends ChangeNotifier {
           .timeout(const Duration(seconds: 20));
       final j = jsonDecode(r.body) as Map<String, dynamic>;
       if (r.statusCode == 200 && j['active'] == true) {
+        await _markVerified(j);
         await _setExpiresMs((j['expires_at'] as num?)?.toInt() ?? 0);
         return null;
       }
@@ -348,9 +439,11 @@ class SubscriptionService extends ChangeNotifier {
       if (r.statusCode != 200) return const TokenState('unknown');
       final j = jsonDecode(r.body) as Map<String, dynamic>;
       final state = (j['state'] ?? 'none').toString();
-      if (state == 'active') {
-        await _setExpiresMs((j['expires_at'] as num?)?.toInt() ?? 0);
-      }
+      await _markVerified(j);
+      // Anything but "active" means the Worker has no time for this phone
+      // (expired or stopped): drop the saved copy too.
+      await _setExpiresMs(
+          state == 'active' ? (j['expires_at'] as num?)?.toInt() ?? 0 : 0);
       final t = (j['token'] ?? '').toString();
       return TokenState(
         state,
@@ -402,8 +495,9 @@ class SubscriptionService extends ChangeNotifier {
           .timeout(const Duration(seconds: 20));
       if (r.statusCode == 200) {
         final j = jsonDecode(r.body) as Map<String, dynamic>;
+        await _markVerified(j);
         await _setExpiresMs((j['expires_at'] as num?)?.toInt() ?? 0);
-        return isPremium ? null : 'That token has no time left';
+        return isPremium ? null : 'That token has expired. Request a new one.';
       }
       return _errorOf(r, 'Could not use that token');
     } catch (_) {
