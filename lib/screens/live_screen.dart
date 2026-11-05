@@ -406,7 +406,7 @@ class _LiveScreenState extends State<LiveScreen> {
 
     final ended = _fixtures.length - live - upcoming;
 
-    final items = _items(now);
+    final gridFixtures = sortFixtures(_fixtures, now).where((f) => _passes(f, now)).toList();
 
     return AppRefresh(
       onRefresh: () async {
@@ -492,14 +492,32 @@ class _LiveScreenState extends State<LiveScreen> {
             )
           else
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                14,
-                2,
-                14,
-                18,
-              ),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate(items),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 22),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 1.18,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final f = gridFixtures[index];
+                    return ValueListenableBuilder<Map<String, LiveScore>>(
+                      valueListenable: ScoreService.instance.scores,
+                      builder: (_, scores, __) => ValueListenableBuilder<DateTime>(
+                        valueListenable: _now,
+                        builder: (_, n, __) => FixtureCard(
+                          fixture: f,
+                          now: n,
+                          score: scores[f.id],
+                          onTap: () => _open(f),
+                        ),
+                      ),
+                    );
+                  },
+                  childCount: gridFixtures.length,
+                ),
               ),
             ),
         ],
