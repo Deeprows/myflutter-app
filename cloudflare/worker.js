@@ -1205,7 +1205,7 @@ async function subStatus(url, env) {
   const id = url.searchParams.get("install") || "";
   if (!ID_RE.test(id)) return json({ error: "bad install id" }, 400);
   const expires = await expiryOf(env, id);
-  return json({ active: expires > Date.now(), expires_at: expires });
+  return json({ active: expires > Date.now(), expires_at: expires, now: Date.now() });
 }
 
 async function subStart(request, env, url) {
@@ -1430,20 +1430,20 @@ async function tokenMine(url, env) {
   if (!ID_RE.test(id)) return json({ error: "bad install id" }, 400);
   const expires = await expiryOf(env, id);
   if (expires > Date.now()) {
-    return json({ state: "active", expires_at: expires });
+    return json({ state: "active", expires_at: expires, now: Date.now() });
   }
   const t = await env.DB.prepare(
     "SELECT token, days FROM tokens WHERE bound_to = ? AND redeemed_by IS NULL ORDER BY created_at DESC LIMIT 1"
   )
     .bind(id)
     .first();
-  if (t) return json({ state: "ready", token: showToken(t.token), days: t.days });
+  if (t) return json({ state: "ready", token: showToken(t.token), days: t.days, expires_at: expires, now: Date.now() });
   const r = await env.DB.prepare(
     "SELECT 1 AS x FROM token_requests WHERE install_id = ?"
   )
     .bind(id)
     .first();
-  return json({ state: r ? "pending" : "none" });
+  return json({ state: r ? "pending" : "none", expires_at: expires, now: Date.now() });
 }
 
 async function tokenRedeem(request, env) {
@@ -1471,7 +1471,14 @@ async function tokenRedeem(request, env) {
     if (row.redeemed_by === installId) {
       // Same phone pressing the button twice: just report the time it has.
       const e = await expiryOf(env, installId);
-      return json({ ok: true, active: e > Date.now(), expires_at: e });
+      if (e > Date.now()) {
+        return json({ ok: true, active: true, expires_at: e, now: Date.now() });
+      }
+      // Used, and the days have run out (or it was stopped): never valid again.
+      return json(
+        { error: "This token has expired. Request a new one.", expires_at: e, now: Date.now() },
+        410
+      );
     }
     return json({ error: "That token has already been used" }, 409);
   }
@@ -1496,7 +1503,24 @@ async function tokenRedeem(request, env) {
   await env.DB.prepare("DELETE FROM token_requests WHERE install_id = ?")
     .bind(installId)
     .run();
-  return json({ ok: true, active: true, expires_at: expires });
+  return json({ ok: true, active: true, expires_at: expires, now: Date.now() });
+}
+
+/**
+ * Stops a phone's ad-free time right now and voids every token it could still
+ * redeem (otherwise a token made for that phone would switch it back on).
+ */
+async function stopPhone(env, id) {
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO subs (install_id, expires_at, source, updated_at) VALUES (?, 0, 'revoked', ?) " +
+        "ON CONFLICT(install_id) DO UPDATE SET expires_at = 0, source = 'revoked', updated_at = excluded.updated_at"
+    ).bind(id, Date.now()),
+    env.DB.prepare(
+      "DELETE FROM tokens WHERE bound_to = ? AND redeemed_by IS NULL"
+    ).bind(id),
+    env.DB.prepare("DELETE FROM token_requests WHERE install_id = ?").bind(id),
+  ]);
 }
 
 /**
@@ -1554,6 +1578,21 @@ async function subAdmin(request, env, url) {
           .run();
         note = `Token made for ${id.slice(0, 12)}… (${days} days). The phone shows it by itself; you can also send it.`;
       }
+    } else if (action === "stop") {
+      if (!ID_RE.test(id)) {
+        note = "Check the ID (letters/numbers only).";
+      } else {
+        await stopPhone(env, id);
+        note = `Subscription stopped for ${id.slice(0, 12)}… Ads come back on that phone within minutes.`;
+      }
+    } else if (action === "void") {
+      const code = normToken(form.get("code"));
+      const r = await env.DB.prepare(
+        "DELETE FROM tokens WHERE token = ? AND redeemed_by IS NULL"
+      )
+        .bind(code)
+        .run();
+      note = Number(r?.meta?.changes) === 1 ? "Token cancelled." : "That token was not found (or is already used).";
     } else if (action === "dismiss") {
       await env.DB.prepare("DELETE FROM token_requests WHERE install_id = ?")
         .bind(id)
@@ -1562,13 +1601,8 @@ async function subAdmin(request, env, url) {
     } else if (!ID_RE.test(id) || !daysOk) {
       note = "Check the ID (letters/numbers only) and the days (0-3650).";
     } else if (days === 0) {
-      await env.DB.prepare(
-        "INSERT INTO subs (install_id, expires_at, source, updated_at) VALUES (?, 0, 'revoked', ?) " +
-          "ON CONFLICT(install_id) DO UPDATE SET expires_at = 0, source = 'revoked', updated_at = excluded.updated_at"
-      )
-        .bind(id, Date.now())
-        .run();
-      note = `Premium switched off for ${id}`;
+      await stopPhone(env, id);
+      note = `Subscription stopped for ${id}`;
     } else {
       const e = await addDays(env, id, { email: null, source: "manual", days });
       note = `Premium until ${new Date(e).toISOString().slice(0, 10)} for ${id}`;
@@ -1615,17 +1649,32 @@ async function subAdmin(request, env, url) {
   const unusedHtml = unused
     .map(
       (r) =>
-        `<tr><td style="font-family:monospace">${esc(showToken(r.token))}</td><td>${esc(r.days)}d</td><td>${r.bound_to ? esc(String(r.bound_to).slice(0, 8)) + "…" : "any"}</td><td>${esc(r.note || "")}</td></tr>`
+        `<tr><td style="font-family:monospace">${esc(showToken(r.token))}</td><td>${esc(r.days)}d</td><td>${r.bound_to ? esc(String(r.bound_to).slice(0, 8)) + "…" : "any"}</td><td>${esc(r.note || "")}</td><td><form method="post" style="margin:0"><input type="hidden" name="token" value="${tk}"><input type="hidden" name="action" value="void"><input type="hidden" name="code" value="${esc(r.token)}"><button style="padding:4px 8px">Cancel</button></form></td></tr>`
+    )
+    .join("");
+
+  const stopBtn = (installId) =>
+    `<form method="post" style="margin:0" onsubmit="return confirm('Stop this subscription now?')"><input type="hidden" name="token" value="${tk}"><input type="hidden" name="action" value="stop"><input type="hidden" name="install_id" value="${esc(installId)}"><button style="padding:4px 8px;background:#5a1f1f;color:#fff;border:0;border-radius:6px">Stop</button></form>`;
+
+  const used = (
+    await env.DB.prepare(
+      "SELECT token, days, redeemed_by, redeemed_at, note FROM tokens WHERE redeemed_by IS NOT NULL ORDER BY redeemed_at DESC LIMIT 25"
+    ).all()
+  ).results || [];
+  const usedHtml = used
+    .map(
+      (r) =>
+        `<tr><td style="font-family:monospace">${esc(showToken(r.token))}</td><td>${esc(r.days)}d</td><td>${esc(day(r.redeemed_at))}</td><td>${esc(r.note || "")}</td><td>${stopBtn(r.redeemed_by)}</td></tr>`
     )
     .join("");
 
   const rows = await env.DB.prepare(
-    "SELECT install_id, email, expires_at, source FROM subs WHERE expires_at > 0 ORDER BY updated_at DESC LIMIT 25"
-  ).all();
+    "SELECT install_id, email, expires_at, source FROM subs WHERE expires_at > ? ORDER BY updated_at DESC LIMIT 50"
+  ).bind(Date.now()).all();
   const list = (rows.results || [])
     .map(
       (r) =>
-        `<tr><td>${esc(String(r.install_id).slice(0, 12))}…</td><td>${esc(r.source)}</td><td>${esc(day(r.expires_at))}</td><td>${esc(r.email || "")}</td></tr>`
+        `<tr><td>${esc(String(r.install_id).slice(0, 12))}…</td><td>${esc(r.source)}</td><td>${esc(day(r.expires_at))}</td><td>${esc(r.email || "")}</td><td>${stopBtn(r.install_id)}</td></tr>`
     )
     .join("");
 
@@ -1659,9 +1708,11 @@ ${reqHtml}
 <p><button style="${box};font-size:16px">Grant days (0 = switch off)</button></p>
 </form>
 <h3>Unused tokens</h3>
-<table style="width:100%;font-size:12.5px"><tr><th align=left>Token<th align=left>Days<th align=left>For<th align=left>Note</tr>${unusedHtml}</table>
-<h3>Ad-free phones</h3>
-<table style="width:100%;font-size:12.5px"><tr><th align=left>ID<th align=left>Source<th align=left>Until<th align=left>E-mail</tr>${list}</table>
+<table style="width:100%;font-size:12.5px"><tr><th align=left>Token<th align=left>Days<th align=left>For<th align=left>Note<th></tr>${unusedHtml}</table>
+<h3>Ad-free phones (active)</h3>
+<table style="width:100%;font-size:12.5px"><tr><th align=left>ID<th align=left>Source<th align=left>Until<th align=left>E-mail<th></tr>${list}</table>
+<h3>Used tokens</h3>
+<table style="width:100%;font-size:12.5px"><tr><th align=left>Token<th align=left>Days<th align=left>Used<th align=left>Note<th></tr>${usedHtml}</table>
 </body>`
   );
 }
