@@ -25,6 +25,7 @@ import '../services/movie_library.dart';
 import '../utils/open_movie.dart';
 import 'browser_screen.dart';
 import 'library_screen.dart';
+import 'trailer_player_screen.dart';
 import '../utils/l10n.dart';
 
 class MoviesScreen extends StatefulWidget {
@@ -178,6 +179,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
   @override
   void initState() {
     super.initState();
+    unawaited(_loadHomeSections());
     _load().then((_) {
       if (AppConfig.moviesUrl.isNotEmpty) _load(remote: true);
     });
@@ -308,8 +310,13 @@ class _MoviesScreenState extends State<MoviesScreen> {
   }
 
   void _openTrailer(TmdbTrailer trailer) {
-    final uri = Uri.parse('https://www.youtube.com/watch?v=${trailer.youtubeKey}');
-    launchUrl(uri, mode: LaunchMode.externalApplication);
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => TrailerPlayerScreen(
+        title: trailer.title,
+        youtubeKey: trailer.youtubeKey,
+        poster: trailer.poster,
+      ),
+    ));
   }
 
   Widget _homeSectionHeading(String title, {String? subtitle}) => Padding(
@@ -902,6 +909,63 @@ class _MovieSheet extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: onPlay,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Ui.red,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.play_arrow_rounded, size: 24),
+                    label: Text('Play'.tr, style: const TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ListenableBuilder(
+                  listenable: MovieLibrary.instance,
+                  builder: (context, _) {
+                    final saved = MovieLibrary.instance.isSaved(movie);
+                    return IconButton.outlined(
+                      tooltip: saved ? 'Remove from Watch later' : 'Watch later',
+                      onPressed: () async {
+                        final now = await MovieLibrary.instance.toggleWatchLater(movie);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(SnackBar(content: Text(now ? 'Saved to Watch later' : 'Removed from Watch later')));
+                      },
+                      style: IconButton.styleFrom(
+                        side: BorderSide(color: saved ? Ui.red : Ui.line),
+                        minimumSize: const Size(52, 52),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      icon: Icon(saved ? Icons.bookmark_rounded : Icons.bookmark_add_outlined,
+                          color: saved ? Ui.red : null),
+                    );
+                  },
+                ),
+                if (movie.hasDownload) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _download(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        side: BorderSide(color: Ui.line),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      icon: const Icon(Icons.download_rounded),
+                      label: Text('Download'.tr, style: const TextStyle(fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 18),
             FutureBuilder<MovieInfo?>(
               future: infoFuture,
               builder: (context, snapshot) => MovieInfoPanel(
@@ -918,7 +982,13 @@ class _MovieSheet extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.only(top: 18),
                   child: GestureDetector(
-                    onTap: () => launchUrl(Uri.parse('https://www.youtube.com/watch?v=${trailer.youtubeKey}'), mode: LaunchMode.externalApplication),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => TrailerPlayerScreen(
+                        title: trailer.title,
+                        youtubeKey: trailer.youtubeKey,
+                        poster: trailer.poster,
+                      ),
+                    )),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(14),
                       child: SizedBox(height: 150, width: double.infinity,
@@ -956,67 +1026,7 @@ class _MovieSheet extends StatelessWidget {
               },
             ),
             const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: onPlay,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Ui.red,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    icon: const Icon(Icons.play_arrow_rounded),
-                    label: Text('Play'.tr,
-                        style: const TextStyle(fontWeight: FontWeight.w800)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                ListenableBuilder(
-                  listenable: MovieLibrary.instance,
-                  builder: (context, _) {
-                    final saved = MovieLibrary.instance.isSaved(movie);
-                    return IconButton.outlined(
-                      tooltip: saved ? 'Remove from Watch later' : 'Watch later',
-                      onPressed: () async {
-                        final now =
-                            await MovieLibrary.instance.toggleWatchLater(movie);
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context)
-                          ..hideCurrentSnackBar()
-                          ..showSnackBar(SnackBar(
-                              content: Text(now
-                                  ? 'Saved to Watch later'
-                                  : 'Removed from Watch later')));
-                      },
-                      style: IconButton.styleFrom(
-                        side: BorderSide(color: saved ? Ui.red : Ui.line),
-                        minimumSize: const Size(52, 52),
-                      ),
-                      icon: Icon(
-                          saved
-                              ? Icons.bookmark_rounded
-                              : Icons.bookmark_add_outlined,
-                          color: saved ? Ui.red : null),
-                    );
-                  },
-                ),
-                if (movie.hasDownload) ...[
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _download(context),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: BorderSide(color: Ui.line),
-                      ),
-                      icon: const Icon(Icons.download_rounded),
-                      label: Text('Download'.tr,
-                          style: const TextStyle(fontWeight: FontWeight.w800)),
-                    ),
-                  ),
-                ],
-              ],
-            ),
+
           ],
         ),
         ),
