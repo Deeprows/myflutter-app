@@ -20,6 +20,9 @@ class MovieInfo {
   final String tagline;
   final String status;
   final String language;
+  final String originalLanguage;
+  final String originalTitle;
+  final List<String> spokenLanguages;
   final String releaseDate; // yyyy-mm-dd or ''
   final String backdrop; // wide background image url or ''
   final int? runtime; // minutes (per episode for series)
@@ -35,6 +38,9 @@ class MovieInfo {
     required this.tagline,
     required this.status,
     required this.language,
+    required this.originalLanguage,
+    required this.originalTitle,
+    required this.spokenLanguages,
     required this.releaseDate,
     required this.backdrop,
     required this.runtime,
@@ -126,6 +132,11 @@ class MovieInfo {
       tagline: s('tagline'),
       status: s('status'),
       language: language,
+      originalLanguage: s('original_language').toUpperCase(),
+      originalTitle: s(tv ? 'original_name' : 'original_title'),
+      spokenLanguages: (j['spoken_languages'] is List)
+          ? (j['spoken_languages'] as List).whereType<Map>().map((l) => (l['english_name'] ?? l['name'] ?? '').toString()).where((l) => l.isNotEmpty).toSet().toList()
+          : const [],
       releaseDate: s(tv ? 'first_air_date' : 'release_date'),
       backdrop: s('backdrop_path').isEmpty
           ? ''
