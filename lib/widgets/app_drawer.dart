@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../config.dart';
 import '../screens/browser_screen.dart';
+import '../screens/fan_profile_screen.dart';
+import '../screens/fan_widgets.dart';
 import '../screens/content_shortcut_screen.dart';
 import '../screens/highlights_screen.dart';
 import '../screens/live_screen.dart';
@@ -12,6 +14,8 @@ import '../screens/network_stream_screen.dart';
 import '../screens/playlists_screen.dart';
 import '../screens/plans_screen.dart';
 import '../screens/remove_ads_screen.dart';
+import '../services/auth_service.dart';
+import '../services/fan_zone_service.dart';
 import '../services/notice_service.dart';
 import '../services/app_sharer.dart';
 import '../services/app_updater.dart';
@@ -25,11 +29,47 @@ import '../theme/app_theme.dart';
 void _toast(BuildContext c, String msg) =>
     ScaffoldMessenger.of(c).showSnackBar(SnackBar(content: Text(msg)));
 
-/// Side menu: Network Stream, Playlists, Floating Player, Video Quality
-/// Setting, scores, Notice, Join Us, Copyright, Share App, Update App, Exit.
-class FootboliveDrawer extends StatelessWidget {
+/// Side menu in the style of the X (Twitter) menu: profile header on top,
+/// large primary items, a divider, then smaller secondary items.
+class FootboliveDrawer extends StatefulWidget {
   final VoidCallback? onHome;
   const FootboliveDrawer({super.key, this.onHome});
+
+  @override
+  State<FootboliveDrawer> createState() => _FootboliveDrawerState();
+}
+
+class _FootboliveDrawerState extends State<FootboliveDrawer> {
+  /// Last loaded Fan Zone profile, kept so the picture shows instantly the
+  /// next time the drawer opens.
+  static Map<String, dynamic>? _cached;
+  static String _cachedFor = '';
+  Map<String, dynamic>? _profile;
+
+  @override
+  void initState() {
+    super.initState();
+    final id = AuthService.instance.user?.id ?? '';
+    if (id.isNotEmpty && _cachedFor == id) _profile = _cached;
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final id = AuthService.instance.user?.id ?? '';
+    if (id.isEmpty) return;
+    try {
+      final data = await FanZoneService.call(
+        'social/profile',
+        query: {'id': id},
+      );
+      final p = Map<String, dynamic>.from(data['profile'] as Map);
+      _cached = p;
+      _cachedFor = id;
+      if (mounted) setState(() => _profile = p);
+    } catch (_) {
+      // Keep the cached/initial avatar when offline.
+    }
+  }
 
   void _go(BuildContext context, Future<void> Function(BuildContext) action) {
     final nav = Navigator.of(context);
@@ -52,207 +92,369 @@ class FootboliveDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget item(
+    // Big primary row (like Profile / Premium / Communities in X).
+    Widget main(
+      IconData icon,
+      String label,
+      Future<void> Function(BuildContext) f, {
+      Widget? badge,
+    }) => InkWell(
+      onTap: () => _go(context, f),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+        child: Row(
+          children: [
+            Icon(icon, size: 27),
+            const SizedBox(width: 20),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            if (badge != null) ...[const SizedBox(width: 10), badge],
+          ],
+        ),
+      ),
+    );
+
+    // Smaller secondary row (like Settings / Help Center in X).
+    Widget sub(
       IconData icon,
       String label,
       Future<void> Function(BuildContext) f,
-    ) => ListTile(
-      dense: true,
-      leading: Icon(icon, size: 21),
-      title: Text(
-        label,
-        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
-      ),
+    ) => InkWell(
       onTap: () => _go(context, f),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 18),
-      minVerticalPadding: 6,
-      horizontalTitleGap: 12,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+        child: Row(
+          children: [
+            Icon(icon, size: 22, color: Ui.muted),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    Widget divider() => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Divider(height: 1, thickness: 1, color: Ui.line),
+    );
+
+    Widget pill(String text) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: Ui.red,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12.5,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
 
     return Drawer(
-      backgroundColor: Ui.cardDeep,
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.fromLTRB(
-              20,
-              MediaQuery.of(context).padding.top + 24,
-              20,
-              16,
-            ),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Ui.red.withValues(alpha: .28), Ui.cardDeep],
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // App logo (the splash image) in place of the football icon
-                // and the app name.
-                Image.asset(
-                  'assets/splash/splash.png',
-                  height: 132,
-                  fit: BoxFit.contain,
+      backgroundColor: Ui.bg,
+      shape: const RoundedRectangleBorder(),
+      child: ListenableBuilder(
+        listenable: Listenable.merge([
+          AuthService.instance,
+          SubscriptionService.instance,
+        ]),
+        builder: (context, _) {
+          final user = AuthService.instance.user;
+          final sub0 = SubscriptionService.instance;
+          final fan = _profile;
+          final fanName = '${fan?['name'] ?? ''}'.trim();
+          final fanHandle = '${fan?['handle'] ?? ''}'.trim();
+          final name = fanName.isNotEmpty
+              ? fanName
+              : ((user?.name.trim().isNotEmpty ?? false)
+                    ? user!.name.trim()
+                    : (user?.email.split('@').first ?? AppConfig.appName));
+          final handle = fanHandle.isNotEmpty
+              ? '@$fanHandle'
+              : (user == null ? '' : '@${FanZoneService.handle(user.id)}');
+          // The picture uploaded in the app's own profile (not Google's).
+          final photo = user == null
+              ? null
+              : FanZoneService.avatarUrl(user.id, fan?['avatar_at']);
+
+          return Column(
+            children: [
+              // ------------------------------------------------ profile
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  MediaQuery.of(context).padding.top + 20,
+                  20,
+                  14,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${'Version'.tr}: ${AppConfig.appVersion}',
-                  style: TextStyle(color: Ui.muted, fontSize: 11.5),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView(
-              // Bottom padding keeps 'Exit' clear of the phone navigation bar.
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewPadding.bottom + 16,
-              ),
-              children: [
-                item(
-                  Icons.block_rounded,
-                  'Remove ads',
-                  (c) => _push(
-                    c,
-                    SubscriptionService.instance.visible
-                        ? const PlansScreen()
-                        : const RemoveAdsScreen(),
-                  ),
-                ),
-                item(
-                  Icons.sensors_rounded,
-                  'Live Now',
-                  (c) => _push(
-                    c,
-                    const ContentShortcutScreen(
-                      title: 'Live Now',
-                      child: LiveScreen(),
-                    ),
-                  ),
-                ),
-                item(
-                  Icons.play_circle_outline_rounded,
-                  'Football Highlights',
-                  (c) => _push(
-                    c,
-                    const ContentShortcutScreen(
-                      title: 'Football Highlights',
-                      child: HighlightsScreen(),
-                    ),
-                  ),
-                ),
-                item(
-                  Icons.live_tv_rounded,
-                  'TV Channels',
-                  (c) => _push(
-                    c,
-                    const ContentShortcutScreen(
-                      title: 'TV Channels',
-                      child: TvScreen(),
-                    ),
-                  ),
-                ),
-                item(
-                  Icons.movie_outlined,
-                  'Movies',
-                  (c) => _push(
-                    c,
-                    const ContentShortcutScreen(
-                      title: 'Movies',
-                      child: MoviesScreen(),
-                    ),
-                  ),
-                ),
-                ExpansionTile(
-                  leading: const Icon(Icons.settings_rounded, size: 21),
-                  title: const Text('Settings'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    item(Icons.palette_rounded, 'Themes'.tr, showThemeSheet),
-                    item(
-                      Icons.language_rounded,
-                      'Language'.tr,
-                      showLanguageSheet,
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: user == null
+                              ? null
+                              : () => _go(
+                                  context,
+                                  (c) => _push(
+                                    c,
+                                    FanProfileScreen(userId: user.id),
+                                  ),
+                                ),
+                          child: FanAvatar(
+                            name: name,
+                            seed: user?.id ?? name,
+                            size: 46,
+                            imageUrl: photo,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (sub0.isPremium)
+                          Icon(
+                            Icons.verified_rounded,
+                            color: Ui.red,
+                            size: 26,
+                          ),
+                      ],
                     ),
-                    item(
-                      Icons.notifications_active_rounded,
-                      'Notifications'.tr,
-                      showNotificationSettings,
+                    const SizedBox(height: 14),
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                    item(
-                      Icons.picture_in_picture_alt_rounded,
-                      'Floating Player'.tr,
-                      showFloatingPlayerDialog,
+                    if (handle.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        handle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Ui.muted, fontSize: 15),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Divider(height: 1, thickness: 1, color: Ui.line),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.only(
+                    top: 6,
+                    bottom: MediaQuery.of(context).viewPadding.bottom + 16,
+                  ),
+                  children: [
+                    if (user != null)
+                      main(
+                        Icons.person_outline_rounded,
+                        'Profile'.tr,
+                        (c) => _push(c, FanProfileScreen(userId: user.id)),
+                      ),
+                    main(
+                      Icons.workspace_premium_outlined,
+                      'Premium'.tr,
+                      (c) => _push(
+                        c,
+                        sub0.visible
+                            ? const PlansScreen()
+                            : const RemoveAdsScreen(),
+                      ),
+                      badge: sub0.isPremium ? pill('Active'.tr) : null,
                     ),
-                    item(
-                      Icons.link_rounded,
-                      'Network Stream'.tr,
-                      (c) => _push(c, const NetworkStreamScreen()),
+                    main(
+                      Icons.sensors_rounded,
+                      'Live Now'.tr,
+                      (c) => _push(
+                        c,
+                        const ContentShortcutScreen(
+                          title: 'Live Now',
+                          child: LiveScreen(),
+                        ),
+                      ),
                     ),
-                    item(
-                      Icons.playlist_play_rounded,
-                      'Playlists'.tr,
-                      (c) => _push(c, const PlaylistsScreen()),
+                    main(
+                      Icons.play_circle_outline_rounded,
+                      'Football Highlights'.tr,
+                      (c) => _push(
+                        c,
+                        const ContentShortcutScreen(
+                          title: 'Football Highlights',
+                          child: HighlightsScreen(),
+                        ),
+                      ),
                     ),
-                    item(
-                      Icons.tune_rounded,
-                      'Video Quality Setting'.tr,
-                      showLowQualityDialog,
+                    main(
+                      Icons.live_tv_rounded,
+                      'TV Channels'.tr,
+                      (c) => _push(
+                        c,
+                        const ContentShortcutScreen(
+                          title: 'TV Channels',
+                          child: TvScreen(),
+                        ),
+                      ),
+                    ),
+                    main(
+                      Icons.movie_outlined,
+                      'Movies'.tr,
+                      (c) => _push(
+                        c,
+                        const ContentShortcutScreen(
+                          title: 'Movies',
+                          child: MoviesScreen(),
+                        ),
+                      ),
+                    ),
+                    main(
+                      Icons.sports_soccer_rounded,
+                      'Football Score'.tr,
+                      (c) => openInApp(
+                        c,
+                        AppConfig.footballScoreUrl,
+                        title: 'Football Score'.tr,
+                      ),
+                    ),
+                    main(
+                      Icons.sports_cricket_rounded,
+                      'Cricket Score'.tr,
+                      (c) => openInApp(
+                        c,
+                        AppConfig.cricketScoreUrl,
+                        title: 'Cricket Score'.tr,
+                      ),
+                    ),
+                    divider(),
+                    Theme(
+                      data: Theme.of(
+                        context,
+                      ).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        tilePadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                        ),
+                        leading: Icon(
+                          Icons.settings_outlined,
+                          size: 22,
+                          color: Ui.muted,
+                        ),
+                        title: Text(
+                          'Settings'.tr,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        iconColor: Ui.muted,
+                        collapsedIconColor: Ui.muted,
+                        childrenPadding: const EdgeInsets.only(left: 16),
+                        children: [
+                          sub(Icons.palette_outlined, 'Themes'.tr, showThemeSheet),
+                          sub(
+                            Icons.language_rounded,
+                            'Language'.tr,
+                            showLanguageSheet,
+                          ),
+                          sub(
+                            Icons.notifications_none_rounded,
+                            'Notifications'.tr,
+                            showNotificationSettings,
+                          ),
+                          sub(
+                            Icons.picture_in_picture_alt_outlined,
+                            'Floating Player'.tr,
+                            showFloatingPlayerDialog,
+                          ),
+                          sub(
+                            Icons.link_rounded,
+                            'Network Stream'.tr,
+                            (c) => _push(c, const NetworkStreamScreen()),
+                          ),
+                          sub(
+                            Icons.playlist_play_rounded,
+                            'Playlists'.tr,
+                            (c) => _push(c, const PlaylistsScreen()),
+                          ),
+                          sub(
+                            Icons.tune_rounded,
+                            'Video Quality Setting'.tr,
+                            showLowQualityDialog,
+                          ),
+                        ],
+                      ),
+                    ),
+                    sub(
+                      Icons.campaign_outlined,
+                      'Notice'.tr,
+                      showNoticeDialog,
+                    ),
+                    sub(
+                      Icons.chat_bubble_outline_rounded,
+                      'Join Us'.tr,
+                      (c) => _openLink(c, AppConfig.joinUrl, 'Join Us'.tr),
+                    ),
+                    sub(
+                      Icons.ios_share_rounded,
+                      'Share App'.tr,
+                      (c) => AppSharer.instance.share(c),
+                    ),
+                    sub(
+                      Icons.sync_rounded,
+                      'Update App'.tr,
+                      (c) => AppUpdater.instance.update(c),
+                    ),
+                    sub(
+                      Icons.copyright_rounded,
+                      'Copyright'.tr,
+                      showCopyrightDialog,
+                    ),
+                    sub(
+                      Icons.exit_to_app_rounded,
+                      'Exit'.tr,
+                      (c) async => SystemNavigator.pop(),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                      child: Text(
+                        '${'Version'.tr}: ${AppConfig.appVersion}',
+                        style: TextStyle(color: Ui.dim, fontSize: 12),
+                      ),
                     ),
                   ],
                 ),
-                item(
-                  Icons.sports_cricket_rounded,
-                  'Cricket Score'.tr,
-                  (c) => openInApp(
-                    c,
-                    AppConfig.cricketScoreUrl,
-                    title: 'Cricket Score'.tr,
-                  ),
-                ),
-                item(
-                  Icons.sports_soccer_rounded,
-                  'Football Score'.tr,
-                  (c) => openInApp(
-                    c,
-                    AppConfig.footballScoreUrl,
-                    title: 'Football Score'.tr,
-                  ),
-                ),
-
-                item(Icons.campaign_rounded, 'Notice'.tr, showNoticeDialog),
-                item(
-                  Icons.chat_rounded,
-                  'Join Us'.tr,
-                  (c) => _openLink(c, AppConfig.joinUrl, 'Join Us'.tr),
-                ),
-                item(
-                  Icons.copyright_rounded,
-                  'Copyright'.tr,
-                  showCopyrightDialog,
-                ),
-                item(
-                  Icons.share_rounded,
-                  'Share App'.tr,
-                  (c) => AppSharer.instance.share(c),
-                ),
-                item(
-                  Icons.sync_rounded,
-                  'Update App'.tr,
-                  (c) => AppUpdater.instance.update(c),
-                ),
-                item(
-                  Icons.exit_to_app_rounded,
-                  'Exit'.tr,
-                  (c) async => SystemNavigator.pop(),
-                ),
-              ],
-            ),
-          ),
-        ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
