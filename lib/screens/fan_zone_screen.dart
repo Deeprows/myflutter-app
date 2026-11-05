@@ -450,9 +450,13 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             _labeled(Icons.leaderboard_rounded, 'Ranks', _openRanks),
             const NotificationBell(label: 'Alerts'),
             _labeled(
-              Icons.forum_outlined,
-              'Match Rooms',
-              () => _roomsTrigger.value++,
+              Icons.fact_check_rounded,
+              'My Predictions',
+              () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const PredictionResultsScreen(),
+                ),
+              ),
             ),
             _labeled(
               Icons.sports_soccer_rounded,
