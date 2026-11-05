@@ -135,7 +135,9 @@ class AppConfig {
   /// WhatsApp chat for people who cannot pay online (manual activation).
   /// Example: `https://wa.me/2348012345678`. Empty = the button tells the
   /// person it is coming soon. The app adds the person's ID to the message.
-  static const whatsappUrl = 'https://wa.me/2348164887683';
+  static const whatsappUrl = 'https://wa.me/2347041629630';
+  /// WhatsApp chat behind "Message Admin" on the login / sign-up screen.
+  static const adminWhatsappUrl = 'https://wa.me/2347041629630';
   static const whatsappMessage =
       'Hello, I want to pay for Deeprowss Premium manually.';
 
