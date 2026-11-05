@@ -80,7 +80,7 @@ class AdScheduler with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       _foreground = true;
       // A premium that ended (or began) while the app was closed.
-      unawaited(SubscriptionService.instance.refresh());
+      unawaited(SubscriptionService.instance.refresh(force: true));
     } else {
       _foreground = false;
       unawaited(_save());
