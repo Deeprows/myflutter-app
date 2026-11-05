@@ -69,7 +69,9 @@ class _MovieInfoPanelState extends State<MovieInfoPanel> {
       if (info.isSeries && info.episodes != null)
         MapEntry('Episodes', '${info.episodes}'),
       if (info.status.isNotEmpty) MapEntry('Status', info.status),
+      if (info.originalLanguage.isNotEmpty) MapEntry('Original language', info.originalLanguage),
       if (info.language.isNotEmpty) MapEntry('Language', info.language),
+      if (info.spokenLanguages.isNotEmpty) MapEntry('Spoken languages', info.spokenLanguages.join(', ')),
     ];
 
     final longText = info.overview.length > 220;
@@ -79,6 +81,18 @@ class _MovieInfoPanelState extends State<MovieInfoPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (info.backdrop.startsWith('http')) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: SizedBox(
+                height: 112,
+                width: double.infinity,
+                child: Image.network(info.backdrop, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
           if (genres.isNotEmpty) _tags(genres),
           if (facts.isNotEmpty) ...[
             const SizedBox(height: 18),
@@ -104,6 +118,14 @@ class _MovieInfoPanelState extends State<MovieInfoPanel> {
                   ),
               ],
             ),
+          ],
+          if (info.tagline.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Text(info.tagline, style: TextStyle(color: Ui.redSoft, fontSize: 14, fontStyle: FontStyle.italic, fontWeight: FontWeight.w700)),
+          ],
+          if (info.originalTitle.isNotEmpty && info.originalTitle != widget.movie.title) ...[
+            const SizedBox(height: 10),
+            Text('Original title: ${info.originalTitle}', style: TextStyle(color: Ui.dim, fontSize: 12, fontWeight: FontWeight.w600)),
           ],
           if (info.overview.isNotEmpty) ...[
             const SizedBox(height: 22),
