@@ -81,18 +81,6 @@ class _MovieInfoPanelState extends State<MovieInfoPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (info.backdrop.startsWith('http')) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: SizedBox(
-                height: 112,
-                width: double.infinity,
-                child: Image.network(info.backdrop, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink()),
-              ),
-            ),
-            const SizedBox(height: 14),
-          ],
           if (genres.isNotEmpty) _tags(genres),
           if (facts.isNotEmpty) ...[
             const SizedBox(height: 18),
