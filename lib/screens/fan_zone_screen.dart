@@ -18,6 +18,7 @@ import '../theme/app_theme.dart';
 import 'fan_posts_feed.dart';
 import 'fan_profile_screen.dart';
 import 'fan_widgets.dart';
+import 'match_rooms_screen.dart';
 import 'highlights_screen.dart';
 import 'movies_screen.dart';
 import 'tv_screen.dart';
@@ -27,7 +28,7 @@ import '../services/auth_service.dart';
 
 String _error(Object e) => e.toString().replaceFirst('Exception: ', '');
 
-enum FanZonePage { predict, ranks, banter }
+enum FanZonePage { predict, ranks, banter, rooms }
 
 class FanZoneScreen extends StatefulWidget {
   final bool active;
@@ -305,20 +306,24 @@ class _FanZoneScreenState extends State<FanZoneScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.page == FanZonePage.rooms) return _roomsPage();
     final title = switch (widget.page) {
       FanZonePage.predict => 'Predict',
       FanZonePage.ranks => 'Ranks',
       FanZonePage.banter => 'Deeprowss',
+      FanZonePage.rooms => 'Match Room',
     };
     final shortcut = switch (widget.page) {
       FanZonePage.predict => 'Highlights',
       FanZonePage.ranks => 'TV',
       FanZonePage.banter => 'Movies',
+      FanZonePage.rooms => 'Match Room',
     };
     final icon = switch (widget.page) {
       FanZonePage.predict => Icons.play_circle_outline_rounded,
       FanZonePage.ranks => Icons.live_tv_outlined,
       FanZonePage.banter => Icons.movie_outlined,
+      FanZonePage.rooms => Icons.groups_rounded,
     };
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -426,6 +431,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                         'Pick winners, draws or goals. Earn points.',
                       FanZonePage.ranks => 'Points count as matches end',
                       FanZonePage.banter => 'Deeprowss community',
+                      FanZonePage.rooms => 'Live match chats',
                     },
                     style: TextStyle(
                       fontSize: 12,
@@ -497,6 +503,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                     FanZonePage.predict => const HighlightsScreen(),
                     FanZonePage.ranks => const TvScreen(),
                     FanZonePage.banter => const MoviesScreen(),
+                    FanZonePage.rooms => const SizedBox.shrink(),
                   },
                 ),
               ),
@@ -523,12 +530,38 @@ class _FanZoneScreenState extends State<FanZoneScreen>
               FanZonePage.predict => _predictions(),
               FanZonePage.ranks => _rankings(),
               FanZonePage.banter => _banter(),
+              FanZonePage.rooms => const SizedBox.shrink(),
             },
           ),
         ],
       ),
     );
   }
+
+  // Match Room tab: live match rooms as cards (own page, no app bar).
+  Widget _roomsPage() => Scaffold(
+    backgroundColor: Colors.transparent,
+    body: SafeArea(
+      bottom: false,
+      child: Column(
+        children: [
+          if (_busy && _fixtures.isNotEmpty)
+            const LinearProgressIndicator(minHeight: 2),
+          if (_failure != null) _failureBanner(),
+          Expanded(
+            child: MatchRoomsView(
+              fixtures: _fixtures,
+              loading: !_loadedOnce,
+              onRefresh: _refresh,
+              onOpenLounge: () => _discussion('lounge', 'Fan lounge'),
+              onOpenMatch: (f) =>
+                  _discussion(FanZoneService.matchKey(f), f.title, match: f),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 
   Widget _failureBanner() => Container(
     margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
