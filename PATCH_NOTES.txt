@@ -1,0 +1,24 @@
+Deeprowss / myflutter movie-section update patch
+
+Updated:
+- lib/screens/movies_screen.dart — Adds Trending Now swipe carousel, Top 10 ranked rail, Trending Movies rail, Latest Trailers rail; preserves existing catalogue/search/genre filters; adds TMDB details, trailer preview and More Like This section in movie detail sheet.
+- lib/services/tmdb_service.dart — Adds TMDB Top Rated Movies, Trending Movies and Latest Trailers endpoints plus detail trailer/similar-title lookups.
+- lib/models/movie_info.dart — Extends movie/series metadata with original title/language and spoken languages.
+- lib/widgets/movie_info_panel.dart — Displays backdrop, tagline, original title, expanded language metadata, overview, directors/creators and cast.
+- lib/models/push_target.dart — Supports DamiMovies trending_movie push payloads with TMDB ID/mediaType, routes them to the Movies section and resolves exact title.
+- lib/services/push_service.dart — Adds the trending notification topic and user subscription control.
+- .github/workflows/send-test-push.yml — Adds trending to the manual push-test topic options.
+- PUSH_SETUP.md — Documents the trending movie notification setup and secrets.
+
+Added:
+- .github/workflows/notify-trending.yml — Runs scheduled/manual trending alert workflow every three hours.
+- scripts/notify_trending.mjs — TMDB top-five deduplication and Firebase Admin notification logic, adapted from DMoviess.
+- state/trending_last.json — Initial deduplication state.
+
+Firebase / GitHub Actions requirements:
+- Repository secret FIREBASE_SERVICE_ACCOUNT (Firebase Admin service-account JSON)
+- Repository secret TMDB_API_KEY (TMDB v3 API key or v4 token)
+- Ensure Firebase project/app is the same Deeprows Firebase project used by the app. The trending FCM topic is `trending`.
+- First scheduled workflow run only records the initial top-five IDs; use workflow_dispatch with force=true for a test send.
+
+This is a changed/added-files patch, not a complete project archive. Merge these paths into your myflutter repository.
