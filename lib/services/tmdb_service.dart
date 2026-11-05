@@ -210,6 +210,77 @@ class TmdbService {
     }
   }
 
+
+  /// Trending movies (separate from the mixed movie/series hero carousel).
+  Future<List<Movie>> trendingMovies() async {
+    if (!enabled) return const [];
+    final data = await _get('/trending/movie/week', {'page': '1'});
+    final rows = data is Map && data['results'] is List
+        ? (data['results'] as List)
+            .map((e) => fromJson(e, type: 'movie'))
+            .whereType<Movie>()
+            .toList()
+        : <Movie>[];
+    return rows;
+  }
+
+  /// TMDB's top-rated movie list for the "Top 10" rail.
+  Future<List<Movie>> topRatedMovies() async {
+    if (!enabled) return const [];
+    final data = await _get('/movie/top_rated', {'page': '1'});
+    final rows = data is Map && data['results'] is List
+        ? (data['results'] as List)
+            .map((e) => fromJson(e, type: 'movie'))
+            .whereType<Movie>()
+            .toList()
+        : <Movie>[];
+    rows.sort((a, b) =>
+        (double.tryParse(b.rating ?? '') ?? 0)
+            .compareTo(double.tryParse(a.rating ?? '') ?? 0));
+    return rows.take(10).toList();
+  }
+
+  /// Fresh official YouTube trailers from now-playing films, mirroring the
+  /// DamiMovies home screen's trailer lookup.
+  Future<List<TmdbTrailer>> latestTrailers() async {
+    if (!enabled) return const [];
+    final nowPlaying = await _get('/movie/now_playing', {'page': '1'});
+    final movies = nowPlaying is Map && nowPlaying['results'] is List
+        ? (nowPlaying['results'] as List)
+            .map((e) => fromJson(e, type: 'movie'))
+            .whereType<Movie>()
+            .take(8)
+            .toList()
+        : <Movie>[];
+    final results = await Future.wait<TmdbTrailer?>(movies.map((movie) async {
+      final id = movie.tmdbId;
+      if (id == null) return null;
+      final videos = await _get('/movie/$id/videos');
+      final rows = videos is Map && videos['results'] is List
+          ? (videos['results'] as List)
+              .whereType<Map>()
+              .where((v) =>
+                  (v['site'] ?? '').toString().toLowerCase() == 'youtube' &&
+                  (v['type'] ?? '').toString().toLowerCase() == 'trailer' &&
+                  (v['key'] ?? '').toString().trim().isNotEmpty)
+              .toList()
+          : <Map>[];
+      if (rows.isEmpty) return null;
+      rows.sort((x, y) => (y['published_at'] ?? '')
+          .toString()
+          .compareTo((x['published_at'] ?? '').toString()));
+      final v = rows.first;
+      return TmdbTrailer(
+        title: movie.title,
+        poster: movie.image,
+        youtubeKey: v['key'].toString(),
+        publishedAt: (v['published_at'] ?? '').toString(),
+        movie: movie,
+      );
+    }));
+    return results.whereType<TmdbTrailer>().toList();
+  }
+
   // category name -> [TMDB movie genre id, TMDB series genre id]
   static const _discoverIds = <String, List<String?>>{
     'Action': ['28', '10759'],
@@ -338,6 +409,45 @@ class TmdbService {
     return null;
   }
 
+  Future<List<Movie>> similar(Movie movie) async {
+    if (!enabled || movie.tmdbId == null) return const [];
+    final type = movie.isSeries ? 'tv' : 'movie';
+    final data = await _get('/$type/${movie.tmdbId}/similar', {'page': '1'});
+    if (data is! Map || data['results'] is! List) return const [];
+    return (data['results'] as List)
+        .map((e) => fromJson(e, type: type))
+        .whereType<Movie>()
+        .take(12)
+        .toList();
+  }
+
+  Future<TmdbTrailer?> trailerFor(Movie movie) async {
+    if (!enabled || movie.tmdbId == null) return null;
+    final type = movie.isSeries ? 'tv' : 'movie';
+    final data = await _get('/$type/${movie.tmdbId}/videos');
+    if (data is! Map || data['results'] is! List) return null;
+    final rows = (data['results'] as List).whereType<Map>().where((v) =>
+        (v['site'] ?? '').toString().toLowerCase() == 'youtube' &&
+        const {'trailer', 'teaser'}.contains((v['type'] ?? '').toString().toLowerCase()) &&
+        (v['key'] ?? '').toString().trim().isNotEmpty).toList();
+    if (rows.isEmpty) return null;
+    rows.sort((a, b) {
+      final aScore = ((a['official'] == true ? 100000000 : 0) +
+          (DateTime.tryParse((a['published_at'] ?? '').toString())?.millisecondsSinceEpoch ?? 0) ~/ 1000);
+      final bScore = ((b['official'] == true ? 100000000 : 0) +
+          (DateTime.tryParse((b['published_at'] ?? '').toString())?.millisecondsSinceEpoch ?? 0) ~/ 1000);
+      return bScore.compareTo(aScore);
+    });
+    final row = rows.first;
+    return TmdbTrailer(
+      title: movie.title,
+      poster: movie.image,
+      youtubeKey: row['key'].toString(),
+      publishedAt: (row['published_at'] ?? '').toString(),
+      movie: movie,
+    );
+  }
+
   /// Searches movies and series on TMDB.
   Future<List<Movie>> search(String query) async {
     final q = query.trim();
@@ -349,6 +459,12 @@ class TmdbService {
         .whereType<Movie>()
         .toList();
   }
+}
+
+class TmdbTrailer {
+  final String title, poster, youtubeKey, publishedAt;
+  final Movie movie;
+  const TmdbTrailer({required this.title, required this.poster, required this.youtubeKey, required this.publishedAt, required this.movie});
 }
 
 class _Target {
