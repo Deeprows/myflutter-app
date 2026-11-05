@@ -3049,7 +3049,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               children: [
                 _hero(),
-                _myPredictions(),
                 const SizedBox(height: 12),
                 _typeBox(),
                 if (_custom.isNotEmpty) const SizedBox(height: 10),
