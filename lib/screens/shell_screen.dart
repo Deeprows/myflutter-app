@@ -258,8 +258,13 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                 ),
                 AiPredictScreen(active: _index == 4),
                 const SizedBox.shrink(),
+                // Match Room: live match rooms as cards.
                 _visited.contains(_tvTab)
-                    ? const LiveScreen()
+                    ? FanZoneScreen(
+                        active: _index == _tvTab,
+                        page: FanZonePage.rooms,
+                        embedded: true,
+                      )
                     : const SizedBox.shrink(),
                 // Slot 7 (Movies) is no longer a tab.
                 const SizedBox.shrink(),
@@ -290,7 +295,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     (states) {
                       final on = states.contains(WidgetState.selected);
                       return TextStyle(
-                        fontSize: 11,
+                        fontSize: 10,
                         height: 1.0,
                         fontWeight: on ? FontWeight.w700 : FontWeight.w500,
                         color: on ? Ui.red : Ui.dim,
@@ -339,9 +344,11 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     label: 'AI Predict'.tr,
                   ),
                   NavigationDestination(
-                    icon: const Icon(Icons.live_tv_outlined),
-                    selectedIcon: const Icon(Icons.live_tv_rounded),
-                    label: 'Match Room'.tr,
+                    icon: const Icon(Icons.groups_outlined),
+                    selectedIcon: const Icon(Icons.groups_rounded),
+                    // Non-breaking space keeps "Match Room" on one line so
+                    // it lines up with the other five labels.
+                    label: 'Match Room'.tr.replaceAll(' ', '\u00A0'),
                   ),
                   NavigationDestination(
                     icon: const Icon(Icons.person_outline_rounded),
