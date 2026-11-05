@@ -74,12 +74,6 @@ enum PushTopic {
     'New movies',
     'When a new movie is added',
     Icons.movie_rounded,
-  ),
-  trending(
-    'trending',
-    'Trending movie alerts',
-    'When a new movie starts trending',
-    Icons.local_fire_department_rounded,
   );
 
   const PushTopic(this.id, this.title, this.subtitle, this.icon);
