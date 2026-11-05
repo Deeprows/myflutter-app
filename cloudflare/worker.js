@@ -1763,6 +1763,8 @@ const FAN_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS fan_comment_reports (comment_id TEXT NOT NULL,user_id TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(comment_id,user_id))`,
   `CREATE TABLE IF NOT EXISTS fan_social_limits (bucket TEXT PRIMARY KEY,count INTEGER NOT NULL,expires INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_limits (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL)`,
+  // Community moderation: a banned fan cannot sign in, post, comment, chat or use any Fan Zone route.
+  `CREATE TABLE IF NOT EXISTS fan_bans (user_id TEXT PRIMARY KEY, reason TEXT NOT NULL DEFAULT '', banned_at INTEGER NOT NULL)`,
   // One-time clean slate: predictions made before the result-checking fix that never got a verified score.
   `DELETE FROM fan_picks WHERE kickoff<1793786400000 AND NOT EXISTS(SELECT 1 FROM fan_results r WHERE r.match_key=fan_picks.match_key)`,
 ];
@@ -1848,13 +1850,16 @@ async function fanZone(request, env, url) {
       }
       if (url.pathname === '/fan/admin/week' && request.method === 'GET') return await fanWeekAdmin(db,url,null);
       if (url.pathname === '/fan/admin/reports' && request.method === 'GET') {
-        const rows = await db.prepare(`SELECT r.message_id,r.reason,m.text,m.room,u.name,COUNT(*) AS reports FROM fan_reports r JOIN fan_messages m ON m.id=r.message_id JOIN fan_users u ON u.id=m.user_id WHERE m.hidden=0 GROUP BY r.message_id ORDER BY reports DESC LIMIT 100`).all();
-        const posts = await db.prepare(`SELECT r.post_id,p.text,p.kind,p.image_key,u.name,COUNT(*) AS reports FROM fan_post_reports r JOIN fan_posts p ON p.id=r.post_id JOIN fan_users u ON u.id=p.user_id WHERE p.hidden=0 GROUP BY r.post_id ORDER BY reports DESC LIMIT 100`).all();
-        const comments=await db.prepare(`SELECT r.comment_id,c.post_id,c.text,u.name,COUNT(*) AS reports FROM fan_comment_reports r JOIN fan_comments c ON c.id=r.comment_id JOIN fan_users u ON u.id=c.user_id JOIN fan_posts p ON p.id=c.post_id WHERE c.hidden=0 AND p.hidden=0 GROUP BY r.comment_id ORDER BY reports DESC LIMIT 100`).all();
+        const rows = await db.prepare(`SELECT r.message_id,r.reason,m.text,m.room,m.user_id,u.name,COUNT(*) AS reports FROM fan_reports r JOIN fan_messages m ON m.id=r.message_id JOIN fan_users u ON u.id=m.user_id WHERE m.hidden=0 GROUP BY r.message_id ORDER BY reports DESC LIMIT 100`).all();
+        const posts = await db.prepare(`SELECT r.post_id,p.text,p.kind,p.image_key,p.user_id,u.name,COUNT(*) AS reports FROM fan_post_reports r JOIN fan_posts p ON p.id=r.post_id JOIN fan_users u ON u.id=p.user_id WHERE p.hidden=0 GROUP BY r.post_id ORDER BY reports DESC LIMIT 100`).all();
+        const comments=await db.prepare(`SELECT r.comment_id,c.post_id,c.text,c.user_id,u.name,COUNT(*) AS reports FROM fan_comment_reports r JOIN fan_comments c ON c.id=r.comment_id JOIN fan_users u ON u.id=c.user_id JOIN fan_posts p ON p.id=c.post_id WHERE c.hidden=0 AND p.hidden=0 GROUP BY r.comment_id ORDER BY reports DESC LIMIT 100`).all();
         return json({reports:rows.results,post_reports:posts.results,comment_reports:comments.results});
       }
+      if (url.pathname === '/fan/admin/users' && request.method === 'GET') return await fanAdminUsers(db,url);
       if (request.method !== 'POST') return fail('Method not allowed',405);
       const b = await request.json();
+      if (url.pathname === '/fan/admin/ban') return await fanAdminBan(env,b);
+      if (url.pathname === '/fan/admin/unban') return await fanAdminUnban(db,b);
       if (url.pathname === '/fan/admin/week/finalize' || url.pathname === '/fan/admin/week/unpublish') return await fanWeekAdmin(db,url,b);
       if (url.pathname === '/fan/admin/hide-post') {
         if(typeof b.id!=='string' || b.id.length>100)return fail('Invalid post');
@@ -1895,6 +1900,8 @@ async function fanZone(request, env, url) {
       if (!/^[a-f0-9]{64}$/.test(token)) return fail('Invalid fan identity',401);
       id = await fanHash(token);
     }
+    const banned=await fanBanned(db,id);
+    if(banned)return json({error:fanBanMessage(banned),banned:true},403);
     if(url.pathname==='/fan/ai-predict/matches')return await fanAiMatches(request,env,id);
     if(url.pathname==='/fan/ai-predict')return await fanAiPredict(request,env,id);
     const user = await db.prepare('SELECT * FROM fan_users WHERE id=?').bind(id).first();
@@ -2240,6 +2247,62 @@ async function fanMigrateInstall(db,legacyToken,id,isNew) {
     db.prepare(`DELETE FROM fan_users WHERE id=? AND ${guard}`).bind(legacy,legacy,id),
   ]);
 }
+// ---- Moderation: ban / remove fans who break the community rules ----
+async function fanBanned(db,id) {
+  return await db.prepare('SELECT reason FROM fan_bans WHERE user_id=?').bind(id).first();
+}
+function fanBanMessage(ban) {
+  const reason=String(ban?.reason || '').trim();
+  return 'Your Deeprowss account has been banned for breaking the community rules.'+(reason?` Reason: ${reason}`:'');
+}
+async function fanAdminUsers(db,url) {
+  const q=(url.searchParams.get('q') || '').trim().slice(0,60);
+  const like='%'+q.replace(/[\\%_]/g,'\\$&')+'%';
+  const rows=await db.prepare(`SELECT u.id,u.name,COALESCE(a.email,'') AS email,
+    (SELECT COUNT(*) FROM fan_posts p WHERE p.user_id=u.id AND p.hidden=0) AS posts,
+    (SELECT COUNT(*) FROM fan_comments c WHERE c.user_id=u.id AND c.hidden=0) AS comments,
+    (SELECT COUNT(*) FROM fan_messages m WHERE m.user_id=u.id AND m.hidden=0) AS messages,
+    b.reason AS ban_reason,b.banned_at
+    FROM fan_users u LEFT JOIN fan_accounts a ON a.id=u.id LEFT JOIN fan_bans b ON b.user_id=u.id
+    WHERE (?='' OR u.name LIKE ? ESCAPE '\\' OR a.email LIKE ? ESCAPE '\\' OR u.id=?)
+    ORDER BY (b.user_id IS NOT NULL) DESC,u.name COLLATE NOCASE ASC LIMIT 50`).bind(q,like,like,q).all();
+  return json({users:rows.results.map(r=>({...r,banned:r.banned_at!=null}))});
+}
+async function fanAdminBan(env,b) {
+  const db=env.DB,fail=(error,status=400)=>json({error},status);
+  if(typeof b.id!=='string' || !/^[a-f0-9]{64}$/.test(b.id))return fail('Invalid user');
+  const reason=typeof b.reason==='string' ? b.reason.trim().slice(0,200) : '';
+  if(!await db.prepare('SELECT id FROM fan_users WHERE id=?').bind(b.id).first())return fail('User not found',404);
+  const removeContent=b.removeContent!==false;
+  const images=removeContent
+    ? (await db.prepare("SELECT image_key FROM fan_posts WHERE user_id=? AND image_key<>''").bind(b.id).all()).results.map(r=>r.image_key)
+    : [];
+  const statements=[db.prepare('INSERT INTO fan_bans(user_id,reason,banned_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET reason=excluded.reason,banned_at=excluded.banned_at').bind(b.id,reason,Date.now())];
+  if(removeContent) {
+    statements.push(
+      db.prepare('UPDATE fan_posts SET hidden=1 WHERE user_id=?').bind(b.id),
+      db.prepare('UPDATE fan_comments SET hidden=1 WHERE user_id=?').bind(b.id),
+      db.prepare('UPDATE fan_messages SET hidden=1 WHERE user_id=?').bind(b.id),
+      db.prepare('DELETE FROM fan_follows WHERE follower_id=? OR following_id=?').bind(b.id,b.id),
+      db.prepare('DELETE FROM fan_likes WHERE user_id=?').bind(b.id),
+    );
+  }
+  await db.batch(statements);
+  if(removeContent && env.FAN_MEDIA) {
+    // Images are cleaned up best-effort, like the single-post hide above.
+    const keys=[...images,`fan-profile/${b.id}/avatar`,`fan-profile/${b.id}/cover`];
+    await Promise.all(keys.map(k=>env.FAN_MEDIA.delete(k).catch(e=>console.error('Image cleanup failed',e))));
+    await db.prepare('UPDATE fan_profile_media SET avatar_at=0,cover_at=0 WHERE user_id=?').bind(b.id).run();
+  }
+  return json({ok:true,removed:removeContent});
+}
+async function fanAdminUnban(db,b) {
+  if(typeof b.id!=='string' || !/^[a-f0-9]{64}$/.test(b.id))return json({error:'Invalid user'},400);
+  await db.prepare('DELETE FROM fan_bans WHERE user_id=?').bind(b.id).run();
+  // Posts hidden by the ban stay hidden; the fan can post again from now on.
+  return json({ok:true});
+}
+
 async function fanAccountAuth(request,env) {
   const fail=(error,status=400,switchTo)=>json({error,...(switchTo?{switchTo}:{})},status);
   if(request.method!=='POST')return fail('Method not allowed',405);
@@ -2250,6 +2313,8 @@ async function fanAccountAuth(request,env) {
   const identity=await verifyFanGoogleToken(body.idToken,env);
   if(!identity)return fail('Could not verify this Gmail account. Please sign in again.',401);
   const id=await fanHash('google:'+identity.sub), db=env.DB;
+  const banned=await fanBanned(db,id);
+  if(banned)return json({error:fanBanMessage(banned),banned:true},403);
   let account=await db.prepare('SELECT id FROM fan_accounts WHERE id=?').bind(id).first();
   const isNew=body.mode==='signup';
   if(isNew && account)return fail('This Gmail already has a Deeprowss account. Please log in.',409,'login');
@@ -2850,7 +2915,7 @@ async function fanSocial(request,env,url,user,id) {
       (SELECT COUNT(*) FROM fan_posts p WHERE p.user_id=u.id AND p.hidden=0) AS posts,
       (SELECT COUNT(*) FROM fan_likes l JOIN fan_posts p ON p.id=l.post_id WHERE p.user_id=u.id AND p.hidden=0) AS likes_received,
       EXISTS(SELECT 1 FROM fan_follows f WHERE f.follower_id=? AND f.following_id=u.id) AS followed
-      FROM fan_users u LEFT JOIN fan_public_profiles p ON p.user_id=u.id LEFT JOIN fan_accounts a ON a.id=u.id WHERE u.id=?`).bind(id,target).first();
+      FROM fan_users u LEFT JOIN fan_public_profiles p ON p.user_id=u.id LEFT JOIN fan_accounts a ON a.id=u.id WHERE u.id=? AND NOT EXISTS(SELECT 1 FROM fan_bans b WHERE b.user_id=u.id)`).bind(id,target).first();
     if(!profile)return fail('Fan not found',404);
     const stats=await db.prepare(`SELECT COUNT(${FAN_PICK_POINTS_SQL}) AS settled,
       COALESCE(SUM(CASE WHEN p.market='score' AND p.home=r.home AND p.away=r.away THEN 1 ELSE 0 END),0) AS exact,
@@ -2869,7 +2934,7 @@ async function fanSocial(request,env,url,user,id) {
   if(request.method==='GET' && path==='/fan/social/people') {
     const target=url.searchParams.get('id') || id,type=url.searchParams.get('type') || 'followers';
     if(!/^[a-f0-9]{64}$/.test(target) || !['followers','following'].includes(type))return fail('Invalid fan list');
-    if(!await db.prepare('SELECT id FROM fan_users WHERE id=?').bind(target).first())return fail('Fan not found',404);
+    if(!await db.prepare('SELECT id FROM fan_users WHERE id=? AND NOT EXISTS(SELECT 1 FROM fan_bans b WHERE b.user_id=fan_users.id)').bind(target).first())return fail('Fan not found',404);
     const cursor=fanSocialCursor(url.searchParams.get('before'),'user');if(cursor===false)return fail('Invalid page cursor');
     const owner=type==='followers'?'following_id':'follower_id',person=type==='followers'?'follower_id':'following_id';
     const result=await db.prepare(`SELECT u.id,u.name,f.at,COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=u.id),0) AS avatar_at,EXISTS(SELECT 1 FROM fan_follows x WHERE x.follower_id=? AND x.following_id=u.id) AS followed FROM fan_follows f JOIN fan_users u ON u.id=f.${person} WHERE f.${owner}=? AND (f.at<? OR (f.at=? AND u.id<?)) ORDER BY f.at DESC,u.id DESC LIMIT 41`).bind(id,target,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
@@ -3090,6 +3155,10 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 6px;
 <div class="row"><input id="tok" type="password" placeholder="Admin token" autocomplete="off"><button id="load">Load weeks</button></div>
 <div class="row"><select id="week" disabled></select></div>
 <div id="msg"></div><div id="out"></div>
+<h1 style="margin-top:32px">Community moderation</h1>
+<p>Review reported posts, comments and chat messages, or search a fan by name or email. Banning blocks the fan from signing in and using the community, and can also remove everything they posted.</p>
+<div class="row"><button id="reports">Load reports</button><input id="q" placeholder="Search fan by name or email"><button id="find" class="ghost">Find fans</button></div>
+<div id="mod"></div>
 <script>
 var $=function(i){return document.getElementById(i)};
 function el(t,x,c){var e=document.createElement(t);if(x!==undefined)e.textContent=x;if(c)e.className=c;return e}
@@ -3153,6 +3222,54 @@ function show(d){
   pc.appendChild(row);out.appendChild(pc);
 }
 $('load').onclick=loadWeeks;$('week').onchange=loadWeek;
+
+function banFan(id,name,after){
+  var reason=prompt('Ban '+name+'? Enter the rule they broke (shown to them):','');
+  if(reason===null)return;
+  var removeContent=confirm('Also remove all of '+name+"'s posts, comments and messages?\\n\\nOK = remove everything, Cancel = keep their content visible.");
+  api('/fan/admin/ban',{id:id,reason:reason,removeContent:removeContent}).then(function(){say(name+' is banned.','ok');after()}).catch(function(e){say(e.message,'err')});
+}
+function unbanFan(id,name,after){
+  if(!confirm('Unban '+name+'? Content removed by the ban stays removed.'))return;
+  api('/fan/admin/unban',{id:id}).then(function(){say(name+' can use Deeprowss again.','ok');after()}).catch(function(e){say(e.message,'err')});
+}
+function item(box,kind,text,name,userId,count,hidePath,hideId){
+  var c=el('div','','card');
+  c.appendChild(el('strong',kind+' by '+name+' ('+count+' report'+(count===1?'':'s')+')'));
+  c.appendChild(el('p',String(text||'').slice(0,300)));
+  var r=el('div','','row');
+  var hide=el('button','Remove','ghost');
+  hide.onclick=function(){api(hidePath,{id:hideId}).then(function(){say('Removed.','ok');loadReports()}).catch(function(e){say(e.message,'err')})};
+  var ban=el('button','Ban '+name);
+  ban.onclick=function(){banFan(userId,name,loadReports)};
+  r.appendChild(hide);r.appendChild(ban);c.appendChild(r);box.appendChild(c);
+}
+function loadReports(){
+  api('/fan/admin/reports').then(function(d){
+    var box=$('mod');box.textContent='';
+    var n=0;
+    (d.post_reports||[]).forEach(function(x){n++;item(box,'Post',x.text,x.name,x.user_id,x.reports,'/fan/admin/hide-post',x.post_id)});
+    (d.comment_reports||[]).forEach(function(x){n++;item(box,'Comment',x.text,x.name,x.user_id,x.reports,'/fan/admin/hide-comment',x.comment_id)});
+    (d.reports||[]).forEach(function(x){n++;item(box,'Chat message',x.text,x.name,x.user_id,x.reports,'/fan/admin/hide',x.message_id)});
+    if(!n)box.appendChild(el('p','No reported content right now.'));
+  }).catch(function(e){say(e.status===401?'Wrong admin token.':e.message,'err')});
+}
+function findFans(){
+  api('/fan/admin/users?q='+encodeURIComponent($('q').value.trim())).then(function(d){
+    var box=$('mod');box.textContent='';
+    if(!d.users.length)return box.appendChild(el('p','No fans found.'));
+    d.users.forEach(function(u){
+      var c=el('div','','card');
+      c.appendChild(el('strong',u.name+(u.banned?' - BANNED':'')));
+      c.appendChild(el('p',(u.email||'no email')+' - '+u.posts+' posts, '+u.comments+' comments, '+u.messages+' messages'+(u.banned&&u.ban_reason?' - reason: '+u.ban_reason:'')));
+      var r=el('div','','row');
+      var b=el('button',u.banned?'Unban':'Ban',u.banned?'ghost':'');
+      b.onclick=function(){(u.banned?unbanFan:banFan)(u.id,u.name,findFans)};
+      r.appendChild(b);c.appendChild(r);box.appendChild(c);
+    });
+  }).catch(function(e){say(e.status===401?'Wrong admin token.':e.message,'err')});
+}
+$('reports').onclick=loadReports;$('find').onclick=findFans;
 </script></body></html>
 `;
 function fanAdminPage() {
@@ -3169,10 +3286,11 @@ async function fanLeagueTable(db,week,offset,range=null) {
   ), members AS (
     SELECT id,name FROM fan_users UNION ALL
     SELECT a.id,SUBSTR(a.name,1,30) FROM fan_accounts a WHERE NOT EXISTS(SELECT 1 FROM fan_users u WHERE u.id=a.id)
+  ), visible AS (SELECT id,name FROM members WHERE NOT EXISTS(SELECT 1 FROM fan_bans b WHERE b.user_id=members.id)
   ) SELECT u.id,u.name,COALESCE(SUM(s.earned),0) AS points,COUNT(s.earned) AS played,
     COALESCE(SUM(CASE WHEN s.earned>0 THEN 1 ELSE 0 END),0) AS won,
     COALESCE(SUM(CASE WHEN s.earned=0 THEN 1 ELSE 0 END),0) AS lost
-    FROM members u LEFT JOIN scores s ON s.user_id=u.id GROUP BY u.id
+    FROM visible u LEFT JOIN scores s ON s.user_id=u.id GROUP BY u.id
     ORDER BY points DESC,won DESC,lost ASC,u.id ASC LIMIT 51 OFFSET ?`).bind(...(range||[]),offset).all();
   return {rows:result.results.slice(0,50),next:result.results.length>50?offset+50:null};
 }
