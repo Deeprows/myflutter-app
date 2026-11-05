@@ -32,7 +32,7 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _help() async {
-    final base = Uri.tryParse(AppConfig.whatsappUrl);
+    final base = Uri.tryParse(AppConfig.adminWhatsappUrl);
     if (base == null) return;
     final uri = base.replace(
       queryParameters: {
