@@ -36,7 +36,7 @@ class ShellScreen extends StatefulWidget {
 
 class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   int _index = 0;
-  // Bottom bar order: Live, Thread, AI Predict, TV, Profile, Search.
+  // Bottom bar order: Live, Thread, AI Predict, Match Room, Profile, Search.
   // Stack slots keep their old numbers so notification targets still work:
   // 0 Live, 3 Thread, 4 AI Predict, 6 TV, 8 Search, 9 Profile. Movies (7) is
   // no longer a tab: it opens from the TV Channels header. Predict (1) opens
@@ -259,7 +259,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                 AiPredictScreen(active: _index == 4),
                 const SizedBox.shrink(),
                 _visited.contains(_tvTab)
-                    ? const TvScreen()
+                    ? const LiveScreen()
                     : const SizedBox.shrink(),
                 // Slot 7 (Movies) is no longer a tab.
                 const SizedBox.shrink(),
@@ -341,7 +341,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                   NavigationDestination(
                     icon: const Icon(Icons.live_tv_outlined),
                     selectedIcon: const Icon(Icons.live_tv_rounded),
-                    label: 'TV'.tr,
+                    label: 'Match Room'.tr,
                   ),
                   NavigationDestination(
                     icon: const Icon(Icons.person_outline_rounded),
