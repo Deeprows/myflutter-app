@@ -84,7 +84,7 @@ assert.equal((await post("/sub/token/redeem", { install_id: B, token: tokA })).s
 
 // 7. open (any-phone) tokens: made in advance, work exactly once
 page = await (await admin({ action: "mint", days: 7, count: 2, note: "friend" })).text();
-const open = [...page.matchAll(/([A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4})/g)].map((m) => m[1]);
+const open = [...page.matchAll(/([A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4})/g)].map((m) => m[1]).slice(0, 2); // new tokens are shown first
 assert.equal(new Set(open).size, 2);
 j = await (await post("/sub/token/redeem", { install_id: B, token: open[0] })).json();
 assert.equal(j.active, true);
@@ -108,6 +108,48 @@ await admin({ action: "grant", install_id: C, days: 5 });
 assert.equal((await (await call(`/sub/status?install=${C}`)).json()).active, true);
 await admin({ action: "grant", install_id: C, days: 0 });
 assert.equal((await (await call(`/sub/status?install=${C}`)).json()).active, false);
+
+// 12. EXPIRED token can never be used again, by anyone (the reported bug)
+const D = "99887766554433221100aabbccddeeff";
+page = await (await admin({ action: "mint", days: 1, count: 1 })).text();
+const tokD = tokenIn(page);
+j = await (await post("/sub/token/redeem", { install_id: D, token: tokD })).json();
+assert.equal(j.active, true);
+assert.ok(j.now > 0, "server time is sent so the app can trust it over the phone clock");
+sqlite.prepare("UPDATE subs SET expires_at = ? WHERE install_id = ?").run(Date.now() - 1000, D); // days run out
+assert.equal((await (await call(`/sub/status?install=${D}`)).json()).active, false);
+let r = await post("/sub/token/redeem", { install_id: D, token: tokD }); // same phone again
+assert.equal(r.status, 410, "used + expired token is refused on the same phone");
+assert.equal((await post("/sub/token/redeem", { install_id: C, token: tokD })).status, 409, "and on any other phone");
+assert.equal((await (await call(`/sub/status?install=${D}`)).json()).active, false);
+
+// 13. Admin "Stop": switches the phone off AND voids tokens it could still redeem
+const E = "abcdefabcdefabcdefabcdefabcdef12";
+await post("/sub/token/request", { install_id: E, contact: "+234 700 000 0000" });
+page = await (await admin({ action: "answer", install_id: E, days: 30 })).text();
+const tokE = tokenIn(page);
+await post("/sub/token/redeem", { install_id: E, token: tokE });
+page = await (await admin({ action: "answer", install_id: E, days: 30 })).text(); // a 2nd, unredeemed token for E
+const tokE2 = tokenIn(page);
+assert.equal((await (await call(`/sub/status?install=${E}`)).json()).active, true);
+page = await (await admin({ action: "stop", install_id: E })).text();
+assert.ok(page.includes("Subscription stopped"));
+assert.equal((await (await call(`/sub/status?install=${E}`)).json()).active, false);
+assert.notEqual((await (await call(`/sub/token/mine?install=${E}`)).json()).state, "ready", "no waiting token after a stop");
+assert.equal((await post("/sub/token/redeem", { install_id: E, token: tokE2 })).status, 404, "voided token is gone");
+assert.equal((await post("/sub/token/redeem", { install_id: E, token: tokE })).status, 410, "stopped phone cannot reuse the old token");
+
+// 14. Admin can cancel an unused token
+page = await (await admin({ action: "mint", days: 3, count: 1 })).text();
+const tokF = tokenIn(page);
+page = await (await admin({ action: "void", code: tokF })).text();
+assert.ok(page.includes("Token cancelled"));
+assert.equal((await post("/sub/token/redeem", { install_id: C, token: tokF })).status, 404);
+
+// 15. admin page shows Stop buttons for active phones and used tokens
+await post("/sub/token/redeem", { install_id: C, token: tokenIn(await (await admin({ action: "mint", days: 2 })).text()) });
+page = await (await call("/sub/admin?token=adm")).text();
+assert.ok(page.includes('value="stop"') && page.includes("Used tokens"));
 
 // 11. Paystack routes still say "not set up" without the key
 assert.equal((await post("/sub/start", { install_id: A, email: "a@b.co" })).status, 503);
