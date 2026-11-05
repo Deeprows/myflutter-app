@@ -3,9 +3,11 @@ import 'dart:math' show Random;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../config.dart';
 import '../models/movie.dart';
+import '../models/movie_info.dart';
 import '../models/push_target.dart';
 import '../services/feed_service.dart';
 import '../services/partner_browser.dart';
@@ -18,6 +20,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_refresh.dart';
 import '../utils/format.dart';
 import '../widgets/movie_card.dart';
+import '../widgets/movie_info_panel.dart';
 import '../services/movie_library.dart';
 import '../utils/open_movie.dart';
 import 'browser_screen.dart';
@@ -33,6 +36,11 @@ class MoviesScreen extends StatefulWidget {
 
 class _MoviesScreenState extends State<MoviesScreen> {
   List<Movie> _all = const [];
+  List<Movie> _heroTrending = const [];
+  List<Movie> _top10 = const [];
+  List<Movie> _trendingMovies = const [];
+  List<TmdbTrailer> _latestTrailers = const [];
+  bool _homeSectionsLoading = true;
   bool _loading = true;
   String _query = '';
   String? _genre;
@@ -215,7 +223,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
 
   bool _openTarget(PushTarget t) {
     for (final m in _all) {
-      if (m.url.trim() == t.url) {
+      if (t.url.isNotEmpty && m.url.trim() == t.url) {
         PushService.instance.target.value = null;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _details(m);
@@ -223,7 +231,23 @@ class _MoviesScreenState extends State<MoviesScreen> {
         return true;
       }
     }
+    if (t.tmdbId != null && t.tmdbId! > 0) {
+      PushService.instance.target.value = null;
+      unawaited(_openTrendingMovieTarget(t));
+      return true;
+    }
     return false;
+  }
+
+  Future<void> _openTrendingMovieTarget(PushTarget target) async {
+    final movie = await tmdb.details(target.tmdbId!, tv: target.mediaType == 'tv');
+    if (!mounted || movie == null) return;
+    if (!_all.any((m) => m.tmdbId == movie.tmdbId)) {
+      setState(() => _all = [..._all, movie]);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _details(movie);
+    });
   }
 
   void _afterLoad({required bool last}) {
@@ -252,6 +276,162 @@ class _MoviesScreenState extends State<MoviesScreen> {
       _pickBg();
     });
     _afterLoad(last: remote || AppConfig.moviesUrl.isEmpty);
+  }
+
+  /// Populate the four homepage rails from the same TMDB endpoints used by
+  /// DamiMovies. Requests are isolated so one unavailable rail doesn't hide
+  /// the other content or the user's bundled movie catalogue.
+  Future<void> _loadHomeSections() async {
+    if (!TmdbService.enabled) {
+      if (mounted) setState(() => _homeSectionsLoading = false);
+      return;
+    }
+    try {
+      final results = await Future.wait<dynamic>([
+        tmdb.trending(),
+        tmdb.topRatedMovies(),
+        tmdb.trendingMovies(),
+        tmdb.latestTrailers(),
+      ]).timeout(const Duration(seconds: 28), onTimeout: () => <dynamic>[[], [], [], []]);
+      if (!mounted) return;
+      setState(() {
+        _heroTrending = (results[0] as List<Movie>).take(15).toList();
+        _top10 = (results[1] as List<Movie>).take(10).toList();
+        _trendingMovies = (results[2] as List<Movie>).take(20).toList();
+        _latestTrailers = (results[3] as List<TmdbTrailer>).take(12).toList();
+        _homeSectionsLoading = false;
+        _pickBg();
+      });
+    } catch (_) {
+      if (mounted) setState(() => _homeSectionsLoading = false);
+    }
+  }
+
+  void _openTrailer(TmdbTrailer trailer) {
+    final uri = Uri.parse('https://www.youtube.com/watch?v=${trailer.youtubeKey}');
+    launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Widget _homeSectionHeading(String title, {String? subtitle}) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
+        child: Row(
+          children: [
+            Expanded(child: Text(title.tr,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+            if (subtitle != null)
+              Text(subtitle, style: TextStyle(color: Ui.dim, fontSize: 11, fontWeight: FontWeight.w700)),
+          ],
+        ),
+      );
+
+  Widget _movieRail(String title, List<Movie> movies, {bool ranked = false}) {
+    if (movies.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _homeSectionHeading(title, subtitle: ranked ? 'TOP 10' : null),
+      SizedBox(
+        height: 258,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: movies.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 11),
+          itemBuilder: (context, i) => SizedBox(
+            width: 145,
+            child: Stack(children: [
+              Positioned.fill(child: MovieCard(movie: movies[i], onTap: () => _details(movies[i]))),
+              if (ranked)
+                Positioned(left: 5, top: 5, child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: Ui.red, borderRadius: BorderRadius.circular(8)),
+                  child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                )),
+            ]),
+          ),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _trendingCarousel(List<Movie> movies) {
+    if (movies.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _homeSectionHeading('Trending Now', subtitle: 'THIS WEEK'),
+      SizedBox(
+        height: 235,
+        child: PageView.builder(
+          controller: PageController(viewportFraction: .83),
+          itemCount: movies.length,
+          itemBuilder: (context, i) {
+            final movie = movies[i];
+            return Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: GestureDetector(
+                onTap: () => _details(movie),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Stack(fit: StackFit.expand, children: [
+                    if (movie.hasImage) Image.network(movie.image, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(color: Ui.card))
+                    else Container(color: Ui.card),
+                    DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
+                      begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                      colors: [Colors.black.withValues(alpha: .08), Colors.black.withValues(alpha: .88)],
+                    ))),
+                    Positioned(left: 15, right: 15, bottom: 14, child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(color: Ui.red, borderRadius: BorderRadius.circular(30)),
+                          child: const Text('🔥 TRENDING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900))),
+                        const SizedBox(height: 8),
+                        Text(movie.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 4),
+                        Text('${movie.year ?? ''}${movie.rating == null ? '' : '  ·  ★ ${movie.rating}/10'}',
+                          style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w700)),
+                      ],
+                    )),
+                  ]),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ]);
+  }
+
+  Widget _latestTrailerRail(List<TmdbTrailer> trailers) {
+    if (trailers.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _homeSectionHeading('Latest Trailers', subtitle: 'WATCH PREVIEWS'),
+      SizedBox(
+        height: 165,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: trailers.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 12),
+          itemBuilder: (context, i) {
+            final trailer = trailers[i];
+            return GestureDetector(
+              onTap: () => _openTrailer(trailer),
+              child: SizedBox(width: 220, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Stack(fit: StackFit.expand, children: [
+                  Image.network('https://img.youtube.com/vi/${trailer.youtubeKey}/hqdefault.jpg', fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => trailer.poster.startsWith('http') ? Image.network(trailer.poster, fit: BoxFit.cover) : Container(color: Ui.card)),
+                  Container(color: Colors.black.withValues(alpha: .2)),
+                  const Center(child: Icon(Icons.play_circle_fill_rounded, size: 48, color: Colors.white)),
+                ]))),
+                const SizedBox(height: 7),
+                Text(trailer.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+              ])),
+            );
+          },
+        ),
+      ),
+    ]);
   }
 
   /// Searches the whole TMDB catalogue shortly after typing stops.
@@ -310,6 +490,10 @@ class _MoviesScreenState extends State<MoviesScreen> {
         isScrollControlled: true,
         builder: (ctx) => _MovieSheet(
           movie: m,
+          infoFuture: tmdb.info(m),
+          trailerFuture: tmdb.trailerFor(m),
+          similarFuture: tmdb.similar(m),
+          onMovieTap: (other) { Navigator.of(ctx).pop(); _details(other); },
           onPlay: () {
             Navigator.of(ctx).pop();
             _play(m);
@@ -526,6 +710,17 @@ class _MoviesScreenState extends State<MoviesScreen> {
               ),
             ),
           ),
+          if (q.isEmpty && _genre == null && _type == null) ...[
+            if (_heroTrending.isNotEmpty) SliverToBoxAdapter(child: _trendingCarousel(_heroTrending)),
+            if (_top10.isNotEmpty) SliverToBoxAdapter(child: _movieRail('Top 10', _top10, ranked: true)),
+            if (_trendingMovies.isNotEmpty) SliverToBoxAdapter(child: _movieRail('Trending Movies', _trendingMovies)),
+            if (_latestTrailers.isNotEmpty) SliverToBoxAdapter(child: _latestTrailerRail(_latestTrailers)),
+            if (_homeSectionsLoading && _heroTrending.isEmpty)
+              SliverToBoxAdapter(child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Row(children: [const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)), const SizedBox(width: 10), Text('Loading movie trends…', style: TextStyle(color: Ui.muted))]),
+              )),
+          ],
           if (_loading || (filtered.isEmpty && _discovering))
             SliverFillRemaining(
               hasScrollBody: false,
@@ -616,7 +811,12 @@ class _LibraryButtons extends StatelessWidget {
 class _MovieSheet extends StatelessWidget {
   final Movie movie;
   final VoidCallback onPlay;
-  const _MovieSheet({required this.movie, required this.onPlay});
+  final Future<MovieInfo?> infoFuture;
+  final Future<TmdbTrailer?> trailerFuture;
+  final Future<List<Movie>> similarFuture;
+  final ValueChanged<Movie> onMovieTap;
+  const _MovieSheet({required this.movie, required this.onPlay, required this.infoFuture,
+    required this.trailerFuture, required this.similarFuture, required this.onMovieTap});
 
   Future<void> _download(BuildContext context) =>
       // Deeprows Browser offer; otherwise the phone's own browser.
@@ -625,7 +825,8 @@ class _MovieSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
+        child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -701,6 +902,59 @@ class _MovieSheet extends StatelessWidget {
                 ),
               ],
             ),
+            FutureBuilder<MovieInfo?>(
+              future: infoFuture,
+              builder: (context, snapshot) => MovieInfoPanel(
+                movie: movie,
+                info: snapshot.data,
+                loading: snapshot.connectionState == ConnectionState.waiting,
+              ),
+            ),
+            FutureBuilder<TmdbTrailer?>(
+              future: trailerFuture,
+              builder: (context, snapshot) {
+                final trailer = snapshot.data;
+                if (trailer == null) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 18),
+                  child: GestureDetector(
+                    onTap: () => launchUrl(Uri.parse('https://www.youtube.com/watch?v=${trailer.youtubeKey}'), mode: LaunchMode.externalApplication),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: SizedBox(height: 150, width: double.infinity,
+                        child: Stack(fit: StackFit.expand, children: [
+                          Image.network('https://img.youtube.com/vi/${trailer.youtubeKey}/hqdefault.jpg', fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => movie.hasImage ? Image.network(movie.image, fit: BoxFit.cover) : Container(color: Ui.card)),
+                          Container(color: Colors.black.withValues(alpha: .25)),
+                          const Center(child: Icon(Icons.play_circle_fill_rounded, size: 56, color: Colors.white)),
+                          Positioned(left: 12, bottom: 10, child: Text('TRAILER · ${movie.title}', maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900))),
+                        ]),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            FutureBuilder<List<Movie>>(
+              future: similarFuture,
+              builder: (context, snapshot) {
+                final related = snapshot.data ?? const <Movie>[];
+                if (related.isEmpty) return const SizedBox.shrink();
+                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const SizedBox(height: 20),
+                  Text('More Like This'.tr, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 10),
+                  SizedBox(height: 245, child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: related.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    itemBuilder: (_, i) => SizedBox(width: 135,
+                      child: MovieCard(movie: related[i], onTap: () => onMovieTap(related[i]))),
+                  )),
+                ]);
+              },
+            ),
             const SizedBox(height: 20),
             Row(
               children: [
@@ -764,6 +1018,7 @@ class _MovieSheet extends StatelessWidget {
               ],
             ),
           ],
+        ),
         ),
       ),
     );
