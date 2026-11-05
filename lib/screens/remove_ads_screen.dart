@@ -159,7 +159,7 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
       backgroundColor: Ui.bg,
       appBar: AppBar(
         backgroundColor: Ui.bg,
-        title: const Text('Remove ads',
+        title: const Text('Premium',
             style: TextStyle(fontWeight: FontWeight.w800)),
       ),
       body: SafeArea(
