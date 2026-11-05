@@ -13,6 +13,8 @@ class PushTarget {
   final String home;
   final String away;
   final int? kickoffMs;
+  final int? tmdbId;
+  final String mediaType;
 
   const PushTarget({
     required this.kind,
@@ -20,6 +22,8 @@ class PushTarget {
     this.home = '',
     this.away = '',
     this.kickoffMs,
+    this.tmdbId,
+    this.mediaType = 'movie',
   });
 
   /// Bottom-tab index: 0 Live, 1 Highlights, 3 Movies.
@@ -28,7 +32,7 @@ class PushTarget {
   /// True when the notification names one specific item to open.
   bool get hasItem => kind == 'kickoff'
       ? home.isNotEmpty && away.isNotEmpty
-      : url.isNotEmpty;
+      : url.isNotEmpty || (kind == 'movies' && tmdbId != null);
 
   bool matchesFixture(String h, String a, int kickoffEpochMs) {
     if (h.trim().toLowerCase() != home.toLowerCase() ||
@@ -43,6 +47,7 @@ class PushTarget {
     String s(String k) => (data[k] ?? '').toString().trim();
     var kind = (s('type').isNotEmpty ? s('type') : s('tab')).toLowerCase();
     if (kind == 'live') kind = 'kickoff';
+    if (kind == 'trending_movie' || kind == 'trending-movie') kind = 'movies';
     if (kind != 'kickoff' && kind != 'highlights' && kind != 'movies') {
       return null;
     }
@@ -52,6 +57,8 @@ class PushTarget {
       home: s('home'),
       away: s('away'),
       kickoffMs: int.tryParse(s('kickoffMs')),
+      tmdbId: int.tryParse(s('movieId').isNotEmpty ? s('movieId') : (s('tmdbId').isNotEmpty ? s('tmdbId') : s('tmdb_id'))),
+      mediaType: s('mediaType').toLowerCase() == 'tv' ? 'tv' : 'movie',
     );
   }
 }
