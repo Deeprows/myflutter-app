@@ -4,6 +4,8 @@ import '../models/fan_post_link.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../services/fan_zone_service.dart';
+import '../services/post_bookmarks.dart';
+import 'bookmarks_screen.dart';
 import '../theme/app_theme.dart';
 import 'fan_widgets.dart';
 import 'fan_x_widgets.dart';
@@ -39,6 +41,7 @@ class _FanPostCardState extends State<FanPostCard> {
   void initState() {
     super.initState();
     _post = Map.of(widget.post);
+    PostBookmarks.instance.load();
     if (!widget.openThread) _loadFollow();
   }
 
@@ -100,6 +103,30 @@ class _FanPostCardState extends State<FanPostCard> {
 
   Future<void> _action(String action) async {
     try {
+      if (action == 'bookmark') {
+        final added = await PostBookmarks.instance.toggle(_post);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                added ? 'Saved to Bookmarks' : 'Removed from Bookmarks',
+              ),
+              action: added
+                  ? SnackBarAction(
+                      label: 'View',
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const BookmarksScreen(),
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
+          );
+        return;
+      }
       if (action == 'share') {
         await Share.share(
           '${_post['name']} on Deeprowss\n${_post['text']}\n\n${FanZoneService.postUrl('${_post['id']}')}',
@@ -199,6 +226,14 @@ class _FanPostCardState extends State<FanPostCard> {
     icon: Icon(Icons.more_horiz_rounded, color: Ui.dim, size: 21),
     itemBuilder: (_) => [
       const PopupMenuItem(value: 'share', child: Text('Share post')),
+      PopupMenuItem(
+        value: 'bookmark',
+        child: Text(
+          PostBookmarks.instance.isBookmarked('${_post['id']}')
+              ? 'Remove bookmark'
+              : 'Bookmark post',
+        ),
+      ),
       if (mine)
         const PopupMenuItem(value: 'delete', child: Text('Delete post')),
       if (!mine) ...const [
@@ -277,6 +312,21 @@ class _FanPostCardState extends State<FanPostCard> {
         active: liked,
         tooltip: liked ? 'Unlike post' : 'Like post',
         onTap: _busy ? null : _like,
+      ),
+      ValueListenableBuilder<Set<String>>(
+        valueListenable: PostBookmarks.instance.ids,
+        builder: (_, saved, _) {
+          final on = saved.contains('${_post['id']}');
+          return XAction(
+            icon: on
+                ? Icons.bookmark_rounded
+                : Icons.bookmark_border_rounded,
+            color: const Color(0xFF1D9BF0),
+            active: on,
+            tooltip: on ? 'Remove bookmark' : 'Bookmark post',
+            onTap: () => _action('bookmark'),
+          );
+        },
       ),
       XAction(
         icon: Icons.ios_share_rounded,
