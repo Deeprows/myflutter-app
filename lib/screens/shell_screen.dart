@@ -230,6 +230,57 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
       );
   }
 
+  /// One bottom-bar item: icon over a single-line label. The label shrinks
+  /// to fit its slot and ignores the phone's font scale, so long names such
+  /// as "Match Room" never wrap or break mid-word.
+  Widget _navItem(IconData icon, String label, bool selected) {
+    final color = selected ? Ui.red : Ui.dim;
+    return SizedBox(
+      width: 58,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 26, color: color),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 10.5,
+                height: 1.1,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<NavigationDestination> _navDestinations() {
+    final items = <(IconData, IconData, String)>[
+      (Icons.sensors_rounded, Icons.sensors_rounded, 'Live'.tr),
+      (Icons.forum_outlined, Icons.forum_rounded, 'Thread'.tr),
+      (Icons.auto_awesome_outlined, Icons.auto_awesome_rounded, 'AI Predict'.tr),
+      (Icons.groups_outlined, Icons.groups_rounded, 'Match Room'.tr),
+      (Icons.person_outline_rounded, Icons.person_rounded, 'Profile'.tr),
+      (Icons.search_rounded, Icons.search_rounded, 'Search'.tr),
+    ];
+    return [
+      for (final it in items)
+        NavigationDestination(
+          icon: _navItem(it.$1, it.$3, false),
+          selectedIcon: _navItem(it.$2, it.$3, true),
+          label: it.$3,
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -315,8 +366,9 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                 height: 72,
                 backgroundColor: Ui.bg,
                 indicatorColor: Colors.transparent,
+                // Labels are drawn by _navItem (auto-shrinking, one line).
                 labelBehavior:
-                    NavigationDestinationLabelBehavior.alwaysShow,
+                    NavigationDestinationLabelBehavior.alwaysHide,
                 selectedIndex: _order.contains(_index)
                     ? _order.indexOf(_index)
                     : 0,
@@ -328,38 +380,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                   });
                   if (target == 3) _maybeShowFirstProfile();
                 },
-                destinations: [
-                  NavigationDestination(
-                    icon: const Icon(Icons.sensors_rounded),
-                    label: 'Live'.tr,
-                  ),
-                  NavigationDestination(
-                    icon: const Icon(Icons.forum_outlined),
-                    selectedIcon: const Icon(Icons.forum_rounded),
-                    label: 'Thread'.tr,
-                  ),
-                  NavigationDestination(
-                    icon: const Icon(Icons.auto_awesome_outlined),
-                    selectedIcon: const Icon(Icons.auto_awesome_rounded),
-                    label: 'AI Predict'.tr,
-                  ),
-                  NavigationDestination(
-                    icon: const Icon(Icons.groups_outlined),
-                    selectedIcon: const Icon(Icons.groups_rounded),
-                    // Non-breaking space keeps "Match Room" on one line so
-                    // it lines up with the other five labels.
-                    label: 'Match Room'.tr.replaceAll(' ', '\u00A0'),
-                  ),
-                  NavigationDestination(
-                    icon: const Icon(Icons.person_outline_rounded),
-                    selectedIcon: const Icon(Icons.person_rounded),
-                    label: 'Profile'.tr,
-                  ),
-                  NavigationDestination(
-                    icon: const Icon(Icons.search_rounded),
-                    label: 'Search'.tr,
-                  ),
-                ],
+                destinations: _navDestinations(),
                 ),
               ),
             ),
