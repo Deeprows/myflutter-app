@@ -73,6 +73,11 @@ class FanPostsFeed extends StatefulWidget {
 class _FanPostsFeedState extends State<FanPostsFeed>
     with WidgetsBindingObserver {
   List<Map<String, dynamic>> _posts = [];
+
+  /// Sponsored (admin-pinned) posts shown first, and ads slotted in after the
+  /// 4th post (between the 4th and 5th). Both only come with the main feed.
+  List<Map<String, dynamic>> _pinned = [], _ads = [];
+  bool _isAdmin = false;
   Set<String> _blocked = {};
   String _kind = 'all', _myId = '';
   String _scope = 'all';
@@ -144,7 +149,15 @@ class _FanPostsFeedState extends State<FanPostsFeed>
           _posts = [..._posts, ...incoming.where((p) => ids.add(p['id']))];
         } else {
           _posts = incoming;
+          if (data.containsKey('pinned')) {
+            _pinned = FanZoneService.rows(data['pinned']);
+            _ads = FanZoneService.rows(data['ads']);
+          } else if (widget.authorId != null || _kind != 'all' || _scope != 'all') {
+            _pinned = [];
+            _ads = [];
+          }
         }
+        _isAdmin = data['is_admin'] == true;
         _next = data['next'] as String?;
         _myId = (data['id'] ?? '').toString();
         _uploads = data['uploads_enabled'] == true;
@@ -168,6 +181,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
       MaterialPageRoute(
         builder: (_) => _ComposePost(
           uploadsEnabled: _uploads,
+          isAdmin: _isAdmin,
           initialKind: kind,
           fixtures: widget.fixtures,
         ),
@@ -448,6 +462,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
     key: ValueKey(p['id']),
     post: p,
     viewerId: _myId,
+    isAdmin: _isAdmin,
     onChanged: () {
       _load();
       widget.onSocialChanged?.call();
@@ -467,9 +482,17 @@ class _FanPostsFeedState extends State<FanPostsFeed>
 
   @override
   Widget build(BuildContext context) {
+    final pinned = _pinned.where((p) => !_blocked.contains(p['user_id'])).toList();
+    final pinnedIds = pinned.map((p) => p['id']).toSet();
     final visible = _posts
-        .where((p) => !_blocked.contains(p['user_id']))
+        .where((p) => !_blocked.contains(p['user_id']) && !pinnedIds.contains(p['id']))
         .toList();
+    final ads = _ads.where((p) => !_blocked.contains(p['user_id'])).toList();
+    // One ad between the 4th and 5th post. The ad changes from one refresh to
+    // the next when the admin has published several.
+    final adSlot = visible.length >= 4 && ads.isNotEmpty
+        ? ads[(DateTime.now().millisecondsSinceEpoch ~/ 60000) % ads.length]
+        : null;
     final home = widget.authorId == null;
     const pad = EdgeInsets.symmetric(horizontal: 16);
     final list = RefreshIndicator(
@@ -533,7 +556,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
                 ],
               ),
             ),
-          if (!_busy && _failure == null && visible.isEmpty)
+          if (!_busy && _failure == null && visible.isEmpty && pinned.isEmpty)
             Padding(
               padding: pad,
               child: FanEmpty(
@@ -553,7 +576,11 @@ class _FanPostsFeedState extends State<FanPostsFeed>
                       ),
               ),
             ),
-          for (final p in visible) _post(p),
+          for (final p in pinned) _post(p),
+          for (var i = 0; i < visible.length; i++) ...[
+            _post(visible[i]),
+            if (i == 3 && adSlot != null) _post(adSlot),
+          ],
           if (_busy && visible.isNotEmpty)
             const Padding(
               padding: EdgeInsets.all(12),
@@ -627,10 +654,14 @@ class _FanPostsFeedState extends State<FanPostsFeed>
 
 class _ComposePost extends StatefulWidget {
   final bool uploadsEnabled;
+
+  /// Only the Deeprowss admin sees the "Post as Ad" switch.
+  final bool isAdmin;
   final String initialKind;
   final List<Fixture> fixtures;
   const _ComposePost({
     required this.uploadsEnabled,
+    this.isAdmin = false,
     required this.initialKind,
     required this.fixtures,
   });
@@ -672,7 +703,7 @@ class _ComposePostState extends State<_ComposePost> {
   final _title = TextEditingController();
   late String _kind = widget.initialKind;
   Uint8List? _image;
-  bool _busy = false, _picking = false;
+  bool _busy = false, _picking = false, _asAd = false;
 
   static const _hints = {
     'prediction': 'Arsenal 2-1 Chelsea. Saka scores, Palmer gets one back…',
@@ -839,6 +870,7 @@ class _ComposePostState extends State<_ComposePost> {
       try {
         await FanZoneService.publish(
           kind: 'video',
+          isAd: _asAd,
           text: [title, if (caption.isNotEmpty) caption, link].join('\n\n'),
           matchKey: _taggedMatch == null
               ? null
@@ -868,6 +900,7 @@ class _ComposePostState extends State<_ComposePost> {
     try {
       await FanZoneService.publish(
         kind: _kind,
+        isAd: _asAd,
         text: _text.text,
         image: _image,
         matchKey: _taggedMatch == null
@@ -1290,6 +1323,25 @@ class _ComposePostState extends State<_ComposePost> {
             padding: const EdgeInsets.all(16),
             children: [
               _kindPicker(),
+              if (widget.isAdmin) ...[
+                const SizedBox(height: 12),
+                Container(
+                  decoration: fanBox(radius: 12),
+                  child: SwitchListTile(
+                    value: _asAd,
+                    onChanged: _busy ? null : (v) => setState(() => _asAd = v),
+                    secondary: Icon(Icons.campaign_rounded, color: Ui.redSoft),
+                    title: const Text(
+                      'Post as Ad',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: const Text(
+                      'Shows with an "Ad" tag between the 4th and 5th post on the Thread page.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               _kindHeader(k),
               const SizedBox(height: 16),
