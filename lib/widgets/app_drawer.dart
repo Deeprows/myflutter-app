@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../config.dart';
 import '../screens/auth_screen.dart';
+import '../screens/bookmarks_screen.dart';
 import '../screens/browser_screen.dart';
 import '../screens/fan_profile_screen.dart';
 import '../screens/fan_widgets.dart';
@@ -18,6 +19,7 @@ import '../screens/remove_ads_screen.dart';
 import '../services/auth_service.dart';
 import '../services/fan_zone_service.dart';
 import '../services/notice_service.dart';
+import '../services/post_bookmarks.dart';
 import '../services/app_sharer.dart';
 import '../services/app_updater.dart';
 import '../services/subscription_service.dart';
@@ -66,6 +68,7 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
     super.initState();
     final id = AuthService.instance.user?.id ?? '';
     if (id.isNotEmpty && _cachedFor == id) _profile = _cached;
+    PostBookmarks.instance.load();
     _loadProfile();
   }
 
@@ -394,6 +397,23 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
                         'Profile'.tr,
                         (c) => _push(c, FanProfileScreen(userId: user.id)),
                       ),
+                    _row(
+                      Icons.bookmark_border_rounded,
+                      'Bookmarks'.tr,
+                      (c) => _push(c, const BookmarksScreen()),
+                      badge: ValueListenableBuilder<Set<String>>(
+                        valueListenable: PostBookmarks.instance.ids,
+                        builder: (_, saved, _) => saved.isEmpty
+                            ? const SizedBox.shrink()
+                            : Text(
+                                '${saved.length}',
+                                style: TextStyle(
+                                  color: Ui.muted,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                      ),
+                    ),
                     _row(
                       Icons.workspace_premium_outlined,
                       'Premium'.tr,
