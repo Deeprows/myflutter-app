@@ -43,6 +43,30 @@ class _MatchChatState extends State<MatchChat> {
     _poll = Timer.periodic(const Duration(seconds: 4), (_) => _refresh());
   }
 
+  DateTime? _nameAt;
+  Future<String> _profileName() async {
+    final response = await FanZoneService.call('social/profile');
+    final profile = response['profile'];
+    final name = profile is Map ? '${profile['name'] ?? ''}'.trim() : '';
+    if (name.isNotEmpty) _nameAt = DateTime.now();
+    return name;
+  }
+
+  /// Picks up a nickname changed in the profile since the chat was opened.
+  Future<void> _syncProfileName() async {
+    if (!AuthService.instance.signedIn) return;
+    final at = _nameAt;
+    if (at != null && DateTime.now().difference(at) < const Duration(minutes: 2)) {
+      return;
+    }
+    try {
+      final name = await _profileName();
+      if (name.isNotEmpty && name != _username && mounted) {
+        setState(() => _username = name);
+      }
+    } catch (_) {}
+  }
+
   bool _identityFailed = false;
   Future<void> _loadIdentity() async {
     if (mounted)
@@ -53,22 +77,11 @@ class _MatchChatState extends State<MatchChat> {
     try {
       var name = '';
       if (AuthService.instance.signedIn) {
-        final user = AuthService.instance.user;
-        name = (user?.name ?? '').trim();
-        if (name.isEmpty) {
-          final email = (user?.email ?? '').trim();
-          if (email.contains('@')) name = email.split('@').first;
-        }
-        // Profile API enriches the name, but must not block commenting when
-        // that endpoint is temporarily unavailable.
-        try {
-          final response = await FanZoneService.call('social/profile');
-          final profile = response['profile'];
-          if (profile is Map) {
-            final remoteName = '${profile['name'] ?? ''}'.trim();
-            if (remoteName.isNotEmpty) name = remoteName;
-          }
-        } catch (_) {}
+        // Signed-in fans always chat under their Fan Zone profile nickname.
+        // No silent fallback to the Google name: if it cannot be loaded the
+        // retry button is shown instead.
+        name = await _profileName();
+        if (name.isEmpty) throw Exception('No Fan Zone profile name');
       } else {
         name = (await Settings.chatName()).trim();
       }
@@ -206,6 +219,7 @@ class _MatchChatState extends State<MatchChat> {
     final text = _input.text.trim();
     if (text.isEmpty || _sending || _username.isEmpty) return;
     setState(() => _sending = true);
+    await _syncProfileName();
     final err = await ChatService.send(
       _slug,
       matchName: widget.matchName,
