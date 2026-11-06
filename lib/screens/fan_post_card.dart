@@ -637,14 +637,24 @@ class _FanPostCardState extends State<FanPostCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '${_post['name']}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                          ),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                '${_post['name']}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            if (_post['is_premium'] == 1 || _post['is_premium'] == true) ...[
+                              const SizedBox(width: 5),
+                              const Icon(Icons.verified_rounded, color: Color(0xFF1D9BF0), size: 17),
+                            ],
+                          ],
                         ),
                         Text(
                           handle,
