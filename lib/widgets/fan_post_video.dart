@@ -46,6 +46,25 @@ class _FanPostVideoState extends State<FanPostVideo>
   bool _settled = false;
   static const _redirectGate = Duration(seconds: 5);
   bool _loading = false, _failed = false;
+
+  /// True while the WebView shows a page we built ourselves (our HTML5 player
+  /// for m3u8/mp4/mpd, or an embed iframe). Such a page has no reason to
+  /// navigate anywhere, so every top-level hop to another site is an ad.
+  bool _htmlMode = false;
+
+  Future<void> _loadHtml(WebViewController c, String html, {String? baseUrl}) {
+    _htmlMode = true;
+    return c.loadHtmlString(html, baseUrl: baseUrl);
+  }
+
+  /// Same page origin the match page uses for streams (plain-http streams get
+  /// an http origin so they are not blocked as mixed content).
+  String _streamBase(String streamUrl) {
+    if (streamUrl.toLowerCase().startsWith('http://')) {
+      return AppConfig.playerOrigin.replaceFirst('https://', 'http://');
+    }
+    return AppConfig.playerOrigin;
+  }
   String get _url => fanVideoUrl(widget.url);
 
   // Shape of the video box (width / height). Starts from a guess based on the
@@ -210,6 +229,14 @@ class _FanPostVideoState extends State<FanPostVideo>
       }
       return NavigationDecision.prevent;
     }
+    // Our own player / iframe page never needs to leave itself: any top-level
+    // jump to another site (ad redirect, "open in browser") is dropped.
+    if (_htmlMode) {
+      final ytEmbed = (host == 'youtube-nocookie.com' || host == 'www.youtube-nocookie.com' ||
+              host == 'www.youtube.com') &&
+          uri.path.startsWith('/embed/');
+      return ytEmbed ? NavigationDecision.navigate : NavigationDecision.prevent;
+    }
     final site = _siteOf(host);
     if (!_settled && DateTime.now().difference(_startedAt) < _redirectGate) {
       _allowedSites.add(site);
@@ -258,6 +285,7 @@ class _FanPostVideoState extends State<FanPostVideo>
     final initialUri = Uri.tryParse(_url);
     _startedAt = DateTime.now();
     _settled = false;
+    _htmlMode = false;
     _allowedSites
       ..clear()
       ..add(_siteOf(initialUri?.host ?? ''));
@@ -270,6 +298,11 @@ class _FanPostVideoState extends State<FanPostVideo>
         NavigationDelegate(
           onPageStarted: (_) {
             c.runJavaScript(AdShield.adShieldJs).catchError((_) {});
+          },
+          onProgress: (_) {
+            // Like the match page: keep sweeping pop-ups / click-catchers
+            // while an embed page is loading (our own player page needs none).
+            if (!_htmlMode) c.runJavaScript(AdShield.adShieldJs).catchError((_) {});
           },
           onPageFinished: (_) {
             _settled = true;
@@ -296,20 +329,24 @@ class _FanPostVideoState extends State<FanPostVideo>
         onShowCustomWidget: _showFullscreen,
         onHideCustomWidget: _hideFullscreen,
       );
+      final cookies = WebViewCookieManager().platform;
+      if (cookies is AndroidWebViewCookieManager) {
+        unawaited(cookies.setAcceptThirdPartyCookies(platform, true));
+      }
     }
     try {
       if (_info.kind == EmbedKind.tiktok) {
         final id = await resolveTikTokId(_url);
         if (!mounted || _controller != c) return;
         if (id != null) {
-          await c.loadHtmlString(
+          await _loadHtml(c, 
             _iframeHtml(tiktokEmbedUrl(id)),
             baseUrl: 'https://deeprowss.com',
           );
           return;
         }
       } else if (_info.kind == EmbedKind.facebook && initialUri != null) {
-        await c.loadHtmlString(
+        await _loadHtml(c, 
           _iframeHtml(facebookEmbedUrl(_url)),
           baseUrl: 'https://deeprowss.com',
         );
@@ -317,7 +354,7 @@ class _FanPostVideoState extends State<FanPostVideo>
       } else if (_info.kind == EmbedKind.vimeo && initialUri != null) {
         final id = _vimeoId(initialUri);
         if (id == null) throw FormatException('Invalid Vimeo video URL');
-        await c.loadHtmlString(
+        await _loadHtml(c, 
           _iframeHtml('https://player.vimeo.com/video/$id?autoplay=1&title=0&byline=0&portrait=0'),
           baseUrl: 'https://deeprowss.com',
         );
@@ -325,7 +362,7 @@ class _FanPostVideoState extends State<FanPostVideo>
       } else if (_info.kind == EmbedKind.dailymotion && initialUri != null) {
         final id = _dailymotionId(initialUri);
         if (id == null) throw FormatException('Invalid Dailymotion video URL');
-        await c.loadHtmlString(
+        await _loadHtml(c, 
           _iframeHtml('https://www.dailymotion.com/embed/video/$id?autoplay=1'),
           baseUrl: 'https://deeprowss.com',
         );
@@ -333,24 +370,28 @@ class _FanPostVideoState extends State<FanPostVideo>
       }
       final youtubeId = _youtubeId(initialUri);
       if (youtubeId != null) {
-        await c.loadHtmlString(
+        await _loadHtml(c, 
           '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head><body style="margin:0;background:#000"><iframe src="https://www.youtube-nocookie.com/embed/$youtubeId?autoplay=1&playsinline=1&rel=0&controls=1" style="position:fixed;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
           baseUrl: 'https://www.youtube-nocookie.com',
         );
       } else if (stream.usesHtmlPlayer) {
-        await c.loadHtmlString(
+        await c.setUserAgent(AppConfig.userAgent);
+        await _loadHtml(c,
           buildPlayerHtml(stream, lowQuality: false),
-          baseUrl: 'https://deeprowss.com',
+          baseUrl: _streamBase(stream.url),
         );
       } else if (Uri.parse(_url).host == 'www.youtube.com' &&
           Uri.parse(_url).path.startsWith('/embed/')) {
         final src = const HtmlEscape(HtmlEscapeMode.attribute).convert(_url);
-        await c.loadHtmlString(
+        await _loadHtml(c, 
           '<html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;background:black"><iframe src="$src" style="border:0;width:100%;height:100%" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></body></html>',
           baseUrl: 'https://deeprowss.com',
         );
       } else {
-        await c.loadRequest(Uri.parse(_url));
+        // Embed page: same desktop-like agent as the match page's player.
+        await c.setUserAgent(AppConfig.userAgent);
+        _htmlMode = false;
+        await c.loadRequest(Uri.parse(stream.kind == StreamKind.invalid ? _url : stream.url));
       }
     } catch (_) {
       if (mounted)
