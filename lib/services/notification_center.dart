@@ -159,6 +159,9 @@ class NotificationCenter {
         final (title, body) = switch (kind) {
           'follow' => ('$who started following you', 'Tap to view their profile'),
           'like' => ('$who liked your post', 'Tap to open the post'),
+          'reply' => ('$who replied to your comment', '${n['text'] ?? ''}'),
+          'repost' => ('$who reposted your post', 'Tap to open the post'),
+          'quote' => ('$who quoted your post', '${n['text'] ?? ''}'),
           _ => ('$who commented on your post', '${n['text'] ?? ''}'),
         };
         if (atMs <= readAt) read.add(id);
