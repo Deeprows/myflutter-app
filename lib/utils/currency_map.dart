@@ -36,3 +36,34 @@ String currencyForCountry(String? countryCode) {
   final c = (countryCode ?? '').toUpperCase();
   return _currencyByCountry[c] ?? 'USD';
 }
+
+/// Countries offered in the "Pricing country / currency" picker of the
+/// Remove ads page: (country code, name). The currency comes from
+/// [currencyForCountry].
+const List<List<String>> kPricingCountries = [
+  ['NG', 'Nigeria'], ['GH', 'Ghana'], ['KE', 'Kenya'], ['ZA', 'South Africa'],
+  ['UG', 'Uganda'], ['TZ', 'Tanzania'], ['RW', 'Rwanda'], ['ET', 'Ethiopia'],
+  ['EG', 'Egypt'], ['MA', 'Morocco'], ['DZ', 'Algeria'], ['TN', 'Tunisia'],
+  ['ZM', 'Zambia'], ['SN', 'Senegal'], ['CI', "Côte d'Ivoire"],
+  ['CM', 'Cameroon'], ['GB', 'United Kingdom'], ['DE', 'Germany'],
+  ['FR', 'France'], ['ES', 'Spain'], ['IT', 'Italy'], ['NL', 'Netherlands'],
+  ['PT', 'Portugal'], ['IE', 'Ireland'], ['CH', 'Switzerland'],
+  ['SE', 'Sweden'], ['NO', 'Norway'], ['PL', 'Poland'], ['TR', 'Türkiye'],
+  ['US', 'United States'], ['CA', 'Canada'], ['MX', 'Mexico'],
+  ['BR', 'Brazil'], ['AR', 'Argentina'], ['CO', 'Colombia'],
+  ['IN', 'India'], ['PK', 'Pakistan'], ['BD', 'Bangladesh'],
+  ['ID', 'Indonesia'], ['MY', 'Malaysia'], ['SG', 'Singapore'],
+  ['PH', 'Philippines'], ['TH', 'Thailand'], ['VN', 'Vietnam'],
+  ['AE', 'United Arab Emirates'], ['SA', 'Saudi Arabia'], ['QA', 'Qatar'],
+  ['KW', 'Kuwait'], ['JO', 'Jordan'], ['AU', 'Australia'],
+  ['NZ', 'New Zealand'],
+];
+
+/// "Egypt" for 'EG'; the code itself when it is not in the picker list.
+String countryName(String? countryCode) {
+  final c = (countryCode ?? '').toUpperCase();
+  for (final e in kPricingCountries) {
+    if (e[0] == c) return e[1];
+  }
+  return c.isEmpty ? 'your region' : c;
+}
