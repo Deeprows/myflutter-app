@@ -3,6 +3,7 @@ import '../utils/safe_error_message.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 import '../services/fan_zone_service.dart';
 import '../services/content_sync.dart';
@@ -566,7 +567,7 @@ class _EditFanProfile extends StatefulWidget {
 class _EditFanProfileState extends State<_EditFanProfile> {
   static const double _coverHeight = 128;
   static const double _avatarSize = 76;
-  late final TextEditingController _name, _bio, _location;
+  late final TextEditingController _name, _bio, _location, _username;
   Uint8List? _avatar, _cover;
   late String _clubName = '${widget.profile['club_name'] ?? ''}',
       _clubLogo = '${widget.profile['club_logo'] ?? ''}';
@@ -579,6 +580,9 @@ class _EditFanProfileState extends State<_EditFanProfile> {
     super.initState();
     _name = TextEditingController(text: '${widget.profile['name']}');
     _bio = TextEditingController(text: '${widget.profile['bio'] ?? ''}');
+    _username = TextEditingController(
+      text: '${widget.profile['handle'] ?? ''}',
+    );
     _location = TextEditingController(
       text: '${widget.profile['location'] ?? ''}',
     );
@@ -587,6 +591,7 @@ class _EditFanProfileState extends State<_EditFanProfile> {
   @override
   void dispose() {
     _name.dispose();
+    _username.dispose();
     _bio.dispose();
     _location.dispose();
     super.dispose();
@@ -662,6 +667,12 @@ class _EditFanProfileState extends State<_EditFanProfile> {
           'club_logo': _clubLogo,
         },
       );
+      final wantedHandle = _username.text.trim().replaceAll('@', '');
+      if (wantedHandle.isNotEmpty &&
+          wantedHandle != '${widget.profile['handle'] ?? ''}') {
+        await FanZoneService.setHandle(wantedHandle);
+        widget.profile['handle'] = wantedHandle;
+      }
       final avatar = _avatar, cover = _cover;
       if (avatar != null && !_avatarSent) {
         await FanZoneService.uploadProfileImage(kind: 'avatar', image: avatar);
@@ -842,6 +853,21 @@ class _EditFanProfileState extends State<_EditFanProfile> {
                 decoration: const InputDecoration(labelText: 'Name'),
               ),
               TextField(
+                controller: _username,
+                maxLength: 20,
+                enabled: !_saving,
+                autocorrect: false,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9_@]')),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Username',
+                  prefixText: '@',
+                  helperText:
+                      '3–20 letters, numbers or _. Can be changed once an hour.',
+                ),
+              ),
+              TextField(
                 controller: _bio,
                 maxLength: 160,
                 maxLines: 3,
@@ -984,7 +1010,7 @@ class _FanPeopleScreenState extends State<FanPeopleScreen> {
                 ),
               ),
               title: Text('${person['name']}'),
-              subtitle: Text('@${FanZoneService.handle('${person['id']}')}'),
+              subtitle: Text('@${FanZoneService.handleOf(person, '${person['id']}')}'),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () async {
                 await Navigator.of(context).push(
