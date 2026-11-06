@@ -52,8 +52,15 @@ class MainActivity : FlutterActivity() {{
         ).apply {{
             description = "New highlights and movies added to Deeprowss"
         }}
+        val social = NotificationChannel(
+            "social", "Follows, likes and comments", NotificationManager.IMPORTANCE_HIGH
+        ).apply {{
+            description = "When someone follows you, likes your post or comments on it"
+            enableVibration(true)
+        }}
         nm.createNotificationChannel(kickoff)
         nm.createNotificationChannel(content)
+        nm.createNotificationChannel(social)
     }}
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {{
