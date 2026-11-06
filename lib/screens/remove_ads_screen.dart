@@ -9,14 +9,17 @@ import '../config.dart';
 import '../services/ad_scheduler.dart';
 import '../services/install_id.dart';
 import '../services/subscription_service.dart'
-    show PlanInfo, SubscriptionService, TokenState;
+    show AdPlan, AdPlans, SubscriptionService, TokenState;
 import '../theme/app_theme.dart';
+import '../utils/currency_map.dart';
 import 'browser_screen.dart' show openExternally;
 import 'plans_screen.dart' show buildWhatsappUri;
 
-/// "Remove ads": ask for a token, or type one you were given. A valid token
-/// switches every ad off on this phone for the days it carries. The Worker
-/// (see cloudflare/worker.js, TOKENS.md) hands tokens out and counts them.
+/// "Remove ads": pick how long you want ads off (a dropdown of durations, each
+/// with its price in your own currency), pay, send the receipt, then get a
+/// token. A valid token switches every ad off on this phone for the days it
+/// carries. The Worker (see cloudflare/worker.js, TOKENS.md) hands tokens out,
+/// prices the plans (/sub/ad-plans) and counts them.
 class RemoveAdsScreen extends StatefulWidget {
   const RemoveAdsScreen({super.key});
 
@@ -30,8 +33,13 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
   final _token = TextEditingController();
 
   TokenState _state = const TokenState('unknown');
-  PlanInfo _plan = PlanInfo.fallback();
   String _installId = '';
+
+  /// 'auto' = this phone's region, otherwise a country code from the picker.
+  String _country = 'auto';
+  AdPlans? _priced;
+  int _days = 30;
+  bool _loadingPlans = true;
   String _method = 'bank';
 
   bool _busy = false;
@@ -157,15 +165,46 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
 
     setState(() => _installId = id);
 
-    unawaited(
-      _sub.loadPlan().then((p) {
-        if (mounted) {
-          setState(() => _plan = p);
-        }
-      }),
-    );
+    unawaited(_loadPlans());
 
     await _check();
+  }
+
+  // -------------------------------------------------------------
+  // PLANS: DURATION + AMOUNT IN THE PERSON'S CURRENCY
+  // -------------------------------------------------------------
+
+  String get _effectiveCountry =>
+      _country == 'auto' ? (_sub.deviceCountry ?? '') : _country;
+
+  /// Currency the prices are asked for (the Worker may answer in naira when it
+  /// has no rate for it).
+  String get _currency => currencyForCountry(_effectiveCountry);
+
+  List<AdPlan> get _plans => _priced?.plans ?? AdPlan.fallback();
+
+  AdPlan get _plan => _plans.firstWhere(
+        (p) => p.days == _days,
+        orElse: () => _plans.first,
+      );
+
+  Future<void> _loadPlans() async {
+    final wanted = _currency;
+
+    if (mounted) setState(() => _loadingPlans = true);
+
+    final got = await _sub.loadAdPlans(currency: wanted);
+
+    // The person changed country while this was loading: ignore the answer.
+    if (!mounted || wanted != _currency) return;
+
+    setState(() {
+      _priced = got;
+      _loadingPlans = false;
+      if (!got.plans.any((p) => p.days == _days)) {
+        _days = got.plans.first.days;
+      }
+    });
   }
 
   Future<void> _check() async {
@@ -212,7 +251,11 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
       _error = null;
     });
 
-    final err = await _sub.requestToken(contact: number);
+    final err = await _sub.requestToken(
+      contact: number,
+      days: _plan.days,
+      currency: _priced?.currency ?? _currency,
+    );
 
     if (!mounted) return;
 
@@ -284,10 +327,13 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
         ? '${_bankAccount['provider'] ?? _bankAccount['name'] ?? 'Bank'} bank transfer'
         : '${_walletAccount['provider'] ?? _walletAccount['name'] ?? 'Crypto'} (${_walletAccount['network'] ?? ''})';
 
+    final local = _plan.localDisplay;
+
     final message =
         'Hello, I have paid to remove ads on the Deeprowss app.\n'
+        'Plan: ${_plan.label}\n'
         'Payment: $how\n'
-        'Amount: ${_plan.priceDisplay}\n'
+        'Amount: ${_plan.ngnDisplay}${local != null ? ' (about $local)' : ''}\n'
         'My receipt is attached.';
 
     final uri = buildWhatsappUri(
@@ -338,7 +384,7 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
                 if (premium)
                   _activeCard()
                 else ...[
-                  _hero(),
+                  _pricingCard(),
                   const SizedBox(height: 14),
                   _stepCard(
                     number: 1,
@@ -461,8 +507,18 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
     );
   }
 
-  Widget _hero() {
-    final local = _plan.localDisplay;
+  Widget _pricingCard() {
+    final wanted = _currency;
+    final shown = _priced?.currency ?? wanted;
+    final plan = _plan;
+    final local = plan.localDisplay;
+
+    // The Worker had no rate for the chosen currency: it answered in naira.
+    final fellBack = _priced != null && shown != wanted;
+
+    final heading = fellBack
+        ? 'Prices in naira (NGN) - no rate for $wanted yet'
+        : 'Prices for ${countryName(_effectiveCountry)} ($shown)';
 
     return _box(
       highlight: true,
@@ -492,46 +548,83 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
                   ),
                 ),
               ),
+              if (_loadingPlans)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                _plan.priceDisplay,
-                style: const TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '/ month',
-                style: TextStyle(
-                  color: Ui.muted,
-                  fontSize: 14,
-                ),
-              ),
-              if (local != null) ...[
-                const SizedBox(width: 10),
-                Text(
-                  '≈ $local',
-                  style: TextStyle(
-                    color: Ui.green,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ],
+          const SizedBox(height: 14),
+          Text(
+            heading,
+            style: TextStyle(
+              color: Ui.muted,
+              fontSize: 14.5,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            key: ValueKey('country-$_country'),
+            initialValue: _country,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Pricing country / currency',
+              prefixIcon: Icon(Icons.public_rounded),
+            ),
+            items: [
+              const DropdownMenuItem(
+                value: 'auto',
+                child: Text('Automatic (device region)'),
+              ),
+              for (final c in kPricingCountries)
+                DropdownMenuItem(
+                  value: c[0],
+                  child: Text('${c[1]} (${currencyForCountry(c[0])})'),
+                ),
+            ],
+            onChanged: (v) {
+              if (v == null || v == _country) return;
+              setState(() => _country = v);
+              _loadPlans();
+            },
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'Choose a plan',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<int>(
+            key: ValueKey('plan-$shown-${_plans.length}'),
+            initialValue: plan.days,
+            isExpanded: true,
+            itemHeight: 62,
+            decoration: const InputDecoration(
+              labelText: 'How long, and how much',
+              prefixIcon: Icon(Icons.timer_outlined),
+            ),
+            selectedItemBuilder: (_) => [
+              for (final p in _plans) _planRow(p, compact: true),
+            ],
+            items: [
+              for (final p in _plans)
+                DropdownMenuItem(value: p.days, child: _planRow(p)),
+            ],
+            onChanged: (v) {
+              if (v != null) setState(() => _days = v);
+            },
+          ),
+          const SizedBox(height: 10),
           Text(
             local != null
-                ? 'No ads for 30 days on this phone. Charged in naira; $local is an estimate in your currency.'
-                : 'No ads for 30 days on this phone.',
+                ? 'No ads for ${plan.label} on this phone. Charged in naira (${plan.ngnDisplay}); $local is an estimate in your currency.'
+                : 'No ads for ${plan.label} on this phone. Price: ${plan.ngnDisplay}.',
             style: TextStyle(
               color: Ui.muted,
               fontSize: 13,
@@ -540,6 +633,58 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// One row of the plan dropdown: duration on the left, amount on the right.
+  Widget _planRow(AdPlan p, {bool compact = false}) {
+    final usd = p.usdDisplay;
+    final hasUsd = usd != null && p.localDisplay != null;
+
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            p.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        if (compact)
+          Text(
+            hasUsd ? '${p.shownPrice}  ≈ $usd' : p.shownPrice,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+            ),
+          )
+        else
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                p.shownPrice,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (hasUsd)
+                Text(
+                  '≈ $usd',
+                  style: TextStyle(
+                    color: Ui.dim,
+                    fontSize: 12,
+                  ),
+                ),
+            ],
+          ),
+      ],
     );
   }
 
@@ -641,7 +786,7 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Transfer ${_plan.priceDisplay} to this account.',
+                  'Transfer ${_plan.ngnDisplay} for ${_plan.label} to this account.',
                   style: TextStyle(
                     color: Ui.muted,
                     fontSize: 13,
@@ -670,7 +815,7 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Send the USDT equivalent of ${_plan.priceDisplay}. Only send on the ${_walletAccount['network'] ?? ''} network, or the funds are lost.',
+                  'Send the USDT equivalent of ${_plan.ngnDisplay} (${_plan.label}). Only send on the ${_walletAccount['network'] ?? ''} network, or the funds are lost.',
                   style: TextStyle(
                     color: Ui.muted,
                     fontSize: 13,
