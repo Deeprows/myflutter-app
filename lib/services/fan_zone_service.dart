@@ -175,6 +175,7 @@ class FanZoneService {
     String? matchKey,
     Map<String, dynamic>? matchFixture,
     String? quoteOf,
+    bool isAd = false,
   }) async {
     final request = http.MultipartRequest(
       'POST',
@@ -187,6 +188,7 @@ class FanZoneService {
       if (matchKey != null) 'match_key': matchKey,
       if (matchFixture != null) 'match_fixture': jsonEncode(matchFixture),
       if (quoteOf != null && quoteOf.isNotEmpty) 'quote_of': quoteOf,
+      if (isAd) 'is_ad': '1',
     });
     if (image != null) {
       if (image.length > 4 * 1024 * 1024) {
@@ -250,6 +252,19 @@ class FanZoneService {
     if (response.statusCode != 200) {
       throw Exception(data['error'] ?? 'Could not post your reply.');
     }
+  }
+
+  /// Admin only: pins a post to the top of the Thread page as "Sponsored"
+  /// for [days] days (0 = until unpinned), or removes the pin.
+  static Future<void> pinPost(
+    String postId, {
+    required bool pinned,
+    int days = 0,
+  }) async {
+    await call(
+      'post/pin',
+      body: {'id': postId, 'pinned': pinned, if (pinned) 'days': days},
+    );
   }
 
   /// Counts a view of a post (one per fan). Never throws: views are best effort.
