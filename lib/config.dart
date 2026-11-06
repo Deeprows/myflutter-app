@@ -136,6 +136,18 @@ class AppConfig {
   /// Example: `https://wa.me/2348012345678`. Empty = the button tells the
   /// person it is coming soon. The app adds the person's ID to the message.
   static const whatsappUrl = 'https://wa.me/2347041629630';
+  /// ---- Remove-ads payment details (shown on the Premium page) ------------
+  static const payBankProvider = 'OPAY';
+  static const payBankAccountName = 'Taiwo';
+  static const payBankAccountNumber = '9028840867';
+  static const payCryptoProvider = 'USDT';
+  static const payCryptoNetwork = 'TRC20';
+  static const payCryptoAccountName = 'Taiwo';
+  static const payCryptoAddress = 'TFijBKULxEJuJwgj9nrEcQHvTuweKQoZ2M';
+
+  /// WhatsApp chat that receives payment receipts (+234 704 162 9630).
+  static const receiptWhatsappUrl = 'https://wa.me/2347041629630';
+
   /// WhatsApp chat behind "Message Admin" on the login / sign-up screen.
   static const adminWhatsappUrl = 'https://wa.me/2347041629630';
   static const whatsappMessage =
