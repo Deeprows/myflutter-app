@@ -13,6 +13,7 @@ import '../models/live_score.dart';
 import '../services/score_service.dart';
 import '../services/fan_zone_service.dart';
 import '../services/subscription_service.dart';
+import '../services/remote_config.dart';
 import '../services/feed_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
@@ -54,6 +55,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   final Set<String> _selected = {};
   final Set<String> _dailyFreePicks = {};
   bool _dailyPicksLoaded = false;
+  bool _weeklyPremium = false;
   final Map<String, Map<String, dynamic>> _results = {};
   final Map<String, String> _failures = {};
 
@@ -68,6 +70,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   void initState() {
     super.initState();
     _loadDailyFreePicks();
+    _refreshWeeklyPremium();
     ContentSync.tick.addListener(_sync);
     if (widget.active) _load();
   }
@@ -518,6 +521,14 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         '${now.day.toString().padLeft(2, '0')}';
   }
 
+  Future<void> _refreshWeeklyPremium() async {
+    if (!AuthService.instance.signedIn) return;
+    final active = await FanZoneService.hasWeeklyPremium();
+    if (mounted && active != _weeklyPremium) {
+      setState(() => _weeklyPremium = active);
+    }
+  }
+
   Future<void> _loadDailyFreePicks() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -563,7 +574,8 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     );
     if (!mounted) return false;
     await SubscriptionService.instance.refresh(force: true);
-    return SubscriptionService.instance.isPremium;
+    await _refreshWeeklyPremium();
+    return SubscriptionService.instance.isPremium || _weeklyPremium;
   }
 
   Future<bool> _select(Fixture f, bool selected) async {
@@ -578,7 +590,9 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     if (!_dailyPicksLoaded) await _loadDailyFreePicks();
     if (!mounted) return false;
 
-    final premium = SubscriptionService.instance.isPremium;
+    final premium = SubscriptionService.instance.isPremium ||
+        _weeklyPremium || await FanZoneService.hasWeeklyPremium();
+    if (premium && !_weeklyPremium && mounted) setState(() => _weeklyPremium = true);
     if (!premium && !_dailyFreePicks.contains(key) &&
         _dailyFreePicks.length >= _maxPicks) {
       _snack('You have used your 3 free AI match selections for today. Upgrade to Premium for more selections.');
@@ -2108,15 +2122,61 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           alignment: Alignment.centerRight,
           child: TextButton.icon(
             onPressed: () async {
+              final analysis = 'Deeprowss AI Predict\\n${f.title}\\n\\n'
+                  '${'${data['analysis']}'.replaceAll('**', '')}\\n\\n'
+                  'Source: ${data['dataSource'] ?? 'Verified recent results'}. '
+                  'AI analysis is informational; outcomes are uncertain.';
+              final action = await showModalBottomSheet<String>(
+                context: context,
+                showDragHandle: true,
+                builder: (ctx) => SafeArea(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    ListTile(
+                      leading: const Icon(Icons.forum_outlined),
+                      title: const Text('Post to Community Trend'),
+                      subtitle: const Text('Publish this analysis with a match link'),
+                      onTap: () => Navigator.pop(ctx, 'post'),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.ios_share_rounded),
+                      title: const Text('Share outside Deeprowss'),
+                      subtitle: const Text('Includes the app download link'),
+                      onTap: () => Navigator.pop(ctx, 'external'),
+                    ),
+                  ]),
+                ),
+              );
+              if (!mounted || action == null) return;
               try {
-                await Share.share(
-                  'Deeprowss AI Predict\n${f.title}\n\n${'${data['analysis']}'.replaceAll('**', '')}\n\nSource: ${data['dataSource'] ?? 'Verified recent results'}. Outcomes are uncertain.',
-                );
-              } catch (_) {
-                if (mounted)
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Could not open sharing.')),
+                if (action == 'post') {
+                  await FanZoneService.publish(
+                    kind: 'prediction',
+                    text: '$analysis\\n\\nOpen this match in Deeprowss AI Predict: ${f.title}',
+                    matchFixture: {
+                      'id': f.id,
+                      'home': f.home,
+                      'away': f.away,
+                      'homeLogo': f.homeLogo,
+                      'awayLogo': f.awayLogo,
+                      'league': f.league,
+                      'kickoff': f.kickoff.toIso8601String(),
+                      'duration': f.durationMin,
+                      'scoreLeague': f.scoreLeague,
+                    },
                   );
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('AI analysis posted to Community Trend.')),
+                  );
+                } else {
+                  final download = RemoteConfig.instance.shareLink;
+                  await Share.share(
+                    '$analysis\\n\\nView more predictions on Deeprowss: $download',
+                  );
+                }
+              } catch (e) {
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                );
               }
             },
             icon: const Icon(Icons.ios_share_rounded, size: 18),
@@ -3068,7 +3128,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                     ),
                     const Spacer(),
                     FanPill(
-                      text: SubscriptionService.instance.isPremium
+                      text: (SubscriptionService.instance.isPremium || _weeklyPremium)
                           ? '${_selected.length} selected · Premium'
                           : '${_selected.length}/$_maxPicks selected · ${(_maxPicks - _dailyFreePicks.length).clamp(0, _maxPicks)} left today',
                       color: _selected.isEmpty
