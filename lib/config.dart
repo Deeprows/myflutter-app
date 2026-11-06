@@ -28,6 +28,10 @@ class AppConfig {
   static const noticeUrl =
       'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/notice.json';
 
+  /// Remote manual image advertisement (JSON; see assets/data/manual_ad.json).
+  static const manualAdUrl =
+      'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/manual_ad.json';
+
   /// Score pages opened in the in-app browser.
   static const footballScoreUrl =
       'https://www.livescore.com/en/football/';
