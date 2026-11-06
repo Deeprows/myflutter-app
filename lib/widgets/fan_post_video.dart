@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -7,6 +8,7 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 import '../services/ad_shield.dart';
 import '../config.dart';
 import '../models/fan_post_link.dart';
+import '../services/embed_info.dart';
 import '../services/player_html.dart';
 import '../services/stream_resolver.dart';
 import '../theme/app_theme.dart';
@@ -46,6 +48,40 @@ class _FanPostVideoState extends State<FanPostVideo>
   bool _loading = false, _failed = false;
   String get _url => fanVideoUrl(widget.url);
 
+  // Shape of the video box (width / height). Starts from a guess based on the
+  // link (Shorts / TikTok / Reels are portrait) and follows the real video once
+  // the player can measure it. [_manualRatio] wins when the viewer picks a shape.
+  late EmbedInfo _info = embedInfoFor(widget.url);
+  late double _ratio = _info.ratio;
+  double? _manualRatio;
+  String? _tiktokThumb;
+
+  static const _shapes = [kLandscape, 1.0, kPortrait];
+
+  void _cycleShape() {
+    final cur = _manualRatio ?? _ratio;
+    var nearest = 0;
+    for (var i = 1; i < _shapes.length; i++) {
+      if ((_shapes[i] - cur).abs() < (_shapes[nearest] - cur).abs()) nearest = i;
+    }
+    setState(() => _manualRatio = _shapes[(nearest + 1) % _shapes.length]);
+  }
+
+  void _onMeasured(String message) {
+    if (_manualRatio != null) return;
+    final parts = message.split('x');
+    if (parts.length != 2) return;
+    final w = double.tryParse(parts[0]), h = double.tryParse(parts[1]);
+    if (w == null || h == null || w <= 0 || h <= 0) return;
+    final r = (w / h).clamp(0.4, 2.4).toDouble();
+    if ((r - _ratio).abs() > 0.02 && mounted) setState(() => _ratio = r);
+  }
+
+  String _iframeHtml(String src) {
+    final safe = const HtmlEscape(HtmlEscapeMode.attribute).convert(src);
+    return '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head><body style="margin:0;background:#000"><iframe src="$safe" style="position:fixed;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write" allowfullscreen scrolling="no"></iframe></body></html>';
+  }
+
   String? get _youtubeThumbnail {
     final uri = Uri.tryParse(_url);
     if (uri == null) return null;
@@ -69,6 +105,11 @@ class _FanPostVideoState extends State<FanPostVideo>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (_info.kind == EmbedKind.tiktok) {
+      tiktokThumbnail(widget.url).then((t) {
+        if (mounted && t != null) setState(() => _tiktokThumb = t);
+      });
+    }
     if (widget.autoPlay) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _controller == null) _play();
@@ -224,6 +265,7 @@ class _FanPostVideoState extends State<FanPostVideo>
     c
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
+      ..addJavaScriptChannel('FanSize', onMessageReceived: (m) => _onMeasured(m.message))
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (_) {
@@ -232,6 +274,7 @@ class _FanPostVideoState extends State<FanPostVideo>
           onPageFinished: (_) {
             _settled = true;
             c.runJavaScript(AdShield.adShieldJs).catchError((_) {});
+            c.runJavaScript(embedSizeJs).catchError((_) {});
             if (mounted) setState(() => _loading = false);
           },
           onWebResourceError: (e) {
@@ -255,6 +298,23 @@ class _FanPostVideoState extends State<FanPostVideo>
       );
     }
     try {
+      if (_info.kind == EmbedKind.tiktok) {
+        final id = await resolveTikTokId(_url);
+        if (!mounted || _controller != c) return;
+        if (id != null) {
+          await c.loadHtmlString(
+            _iframeHtml(tiktokEmbedUrl(id)),
+            baseUrl: 'https://deeprowss.com',
+          );
+          return;
+        }
+      } else if (_info.kind == EmbedKind.facebook && initialUri != null) {
+        await c.loadHtmlString(
+          _iframeHtml(facebookEmbedUrl(_url)),
+          baseUrl: 'https://deeprowss.com',
+        );
+        return;
+      }
       final youtubeId = _youtubeId(initialUri);
       if (youtubeId != null) {
         await c.loadHtmlString(
@@ -300,89 +360,136 @@ class _FanPostVideoState extends State<FanPostVideo>
     return id != null && RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(id) ? id : null;
   }
 
-  @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: _fullscreenEntry == null,
-    onPopInvokedWithResult: (didPop, result) {
-      if (!didPop && _fullscreenEntry != null) _backFromFullscreen();
-    },
-    child: Container(
-    margin: const EdgeInsets.only(top: 10),
-    clipBehavior: Clip.antiAlias,
-    decoration: BoxDecoration(
-      color: Colors.black,
-      border: Border.all(color: Ui.line),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Column(
-      children: [
-        AspectRatio(
-          aspectRatio: 16 / 9,
-          child: _controller != null && !_failed
-              ? Stack(
-                  children: [
-                    WebViewWidget(controller: _controller!),
-                    if (_loading) const LinearProgressIndicator(),
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: IconButton.filled(
-                        visualDensity: VisualDensity.compact,
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.black54,
-                          foregroundColor: Colors.white,
-                        ),
-                        onPressed: _stop,
-                        tooltip: 'Stop video',
-                        icon: const Icon(Icons.close, size: 18),
-                      ),
-                    ),
-                  ],
-                )
-              : InkWell(
-                  onTap: widget.onTapPreview ?? _play,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    alignment: Alignment.center,
-                    children: [
-                      if (_youtubeThumbnail != null)
-                        Image.network(
-                          _youtubeThumbnail!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const ColoredBox(
-                            color: Color(0xFF171A20),
-                          ),
-                        )
-                      else
-                        const ColoredBox(color: Color(0xFF171A20)),
-                      const ColoredBox(color: Color(0x55000000)),
-                      Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.play_circle_fill_rounded,
-                              size: 58,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              _failed ? 'Retry video' : 'Play video',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                shadows: [Shadow(blurRadius: 5, color: Colors.black)],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+  String get _playLabel {
+    if (_failed) return 'Retry video';
+    switch (_info.kind) {
+      case EmbedKind.tiktok:
+        return 'Play TikTok';
+      case EmbedKind.facebook:
+        return 'Play Facebook video';
+      default:
+        return 'Play video';
+    }
+  }
+
+  Widget _preview() {
+    final thumb = _youtubeThumbnail ?? _tiktokThumb;
+    return InkWell(
+      onTap: widget.onTapPreview ?? _play,
+      child: Stack(
+        fit: StackFit.expand,
+        alignment: Alignment.center,
+        children: [
+          if (thumb != null)
+            Image.network(
+              thumb,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) =>
+                  const ColoredBox(color: Color(0xFF171A20)),
+            )
+          else
+            const ColoredBox(color: Color(0xFF171A20)),
+          const ColoredBox(color: Color(0x55000000)),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.play_circle_fill_rounded,
+                  size: 58,
+                  color: Colors.white,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _playLabel,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    shadows: [Shadow(blurRadius: 5, color: Colors.black)],
                   ),
                 ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _player() => Stack(
+    children: [
+      WebViewWidget(controller: _controller!),
+      if (_loading) const LinearProgressIndicator(),
+      Positioned(
+        top: 4,
+        right: 4,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton.filled(
+              visualDensity: VisualDensity.compact,
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.black54,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: _cycleShape,
+              tooltip: 'Change video shape',
+              icon: const Icon(Icons.aspect_ratio_rounded, size: 18),
+            ),
+            const SizedBox(width: 4),
+            IconButton.filled(
+              visualDensity: VisualDensity.compact,
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.black54,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: _stop,
+              tooltip: 'Stop video',
+              icon: const Icon(Icons.close, size: 18),
+            ),
+          ],
         ),
-      ],
-    ),
-    ),
+      ),
+    ],
   );
+
+  @override
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    // In the feed keep tall (portrait) videos from taking over the screen;
+    // on the post page they can use most of it.
+    final maxFraction = widget.onTapPreview != null ? 0.55 : 0.78;
+    return PopScope(
+      canPop: _fullscreenEntry == null,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _fullscreenEntry != null) _backFromFullscreen();
+      },
+      child: Container(
+        margin: const EdgeInsets.only(top: 10),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: Colors.black,
+          border: Border.all(color: Ui.line),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final w = box.maxWidth.isFinite ? box.maxWidth : screen.width;
+            final maxH = math.max(w * 0.5, screen.height * maxFraction);
+            final h = (w / (_manualRatio ?? _ratio)).clamp(w * 0.45, maxH).toDouble();
+            return AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: w,
+                height: h,
+                child: _controller != null && !_failed ? _player() : _preview(),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
 }
