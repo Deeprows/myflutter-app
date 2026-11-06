@@ -5,6 +5,8 @@ import '../models/fan_post_link.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../services/fan_zone_service.dart';
+import '../services/post_translation_service.dart';
+import '../services/locale_service.dart';
 import '../services/post_bookmarks.dart';
 import 'bookmarks_screen.dart';
 import '../theme/app_theme.dart';
@@ -40,6 +42,10 @@ class _FanPostCardState extends State<FanPostCard> {
       _followBusy = false,
       _followKnown = false,
       _followed = false;
+  bool _translationBusy = false;
+  String? _translatedText;
+  String? _translationTarget;
+  String? _translationError;
   @override
   void initState() {
     super.initState();
@@ -52,6 +58,12 @@ class _FanPostCardState extends State<FanPostCard> {
   void didUpdateWidget(covariant FanPostCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_busy) _post = Map.of(widget.post);
+    if (oldWidget.post['id'] != widget.post['id'] ||
+        oldWidget.post['text'] != widget.post['text']) {
+      _translatedText = null;
+      _translationTarget = null;
+      _translationError = null;
+    }
   }
 
   void _notice(String text) {
@@ -568,6 +580,96 @@ class _FanPostCardState extends State<FanPostCard> {
     );
   }
 
+  Future<void> _translatePost(String source, String target) async {
+    if (_translationBusy) return;
+    setState(() {
+      _translationBusy = true;
+      _translationError = null;
+    });
+    try {
+      final result = await PostTranslationService.instance.translate(
+        source,
+        target,
+      );
+      if (!mounted) return;
+      setState(() {
+        _translatedText = result;
+        _translationTarget = target;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _translationError = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _translationBusy = false);
+    }
+  }
+
+  String _languageName(String code) {
+    for (final language in AppLocale.supported) {
+      if (language.code == code) return language.native;
+    }
+    return code.toUpperCase();
+  }
+
+  Widget _translationControl(String source) {
+    final current = AppLocale.code;
+    final targets = <String>{current, 'en'}.toList();
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_translatedText != null)
+          TextButton.icon(
+            onPressed: () => setState(() {
+              _translatedText = null;
+              _translationTarget = null;
+              _translationError = null;
+            }),
+            icon: const Icon(Icons.translate_rounded, size: 16),
+            label: const Text('Show original'),
+            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+          )
+        else
+          PopupMenuButton<String>(
+            enabled: !_translationBusy,
+            tooltip: 'Translate post',
+            onSelected: (target) => _translatePost(source, target),
+            itemBuilder: (_) => targets
+                .map((target) => PopupMenuItem<String>(
+                      value: target,
+                      child: Text('Translate to ${_languageName(target)}'),
+                    ))
+                .toList(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (_translationBusy)
+                  const SizedBox(width: 14, height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                else
+                  const Icon(Icons.translate_rounded, size: 17),
+                const SizedBox(width: 5),
+                Text(
+                  _translationBusy ? 'Translating…' : 'Translate',
+                  style: TextStyle(
+                    color: Ui.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Icon(Icons.arrow_drop_down, size: 17),
+              ]),
+            ),
+          ),
+        if (_translationTarget != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Text('· ${_languageName(_translationTarget!)}',
+              style: TextStyle(color: Ui.muted, fontSize: 11)),
+          ),
+      ],
+    );
+  }
+
   Widget _content(bool detail) {
     final kindKey = '${_post['kind']}';
     final kind = FanKind.of(kindKey);
@@ -580,12 +682,18 @@ class _FanPostCardState extends State<FanPostCard> {
     }
     displayText = displayText.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
     final style = TextStyle(fontSize: detail ? 21 : 15.5, height: 1.42);
+    final originalDisplayText = displayText;
     // Video posts: the first line is the title, the rest is the caption.
     String? videoTitle;
     if (kindKey == 'video' && displayText.isNotEmpty) {
       final nl = displayText.indexOf('\n');
       videoTitle = nl < 0 ? displayText : displayText.substring(0, nl).trim();
       displayText = nl < 0 ? '' : displayText.substring(nl).trim();
+    }
+    final translated = _translatedText;
+    if (translated != null) {
+      displayText = translated;
+      videoTitle = null;
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -597,6 +705,18 @@ class _FanPostCardState extends State<FanPostCard> {
               text: kind.label,
               color: kind.color,
               icon: kind.icon,
+            ),
+          ),
+        if (originalDisplayText.trim().isNotEmpty)
+          Align(
+            alignment: Alignment.centerRight,
+            child: _translationControl(originalDisplayText),
+          ),
+        if (_translationError != null)
+          Padding(padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              _translationError!,
+              style: TextStyle(color: Ui.red, fontSize: 12),
             ),
           ),
         if (videoTitle != null && videoTitle.isNotEmpty)
