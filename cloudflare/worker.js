@@ -22,6 +22,7 @@
  *
  * Premium subscriptions (Paystack + D1), see SUBSCRIPTIONS.md:
  *   GET  /sub/config   price, local-currency equivalent
+ *   GET  /sub/ad-plans "Remove ads" plans (days + price) in the caller's currency (?cur=EGP)
  *   POST /sub/start    creates a Paystack checkout
  *   GET  /sub/verify   confirms a payment after checkout
  *   GET  /sub/status   is this install premium?
@@ -958,6 +959,15 @@ async function ensureSchema(env) {
       "CREATE TABLE IF NOT EXISTS token_requests (install_id TEXT PRIMARY KEY, contact TEXT, created_at INTEGER NOT NULL DEFAULT 0)"
     ),
   ]);
+  // Older databases: remember which plan a phone asked for. Harmless when the
+  // columns already exist.
+  for (const col of ["days INTEGER", "amount_ngn INTEGER", "currency TEXT"]) {
+    try {
+      await env.DB.prepare(`ALTER TABLE token_requests ADD COLUMN ${col}`).run();
+    } catch {
+      // column already there
+    }
+  }
   schemaReady = true;
 }
 
@@ -975,6 +985,11 @@ async function subscriptions(request, env, url) {
 
   if (path === "/sub/config" && request.method === "GET") {
     return subConfig(url, env);
+  }
+
+  // The "Remove ads" plan list, priced in the person's own currency.
+  if (path === "/sub/ad-plans" && request.method === "GET") {
+    return adPlans(url, env);
   }
 
   // Status, the admin page and the token routes only need the database;
@@ -1091,6 +1106,100 @@ async function subConfig(url, env) {
     }
   }
   return json(out);
+}
+
+// ---- "Remove ads" plans: duration + amount, in the person's own currency ----
+//
+// Naira prices per number of days. Change them without a rebuild by setting the
+// Worker variable AD_PLANS to JSON such as {"7":700,"30":2000,"90":5000}.
+const DEFAULT_AD_PLANS = {
+  7: 700,
+  14: 1200,
+  30: 2000,
+  60: 3600,
+  90: 5000,
+  180: 9000,
+  365: 16000,
+};
+
+function adPlanTable(env) {
+  let table = DEFAULT_AD_PLANS;
+  try {
+    if (env.AD_PLANS) table = JSON.parse(env.AD_PLANS);
+  } catch {
+    table = DEFAULT_AD_PLANS;
+  }
+  const out = [];
+  for (const [d, p] of Object.entries(table || {})) {
+    const days = parseInt(d, 10);
+    const price = Math.round(Number(p));
+    if (days >= 1 && days <= 3650 && price >= 1) {
+      out.push({ days, price_ngn: price });
+    }
+  }
+  if (!out.length) {
+    return Object.entries(DEFAULT_AD_PLANS).map(([d, p]) => ({
+      days: Number(d),
+      price_ngn: p,
+    }));
+  }
+  return out.sort((a, b) => a.days - b.days);
+}
+
+/** 27 -> "E£27", 0.5 -> "$0.50": whole units once the amount is 10 or more. */
+function moneyShort(amount, currency) {
+  const whole = amount >= 10;
+  try {
+    return new Intl.NumberFormat("en", {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+      minimumFractionDigits: whole ? 0 : 2,
+      maximumFractionDigits: whole ? 0 : 2,
+    }).format(amount);
+  } catch {
+    return `${currency} ${whole ? Math.round(amount) : amount.toFixed(2)}`;
+  }
+}
+
+/** Rounds up so the shown amount never looks cheaper than what is charged. */
+const roundUpMoney = (amount) =>
+  amount >= 10 ? Math.ceil(amount) : Math.ceil(amount * 100) / 100;
+
+async function adPlans(url, env) {
+  const cur = (url.searchParams.get("cur") || "NGN").toUpperCase();
+  const wanted = /^[A-Z]{3}$/.test(cur) ? cur : "NGN";
+  let rates = null;
+  try {
+    rates = await ngnRates();
+  } catch {
+    rates = null;
+  }
+  const rate = wanted !== "NGN" && rates ? Number(rates[wanted]) : 0;
+  const usd = rates ? Number(rates.USD) : 0;
+  const local = rate > 0;
+
+  const plans = adPlanTable(env).map((p) => {
+    const row = {
+      days: p.days,
+      price_ngn: p.price_ngn,
+      ngn_display: moneyShort(p.price_ngn, "NGN"),
+      local_amount: null,
+      local_display: null,
+      usd_display: null,
+    };
+    if (local) {
+      const amount = roundUpMoney(p.price_ngn * rate);
+      row.local_amount = amount;
+      row.local_display = moneyShort(amount, wanted);
+    }
+    if (usd > 0 && wanted !== "USD") {
+      const d = roundUpMoney(p.price_ngn * usd);
+      row.usd_display = `US$${d % 1 === 0 ? d : d.toFixed(2)}`;
+    }
+    return row;
+  });
+  return json({ currency: local ? wanted : "NGN", plans });
 }
 
 // ---- Paystack --------------------------------------------------------------
@@ -1411,15 +1520,24 @@ async function tokenRequest(request, env) {
   const installId = String(b.install_id || "");
   if (!ID_RE.test(installId)) return json({ error: "bad install id" }, 400);
   const contact = String(b.contact || "").trim().slice(0, 80);
+  // The plan the person picked (optional: older apps do not send it).
+  const wantDays = parseInt(b.days, 10);
+  const planOk = adPlanTable(env).find((p) => p.days === wantDays);
+  const days = planOk ? planOk.days : null;
+  const amountNgn = planOk ? planOk.price_ngn : null;
+  const currency = /^[A-Za-z]{3}$/.test(String(b.currency || ""))
+    ? String(b.currency).toUpperCase()
+    : null;
 
   if ((await expiryOf(env, installId)) > Date.now()) {
     return json({ ok: true, state: "active" });
   }
   await env.DB.prepare(
-    "INSERT INTO token_requests (install_id, contact, created_at) VALUES (?, ?, ?) " +
-      "ON CONFLICT(install_id) DO UPDATE SET contact = COALESCE(NULLIF(excluded.contact, ''), token_requests.contact), created_at = excluded.created_at"
+    "INSERT INTO token_requests (install_id, contact, created_at, days, amount_ngn, currency) VALUES (?, ?, ?, ?, ?, ?) " +
+      "ON CONFLICT(install_id) DO UPDATE SET contact = COALESCE(NULLIF(excluded.contact, ''), token_requests.contact), created_at = excluded.created_at, " +
+      "days = COALESCE(excluded.days, token_requests.days), amount_ngn = COALESCE(excluded.amount_ngn, token_requests.amount_ngn), currency = COALESCE(excluded.currency, token_requests.currency)"
   )
-    .bind(installId, contact, Date.now())
+    .bind(installId, contact, Date.now(), days, amountNgn, currency)
     .run();
   return json({ ok: true, state: "pending" });
 }
@@ -1624,7 +1742,7 @@ async function subAdmin(request, env, url) {
 
   const reqs = (
     await env.DB.prepare(
-      "SELECT install_id, contact, created_at FROM token_requests ORDER BY created_at DESC LIMIT 30"
+      "SELECT install_id, contact, created_at, days, amount_ngn, currency FROM token_requests ORDER BY created_at DESC LIMIT 30"
     ).all()
   ).results || [];
   const reqHtml = reqs.length
@@ -1633,7 +1751,8 @@ async function subAdmin(request, env, url) {
           (r) => `<form method="post" style="background:#101722;padding:10px;border-radius:8px;margin:8px 0">
 <input type="hidden" name="token" value="${tk}"><input type="hidden" name="install_id" value="${esc(r.install_id)}">
 <div style="font-size:12.5px;margin-bottom:6px">${esc(String(r.install_id).slice(0, 12))}… &middot; ${esc(day(r.created_at))}${r.contact ? ` &middot; <b>${esc(r.contact)}</b>` : ""}${waLink(r.contact)}</div>
-<input name="days" type="number" value="30" style="width:80px;padding:9px">
+${r.days ? `<div style="font-size:13.5px;margin-bottom:6px;color:#22e07a">Wants <b>${esc(r.days)} days</b>${r.amount_ngn ? ` &middot; ₦${esc(Number(r.amount_ngn).toLocaleString("en-US"))}` : ""}${r.currency ? ` (${esc(r.currency)})` : ""}</div>` : ""}
+<input name="days" type="number" value="${esc(r.days || 30)}" style="width:80px;padding:9px">
 <button name="action" value="answer" style="${btn}">Create token</button>
 <button name="action" value="dismiss" style="${btn}">Dismiss</button>
 </form>`
