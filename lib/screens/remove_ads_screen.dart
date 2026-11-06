@@ -30,6 +30,7 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
   TokenState _state = const TokenState('unknown');
   PlanInfo _plan = PlanInfo.fallback(); // ₦2,000 until the Worker answers
   String _installId = '';
+  String _method = 'bank'; // 'bank' | 'crypto'
   bool _busy = false;
   bool _checking = true;
   String? _error;
@@ -150,6 +151,28 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
     }
   }
 
+  /// Opens WhatsApp with the receipt message ready; the person attaches the
+  /// payment screenshot there.
+  Future<void> _sendReceipt() async {
+    final how = _method == 'bank'
+        ? '${AppConfig.payBankProvider} bank transfer'
+        : '${AppConfig.payCryptoProvider} (${AppConfig.payCryptoNetwork})';
+    final message = 'Hello, I have paid to remove ads on the Deeprowss app.\n'
+        'Payment: $how\n'
+        'Amount: ${_plan.priceDisplay}\n'
+        'My receipt is attached.';
+    final uri = buildWhatsappUri(
+        AppConfig.receiptWhatsappUrl, message, _installId);
+    if (uri == null || !await openExternally(uri.toString())) {
+      if (mounted) _toast('Could not open WhatsApp');
+    }
+  }
+
+  Future<void> _copy(String value, String what) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (mounted) _toast('$what copied');
+  }
+
   // ------------------------------------------------------------------ UI
 
   @override
@@ -159,7 +182,7 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
       backgroundColor: Ui.bg,
       appBar: AppBar(
         backgroundColor: Ui.bg,
-        title: const Text('Premium',
+        title: const Text('Remove ads',
             style: TextStyle(fontWeight: FontWeight.w800)),
       ),
       body: SafeArea(
@@ -167,12 +190,30 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
+              padding: const EdgeInsets.fromLTRB(14, 6, 14, 24),
               children: [
                 if (premium)
                   _activeCard()
                 else ...[
-                  _requestCard(),
+                  _hero(),
+                  const SizedBox(height: 14),
+                  _stepCard(
+                    number: 1,
+                    title: 'Make your payment',
+                    child: _payBlock(),
+                  ),
+                  const SizedBox(height: 12),
+                  _stepCard(
+                    number: 2,
+                    title: 'Send your receipt',
+                    child: _receiptBlock(),
+                  ),
+                  const SizedBox(height: 12),
+                  _stepCard(
+                    number: 3,
+                    title: 'Get your token',
+                    child: _tokenBlock(),
+                  ),
                   const SizedBox(height: 12),
                   _haveTokenCard(),
                 ],
@@ -240,77 +281,39 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
     );
   }
 
-  Widget _requestCard() {
-    final st = _state.state;
+  /// Title + price at the top of the page.
+  Widget _hero() {
+    final local = _plan.localDisplay;
     return _box(
       highlight: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(Icons.block_rounded, color: Ui.redSoft),
-            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Ui.red.withValues(alpha: .18),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.block_rounded, color: Ui.redSoft),
+            ),
+            const SizedBox(width: 12),
             const Expanded(
-              child: Text('Remove all ads',
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+              child: Text('Go ad-free',
+                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
             ),
           ]),
-          const SizedBox(height: 6),
-          Text(
-            'Request a token and we will confirm payment with you. When it is '
-            'ready it appears here, and one tap switches every ad off on this '
-            'phone.',
-            style: TextStyle(color: Ui.muted, fontSize: 13.5, height: 1.3),
-          ),
           const SizedBox(height: 12),
-          _priceRow(),
-          const SizedBox(height: 14),
-          if (_checking)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(8),
-                child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2.4)),
-              ),
-            )
-          else if (st == 'ready' && _state.token != null)
-            _readyBlock()
-          else if (st == 'pending')
-            _pendingBlock()
-          else
-            _askBlock(),
-        ],
-      ),
-    );
-  }
-
-  /// "₦2,000 / month" and, for people outside Nigeria, the same price in
-  /// their own currency (an estimate; the charge is always in naira).
-  Widget _priceRow() {
-    final local = _plan.localDisplay;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Ui.cardDeep,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Ui.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(_plan.priceDisplay,
                   style: const TextStyle(
-                      fontSize: 26, fontWeight: FontWeight.w900)),
+                      fontSize: 30, fontWeight: FontWeight.w900)),
               const SizedBox(width: 6),
-              Text('/ month',
-                  style: TextStyle(color: Ui.muted, fontSize: 14)),
+              Text('/ month', style: TextStyle(color: Ui.muted, fontSize: 14)),
               if (local != null) ...[
                 const SizedBox(width: 10),
                 Text('≈ $local',
@@ -321,22 +324,264 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
               ],
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             local != null
-                ? 'No ads for 30 days. Charged in naira; $local is an estimate '
-                    'in your currency.'
-                : 'No ads for 30 days.',
-            style: TextStyle(color: Ui.muted, fontSize: 12.5, height: 1.25),
+                ? 'No ads for 30 days on this phone. Charged in naira; $local '
+                    'is an estimate in your currency.'
+                : 'No ads for 30 days on this phone.',
+            style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3),
           ),
         ],
       ),
     );
   }
 
+  Widget _stepCard({
+    required int number,
+    required String title,
+    required Widget child,
+  }) =>
+      _box(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              CircleAvatar(
+                radius: 13,
+                backgroundColor: Ui.red,
+                child: Text('$number',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(title,
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.w900)),
+              ),
+            ]),
+            const SizedBox(height: 14),
+            child,
+          ],
+        ),
+      );
+
+  // ---- step 1: payment details
+
+  Widget _payBlock() {
+    final bank = _method == 'bank';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(children: [
+          Expanded(
+            child: _methodChip(
+              id: 'bank',
+              icon: Icons.account_balance_rounded,
+              label: 'Bank transfer',
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _methodChip(
+              id: 'crypto',
+              icon: Icons.currency_bitcoin_rounded,
+              label: 'Crypto (USDT)',
+            ),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Ui.cardDeep,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Ui.line),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (bank) ...[
+                _kv('Provider', AppConfig.payBankProvider),
+                _kv('Account name', AppConfig.payBankAccountName),
+                const SizedBox(height: 6),
+                _copyValue(
+                  label: 'Account number',
+                  value: AppConfig.payBankAccountNumber,
+                  what: 'Account number',
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Transfer ${_plan.priceDisplay} to this account.',
+                  style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3),
+                ),
+              ] else ...[
+                _kv('Provider', AppConfig.payCryptoProvider),
+                _kv('Network', AppConfig.payCryptoNetwork),
+                _kv('Account name', AppConfig.payCryptoAccountName),
+                const SizedBox(height: 6),
+                _copyValue(
+                  label: 'Wallet address',
+                  value: AppConfig.payCryptoAddress,
+                  what: 'Wallet address',
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Send the USDT equivalent of ${_plan.priceDisplay}. Only '
+                  'send on the ${AppConfig.payCryptoNetwork} network, or the '
+                  'funds are lost.',
+                  style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _methodChip({
+    required String id,
+    required IconData icon,
+    required String label,
+  }) {
+    final on = _method == id;
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => setState(() => _method = id),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          color: on ? Ui.red.withValues(alpha: .16) : Ui.cardDeep,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: on ? Ui.red : Ui.line, width: on ? 1.5 : 1),
+        ),
+        child: Column(children: [
+          Icon(icon, color: on ? Ui.redSoft : Ui.muted),
+          const SizedBox(height: 4),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: on ? FontWeight.w800 : FontWeight.w600,
+                  color: on ? Colors.white : Ui.muted)),
+        ]),
+      ),
+    );
+  }
+
+  Widget _kv(String k, String v) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(children: [
+          SizedBox(
+            width: 112,
+            child: Text(k, style: TextStyle(color: Ui.muted, fontSize: 14)),
+          ),
+          Expanded(
+            child: Text(v,
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w800)),
+          ),
+        ]),
+      );
+
+  Widget _copyValue({
+    required String label,
+    required String value,
+    required String what,
+  }) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(color: Ui.muted, fontSize: 12.5)),
+          const SizedBox(height: 4),
+          Row(children: [
+            Expanded(
+              child: SelectableText(value,
+                  style: const TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: .4)),
+            ),
+            IconButton(
+              tooltip: 'Copy',
+              onPressed: () => _copy(value, what),
+              icon: Icon(Icons.copy_rounded, color: Ui.redSoft),
+            ),
+          ]),
+        ],
+      );
+
+  // ---- step 2: receipt on WhatsApp
+
+  Widget _receiptBlock() => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'After paying, send your receipt or a screenshot of the payment '
+            'on WhatsApp. We confirm it and make your token.',
+            style: TextStyle(color: Ui.muted, fontSize: 13.5, height: 1.3),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _sendReceipt,
+              icon: const Icon(Icons.chat_rounded),
+              label: const Text('Send receipt on WhatsApp',
+                  style:
+                      TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF25D366),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tip: in WhatsApp, tap the attach (📎) button and choose your '
+            'payment screenshot. Your ID is added to the message for you.',
+            style: TextStyle(color: Ui.dim, fontSize: 12, height: 1.3),
+          ),
+        ],
+      );
+
+  // ---- step 3: token request / pending / ready
+
+  Widget _tokenBlock() {
+    final st = _state.state;
+    if (_checking) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(8),
+          child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2.4)),
+        ),
+      );
+    }
+    if (st == 'ready' && _state.token != null) return _readyBlock();
+    if (st == 'pending') return _pendingBlock();
+    return _askBlock();
+  }
+
   Widget _askBlock() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text(
+            'Request your token. When it is ready it shows up here and one '
+            'tap switches every ad off on this phone.',
+            style: TextStyle(color: Ui.muted, fontSize: 13.5, height: 1.3),
+          ),
+          const SizedBox(height: 12),
           TextField(
             controller: _contact,
             maxLength: 20,
@@ -361,8 +606,6 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
             icon: Icons.vpn_key_rounded,
             onTap: _request,
           ),
-          const SizedBox(height: 8),
-          _chatButton(),
         ],
       );
 
@@ -374,7 +617,8 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Request sent. Your token will appear here by itself.',
+                'Request sent. Your token will appear here by itself once '
+                'your payment is confirmed.',
                 style: TextStyle(color: Ui.muted, fontSize: 13.5),
               ),
             ),
@@ -385,8 +629,10 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
             await _check();
             if (mounted) setState(() => _busy = false);
           }),
-          const SizedBox(height: 8),
-          _chatButton(),
+          TextButton(
+            onPressed: _chat,
+            child: const Text('Need help? Chat on WhatsApp'),
+          ),
         ],
       );
 
@@ -426,34 +672,37 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
   }
 
   Widget _haveTokenCard() => _box(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Already have a token?',
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: EdgeInsets.zero,
+            title: const Text('Already have a token?',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _token,
-              textCapitalization: TextCapitalization.characters,
-              autocorrect: false,
-              enableSuggestions: false,
-              maxLength: 16,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9\- ]')),
-                _UpperCaseFormatter(),
-              ],
-              decoration: const InputDecoration(
-                labelText: 'Token (XXXX-XXXX-XXXX)',
-                counterText: '',
+            children: [
+              TextField(
+                controller: _token,
+                textCapitalization: TextCapitalization.characters,
+                autocorrect: false,
+                enableSuggestions: false,
+                maxLength: 16,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9\- ]')),
+                  _UpperCaseFormatter(),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Token (XXXX-XXXX-XXXX)',
+                  counterText: '',
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            _primary(
-              label: 'Remove ads',
-              icon: Icons.block_rounded,
-              onTap: () => _redeem(_token.text),
-            ),
-          ],
+              const SizedBox(height: 12),
+              _primary(
+                label: 'Remove ads',
+                icon: Icons.block_rounded,
+                onTap: () => _redeem(_token.text),
+              ),
+            ],
+          ),
         ),
       );
 
@@ -480,23 +729,6 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
             backgroundColor: Ui.red,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24)),
-          ),
-        ),
-      );
-
-  Widget _chatButton() => SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: _chat,
-          icon: Icon(Icons.chat_rounded, color: Ui.green),
-          label: const Text('Buy token on WhatsApp',
-              style: TextStyle(fontWeight: FontWeight.w800)),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            side: BorderSide(color: Ui.green.withValues(alpha: .7)),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24)),
           ),
