@@ -485,11 +485,22 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            _profile == null ? 'Fan profile' : '${_profile!['name']}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  _profile == null ? 'Fan profile' : '${_profile!['name']}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                ),
+              ),
+              if (_profile?['is_premium'] == 1 || _profile?['is_premium'] == true) ...[
+                const SizedBox(width: 5),
+                const Icon(Icons.verified_rounded, color: Color(0xFF1D9BF0), size: 18),
+              ],
+            ],
           ),
           if (_profile != null)
             Text(
