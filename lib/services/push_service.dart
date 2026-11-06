@@ -7,8 +7,14 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/push_target.dart';
+import '../screens/fan_profile_screen.dart';
+import '../screens/fan_thread_screen.dart';
+import 'app_nav.dart';
+import 'auth_service.dart';
 import 'content_sync.dart';
+import 'fan_zone_service.dart';
 import 'native_notifier.dart';
+import 'notification_center.dart';
 
 // ---------------------------------------------------------------- Firebase
 // Same Firebase project the Deeprowss website uses (deeprows-4d37c), so the
@@ -113,9 +119,33 @@ class PushService {
 
   void _dispatch(PushTarget? t) {
     if (t == null) return;
+    if (t.kind == 'social') {
+      unawaited(_openSocial(t));
+      return;
+    }
     tabRequest.value = null;
     tabRequest.value = t.tab;
     target.value = t.hasItem ? t : null;
+  }
+
+  /// New follower -> that fan's profile; like / comment -> the post.
+  /// When the app was closed the navigator needs a moment to exist.
+  Future<void> _openSocial(PushTarget t) async {
+    for (var i = 0; i < 20; i++) {
+      final nav = AppNav.key.currentState;
+      if (nav != null) {
+        nav.push(
+          MaterialPageRoute<void>(
+            builder: (_) => t.socialKind == 'follow' || t.postId.isEmpty
+                ? FanProfileScreen(userId: t.actorId)
+                : FanThreadScreen(postId: t.postId),
+          ),
+        );
+        NotificationCenter.instance.refreshBadge();
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
   }
 
   void _onPayload(String json) {
@@ -194,7 +224,16 @@ class PushService {
       // Token check only records problems; it must never delay subscribing.
       unawaited(_checkToken());
       await syncTopics();
-      messaging.onTokenRefresh.listen((_) => syncTopics());
+      messaging.onTokenRefresh.listen((_) {
+        syncTopics();
+        _registered = '';
+        registerDevice();
+      });
+      // Follower / like / comment pushes are sent to this phone's token.
+      AuthService.instance.addListener(() {
+        if (AuthService.instance.signedIn) unawaited(registerDevice());
+      });
+      unawaited(registerDevice());
     } catch (e, st) {
       initError = 'Push start-up failed: $e';
       debugPrint('Push init failed: $e\n$st');
@@ -218,6 +257,43 @@ class PushService {
       await Future<void>.delayed(Duration(seconds: 2 + i * 2));
     }
     return null;
+  }
+
+  // ------------------------------------------------ personal (social) push
+
+  String _registered = '';
+
+  /// Tells the server which phone belongs to the signed-in fan, so it can
+  /// push "new follower", "liked your post" and "commented" to it. Safe to
+  /// call often: it only talks to the server when something changed.
+  Future<void> registerDevice() async {
+    if (!_ready || !AuthService.instance.signedIn) return;
+    try {
+      final t = await FirebaseMessaging.instance.getToken();
+      if (t == null || t.isEmpty) return;
+      final key = '${AuthService.instance.user?.id}:$t';
+      if (key == _registered) return;
+      await FanZoneService.call('social/device', body: {'token': t});
+      _registered = key;
+    } catch (_) {
+      // Retried on the next check (app start, token refresh, sign-in).
+    }
+  }
+
+  /// Called when the fan signs out, so the next person on this phone does
+  /// not receive the previous fan's notifications.
+  Future<void> unregisterDevice() async {
+    if (!_ready || !AuthService.instance.signedIn) return;
+    try {
+      final t = await FirebaseMessaging.instance.getToken();
+      if (t == null || t.isEmpty) return;
+      await FanZoneService.call(
+        'social/device',
+        body: {'token': t, 'enabled': false},
+        timeout: const Duration(seconds: 6),
+      );
+    } catch (_) {}
+    _registered = '';
   }
 
   // ------------------------------------------------------------- topics
@@ -307,7 +383,16 @@ class PushService {
     if (title.isEmpty && body.isEmpty) return;
     final t = PushTarget.fromData(m.data);
     final channel = m.notification?.android?.channelId ??
-        (t?.kind == 'kickoff' ? 'kickoff' : 'content');
+        (t?.kind == 'kickoff'
+            ? 'kickoff'
+            : (t?.kind == 'social' ? 'social' : 'content'));
+    if (t?.kind == 'social') {
+      // Drawn right below; make sure the in-app fallback does not repeat it,
+      // and light up the bell straight away.
+      final nid = (m.data['nid'] ?? '').toString();
+      await NotificationCenter.instance.markNotified(nid);
+      unawaited(NotificationCenter.instance.poll());
+    }
     final payload = jsonEncode(
         m.data.map((k, v) => MapEntry(k.toString(), v.toString())));
 
