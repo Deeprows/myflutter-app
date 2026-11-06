@@ -5,7 +5,12 @@ import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import 'package:flutter/services.dart';
+
+import '../models/fan_post_link.dart';
 import '../models/fixture.dart';
+import '../services/embed_info.dart';
+import '../widgets/fan_post_video.dart';
 import '../services/fan_zone_service.dart';
 import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
@@ -20,12 +25,14 @@ const _labels = {
   'prediction': 'Predictions',
   'betslip': 'Bet Slips',
   'banter': 'Banter',
+  'video': 'Videos',
 };
 const _filterIcons = {
   'all': Icons.dashboard_rounded,
   'prediction': Icons.sports_soccer_rounded,
   'betslip': Icons.receipt_long_rounded,
   'banter': Icons.forum_rounded,
+  'video': Icons.smart_display_rounded,
 };
 String _error(Object e) => safeErrorMessage(e);
 
@@ -630,9 +637,32 @@ class _ComposePost extends StatefulWidget {
   State<_ComposePost> createState() => _ComposePostState();
 }
 
+/// The pasted link as embed info when it is a YouTube, TikTok or Facebook
+/// video link, otherwise null.
+EmbedInfo? _supportedVideo(String raw) {
+  final link = raw.trim();
+  final u = Uri.tryParse(link);
+  if (u == null || (u.scheme != 'http' && u.scheme != 'https') || u.host.isEmpty) {
+    return null;
+  }
+  final info = embedInfoFor(link);
+  switch (info.kind) {
+    case EmbedKind.youtube:
+      return fanVideoUrl(link).contains('/embed/') ? info : null;
+    case EmbedKind.tiktok:
+      return tiktokIdFrom(link) != null || isTikTokShortLink(u) ? info : null;
+    case EmbedKind.facebook:
+      return info;
+    case EmbedKind.generic:
+      return null;
+  }
+}
+
 class _ComposePostState extends State<_ComposePost> {
   Fixture? _taggedMatch;
   final _text = TextEditingController();
+  final _url = TextEditingController();
+  final _title = TextEditingController();
   late String _kind = widget.initialKind;
   Uint8List? _image;
   bool _busy = false, _picking = false;
@@ -641,11 +671,22 @@ class _ComposePostState extends State<_ComposePost> {
     'prediction': 'Arsenal 2-1 Chelsea. Saka scores, Palmer gets one back…',
     'betslip': 'Add a caption for your slip (optional)…',
     'banter': 'What is your take on the football today?',
+    'video': 'Say something about this video (optional)…',
+  };
+
+  static const _kinds = ['prediction', 'betslip', 'banter', 'video'];
+  static const _blurbs = {
+    'prediction': 'Call a score or a player moment before kick-off.',
+    'betslip': 'Show your slip. Crop out account details first.',
+    'banter': 'Share a hot take with the community.',
+    'video': 'Share a YouTube, TikTok or Facebook video with a title.',
   };
 
   @override
   void dispose() {
     _text.dispose();
+    _url.dispose();
+    _title.dispose();
     super.dispose();
   }
 
@@ -763,8 +804,47 @@ class _ComposePostState extends State<_ComposePost> {
     }
   }
 
+  Future<void> _pasteLink() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final value = data?.text?.trim() ?? '';
+    if (value.isEmpty) {
+      _notice('Nothing to paste. Copy a video link first.');
+      return;
+    }
+    setState(() => _url.text = value);
+  }
+
   Future<void> _publish() async {
     if (_busy || _picking) return;
+    if (_kind == 'video') {
+      final link = _url.text.trim();
+      final title = _title.text.trim().replaceAll(RegExp(r'\s*\n\s*'), ' ');
+      if (_supportedVideo(link) == null) {
+        _notice('Paste a YouTube, TikTok or Facebook video link.');
+        return;
+      }
+      if (title.isEmpty) {
+        _notice('Add a title for your video.');
+        return;
+      }
+      final caption = _text.text.trim();
+      setState(() => _busy = true);
+      try {
+        await FanZoneService.publish(
+          kind: 'video',
+          text: [title, if (caption.isNotEmpty) caption, link].join('\n\n'),
+          matchKey: _taggedMatch == null
+              ? null
+              : FanZoneService.matchKey(_taggedMatch!),
+        );
+        if (mounted) Navigator.pop(context, true);
+      } catch (e) {
+        _notice(_error(e));
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+      return;
+    }
     if (_kind == 'betslip' && _image == null) {
       _notice('Attach your bet-slip image.');
       return;
@@ -795,6 +875,386 @@ class _ComposePostState extends State<_ComposePost> {
     }
   }
 
+  Widget _kindPicker() => SizedBox(
+    height: 46,
+    child: ListView.separated(
+      scrollDirection: Axis.horizontal,
+      itemCount: _kinds.length,
+      separatorBuilder: (_, __) => const SizedBox(width: 8),
+      itemBuilder: (_, i) {
+        final kind = _kinds[i];
+        final fk = FanKind.of(kind);
+        final sel = kind == _kind;
+        return Material(
+          color: sel ? fk.color.withValues(alpha: .18) : Ui.card,
+          shape: StadiumBorder(
+            side: BorderSide(
+              color: sel ? fk.color : Ui.line,
+              width: sel ? 1.4 : 1,
+            ),
+          ),
+          child: InkWell(
+            customBorder: const StadiumBorder(),
+            onTap: _busy ? null : () => setState(() => _kind = kind),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(fk.icon, size: 18, color: sel ? fk.color : Ui.dim),
+                  const SizedBox(width: 8),
+                  Text(
+                    fk.label,
+                    style: TextStyle(
+                      fontWeight: sel ? FontWeight.w800 : FontWeight.w600,
+                      color: sel ? fk.color : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    ),
+  );
+
+  Widget _kindHeader(FanKind k) => Row(
+    children: [
+      Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: k.color.withValues(alpha: .16),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(k.icon, color: k.color, size: 21),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              k.label,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              _blurbs[_kind] ?? '',
+              style: TextStyle(fontSize: 12.5, color: Ui.muted, height: 1.3),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+
+  Widget _tagRow(int maxChars) => Padding(
+    padding: const EdgeInsets.fromLTRB(8, 0, 12, 8),
+    child: Row(
+      children: [
+        Flexible(
+          child: TextButton.icon(
+            onPressed: _busy ? null : _tagMatch,
+            icon: const Icon(Icons.sports_soccer_rounded, size: 16),
+            label: Text(
+              _taggedMatch?.title ?? 'Tag a match',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        if (_taggedMatch != null)
+          IconButton(
+            onPressed: _busy ? null : () => setState(() => _taggedMatch = null),
+            tooltip: 'Remove match tag',
+            icon: const Icon(Icons.close, size: 16),
+          ),
+        const Spacer(),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _text,
+          builder: (_, v, __) => Text(
+            '${v.text.length}/$maxChars',
+            style: TextStyle(fontSize: 12, color: Ui.dim),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  InputDecoration _fieldDecoration({
+    required String label,
+    String? hint,
+    Widget? prefix,
+    Widget? suffix,
+    String? error,
+  }) => InputDecoration(
+    labelText: label,
+    hintText: hint,
+    errorText: error,
+    counterText: '',
+    prefixIcon: prefix,
+    suffixIcon: suffix,
+    filled: true,
+    fillColor: Ui.card,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: Ui.line),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: Ui.line),
+    ),
+  );
+
+  Widget _platformChip(EmbedKind kind, String label, IconData icon, EmbedInfo? found) {
+    final on = found?.kind == kind;
+    final color = FanKind.of('video').color;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: on ? color.withValues(alpha: .18) : Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: on ? color : Ui.line),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(on ? Icons.check_circle_rounded : icon, size: 15, color: on ? color : Ui.dim),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: on ? color : Ui.muted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _howTo() {
+    Widget step(int n, String text) => Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: FanKind.of('video').color.withValues(alpha: .2),
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '$n',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text, style: const TextStyle(fontSize: 13.5, height: 1.35)),
+          ),
+        ],
+      ),
+    );
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: fanBox(radius: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'How to embed a video',
+            style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          step(1, 'Open the video in YouTube, TikTok or Facebook.'),
+          step(2, 'Tap Share, then Copy link.'),
+          step(3, 'Paste the link above (or tap the paste button).'),
+          step(4, 'Add a title and an optional caption, then tap Post.'),
+          Text(
+            'Works with YouTube videos, Shorts and live links, TikTok videos '
+            '(including short vm.tiktok.com links) and public Facebook '
+            'videos, Reels and fb.watch links. Private videos will not play. '
+            'Portrait videos are shown in a tall player automatically.',
+            style: TextStyle(fontSize: 12, color: Ui.muted, height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _videoForm() {
+    final link = _url.text.trim();
+    final found = _supportedVideo(link);
+    final invalid = link.isNotEmpty && found == null;
+    return [
+      TextField(
+        controller: _url,
+        enabled: !_busy,
+        keyboardType: TextInputType.url,
+        autocorrect: false,
+        onChanged: (_) => setState(() {}),
+        decoration: _fieldDecoration(
+          label: 'Video link',
+          hint: 'Paste a YouTube, TikTok or Facebook link',
+          prefix: const Icon(Icons.link_rounded),
+          suffix: link.isEmpty
+              ? IconButton(
+                  tooltip: 'Paste',
+                  onPressed: _busy ? null : _pasteLink,
+                  icon: const Icon(Icons.content_paste_rounded),
+                )
+              : IconButton(
+                  tooltip: 'Clear',
+                  onPressed: _busy ? null : () => setState(_url.clear),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+          error: invalid
+              ? 'Use a YouTube, TikTok or Facebook video link.'
+              : null,
+        ),
+      ),
+      const SizedBox(height: 10),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _platformChip(EmbedKind.youtube, 'YouTube', Icons.smart_display_rounded, found),
+          _platformChip(EmbedKind.tiktok, 'TikTok', Icons.music_note_rounded, found),
+          _platformChip(EmbedKind.facebook, 'Facebook', Icons.facebook_rounded, found),
+        ],
+      ),
+      const SizedBox(height: 14),
+      TextField(
+        controller: _title,
+        enabled: !_busy,
+        maxLength: 100,
+        textCapitalization: TextCapitalization.sentences,
+        onChanged: (_) => setState(() {}),
+        decoration: _fieldDecoration(
+          label: 'Title',
+          hint: 'Give your video a short title',
+          prefix: const Icon(Icons.title_rounded),
+        ),
+      ),
+      const SizedBox(height: 14),
+      Container(
+        padding: const EdgeInsets.all(4),
+        decoration: fanBox(border: FanKind.of('video').color.withValues(alpha: .4)),
+        child: Column(
+          children: [
+            TextField(
+              controller: _text,
+              enabled: !_busy,
+              maxLength: 1000,
+              minLines: 3,
+              maxLines: 8,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                counterText: '',
+                hintText: _hints['video'],
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.all(12),
+              ),
+            ),
+            MentionSuggestions(controller: _text),
+            _tagRow(1000),
+          ],
+        ),
+      ),
+      if (found != null) ...[
+        const SizedBox(height: 16),
+        Text(
+          'Preview',
+          style: TextStyle(fontSize: 12.5, color: Ui.muted, fontWeight: FontWeight.w700),
+        ),
+        FanPostVideo(key: ValueKey(link), url: link, inline: true),
+      ],
+      const SizedBox(height: 16),
+      _howTo(),
+    ];
+  }
+
+  List<Widget> _standardForm(FanKind k) => [
+    Container(
+      padding: const EdgeInsets.all(4),
+      decoration: fanBox(border: k.color.withValues(alpha: .4)),
+      child: Column(
+        children: [
+          TextField(
+            controller: _text,
+            enabled: !_busy,
+            maxLength: 5000,
+            minLines: 6,
+            maxLines: 12,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              counterText: '',
+              hintText: _hints[_kind],
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              contentPadding: const EdgeInsets.all(12),
+            ),
+          ),
+          MentionSuggestions(controller: _text),
+          _tagRow(5000),
+        ],
+      ),
+    ),
+    const SizedBox(height: 14),
+    if (_image != null)
+      Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              width: double.infinity,
+              height: 260,
+              color: Colors.black26,
+              child: Image.memory(_image!, cacheWidth: 900, fit: BoxFit.contain),
+            ),
+          ),
+          Positioned(
+            right: 6,
+            top: 6,
+            child: IconButton.filled(
+              onPressed: _busy ? null : () => setState(() => _image = null),
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ),
+        ],
+      )
+    else
+      OutlinedButton.icon(
+        onPressed: widget.uploadsEnabled && !_busy && !_picking ? _pickImage : null,
+        icon: const Icon(Icons.add_photo_alternate_outlined),
+        label: Text(
+          _picking
+              ? 'Opening photos…'
+              : _kind == 'betslip'
+              ? 'Attach your bet slip'
+              : 'Attach a photo',
+        ),
+        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+      ),
+    const SizedBox(height: 8),
+    Text(
+      widget.uploadsEnabled
+          ? 'One JPG/PNG • Up to 4 MB. Crop out account details before sharing.'
+          : 'Image uploads are not enabled yet. You can still publish text predictions and banter.',
+      style: TextStyle(fontSize: 12, color: Ui.muted),
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final k = FanKind.of(_kind);
@@ -817,138 +1277,11 @@ class _ComposePostState extends State<_ComposePost> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              SegmentedButton<String>(
-                showSelectedIcon: false,
-                style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                segments: [
-                  for (final kind in const ['prediction', 'betslip', 'banter'])
-                    ButtonSegment<String>(
-                      value: kind,
-                      icon: Icon(FanKind.of(kind).icon, size: 16),
-                      label: Text(FanKind.of(kind).label),
-                    ),
-                ],
-                selected: {_kind},
-                onSelectionChanged: _busy
-                    ? null
-                    : (s) => setState(() => _kind = s.first),
-              ),
+              _kindPicker(),
               const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: fanBox(border: k.color.withValues(alpha: .4)),
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: _text,
-                      enabled: !_busy,
-                      maxLength: 5000,
-                      minLines: 6,
-                      maxLines: 12,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: InputDecoration(
-                        counterText: '',
-                        hintText: _hints[_kind],
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.all(12),
-                      ),
-                    ),
-                    MentionSuggestions(controller: _text),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 12, 8),
-                      child: Row(
-                        children: [
-                          Flexible(
-                            child: TextButton.icon(
-                              onPressed: _busy ? null : _tagMatch,
-                              icon: const Icon(
-                                Icons.sports_soccer_rounded,
-                                size: 16,
-                              ),
-                              label: Text(
-                                _taggedMatch?.title ?? 'Tag a match',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                          if (_taggedMatch != null)
-                            IconButton(
-                              onPressed: _busy
-                                  ? null
-                                  : () => setState(() => _taggedMatch = null),
-                              tooltip: 'Remove match tag',
-                              icon: const Icon(Icons.close, size: 16),
-                            ),
-                          const Spacer(),
-                          ValueListenableBuilder<TextEditingValue>(
-                            valueListenable: _text,
-                            builder: (_, v, __) => Text(
-                              '${v.text.length}/5000',
-                              style: TextStyle(fontSize: 12, color: Ui.dim),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              if (_image != null)
-                Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        width: double.infinity,
-                        height: 260,
-                        color: Colors.black26,
-                        child: Image.memory(
-                          _image!,
-                          cacheWidth: 900,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: 6,
-                      top: 6,
-                      child: IconButton.filled(
-                        onPressed: _busy
-                            ? null
-                            : () => setState(() => _image = null),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ),
-                  ],
-                )
-              else
-                OutlinedButton.icon(
-                  onPressed: widget.uploadsEnabled && !_busy && !_picking
-                      ? _pickImage
-                      : null,
-                  icon: const Icon(Icons.add_photo_alternate_outlined),
-                  label: Text(
-                    _picking
-                        ? 'Opening photos…'
-                        : _kind == 'betslip'
-                        ? 'Attach your bet slip'
-                        : 'Attach a photo',
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
-                  ),
-                ),
-              const SizedBox(height: 8),
-              Text(
-                widget.uploadsEnabled
-                    ? 'One JPG/PNG • Up to 4 MB. Crop out account details before sharing.'
-                    : 'Image uploads are not enabled yet. You can still publish text predictions and banter.',
-                style: TextStyle(fontSize: 12, color: Ui.muted),
-              ),
+              _kindHeader(k),
+              const SizedBox(height: 16),
+              if (_kind == 'video') ..._videoForm() else ..._standardForm(k),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -960,12 +1293,8 @@ class _ComposePostState extends State<_ComposePost> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Your post is public. Predictions are opinions, not guarantees. Published posts cannot be edited; you can delete your own post.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Ui.muted,
-                          height: 1.4,
-                        ),
+                        'Your post is public. Predictions are opinions, not guarantees. Premium members can edit their posts after publishing; anyone can delete their own post.',
+                        style: TextStyle(fontSize: 12, color: Ui.muted, height: 1.4),
                       ),
                     ),
                   ],
