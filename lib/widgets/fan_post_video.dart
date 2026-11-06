@@ -383,5 +383,6 @@ class _FanPostVideoState extends State<FanPostVideo>
         ),
       ],
     ),
+    ),
   );
 }
