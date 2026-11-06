@@ -1788,6 +1788,7 @@ async function fanInit(db) {
         // Replies to comments (with an optional image / GIF) and reposts / quotes of posts.
         ['fan_comments',[['parent_id',"TEXT NOT NULL DEFAULT ''"],['root_id',"TEXT NOT NULL DEFAULT ''"],['image_key',"TEXT NOT NULL DEFAULT ''"]]],
         ['fan_posts',[['quote_of',"TEXT NOT NULL DEFAULT ''"]]],
+        ['fan_users',[['premium_until',"INTEGER NOT NULL DEFAULT 0"]]],
       ]) {
         const columns=(await db.prepare(`PRAGMA table_info(${table})`).all()).results;
         for(const [name,definition] of list) {
@@ -1937,6 +1938,10 @@ async function fanZone(request, env, url, ctx) {
     if(url.pathname==='/fan/ai-predict/matches')return await fanAiMatches(request,env,id);
     if(url.pathname==='/fan/ai-predict')return await fanAiPredict(request,env,id);
     const user = await db.prepare('SELECT * FROM fan_users WHERE id=?').bind(id).first();
+    if(request.method==='GET' && url.pathname==='/fan/premium/status') {
+      return json({premium:Boolean(user && Number(user.premium_until || 0)>Date.now()),
+        premium_until:Number(user?.premium_until || 0)});
+    }
     if(request.method==='POST' && url.pathname==='/fan/profile/image')return await fanProfileImage(request,env,user,id);
     if(url.pathname.startsWith('/fan/social/'))return await fanSocial(request,env,url,user,id,ctx);
     if(url.pathname==='/fan/posts' || url.pathname==='/fan/post' || url.pathname.startsWith('/fan/post/')) {
@@ -2157,10 +2162,29 @@ async function fanPosts(request,env,url,user,id,ctx) {
     if(!form)return fail('Invalid upload or image exceeds 4 MB.',413);
     const kind=String(form.get('kind') || 'banter');
     const text=String(form.get('text') || '').trim();
-    if(!['prediction','betslip','banter'].includes(kind) || text.length>1000)return fail('Choose a post type and keep text within 1,000 characters');
+    if(!['prediction','betslip','banter'].includes(kind) || text.length>5000)return fail('Choose a post type and keep text within 5,000 characters');
     const tagged=String(form.get('match_key') || '');
     let taggedFixture=null;
-    if(tagged) {
+    const rawMatchFixture=String(form.get('match_fixture') || '');
+    if(rawMatchFixture) {
+      if(rawMatchFixture.length>8000)return fail('Invalid match link.');
+      try { taggedFixture=JSON.parse(rawMatchFixture); } catch { return fail('Invalid match link.'); }
+      const validLogo=v=>typeof v==='string' && v.length<=1000 && (!v || /^https:\/\//i.test(v));
+      if(!taggedFixture || typeof taggedFixture!=='object' ||
+        typeof taggedFixture.id!=='string' || !taggedFixture.id || taggedFixture.id.length>120 ||
+        typeof taggedFixture.home!=='string' || !taggedFixture.home.trim() || taggedFixture.home.length>80 ||
+        typeof taggedFixture.away!=='string' || !taggedFixture.away.trim() || taggedFixture.away.length>80 ||
+        !Number.isFinite(Date.parse(taggedFixture.kickoff)) ||
+        !validLogo(taggedFixture.homeLogo || '') || !validLogo(taggedFixture.awayLogo || ''))return fail('Invalid match link.');
+      taggedFixture={
+        id:taggedFixture.id,home:taggedFixture.home.trim(),away:taggedFixture.away.trim(),
+        homeLogo:taggedFixture.homeLogo || '',awayLogo:taggedFixture.awayLogo || '',
+        league:String(taggedFixture.league || 'Football').slice(0,100),
+        kickoff:new Date(taggedFixture.kickoff).toISOString(),
+        duration:Number.isInteger(taggedFixture.duration)?Math.max(60,Math.min(180,taggedFixture.duration)):130,
+        scoreLeague:String(taggedFixture.scoreLeague || '').slice(0,40)
+      };
+    } else if(tagged) {
       taggedFixture=(await fanFixtures(env)).find(f=>fanKey(f)===tagged);
       if(!taggedFixture)return fail('Tagged match is no longer available. Choose another match.');
     }
@@ -2934,7 +2958,7 @@ async function fanRecentForm(env,teamId,kickoff) {
 }
 
 // Social data is keyed by verified account identity; no emails in public DTOs.
-const FAN_SOCIAL_POST_FIELDS=`p.id,p.user_id,u.name,p.kind,p.text,p.at,COALESCE((SELECT t.fixture_json FROM fan_post_matches t WHERE t.post_id=p.id),'') AS match_json,CASE WHEN p.image_key<>'' THEN 1 ELSE 0 END AS has_image,
+const FAN_SOCIAL_POST_FIELDS=`p.id,p.user_id,u.name,CASE WHEN COALESCE(u.premium_until,0)>CAST(strftime('%s','now') AS INTEGER)*1000 THEN 1 ELSE 0 END AS is_premium,p.kind,p.text,p.at,COALESCE((SELECT t.fixture_json FROM fan_post_matches t WHERE t.post_id=p.id),'') AS match_json,CASE WHEN p.image_key<>'' THEN 1 ELSE 0 END AS has_image,
  (SELECT COUNT(*) FROM fan_likes l WHERE l.post_id=p.id) AS likes,
  (SELECT COUNT(*) FROM fan_comments c WHERE c.post_id=p.id AND c.hidden=0) AS comments,
  EXISTS(SELECT 1 FROM fan_likes l WHERE l.post_id=p.id AND l.user_id=?) AS liked,
@@ -3038,7 +3062,7 @@ async function fanSocial(request,env,url,user,id,ctx) {
     await fanSyncResults(env);
     const target=url.searchParams.get('id') || id;
     if(!/^[a-f0-9]{64}$/.test(target))return fail('Invalid fan');
-    const profile=await db.prepare(`SELECT u.id,u.name,COALESCE(p.bio,'') AS bio,a.created_at AS joined_at,
+    const profile=await db.prepare(`SELECT u.id,u.name,CASE WHEN COALESCE(u.premium_until,0)>CAST(strftime('%s','now') AS INTEGER)*1000 THEN 1 ELSE 0 END AS is_premium,COALESCE(p.bio,'') AS bio,a.created_at AS joined_at,
       COALESCE((SELECT c.name FROM fan_clubs c WHERE c.user_id=u.id),'') AS club_name,
       COALESCE((SELECT c.logo FROM fan_clubs c WHERE c.user_id=u.id),'') AS club_logo,
       COALESCE((SELECT m.location FROM fan_profile_media m WHERE m.user_id=u.id),'') AS location,
@@ -3049,7 +3073,7 @@ async function fanSocial(request,env,url,user,id,ctx) {
       (SELECT COUNT(*) FROM fan_posts p WHERE p.user_id=u.id AND p.hidden=0) AS posts,
       (SELECT COUNT(*) FROM fan_likes l JOIN fan_posts p ON p.id=l.post_id WHERE p.user_id=u.id AND p.hidden=0) AS likes_received,
       EXISTS(SELECT 1 FROM fan_follows f WHERE f.follower_id=? AND f.following_id=u.id) AS followed
-      FROM fan_users u LEFT JOIN fan_public_profiles p ON p.user_id=u.id LEFT JOIN fan_accounts a ON a.id=u.id WHERE u.id=? AND NOT EXISTS(SELECT 1 FROM fan_bans b WHERE b.user_id=u.id)`).bind(id,target).first();
+      FROM fan_users u LEFT JOIN fan_public_profiles p ON p.user_id=u.id LEFT JOIN fan_accounts a ON a.id=u.id WHERE u.id=? AND NOT EXISTS(SELECT 1 FROM fan_bans b WHERE b.user_id=u.id)`).bind(Date.now(),id,target).first();
     if(!profile)return fail('Fan not found',404);
     const stats=await db.prepare(`SELECT COUNT(${FAN_PICK_POINTS_SQL}) AS settled,
       COALESCE(SUM(CASE WHEN p.market='score' AND p.home=r.home AND p.away=r.away THEN 1 ELSE 0 END),0) AS exact,
@@ -3381,6 +3405,8 @@ async function fanWeekAdmin(db,url,b) {
     if(!member)return fail('One of the chosen winners is not a registered fan.');
     const stat=report.standings.find(r=>r.id===id) || {points:0,played:0,won:0};
     statements.push(db.prepare('INSERT INTO fan_week_winners(week,rank,user_id,name,points,played,won,finalized_at) VALUES(?,?,?,?,?,?,?,?)').bind(week,i+1,id,String(member.name || 'Fan').slice(0,30),stat.points,stat.played,stat.won,now));
+    // Weekly leaderboard winners receive a full seven-day Premium reward.
+    statements.push(db.prepare('UPDATE fan_users SET premium_until=MAX(COALESCE(premium_until,0),?) WHERE id=?').bind(now+FAN_WEEK_MS,id));
   }
   await db.batch(statements);
   return json({ok:true,week,winners:(await fanWeekReport(db,week)).published});
@@ -3535,10 +3561,10 @@ async function fanLeagueTable(db,week,offset,range=null) {
     SELECT p.user_id,${FAN_PICK_POINTS_SQL} AS earned FROM fan_picks p
     LEFT JOIN fan_results r ON r.match_key=p.match_key${range?' WHERE p.kickoff>=? AND p.kickoff<?':''}
   ), members AS (
-    SELECT id,name FROM fan_users UNION ALL
-    SELECT a.id,SUBSTR(a.name,1,30) FROM fan_accounts a WHERE NOT EXISTS(SELECT 1 FROM fan_users u WHERE u.id=a.id)
-  ), visible AS (SELECT id,name FROM members WHERE NOT EXISTS(SELECT 1 FROM fan_bans b WHERE b.user_id=members.id)
-  ) SELECT u.id,u.name,COALESCE(SUM(s.earned),0) AS points,COUNT(s.earned) AS played,
+    SELECT id,name,COALESCE(premium_until,0) AS premium_until FROM fan_users UNION ALL
+    SELECT a.id,SUBSTR(a.name,1,30),0 FROM fan_accounts a WHERE NOT EXISTS(SELECT 1 FROM fan_users u WHERE u.id=a.id)
+  ), visible AS (SELECT id,name,premium_until FROM members WHERE NOT EXISTS(SELECT 1 FROM fan_bans b WHERE b.user_id=members.id)
+  ) SELECT u.id,u.name,CASE WHEN COALESCE(u.premium_until,0)>CAST(strftime('%s','now') AS INTEGER)*1000 THEN 1 ELSE 0 END AS is_premium,COALESCE(SUM(s.earned),0) AS points,COUNT(s.earned) AS played,
     COALESCE(SUM(CASE WHEN s.earned>0 THEN 1 ELSE 0 END),0) AS won,
     COALESCE(SUM(CASE WHEN s.earned=0 THEN 1 ELSE 0 END),0) AS lost
     FROM visible u LEFT JOIN scores s ON s.user_id=u.id GROUP BY u.id
