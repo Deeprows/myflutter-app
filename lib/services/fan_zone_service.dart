@@ -64,6 +64,17 @@ class FanZoneService {
   static String handle(String id) =>
       'fan_${id.length <= 12 ? id : id.substring(0, 12)}';
 
+  /// Premium awarded by the weekly Fan Zone leaderboard (separate from a paid
+  /// ad-free subscription). The Worker is authoritative for the expiry.
+  static Future<bool> hasWeeklyPremium() async {
+    try {
+      final data = await call('premium/status');
+      return data['premium'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static String postUrl(String postId) =>
       '${AppConfig.feedBase}/fan/share/${Uri.encodeComponent(postId)}';
 
@@ -122,6 +133,7 @@ class FanZoneService {
     required String text,
     Uint8List? image,
     String? matchKey,
+    Map<String, dynamic>? matchFixture,
     String? quoteOf,
   }) async {
     final request = http.MultipartRequest(
@@ -133,6 +145,7 @@ class FanZoneService {
       'kind': kind,
       'text': text.trim(),
       if (matchKey != null) 'match_key': matchKey,
+      if (matchFixture != null) 'match_fixture': jsonEncode(matchFixture),
       if (quoteOf != null && quoteOf.isNotEmpty) 'quote_of': quoteOf,
     });
     if (image != null) {
