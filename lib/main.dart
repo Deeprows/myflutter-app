@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app.dart';
+import 'services/notification_center.dart';
 import 'services/analytics_service.dart';
 import 'services/download_manager.dart';
 import 'services/feed_service.dart';
@@ -42,6 +43,9 @@ Future<void> main() async {
   await PushService.instance.initCore();
 
   runApp(const FootboliveApp());
+
+  // Keeps the bell's unread count fresh (follows, likes, comments, content).
+  NotificationCenter.instance.start();
 
   // Analytics never blocks app startup.
   unawaited(
