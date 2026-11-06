@@ -1907,7 +1907,7 @@ async function fanInit(db) {
         ['fan_picks',[['market',"TEXT NOT NULL DEFAULT 'score'"],['selection',"TEXT NOT NULL DEFAULT ''"]]],
         // Replies to comments (with an optional image / GIF) and reposts / quotes of posts.
         ['fan_comments',[['parent_id',"TEXT NOT NULL DEFAULT ''"],['root_id',"TEXT NOT NULL DEFAULT ''"],['image_key',"TEXT NOT NULL DEFAULT ''"],['edited_at',"INTEGER NOT NULL DEFAULT 0"]]],
-        ['fan_posts',[['quote_of',"TEXT NOT NULL DEFAULT ''"],['edited_at',"INTEGER NOT NULL DEFAULT 0"]]],
+        ['fan_posts',[['quote_of',"TEXT NOT NULL DEFAULT ''"],['edited_at',"INTEGER NOT NULL DEFAULT 0"],['is_ad',"INTEGER NOT NULL DEFAULT 0"],['pinned_at',"INTEGER NOT NULL DEFAULT 0"],['pin_until',"INTEGER NOT NULL DEFAULT 0"]]],
         ['fan_users',[['premium_until',"INTEGER NOT NULL DEFAULT 0"]]],
       ]) {
         const columns=(await db.prepare(`PRAGMA table_info(${table})`).all()).results;
@@ -2259,6 +2259,16 @@ async function fanProfileImage(request,env,user,id) {
   await env.DB.prepare(`INSERT INTO fan_profile_media(user_id,${column}) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET ${column}=excluded.${column}`).bind(id,now).run();
   return json({ok:true,kind,version:now});
 }
+// The Deeprowss admin is the verified Google account deeprows@gmail.com (override with FAN_ADMIN_EMAIL).
+// Only this account can publish ads and pin / unpin sponsored posts.
+const FAN_ADMIN_HANDLE='DeeprowssAdmin';
+async function fanIsAdmin(env,id) {
+  try {
+    const email=String(env.FAN_ADMIN_EMAIL || 'deeprows@gmail.com').trim().toLowerCase();
+    const row=await env.DB.prepare('SELECT 1 AS ok FROM fan_accounts WHERE id=? AND lower(email)=?').bind(id,email).first();
+    return Boolean(row);
+  } catch(_) { return false; }
+}
 // Premium for editing: Fan Zone weekly premium, or a paid subscription on the
 // install the request comes from (same trust model as /sub/status).
 async function fanCanEdit(env,user,installId) {
@@ -2279,10 +2289,17 @@ async function fanPosts(request,env,url,user,id,ctx) {
     if((author && !/^[a-f0-9]{64}$/.test(author)) || !['all','following'].includes(scope))return fail('Invalid feed');
     const cursor=fanSocialCursor(url.searchParams.get('before'),'post');
     if(cursor===false)return fail('Invalid page cursor');
-    const rows=await db.prepare(`SELECT ${FAN_SOCIAL_POST_FIELDS} FROM fan_posts p JOIN fan_users u ON u.id=p.user_id WHERE p.hidden=0 AND (?='all' OR p.kind=?) AND (?='' OR p.user_id=?) AND (?='all' OR EXISTS(SELECT 1 FROM fan_follows f WHERE f.follower_id=? AND f.following_id=p.user_id)) AND (p.at<? OR (p.at=? AND p.id<?)) ORDER BY p.at DESC,p.id DESC LIMIT 41`)
-      .bind(id,kind,kind,author,author,scope,id,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
+    const rows=await db.prepare(`SELECT ${FAN_SOCIAL_POST_FIELDS} FROM fan_posts p JOIN fan_users u ON u.id=p.user_id WHERE p.hidden=0 AND (?='all' OR p.kind=?) AND (?='' OR p.user_id=?) AND (?='all' OR EXISTS(SELECT 1 FROM fan_follows f WHERE f.follower_id=? AND f.following_id=p.user_id)) AND (?<>'' OR p.is_ad=0) AND (p.at<? OR (p.at=? AND p.id<?)) ORDER BY p.at DESC,p.id DESC LIMIT 41`)
+      .bind(id,kind,kind,author,author,scope,id,author,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
     const posts=rows.results.slice(0,40),last=posts.at(-1);
-    return json({posts,next:rows.results.length>40?`${last.at}:${last.id}`:null,id,uploads_enabled:Boolean(env.FAN_MEDIA)});
+    const out={posts,next:rows.results.length>40?`${last.at}:${last.id}`:null,id,uploads_enabled:Boolean(env.FAN_MEDIA),is_admin:await fanIsAdmin(env,id)};
+    // The main Thread feed also carries the sponsored (pinned) posts and the ads to slot in after the 4th post.
+    if(!author && !cursor && scope==='all' && kind==='all') {
+      const now=Date.now();
+      out.pinned=(await db.prepare(`SELECT ${FAN_SOCIAL_POST_FIELDS} FROM fan_posts p JOIN fan_users u ON u.id=p.user_id WHERE p.hidden=0 AND p.pinned_at>0 AND (p.pin_until=0 OR p.pin_until>?) ORDER BY p.pinned_at DESC LIMIT 5`).bind(id,now).all()).results;
+      out.ads=(await db.prepare(`SELECT ${FAN_SOCIAL_POST_FIELDS} FROM fan_posts p JOIN fan_users u ON u.id=p.user_id WHERE p.hidden=0 AND p.is_ad=1 ORDER BY p.at DESC,p.id DESC LIMIT 5`).bind(id).all()).results;
+    }
+    return json(out);
   }
   if(!user) return fail('Choose your Fan Zone nickname first.',403);
   if(request.method==='POST' && url.pathname==='/fan/post') {
@@ -2340,6 +2357,8 @@ async function fanPosts(request,env,url,user,id,ctx) {
       type=fanImageType(bytes);
       if(!type)return fail('Choose a JPG or PNG image, up to 6,000 pixels per side and 16 megapixels.');
     }
+    const wantsAd=['1','true'].includes(String(form.get('is_ad') || ''));
+    if(wantsAd && !await fanIsAdmin(env,id))return fail('Only the Deeprowss admin can publish ads.',403);
     const now=Date.now();
     // A shared per-profile cooldown also applies across lounge and feed posts.
     const allowed=await db.prepare('UPDATE fan_users SET last_post=? WHERE id=? AND last_post<? RETURNING id').bind(now,id,now-10000).first();
@@ -2348,7 +2367,7 @@ async function fanPosts(request,env,url,user,id,ctx) {
     const imageKey=hasImage?`fan-posts/${postId}`:'';
     try {
       if(hasImage)await env.FAN_MEDIA.put(imageKey,bytes,{httpMetadata:{contentType:type}});
-      const insert=db.prepare('INSERT INTO fan_posts(id,user_id,kind,text,image_key,at,quote_of) VALUES(?,?,?,?,?,?,?)').bind(postId,id,kind,text,imageKey,now,quoteOf);
+      const insert=db.prepare('INSERT INTO fan_posts(id,user_id,kind,text,image_key,at,quote_of,is_ad) VALUES(?,?,?,?,?,?,?,?)').bind(postId,id,kind,text,imageKey,now,quoteOf,wantsAd?1:0);
       if(taggedFixture)await db.batch([insert,db.prepare('INSERT INTO fan_post_matches(post_id,fixture_json) VALUES(?,?)').bind(postId,JSON.stringify(taggedFixture))]);
       else await insert.run();
     } catch(e) {
@@ -2378,6 +2397,23 @@ async function fanPosts(request,env,url,user,id,ctx) {
     if(post.kind==='prediction' && !text)return fail('Write your prediction before saving');
     await db.prepare('UPDATE fan_posts SET text=?,edited_at=? WHERE id=?').bind(text,Date.now(),b.id).run();
     return json({ok:true,text,edited_at:Date.now()});
+  }
+  if(request.method==='POST' && url.pathname==='/fan/post/pin') {
+    // Only the admin pins posts (after a sponsor pays manually). days=0 keeps the pin until it is removed.
+    if(!await fanIsAdmin(env,id))return fail('Only the Deeprowss admin can pin posts.',403);
+    const raw=await request.text();
+    if(raw.length>2048)return fail('Request too large',413);
+    let b;try{b=JSON.parse(raw);}catch(_){return fail('Invalid request');}
+    if(!b || typeof b.id!=='string' || !/^[a-f0-9-]{36}$/.test(b.id) || typeof b.pinned!=='boolean')return fail('Invalid pin request');
+    const days=b.days===undefined?0:b.days;
+    if(!Number.isInteger(days) || days<0 || days>365)return fail('Choose 0 to 365 days.');
+    const post=await db.prepare('SELECT kind FROM fan_posts WHERE id=? AND hidden=0').bind(b.id).first();
+    if(!post)return fail('Post not found',404);
+    if(post.kind==='repost')return fail('Reposts cannot be pinned.');
+    const now=Date.now();
+    if(b.pinned)await db.prepare('UPDATE fan_posts SET pinned_at=?,pin_until=? WHERE id=?').bind(now,days>0?now+days*86400000:0,b.id).run();
+    else await db.prepare('UPDATE fan_posts SET pinned_at=0,pin_until=0 WHERE id=?').bind(b.id).run();
+    return json({ok:true,pinned:b.pinned,pin_until:b.pinned&&days>0?now+days*86400000:0});
   }
   if(request.method==='POST' && ['/fan/post/report','/fan/post/delete'].includes(url.pathname)) {
     const raw=await request.text();
@@ -3128,7 +3164,7 @@ async function fanNotifyMentions(env,ctx,m) {
     }
   } catch(e) { /* mentions are best effort */ }
 }
-const FAN_SOCIAL_POST_FIELDS=`p.id,p.user_id,${fanHandleSql('p.user_id')} AS handle,u.name,CASE WHEN COALESCE(u.premium_until,0)>CAST(strftime('%s','now') AS INTEGER)*1000 THEN 1 ELSE 0 END AS is_premium,p.kind,p.text,p.at,p.edited_at,COALESCE((SELECT t.fixture_json FROM fan_post_matches t WHERE t.post_id=p.id),'') AS match_json,CASE WHEN p.image_key<>'' THEN 1 ELSE 0 END AS has_image,
+const FAN_SOCIAL_POST_FIELDS=`p.id,p.user_id,${fanHandleSql('p.user_id')} AS handle,u.name,CASE WHEN COALESCE(u.premium_until,0)>CAST(strftime('%s','now') AS INTEGER)*1000 THEN 1 ELSE 0 END AS is_premium,p.kind,p.text,p.at,p.edited_at,p.is_ad,CASE WHEN p.pinned_at>0 AND (p.pin_until=0 OR p.pin_until>CAST(strftime('%s','now') AS INTEGER)*1000) THEN 1 ELSE 0 END AS pinned,p.pin_until,COALESCE((SELECT t.fixture_json FROM fan_post_matches t WHERE t.post_id=p.id),'') AS match_json,CASE WHEN p.image_key<>'' THEN 1 ELSE 0 END AS has_image,
  (SELECT COUNT(*) FROM fan_likes l WHERE l.post_id=p.id) AS likes,
  (SELECT COUNT(*) FROM fan_comments c WHERE c.post_id=p.id AND c.hidden=0) AS comments,
  EXISTS(SELECT 1 FROM fan_likes l WHERE l.post_id=p.id AND l.user_id=?) AS liked,
@@ -3311,7 +3347,7 @@ async function fanSocial(request,env,url,user,id,ctx) {
     if(!/^[a-f0-9-]{36}$/.test(postId || ''))return fail('Invalid post');
     const post=await db.prepare(`SELECT ${FAN_SOCIAL_POST_FIELDS} FROM fan_posts p JOIN fan_users u ON u.id=p.user_id WHERE p.id=? AND p.hidden=0`).bind(id,postId).first();
     if(!post)return fail('Post not found',404);
-    if(path==='/fan/social/post')return json({post,viewer_id:id});
+    if(path==='/fan/social/post')return json({post,viewer_id:id,is_admin:await fanIsAdmin(env,id)});
     const cursor=fanSocialCursor(url.searchParams.get('before'));if(cursor===false)return fail('Invalid page cursor');
     const COMMENT_FIELDS=`c.id,c.post_id,c.user_id,${fanHandleSql('c.user_id')} AS handle,u.name,c.text,c.at,c.edited_at,c.parent_id,c.root_id,CASE WHEN c.image_key<>'' THEN 1 ELSE 0 END AS has_image,
       (SELECT COUNT(*) FROM fan_comment_likes l WHERE l.comment_id=c.id) AS likes,
@@ -3328,7 +3364,7 @@ async function fanSocial(request,env,url,user,id,ctx) {
       const marks=comments.map(()=>'?').join(',');
       replies=(await db.prepare(`SELECT ${COMMENT_FIELDS.replace(/\?1/g,'?')} FROM fan_comments c JOIN fan_users u ON u.id=c.user_id WHERE c.post_id=? AND c.hidden=0 AND c.root_id IN (${marks}) ORDER BY c.at ASC,c.id ASC LIMIT 400`).bind(id,postId,...comments.map(c=>c.id)).all()).results;
     }
-    return json({comments:[...comments,...replies],next:roots.results.length>30?`${last.at}:${last.id}`:null,post,viewer_id:id});
+    return json({comments:[...comments,...replies],next:roots.results.length>30?`${last.at}:${last.id}`:null,post,viewer_id:id,is_admin:await fanIsAdmin(env,id)});
   }
   if(request.method==='GET' && path==='/fan/social/notifications') {
     const rows=await db.prepare(`SELECT n.id,n.kind,n.actor_id,COALESCE((SELECT u.name FROM fan_users u WHERE u.id=n.actor_id),n.actor_name) AS actor_name,n.post_id,n.text,n.at,COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=n.actor_id),0) AS avatar_at FROM fan_notifications n WHERE n.user_id=? ORDER BY n.at DESC LIMIT 50`).bind(id).all();
@@ -3418,6 +3454,8 @@ async function fanSocial(request,env,url,user,id,ctx) {
     if(!/^[A-Za-z0-9_]{3,20}$/.test(wanted))return fail('Use 3–20 letters, numbers or underscores.');
     const lower=wanted.toLowerCase();
     if((/^fan_[a-f0-9]{12}$/.test(lower) && lower!==`fan_${id.slice(0,12)}`) || ['admin','administrator','support','moderator','staff','official','everyone','all','here'].includes(lower))return fail('That username is reserved.');
+    const isAdmin=await fanIsAdmin(env,id);
+    if(lower===FAN_ADMIN_HANDLE.toLowerCase() && !isAdmin)return fail('That username is reserved.');
     const mine=await db.prepare('SELECT handle,changed_at FROM fan_handles WHERE user_id=?').bind(id).first();
     if(mine && mine.handle===wanted)return json({ok:true,handle:wanted});
     const now=Date.now();
