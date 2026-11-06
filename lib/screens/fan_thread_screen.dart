@@ -356,6 +356,15 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
                                   fontSize: 14.5,
                                 ),
                               ),
+                              if (c['is_premium'] == 1 || c['is_premium'] == true)
+                                const WidgetSpan(
+                                  alignment: PlaceholderAlignment.middle,
+                                  child: Padding(
+                                    padding: EdgeInsets.only(left: 4),
+                                    child: Icon(Icons.verified_rounded,
+                                      color: Color(0xFF1D9BF0), size: 15),
+                                  ),
+                                ),
                               TextSpan(
                                 text:
                                     '  @${FanZoneService.handleOf(c, '${c['user_id']}')} · ${fanTimeAgo(c['at']).replaceAll(' ago', '')}${(c['edited_at'] is num && (c['edited_at'] as num) > 0) ? ' · edited' : ''}',
