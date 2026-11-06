@@ -1,4 +1,6 @@
-import 'dart:async';\nimport 'dart:convert';
+
+import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -28,11 +30,13 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
   final _token = TextEditingController();
 
   TokenState _state = const TokenState('unknown');
-  PlanInfo _plan = PlanInfo.fallback(); // ₦2,000 until the Worker answers
+  PlanInfo _plan = PlanInfo.fallback();
   String _installId = '';
-  String _method = 'bank'; // 'bank' | 'crypto'
+  String _method = 'bank';
+
   bool _busy = false;
   bool _checking = true;
+
   Map<String, dynamic> _paymentConfig = {};
   String? _error;
   Timer? _poll;
@@ -40,14 +44,21 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
   @override
   void initState() {
     super.initState();
-    AdScheduler.instance.hold(); // no ad pop-up while sorting this out
+
+    AdScheduler.instance.hold();
     _sub.addListener(_changed);
+
     unawaited(_loadPaymentAccounts());
     _load();
-    // While waiting for an answer, look again every 20 seconds so the token
-    // shows up by itself as soon as it is made.
+
+    // Check pending requests automatically every 20 seconds.
     _poll = Timer.periodic(const Duration(seconds: 20), (_) {
-      if (_state.state == 'pending' && !_busy) _check();
+      if (mounted &&
+          _state.state == 'pending' &&
+          !_busy &&
+          !_checking) {
+        _check();
+      }
     });
   }
 
@@ -71,91 +82,140 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
       ..showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  // -------------------------------------------------------------
+  // PAYMENT ACCOUNT CONFIGURATION
+  // -------------------------------------------------------------
+
   Future<void> _loadPaymentAccounts() async {
     try {
-      final raw = await rootBundle.loadString('assets/data/payment_accounts.json');
+      final raw = await rootBundle.loadString(
+        'assets/data/payment_accounts.json',
+      );
+
       final decoded = jsonDecode(raw);
+
       if (decoded is Map<String, dynamic> && mounted) {
         setState(() => _paymentConfig = decoded);
       }
     } catch (_) {
-      // Keep the values from AppConfig as a safe fallback if the asset is absent
-      // or malformed.
+      // Use AppConfig fallback values if JSON is unavailable.
     }
   }
 
   List<Map<String, dynamic>> get _accounts {
     final raw = _paymentConfig['accounts'];
+
     if (raw is List) {
-      return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      return raw
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
     }
+
     return const [];
   }
 
   Map<String, dynamic>? _account(String id) {
     for (final account in _accounts) {
-      if (account['id'] == id && account['enabled'] != false) return account;
+      if (account['id'] == id && account['enabled'] != false) {
+        return account;
+      }
     }
+
     return null;
   }
 
-  Map<String, dynamic> get _bankAccount => _account('opay') ?? const {
-    'provider': AppConfig.payBankProvider,
-    'account_name': AppConfig.payBankAccountName,
-    'account_number': AppConfig.payBankAccountNumber,
-  };
+  Map<String, dynamic> get _bankAccount =>
+      _account('opay') ??
+      const {
+        'provider': AppConfig.payBankProvider,
+        'account_name': AppConfig.payBankAccountName,
+        'account_number': AppConfig.payBankAccountNumber,
+      };
 
-  Map<String, dynamic> get _walletAccount => _account('wallet') ?? const {
-    'provider': AppConfig.payCryptoProvider,
-    'network': AppConfig.payCryptoNetwork,
-    'wallet_name': AppConfig.payCryptoAccountName,
-    'wallet_address': AppConfig.payCryptoAddress,
-  };
+  Map<String, dynamic> get _walletAccount =>
+      _account('wallet') ??
+      const {
+        'provider': AppConfig.payCryptoProvider,
+        'network': AppConfig.payCryptoNetwork,
+        'wallet_name': AppConfig.payCryptoAccountName,
+        'wallet_address': AppConfig.payCryptoAddress,
+      };
 
   String get _receiptUrl =>
       (_paymentConfig['receipt_whatsapp'] as String?) ??
       AppConfig.receiptWhatsappUrl;
 
+  // -------------------------------------------------------------
+  // SUBSCRIPTION AND TOKEN STATUS
+  // -------------------------------------------------------------
+
   Future<void> _load() async {
     final id = await InstallId.get();
+
     if (!mounted) return;
+
     setState(() => _installId = id);
-    // Price (naira + the person's own currency) from the Worker.
-    unawaited(_sub.loadPlan().then((p) {
-      if (mounted) setState(() => _plan = p);
-    }));
+
+    unawaited(
+      _sub.loadPlan().then((p) {
+        if (mounted) {
+          setState(() => _plan = p);
+        }
+      }),
+    );
+
     await _check();
   }
 
   Future<void> _check() async {
-    final st = await _sub.tokenStatus();
-    if (!mounted) return;
-    setState(() {
-      _state = st;
-      _checking = false;
-    });
+    if (_checking && _state.state != 'unknown') return;
+
+    try {
+      final st = await _sub.tokenStatus();
+
+      if (!mounted) return;
+
+      setState(() {
+        _state = st;
+        _checking = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() => _checking = false);
+    }
   }
 
-  // ------------------------------------------------------------- actions
+  // -------------------------------------------------------------
+  // ACTIONS
+  // -------------------------------------------------------------
 
   Future<void> _request() async {
     if (_busy) return;
-    // The WhatsApp number is the one required field: it is how you reach the
-    // person to confirm payment.
+
     final number = _contact.text.trim();
     final digits = number.replaceAll(RegExp(r'\D'), '');
+
     if (digits.length < 7 || digits.length > 15) {
-      setState(() => _error =
-          'Enter your WhatsApp number with country code, e.g. +234 801 234 5678');
+      setState(() {
+        _error =
+            'Enter your WhatsApp number with country code, e.g. +234 801 234 5678';
+      });
       return;
     }
+
     FocusScope.of(context).unfocus();
+
     setState(() {
       _busy = true;
       _error = null;
     });
+
     final err = await _sub.requestToken(contact: number);
+
     if (!mounted) return;
+
     if (err != null) {
       setState(() {
         _busy = false;
@@ -163,74 +223,110 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
       });
       return;
     }
+
     await _check();
+
     if (!mounted) return;
+
     setState(() => _busy = false);
-    if (!_sub.isPremium) _toast('Request sent ✅');
+
+    if (!_sub.isPremium) {
+      _toast('Request sent ✅');
+    }
   }
 
   Future<void> _redeem(String token) async {
     if (_busy) return;
+
     FocusScope.of(context).unfocus();
+
     setState(() {
       _busy = true;
       _error = null;
     });
+
     final err = await _sub.redeemToken(token);
+
     if (!mounted) return;
+
     setState(() {
       _busy = false;
       _error = err;
     });
-    if (err == null) _toast('Ads removed. Thank you! 💗');
+
+    if (err == null) {
+      _toast('Ads removed. Thank you! 💗');
+    }
   }
 
   Future<void> _chat() async {
     final uri = buildWhatsappUri(
-        AppConfig.whatsappUrl, AppConfig.tokenRequestMessage, _installId);
+      AppConfig.whatsappUrl,
+      AppConfig.tokenRequestMessage,
+      _installId,
+    );
+
     final link = uri?.toString() ?? AppConfig.joinUrl;
+
     if (link.isEmpty) {
       _toast('The chat link is not set up yet');
       return;
     }
+
     if (!await openExternally(link) && mounted) {
       _toast('Could not open the chat');
     }
   }
 
-  /// Opens WhatsApp with the receipt message ready; the person attaches the
-  /// payment screenshot there.
+  /// Opens WhatsApp with the receipt message ready.
   Future<void> _sendReceipt() async {
     final how = _method == 'bank'
         ? '${_bankAccount['provider'] ?? _bankAccount['name'] ?? 'Bank'} bank transfer'
         : '${_walletAccount['provider'] ?? _walletAccount['name'] ?? 'Crypto'} (${_walletAccount['network'] ?? ''})';
-    final message = 'Hello, I have paid to remove ads on the Deeprowss app.\n'
+
+    final message =
+        'Hello, I have paid to remove ads on the Deeprowss app.\n'
         'Payment: $how\n'
         'Amount: ${_plan.priceDisplay}\n'
         'My receipt is attached.';
+
     final uri = buildWhatsappUri(
-        _receiptUrl, message, _installId);
+      _receiptUrl,
+      message,
+      _installId,
+    );
+
     if (uri == null || !await openExternally(uri.toString())) {
-      if (mounted) _toast('Could not open WhatsApp');
+      if (mounted) {
+        _toast('Could not open WhatsApp');
+      }
     }
   }
 
   Future<void> _copy(String value, String what) async {
     await Clipboard.setData(ClipboardData(text: value));
-    if (mounted) _toast('$what copied');
+
+    if (mounted) {
+      _toast('$what copied');
+    }
   }
 
-  // ------------------------------------------------------------------ UI
+  // -------------------------------------------------------------
+  // MAIN UI
+  // -------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     final premium = _sub.isPremium;
+
     return Scaffold(
       backgroundColor: Ui.bg,
       appBar: AppBar(
         backgroundColor: Ui.bg,
-        title: const Text('Remove ads',
-            style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text(
+          'Remove ads',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
       ),
       body: SafeArea(
         child: Center(
@@ -266,9 +362,14 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
                 ],
                 if (_error != null) ...[
                   const SizedBox(height: 12),
-                  Text(_error!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Ui.redSoft, fontSize: 13.5)),
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Ui.redSoft,
+                      fontSize: 13.5,
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 10),
                 _idLine(),
@@ -280,7 +381,15 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
     );
   }
 
-  Widget _box({required Widget child, bool highlight = false}) => Container(
+  // -------------------------------------------------------------
+  // SHARED CARD DESIGN
+  // -------------------------------------------------------------
+
+  Widget _box({
+    required Widget child,
+    bool highlight = false,
+  }) =>
+      Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Ui.panel,
@@ -288,14 +397,19 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
               ? LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Ui.red.withValues(alpha: .16), Ui.panel, Ui.panel],
+                  colors: [
+                    Ui.red.withValues(alpha: .16),
+                    Ui.panel,
+                    Ui.panel,
+                  ],
                   stops: const [0, .55, 1],
                 )
               : null,
           borderRadius: BorderRadius.circular(26),
           border: Border.all(
-              color: highlight ? Ui.red.withValues(alpha: .5) : Ui.line,
-              width: highlight ? 1.3 : 1),
+            color: highlight ? Ui.red.withValues(alpha: .5) : Ui.line,
+            width: highlight ? 1.3 : 1,
+          ),
         ),
         child: child,
       );
@@ -303,81 +417,126 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
   Widget _activeCard() {
     final date = _sub.expiresLabel;
     final left = _sub.daysLeft;
+
     final detail = [
       if (date != null) 'No ads until $date',
-      if (left != null && left <= 400) '$left day${left == 1 ? '' : 's'} left',
+      if (left != null && left <= 400)
+        '$left day${left == 1 ? '' : 's'} left',
     ].join(' · ');
+
     return _box(
       highlight: true,
-      child: Row(children: [
-        Icon(Icons.verified_rounded, color: Ui.green, size: 32),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Subscription: Active',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 2),
-              Text(detail.isEmpty ? 'All ads are removed' : detail,
-                  style: TextStyle(color: Ui.muted, fontSize: 13.5)),
-            ],
+      child: Row(
+        children: [
+          Icon(
+            Icons.verified_rounded,
+            color: Ui.green,
+            size: 32,
           ),
-        ),
-      ]),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Subscription: Active',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  detail.isEmpty ? 'All ads are removed' : detail,
+                  style: TextStyle(
+                    color: Ui.muted,
+                    fontSize: 13.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  /// Title + price at the top of the page.
   Widget _hero() {
     final local = _plan.localDisplay;
+
     return _box(
       highlight: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Ui.red.withValues(alpha: .18),
-                shape: BoxShape.circle,
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Ui.red.withValues(alpha: .18),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.block_rounded,
+                  color: Ui.redSoft,
+                ),
               ),
-              child: Icon(Icons.block_rounded, color: Ui.redSoft),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text('Go ad-free',
-                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
-            ),
-          ]),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Go ad-free',
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text(_plan.priceDisplay,
-                  style: const TextStyle(
-                      fontSize: 30, fontWeight: FontWeight.w900)),
+              Text(
+                _plan.priceDisplay,
+                style: const TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
               const SizedBox(width: 6),
-              Text('/ month', style: TextStyle(color: Ui.muted, fontSize: 14)),
+              Text(
+                '/ month',
+                style: TextStyle(
+                  color: Ui.muted,
+                  fontSize: 14,
+                ),
+              ),
               if (local != null) ...[
                 const SizedBox(width: 10),
-                Text('≈ $local',
-                    style: TextStyle(
-                        color: Ui.green,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800)),
+                Text(
+                  '≈ $local',
+                  style: TextStyle(
+                    color: Ui.green,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ],
             ],
           ),
           const SizedBox(height: 6),
           Text(
             local != null
-                ? 'No ads for 30 days on this phone. Charged in naira; $local '
-                    'is an estimate in your currency.'
+                ? 'No ads for 30 days on this phone. Charged in naira; $local is an estimate in your currency.'
                 : 'No ads for 30 days on this phone.',
-            style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3),
+            style: TextStyle(
+              color: Ui.muted,
+              fontSize: 13,
+              height: 1.3,
+            ),
           ),
         ],
       ),
@@ -393,53 +552,67 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              CircleAvatar(
-                radius: 13,
-                backgroundColor: Ui.red,
-                child: Text('$number',
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 13,
+                  backgroundColor: Ui.red,
+                  child: Text(
+                    '$number',
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900)),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(title,
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
                     style: const TextStyle(
-                        fontSize: 17, fontWeight: FontWeight.w900)),
-              ),
-            ]),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 14),
             child,
           ],
         ),
       );
 
-  // ---- step 1: payment details
+  // -------------------------------------------------------------
+  // STEP 1: PAYMENT DETAILS
+  // -------------------------------------------------------------
 
   Widget _payBlock() {
     final bank = _method == 'bank';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(children: [
-          Expanded(
-            child: _methodChip(
-              id: 'bank',
-              icon: Icons.account_balance_rounded,
-              label: 'Bank transfer',
+        Row(
+          children: [
+            Expanded(
+              child: _methodChip(
+                id: 'bank',
+                icon: Icons.account_balance_rounded,
+                label: 'Bank transfer',
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _methodChip(
-              id: 'crypto',
-              icon: Icons.currency_bitcoin_rounded,
-              label: 'Crypto (USDT)',
+            const SizedBox(width: 10),
+            Expanded(
+              child: _methodChip(
+                id: 'crypto',
+                icon: Icons.currency_bitcoin_rounded,
+                label: 'Crypto (USDT)',
+              ),
             ),
-          ),
-        ]),
+          ],
+        ),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(14),
@@ -452,8 +625,14 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (bank) ...[
-                _kv('Provider', '${_bankAccount['provider'] ?? _bankAccount['name'] ?? 'Bank'}'),
-                _kv('Account name', '${_bankAccount['account_name'] ?? _bankAccount['wallet_name'] ?? ''}'),
+                _kv(
+                  'Provider',
+                  '${_bankAccount['provider'] ?? _bankAccount['name'] ?? 'Bank'}',
+                ),
+                _kv(
+                  'Account name',
+                  '${_bankAccount['account_name'] ?? _bankAccount['wallet_name'] ?? ''}',
+                ),
                 const SizedBox(height: 6),
                 _copyValue(
                   label: 'Account number',
@@ -463,24 +642,40 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
                 const SizedBox(height: 10),
                 Text(
                   'Transfer ${_plan.priceDisplay} to this account.',
-                  style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3),
+                  style: TextStyle(
+                    color: Ui.muted,
+                    fontSize: 13,
+                    height: 1.3,
+                  ),
                 ),
               ] else ...[
-                _kv('Provider', '${_walletAccount['provider'] ?? _walletAccount['name'] ?? 'Crypto'}'),
-                _kv('Network', '${_walletAccount['network'] ?? ''}'),
-                _kv('Account name', '${_walletAccount['wallet_name'] ?? _walletAccount['account_name'] ?? ''}'),
+                _kv(
+                  'Provider',
+                  '${_walletAccount['provider'] ?? _walletAccount['name'] ?? 'Crypto'}',
+                ),
+                _kv(
+                  'Network',
+                  '${_walletAccount['network'] ?? ''}',
+                ),
+                _kv(
+                  'Account name',
+                  '${_walletAccount['wallet_name'] ?? _walletAccount['account_name'] ?? ''}',
+                ),
                 const SizedBox(height: 6),
                 _copyValue(
                   label: 'Wallet address',
-                  value: '${_walletAccount['wallet_address'] ?? _walletAccount['address'] ?? ''}',
+                  value:
+                      '${_walletAccount['wallet_address'] ?? _walletAccount['address'] ?? ''}',
                   what: 'Wallet address',
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Send the USDT equivalent of ${_plan.priceDisplay}. Only '
-                  'send on the ${_walletAccount['network'] ?? ''} network, or the '
-                  'funds are lost.',
-                  style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3),
+                  'Send the USDT equivalent of ${_plan.priceDisplay}. Only send on the ${_walletAccount['network'] ?? ''} network, or the funds are lost.',
+                  style: TextStyle(
+                    color: Ui.muted,
+                    fontSize: 13,
+                    height: 1.3,
+                  ),
                 ),
               ],
             ],
@@ -496,44 +691,70 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
     required String label,
   }) {
     final on = _method == id;
+
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () => setState(() => _method = id),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        padding: const EdgeInsets.symmetric(
+          vertical: 12,
+          horizontal: 8,
+        ),
         decoration: BoxDecoration(
           color: on ? Ui.red.withValues(alpha: .16) : Ui.cardDeep,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-              color: on ? Ui.red : Ui.line, width: on ? 1.5 : 1),
+            color: on ? Ui.red : Ui.line,
+            width: on ? 1.5 : 1,
+          ),
         ),
-        child: Column(children: [
-          Icon(icon, color: on ? Ui.redSoft : Ui.muted),
-          const SizedBox(height: 4),
-          Text(label,
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              color: on ? Ui.redSoft : Ui.muted,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: on ? FontWeight.w800 : FontWeight.w600,
-                  color: on ? Colors.white : Ui.muted)),
-        ]),
+                fontSize: 13,
+                fontWeight: on ? FontWeight.w800 : FontWeight.w600,
+                color: on ? Colors.white : Ui.muted,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _kv(String k, String v) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Row(children: [
-          SizedBox(
-            width: 112,
-            child: Text(k, style: TextStyle(color: Ui.muted, fontSize: 14)),
-          ),
-          Expanded(
-            child: Text(v,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 112,
+              child: Text(
+                k,
+                style: TextStyle(
+                  color: Ui.muted,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                v,
                 style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w800)),
-          ),
-        ]),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
       );
 
   Widget _copyValue({
@@ -544,34 +765,53 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(color: Ui.muted, fontSize: 12.5)),
+          Text(
+            label,
+            style: TextStyle(
+              color: Ui.muted,
+              fontSize: 12.5,
+            ),
+          ),
           const SizedBox(height: 4),
-          Row(children: [
-            Expanded(
-              child: SelectableText(value,
+          Row(
+            children: [
+              Expanded(
+                child: SelectableText(
+                  value,
                   style: const TextStyle(
-                      fontSize: 19,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: .4)),
-            ),
-            IconButton(
-              tooltip: 'Copy',
-              onPressed: () => _copy(value, what),
-              icon: Icon(Icons.copy_rounded, color: Ui.redSoft),
-            ),
-          ]),
+                    fontSize: 19,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .4,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Copy',
+                onPressed: () => _copy(value, what),
+                icon: Icon(
+                  Icons.copy_rounded,
+                  color: Ui.redSoft,
+                ),
+              ),
+            ],
+          ),
         ],
       );
 
-  // ---- step 2: receipt on WhatsApp
+  // -------------------------------------------------------------
+  // STEP 2: RECEIPT
+  // -------------------------------------------------------------
 
   Widget _receiptBlock() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'After paying, send your receipt or a screenshot of the payment '
-            'on WhatsApp. We confirm it and make your token.',
-            style: TextStyle(color: Ui.muted, fontSize: 13.5, height: 1.3),
+            'After paying, send your receipt or a screenshot of the payment on WhatsApp. We confirm it and make your token.',
+            style: TextStyle(
+              color: Ui.muted,
+              fontSize: 13.5,
+              height: 1.3,
+            ),
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -579,44 +819,65 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
             child: FilledButton.icon(
               onPressed: _sendReceipt,
               icon: const Icon(Icons.chat_rounded),
-              label: const Text('Send receipt on WhatsApp',
-                  style:
-                      TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
+              label: const Text(
+                'Send receipt on WhatsApp',
+                style: TextStyle(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF25D366),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24)),
+                  borderRadius: BorderRadius.circular(24),
+                ),
               ),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Tip: in WhatsApp, tap the attach (📎) button and choose your '
-            'payment screenshot. Your ID is added to the message for you.',
-            style: TextStyle(color: Ui.dim, fontSize: 12, height: 1.3),
+            'Tip: in WhatsApp, tap the attach (📎) button and choose your payment screenshot. Your ID is added to the message for you.',
+            style: TextStyle(
+              color: Ui.dim,
+              fontSize: 12,
+              height: 1.3,
+            ),
           ),
         ],
       );
 
-  // ---- step 3: token request / pending / ready
+  // -------------------------------------------------------------
+  // STEP 3: TOKEN
+  // -------------------------------------------------------------
 
   Widget _tokenBlock() {
     final st = _state.state;
+
     if (_checking) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(8),
           child: SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2.4)),
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.4,
+            ),
+          ),
         ),
       );
     }
-    if (st == 'ready' && _state.token != null) return _readyBlock();
-    if (st == 'pending') return _pendingBlock();
+
+    if (st == 'ready' && _state.token != null) {
+      return _readyBlock();
+    }
+
+    if (st == 'pending') {
+      return _pendingBlock();
+    }
+
     return _askBlock();
   }
 
@@ -624,9 +885,12 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Request your token. When it is ready it shows up here and one '
-            'tap switches every ad off on this phone.',
-            style: TextStyle(color: Ui.muted, fontSize: 13.5, height: 1.3),
+            'Request your token. When it is ready it shows up here and one tap switches every ad off on this phone.',
+            style: TextStyle(
+              color: Ui.muted,
+              fontSize: 13.5,
+              height: 1.3,
+            ),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -635,15 +899,20 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
             keyboardType: TextInputType.phone,
             textInputAction: TextInputAction.done,
             inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9+\- ()]')),
+              FilteringTextInputFormatter.allow(
+                RegExp(r'[0-9+\- ()]'),
+              ),
             ],
             onChanged: (_) {
-              if (_error != null) setState(() => _error = null);
+              if (_error != null) {
+                setState(() => _error = null);
+              }
             },
             decoration: const InputDecoration(
               labelText: 'Your WhatsApp number',
               hintText: '+234 801 234 5678',
-              helperText: 'Required. We message you here to confirm payment.',
+              helperText:
+                  'Required. We message you here to confirm payment.',
               counterText: '',
             ),
           ),
@@ -659,23 +928,40 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
   Widget _pendingBlock() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(children: [
-            Icon(Icons.hourglass_top_rounded, color: Ui.muted, size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Request sent. Your token will appear here by itself once '
-                'your payment is confirmed.',
-                style: TextStyle(color: Ui.muted, fontSize: 13.5),
+          Row(
+            children: [
+              Icon(
+                Icons.hourglass_top_rounded,
+                color: Ui.muted,
+                size: 20,
               ),
-            ),
-          ]),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Request sent. Your token will appear here by itself once your payment is confirmed.',
+                  style: TextStyle(
+                    color: Ui.muted,
+                    fontSize: 13.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
-          _primary(label: 'Check now', icon: Icons.refresh_rounded, onTap: () async {
-            setState(() => _busy = true);
-            await _check();
-            if (mounted) setState(() => _busy = false);
-          }),
+          _primary(
+            label: 'Check now',
+            icon: Icons.refresh_rounded,
+            onTap: () async {
+              if (_busy) return;
+
+              setState(() => _busy = true);
+              await _check();
+
+              if (mounted) {
+                setState(() => _busy = false);
+              }
+            },
+          ),
           TextButton(
             onPressed: _chat,
             child: const Text('Need help? Chat on WhatsApp'),
@@ -686,12 +972,16 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
   Widget _readyBlock() {
     final t = _state.token!;
     final days = _state.days;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
           days > 0 ? 'Your token is ready ($days days)' : 'Your token is ready',
-          style: TextStyle(color: Ui.green, fontWeight: FontWeight.w800),
+          style: TextStyle(
+            color: Ui.green,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         const SizedBox(height: 8),
         Container(
@@ -705,7 +995,10 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
             t,
             textAlign: TextAlign.center,
             style: const TextStyle(
-                fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 2),
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 2,
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -718,14 +1011,25 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
     );
   }
 
+  // -------------------------------------------------------------
+  // MANUAL TOKEN ENTRY
+  // -------------------------------------------------------------
+
   Widget _haveTokenCard() => _box(
         child: Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          data: Theme.of(context).copyWith(
+            dividerColor: Colors.transparent,
+          ),
           child: ExpansionTile(
             tilePadding: EdgeInsets.zero,
             childrenPadding: EdgeInsets.zero,
-            title: const Text('Already have a token?',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            title: const Text(
+              'Already have a token?',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             children: [
               TextField(
                 controller: _token,
@@ -734,7 +1038,9 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
                 enableSuggestions: false,
                 maxLength: 16,
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9\- ]')),
+                  FilteringTextInputFormatter.allow(
+                    RegExp(r'[A-Za-z0-9\- ]'),
+                  ),
                   _UpperCaseFormatter(),
                 ],
                 decoration: const InputDecoration(
@@ -753,6 +1059,10 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
         ),
       );
 
+  // -------------------------------------------------------------
+  // PRIMARY BUTTON
+  // -------------------------------------------------------------
+
   Widget _primary({
     required String label,
     required IconData icon,
@@ -767,43 +1077,75 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2.2, color: Colors.white))
+                    strokeWidth: 2.2,
+                    color: Colors.white,
+                  ),
+                )
               : Icon(icon),
-          label: Text(label,
-              style:
-                  const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
+          label: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 15.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           style: FilledButton.styleFrom(
             backgroundColor: Ui.red,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24)),
+              borderRadius: BorderRadius.circular(24),
+            ),
           ),
         ),
       );
 
+  // -------------------------------------------------------------
+  // INSTALLATION ID
+  // -------------------------------------------------------------
+
   Widget _idLine() {
-    if (_installId.isEmpty) return const SizedBox.shrink();
+    if (_installId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Center(
       child: InkWell(
         onTap: () async {
-          await Clipboard.setData(ClipboardData(text: _installId));
-          if (mounted) _toast('ID copied');
+          await Clipboard.setData(
+            ClipboardData(text: _installId),
+          );
+
+          if (mounted) {
+            _toast('ID copied');
+          }
         },
         child: Padding(
           padding: const EdgeInsets.all(6),
           child: Text(
-              'Your ID: ${_installId.length > 8 ? _installId.substring(0, 8) : _installId}…  (tap to copy)',
-              style: TextStyle(color: Ui.dim, fontSize: 11.5)),
+            'Your ID: ${_installId.length > 8 ? _installId.substring(0, 8) : _installId}…  (tap to copy)',
+            style: TextStyle(
+              color: Ui.dim,
+              fontSize: 11.5,
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
+// -------------------------------------------------------------
+// TOKEN UPPERCASE FORMATTER
+// -------------------------------------------------------------
+
 class _UpperCaseFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
-          TextEditingValue oldValue, TextEditingValue newValue) =>
-      newValue.copyWith(text: newValue.text.toUpperCase());
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) =>
+      newValue.copyWith(
+        text: newValue.text.toUpperCase(),
+      );
 }
