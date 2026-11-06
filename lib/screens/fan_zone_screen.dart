@@ -1621,127 +1621,351 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     ];
   }
 
+  // ---------------------------------------------------------------- ranks
+
+  static const _gold = Color(0xFFFFC857);
+  static const _silver = Color(0xFFC0C7D1);
+  static const _bronze = Color(0xFFCD8B5A);
+  static const _tick = Color(0xFF1D9BF0);
+
+  bool _isPremiumRow(Map<String, dynamic> r) =>
+      r['is_premium'] == 1 || r['is_premium'] == true;
+
+  Widget _rankAvatar(Map<String, dynamic> r, double size) => FanAvatar(
+    name: '${r['name']}',
+    seed: '${r['id']}',
+    size: size,
+    imageUrl: FanZoneService.avatarUrl('${r['id']}', r['avatar_at']),
+  );
+
+  Widget _nameWithTick(Map<String, dynamic> r, {double size = 14, TextAlign? align}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Flexible(
+          child: Text(
+            '${r['name']}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: align,
+            style: TextStyle(fontSize: size, fontWeight: FontWeight.w800),
+          ),
+        ),
+        if (_isPremiumRow(r)) ...[
+          const SizedBox(width: 3),
+          Icon(Icons.verified_rounded, color: _tick, size: size + 1),
+        ],
+      ],
+    );
+  }
+
+  Widget _prizeBanner() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [_gold.withValues(alpha: .22), _gold.withValues(alpha: .06)],
+      ),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: _gold.withValues(alpha: .35)),
+    ),
+    child: Row(
+      children: [
+        const Icon(Icons.emoji_events_rounded, color: _gold, size: 28),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Top 3 win Premium every week',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14.5),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '7 days of Premium + blue tick',
+                style: TextStyle(color: Ui.muted, fontSize: 12.5),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _podiumSlot(
+    Map<String, dynamic>? r, {
+    required int rank,
+    required String myId,
+  }) {
+    if (r == null) return const Expanded(child: SizedBox());
+    final color = rank == 1 ? _gold : (rank == 2 ? _silver : _bronze);
+    final avatar = rank == 1 ? 68.0 : 54.0;
+    final base = rank == 1 ? 74.0 : (rank == 2 ? 56.0 : 44.0);
+    final mine = '${r['id']}' == myId;
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => _openProfile('${r['id']}'),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            if (rank == 1)
+              const Icon(Icons.workspace_premium_rounded, color: _gold, size: 26),
+            Container(
+              padding: const EdgeInsets.all(2.5),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: color, width: 2.5),
+              ),
+              child: _rankAvatar(r, avatar),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: _nameWithTick(r, size: 13),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${r['points'] ?? 0} pts',
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              height: base,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: mine ? .32 : .18),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                border: Border.all(color: color.withValues(alpha: .45)),
+              ),
+              child: Text(
+                '$rank',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _podium(List<Map<String, dynamic>> rows, String myId) {
+    Map<String, dynamic>? at(int i) => i < rows.length ? rows[i] : null;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        _podiumSlot(at(1), rank: 2, myId: myId),
+        _podiumSlot(at(0), rank: 1, myId: myId),
+        _podiumSlot(at(2), rank: 3, myId: myId),
+      ],
+    );
+  }
+
+  Widget _rankRow(int index, Map<String, dynamic> r, String myId) {
+    final mine = '${r['id']}' == myId;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: mine ? Ui.red.withValues(alpha: .12) : Ui.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: mine ? Ui.red.withValues(alpha: .5) : Ui.line),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => _openProfile('${r['id']}'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 28,
+                  child: Text(
+                    '${index + 1}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Ui.muted,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _rankAvatar(r, 38),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: _nameWithTick(r, size: 14.5),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${r['won'] ?? 0} correct · ${r['lost'] ?? 0} missed',
+                        style: TextStyle(color: Ui.muted, fontSize: 11.5),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${r['points'] ?? 0}',
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text('pts', style: TextStyle(color: Ui.dim, fontSize: 10.5)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pointsPill(String emoji, String label) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: Ui.card,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: Ui.line),
+    ),
+    child: Text(
+      '$emoji  $label',
+      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+    ),
+  );
+
+  void _showRankRules() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Ui.panel,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 0, 22, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'How the table works',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 12),
+              for (final line in const [
+                'Everyone starts on 0. Points land when a match ends and the final score is confirmed.',
+                'Exact score = 3 pts. Right outcome or market = 1 pt. Missed = 0.',
+                'Pushes do not count.',
+                'Ties: points, then wins, then fewer losses, then account ID.',
+                'Tap any fan to open their profile.',
+              ])
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6, right: 10),
+                        child: Icon(Icons.circle, size: 6, color: Ui.red),
+                      ),
+                      Expanded(
+                        child: Text(
+                          line,
+                          style: TextStyle(color: Ui.muted, height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _rankings() {
     final rows = FanZoneService.rows(_data['leaderboard']);
+    final myId = '${_data['id']}';
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
+        padding: const EdgeInsets.fromLTRB(14, 6, 14, 28),
         children: [
-          const Text(
-            'Fan League',
-            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Every registered fan starts on zero. Points are added as soon as a match ends and its final score is confirmed.',
-            style: TextStyle(color: Ui.muted),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'The top 3 weekly leaderboard winners receive 7 days of Premium access and a blue verification tick.',
-            style: TextStyle(color: Color(0xFF1D9BF0), fontSize: 12, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 16),
-          ..._winnerCards(),
-          if (!_loadedOnce) const LinearProgressIndicator(),
-          Container(
-            decoration: fanBox(radius: 14),
-            clipBehavior: Clip.antiAlias,
-            child: Table(
-              columnWidths: const {
-                0: FixedColumnWidth(32),
-                1: FlexColumnWidth(),
-                2: FixedColumnWidth(32),
-                3: FixedColumnWidth(32),
-                4: FixedColumnWidth(32),
-                5: FixedColumnWidth(40),
-              },
-              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-              children: [
-                TableRow(
-                  decoration: BoxDecoration(color: Ui.panel),
-                  children: [
-                    for (final title in ['#', 'Fan', 'P', 'W', 'L', 'Pts'])
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                          horizontal: 3,
-                        ),
-                        child: Text(
-                          title,
-                          textAlign: title == 'Fan'
-                              ? TextAlign.left
-                              : TextAlign.center,
-                          style: const TextStyle(fontWeight: FontWeight.w900),
-                        ),
-                      ),
-                  ],
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Fan League',
+                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
                 ),
-                for (var i = 0; i < rows.length; i++)
-                  TableRow(
-                    decoration: BoxDecoration(
-                      color: rows[i]['id'] == _data['id']
-                          ? Ui.red.withValues(alpha: .12)
-                          : null,
-                      border: Border(bottom: BorderSide(color: Ui.line)),
-                    ),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Text('${i + 1}', textAlign: TextAlign.center),
-                      ),
-                      InkWell(
-                        onTap: () => _openProfile('${rows[i]['id']}'),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 16,
-                            horizontal: 4,
-                          ),
-                          child: Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  '${rows[i]['name']}',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                              if (rows[i]['is_premium'] == 1 || rows[i]['is_premium'] == true) ...[
-                                const SizedBox(width: 4),
-                                const Icon(Icons.verified_rounded, color: Color(0xFF1D9BF0), size: 15),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                      for (final field in ['played', 'won', 'lost', 'points'])
-                        Text(
-                          '${rows[i][field] ?? 0}',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontWeight: field == 'points'
-                                ? FontWeight.w900
-                                : FontWeight.normal,
-                          ),
-                        ),
-                    ],
-                  ),
-              ],
-            ),
+              ),
+              IconButton(
+                tooltip: 'How the table works',
+                onPressed: _showRankRules,
+                icon: Icon(Icons.info_outline_rounded, color: Ui.muted),
+              ),
+            ],
           ),
+          const SizedBox(height: 6),
+          _prizeBanner(),
+          if (!_loadedOnce)
+            const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: LinearProgressIndicator(),
+            ),
+          const SizedBox(height: 20),
+          if (rows.isEmpty && _loadedOnce)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 36),
+              child: Center(
+                child: Text(
+                  'No fans on the table yet',
+                  style: TextStyle(color: Ui.muted),
+                ),
+              ),
+            )
+          else ...[
+            _podium(rows.take(3).toList(), myId),
+            const SizedBox(height: 14),
+            for (var i = 3; i < rows.length; i++) _rankRow(i, rows[i], myId),
+          ],
           if (_data['board_next'] != null)
             TextButton(
               onPressed: _moreRanks ? null : _loadMoreRanks,
               child: Text(_moreRanks ? 'Loading…' : 'Show more fans'),
             ),
-          const SizedBox(height: 12),
-          Text(
-            'P: settled picks • W: correct • L: missed. Exact score: 3 points; correct outcome or market: 1; missed: 0. Pushes do not count. Ties: points, wins, fewer losses, then account ID. Tap a name to view their profile.',
-            style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _pointsPill('🎯', 'Exact score +3'),
+              _pointsPill('✅', 'Right outcome +1'),
+              _pointsPill('❌', 'Missed 0'),
+            ],
           ),
+          const SizedBox(height: 18),
+          ..._winnerCards(),
         ],
       ),
     );
