@@ -841,7 +841,7 @@ class _ComposePostState extends State<_ComposePost> {
                     TextField(
                       controller: _text,
                       enabled: !_busy,
-                      maxLength: 1000,
+                      maxLength: 5000,
                       minLines: 6,
                       maxLines: 12,
                       textCapitalization: TextCapitalization.sentences,
@@ -884,7 +884,7 @@ class _ComposePostState extends State<_ComposePost> {
                           ValueListenableBuilder<TextEditingValue>(
                             valueListenable: _text,
                             builder: (_, v, __) => Text(
-                              '${v.text.length}/1000',
+                              '${v.text.length}/5000',
                               style: TextStyle(fontSize: 12, color: Ui.dim),
                             ),
                           ),
