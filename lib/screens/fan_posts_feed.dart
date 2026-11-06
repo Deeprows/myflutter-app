@@ -11,6 +11,7 @@ import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
 import '../utils/safe_error_message.dart';
 import 'fan_widgets.dart';
+import 'fan_mentions.dart';
 import 'fan_post_card.dart';
 import 'fan_x_widgets.dart';
 
@@ -854,6 +855,7 @@ class _ComposePostState extends State<_ComposePost> {
                         contentPadding: const EdgeInsets.all(12),
                       ),
                     ),
+                    MentionSuggestions(controller: _text),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(8, 0, 12, 8),
                       child: Row(
