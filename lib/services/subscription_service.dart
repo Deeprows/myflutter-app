@@ -86,6 +86,71 @@ class PlanInfo {
   }
 }
 
+/// One "Remove ads" choice: how many days, and what it costs. The Worker
+/// answers with every plan already priced in the person's own currency.
+class AdPlan {
+  final int days;
+  final int priceNgn;
+  final String ngnDisplay; // "₦2,000" - what is actually transferred
+  final String? localDisplay; // "E£69" in the chosen currency (null = naira)
+  final String? usdDisplay; // "US$1.30"
+
+  const AdPlan({
+    required this.days,
+    required this.priceNgn,
+    required this.ngnDisplay,
+    this.localDisplay,
+    this.usdDisplay,
+  });
+
+  /// What the list shows as the price: own currency first, naira otherwise.
+  String get shownPrice => localDisplay ?? ngnDisplay;
+
+  /// "7 days", "1 year" ...
+  String get label {
+    if (days % 365 == 0) {
+      final y = days ~/ 365;
+      return '$y year${y == 1 ? '' : 's'}';
+    }
+    return '$days day${days == 1 ? '' : 's'}';
+  }
+
+  factory AdPlan.fromJson(Map<String, dynamic> j) {
+    String? clean(dynamic v) {
+      final t = (v ?? '').toString();
+      return t.isEmpty ? null : t;
+    }
+
+    final ngn = (j['price_ngn'] as num?)?.toInt() ?? 0;
+    return AdPlan(
+      days: (j['days'] as num?)?.toInt() ?? 30,
+      priceNgn: ngn,
+      ngnDisplay: clean(j['ngn_display']) ?? '₦$ngn',
+      localDisplay: clean(j['local_display']),
+      usdDisplay: clean(j['usd_display']),
+    );
+  }
+
+  /// Shown until the Worker answers (or when it cannot be reached): naira only.
+  static List<AdPlan> fallback() => const [
+        AdPlan(days: 7, priceNgn: 700, ngnDisplay: '₦700'),
+        AdPlan(days: 14, priceNgn: 1200, ngnDisplay: '₦1,200'),
+        AdPlan(days: 30, priceNgn: 2000, ngnDisplay: '₦2,000'),
+        AdPlan(days: 60, priceNgn: 3600, ngnDisplay: '₦3,600'),
+        AdPlan(days: 90, priceNgn: 5000, ngnDisplay: '₦5,000'),
+        AdPlan(days: 180, priceNgn: 9000, ngnDisplay: '₦9,000'),
+        AdPlan(days: 365, priceNgn: 16000, ngnDisplay: '₦16,000'),
+      ];
+}
+
+/// The plans for one currency. [currency] is what the prices are shown in
+/// ('NGN' when the Worker has no rate for the one asked for).
+class AdPlans {
+  final String currency;
+  final List<AdPlan> plans;
+  const AdPlans(this.currency, this.plans);
+}
+
 class CheckoutStart {
   final String url;
   final String reference;
@@ -311,6 +376,31 @@ class SubscriptionService extends ChangeNotifier {
     return PlanInfo.fallback();
   }
 
+  /// The phone's own country (from the region setting), e.g. 'EG'.
+  String? get deviceCountry => PlatformDispatcher.instance.locale.countryCode;
+
+  /// "Remove ads" plans priced in [currency] (null = this phone's currency).
+  Future<AdPlans> loadAdPlans({String? currency}) async {
+    final cur = (currency == null || currency.isEmpty) ? currencyCode : currency;
+    try {
+      final r = await http
+          .get(_uri('/sub/ad-plans', {'cur': cur}))
+          .timeout(const Duration(seconds: 12));
+      if (r.statusCode == 200) {
+        final j = jsonDecode(r.body) as Map<String, dynamic>;
+        final list = (j['plans'] as List? ?? const [])
+            .whereType<Map>()
+            .map((e) => AdPlan.fromJson(Map<String, dynamic>.from(e)))
+            .where((p) => p.days > 0 && p.priceNgn > 0)
+            .toList();
+        if (list.isNotEmpty) {
+          return AdPlans((j['currency'] ?? 'NGN').toString(), list);
+        }
+      }
+    } catch (_) {}
+    return AdPlans('NGN', AdPlan.fallback());
+  }
+
   Future<String> savedEmail() async {
     try {
       return (await SharedPreferences.getInstance()).getString(_kEmail) ?? '';
@@ -458,14 +548,23 @@ class SubscriptionService extends ChangeNotifier {
   /// Sends a token request. [contact] (name / WhatsApp number) is optional and
   /// only shown to you on the admin page. Returns null on success or the
   /// message to show.
-  Future<String?> requestToken({String contact = ''}) async {
+  Future<String?> requestToken({
+    String contact = '',
+    int? days,
+    String? currency,
+  }) async {
     try {
       final id = await InstallId.get();
       final r = await http
           .post(
             _uri('/sub/token/request'),
             headers: {'content-type': 'application/json'},
-            body: jsonEncode({'install_id': id, 'contact': contact.trim()}),
+            body: jsonEncode({
+              'install_id': id,
+              'contact': contact.trim(),
+              if (days != null) 'days': days,
+              if (currency != null && currency.isNotEmpty) 'currency': currency,
+            }),
           )
           .timeout(const Duration(seconds: 20));
       if (r.statusCode == 200) {
