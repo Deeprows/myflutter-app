@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -174,8 +175,13 @@ class XAction extends StatelessWidget {
   }
 }
 
-/// Text with #hashtags and @mentions coloured like on X.
-List<InlineSpan> xRichSpans(String text, {TextStyle? base}) {
+/// Text with #hashtags and @mentions coloured like on X. Pass [onMention] to
+/// make @mentions tappable (it receives the handle without the @).
+List<InlineSpan> xRichSpans(
+  String text, {
+  TextStyle? base,
+  void Function(String handle)? onMention,
+}) {
   final style = base ?? const TextStyle();
   final spans = <InlineSpan>[];
   final pattern = RegExp(r'([#@][\p{L}\p{N}_]+)', unicode: true);
@@ -184,10 +190,15 @@ List<InlineSpan> xRichSpans(String text, {TextStyle? base}) {
     if (m.start > last) {
       spans.add(TextSpan(text: text.substring(last, m.start), style: style));
     }
+    final token = m.group(0)!;
     spans.add(
       TextSpan(
-        text: m.group(0),
+        text: token,
         style: style.copyWith(color: Ui.redSoft, fontWeight: FontWeight.w600),
+        recognizer: onMention != null && token.startsWith('@')
+            ? (TapGestureRecognizer()
+                ..onTap = () => onMention(token.substring(1)))
+            : null,
       ),
     );
     last = m.end;
