@@ -13,7 +13,8 @@ import '../models/fixture.dart';
 class FanZoneService {
   static String matchKey(Fixture f) =>
       '${f.id}|${f.kickoff.millisecondsSinceEpoch}';
-  static Future<String> _token() => AuthService.instance.idToken();
+  static Future<String> _token({bool refresh = false}) =>
+      AuthService.instance.idToken(refresh: refresh);
   static String get _blockedKey =>
       'fan_zone_blocked_${AuthService.instance.user?.id ?? 'signed_out'}';
 
@@ -24,29 +25,34 @@ class FanZoneService {
     Duration timeout = const Duration(seconds: 20),
   }) async {
     try {
-      final token = await _token();
       final uri = Uri.parse(
         '${AppConfig.feedBase}/fan/$path',
       ).replace(queryParameters: query);
-      final headers = {
-        'content-type': 'application/json',
-        'authorization': 'Bearer $token',
-      };
-      // Reads are safe to repeat: one quiet retry on a slow/dropped connection.
-      http.Response response;
-      try {
-        response =
-            await (body == null
-                    ? http.get(uri, headers: headers)
-                    : http.post(uri, headers: headers, body: jsonEncode(body)))
-                .timeout(timeout);
-      } on TimeoutException {
-        if (body != null) rethrow;
-        response = await http.get(uri, headers: headers).timeout(timeout);
-      } on http.ClientException {
-        if (body != null) rethrow;
-        await Future<void>.delayed(const Duration(milliseconds: 600));
-        response = await http.get(uri, headers: headers).timeout(timeout);
+      Future<http.Response> send(String token) async {
+        final headers = {
+          'content-type': 'application/json',
+          'authorization': 'Bearer $token',
+        };
+        // Reads are safe to repeat: one quiet retry on a slow/dropped connection.
+        try {
+          return await (body == null
+                  ? http.get(uri, headers: headers)
+                  : http.post(uri, headers: headers, body: jsonEncode(body)))
+              .timeout(timeout);
+        } on TimeoutException {
+          if (body != null) rethrow;
+          return await http.get(uri, headers: headers).timeout(timeout);
+        } on http.ClientException {
+          if (body != null) rethrow;
+          await Future<void>.delayed(const Duration(milliseconds: 600));
+          return await http.get(uri, headers: headers).timeout(timeout);
+        }
+      }
+
+      var response = await send(await _token());
+      if (response.statusCode == 401) {
+        // The Google token was rejected (usually expired): get a new one once.
+        response = await send(await _token(refresh: true));
       }
       final data = jsonDecode(utf8.decode(response.bodyBytes));
       if (data is! Map<String, dynamic>) {
