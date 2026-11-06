@@ -70,6 +70,10 @@ class FanZoneService {
   static String imageUrl(String postId) =>
       '${AppConfig.feedBase}/fan/image/${Uri.encodeComponent(postId)}';
 
+  /// Image or GIF attached to a reply (comment).
+  static String commentImageUrl(String commentId) =>
+      '${AppConfig.feedBase}/fan/comment-image/${Uri.encodeComponent(commentId)}';
+
   /// Public URL of a fan's profile photo or cover photo. [version] is the
   /// upload time the server reports, so a new upload is a new URL.
   static String profileImageUrl(String userId, String kind, num version) =>
@@ -118,6 +122,7 @@ class FanZoneService {
     required String text,
     Uint8List? image,
     String? matchKey,
+    String? quoteOf,
   }) async {
     final request = http.MultipartRequest(
       'POST',
@@ -128,6 +133,7 @@ class FanZoneService {
       'kind': kind,
       'text': text.trim(),
       if (matchKey != null) 'match_key': matchKey,
+      if (quoteOf != null && quoteOf.isNotEmpty) 'quote_of': quoteOf,
     });
     if (image != null) {
       if (image.length > 4 * 1024 * 1024) {
@@ -149,6 +155,57 @@ class FanZoneService {
     }
     if (response.statusCode != 200) {
       throw Exception(data['error'] ?? 'Could not publish your post.');
+    }
+  }
+
+  /// Posts a reply. [parentId] makes it a reply to another comment; [image]
+  /// may be a JPG, PNG or GIF (up to 4 MB).
+  static Future<void> postComment({
+    required String postId,
+    String text = '',
+    String? parentId,
+    Uint8List? image,
+  }) async {
+    if (image != null && image.length > 4 * 1024 * 1024) {
+      throw Exception('Choose an image smaller than 4 MB.');
+    }
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('${AppConfig.feedBase}/fan/social/comment'),
+    );
+    request.headers['authorization'] = 'Bearer ${await _token()}';
+    request.fields.addAll({
+      'id': postId,
+      'text': text.trim(),
+      if (parentId != null && parentId.isNotEmpty) 'parent_id': parentId,
+    });
+    if (image != null) {
+      request.files.add(
+        http.MultipartFile.fromBytes('image', image, filename: 'reply-image'),
+      );
+    }
+    final response = await request.send().timeout(const Duration(seconds: 45));
+    final body = await response.stream.bytesToString().timeout(
+      const Duration(seconds: 20),
+    );
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(body) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception('Reply is unavailable right now. Please try again later.');
+    }
+    if (response.statusCode != 200) {
+      throw Exception(data['error'] ?? 'Could not post your reply.');
+    }
+  }
+
+  /// Counts a view of a post (one per fan). Never throws: views are best effort.
+  static Future<int?> recordView(String postId) async {
+    try {
+      final data = await call('social/view', body: {'id': postId});
+      return (data['views'] as num?)?.toInt();
+    } catch (_) {
+      return null;
     }
   }
 
