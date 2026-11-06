@@ -1760,6 +1760,9 @@ const FAN_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS fan_likes (post_id TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(post_id,user_id))`,
   `CREATE TABLE IF NOT EXISTS fan_comments (id TEXT PRIMARY KEY, post_id TEXT NOT NULL, user_id TEXT NOT NULL, text TEXT NOT NULL, at INTEGER NOT NULL, hidden INTEGER NOT NULL DEFAULT 0)`,
   `CREATE INDEX IF NOT EXISTS fan_comments_post ON fan_comments(post_id,hidden,at DESC,id DESC)`,
+  // Views (one per fan per post), comment likes.
+  `CREATE TABLE IF NOT EXISTS fan_post_views (post_id TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(post_id,user_id))`,
+  `CREATE TABLE IF NOT EXISTS fan_comment_likes (comment_id TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(comment_id,user_id))`,
   `CREATE TABLE IF NOT EXISTS fan_comment_reports (comment_id TEXT NOT NULL,user_id TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(comment_id,user_id))`,
   `CREATE TABLE IF NOT EXISTS fan_social_limits (bucket TEXT PRIMARY KEY,count INTEGER NOT NULL,expires INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_limits (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL)`,
@@ -1780,12 +1783,21 @@ async function fanInit(db) {
     fanReady.set(db, (async()=> {
       await db.batch(FAN_SCHEMA.map(sql=>db.prepare(sql)));
       await db.prepare('INSERT OR IGNORE INTO fan_users(id,name) SELECT id,SUBSTR(name,1,30) FROM fan_accounts').run();
-      const columns=(await db.prepare('PRAGMA table_info(fan_picks)').all()).results;
-      for(const [name,definition] of [['market',"TEXT NOT NULL DEFAULT 'score'"],['selection',"TEXT NOT NULL DEFAULT ''"]]) {
-        if(columns.some(c=>c.name===name))continue;
-        try {await db.prepare(`ALTER TABLE fan_picks ADD COLUMN ${name} ${definition}`).run();}
-        catch(e) {if(!(await db.prepare('PRAGMA table_info(fan_picks)').all()).results.some(c=>c.name===name))throw e;}
+      for(const [table,list] of [
+        ['fan_picks',[['market',"TEXT NOT NULL DEFAULT 'score'"],['selection',"TEXT NOT NULL DEFAULT ''"]]],
+        // Replies to comments (with an optional image / GIF) and reposts / quotes of posts.
+        ['fan_comments',[['parent_id',"TEXT NOT NULL DEFAULT ''"],['root_id',"TEXT NOT NULL DEFAULT ''"],['image_key',"TEXT NOT NULL DEFAULT ''"]]],
+        ['fan_posts',[['quote_of',"TEXT NOT NULL DEFAULT ''"]]],
+      ]) {
+        const columns=(await db.prepare(`PRAGMA table_info(${table})`).all()).results;
+        for(const [name,definition] of list) {
+          if(columns.some(c=>c.name===name))continue;
+          try {await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`).run();}
+          catch(e) {if(!(await db.prepare(`PRAGMA table_info(${table})`).all()).results.some(c=>c.name===name))throw e;}
+        }
       }
+      await db.prepare('CREATE INDEX IF NOT EXISTS fan_comments_root ON fan_comments(post_id,root_id,hidden,at)').run();
+      await db.prepare('CREATE INDEX IF NOT EXISTS fan_posts_quote ON fan_posts(quote_of,hidden)').run();
     })().catch(e=>{fanReady.delete(db);throw e;}));
   }
   await fanReady.get(db);
@@ -1821,6 +1833,20 @@ async function fanZone(request, env, url, ctx) {
       const post=await db.prepare('SELECT image_key FROM fan_posts WHERE id=? AND hidden=0').bind(imageId).first();
       if(!post?.image_key || !env.FAN_MEDIA)return fail('Image not found',404);
       const image=await env.FAN_MEDIA.get(post.image_key);
+      if(!image)return fail('Image not found',404);
+      const headers=new Headers(CORS);
+      image.writeHttpMetadata(headers);
+      headers.set('cache-control','no-store');
+      headers.set('x-content-type-options','nosniff');
+      headers.set('content-security-policy',"default-src 'none'; sandbox");
+      return new Response(image.body,{headers});
+    }
+    if(request.method==='GET' && url.pathname.startsWith('/fan/comment-image/')) {
+      const imageId=url.pathname.slice('/fan/comment-image/'.length);
+      if(!/^[a-f0-9-]{36}$/.test(imageId))return fail('Image not found',404);
+      const row=await db.prepare('SELECT c.image_key FROM fan_comments c JOIN fan_posts p ON p.id=c.post_id WHERE c.id=? AND c.hidden=0 AND p.hidden=0').bind(imageId).first();
+      if(!row?.image_key || !env.FAN_MEDIA)return fail('Image not found',404);
+      const image=await env.FAN_MEDIA.get(row.image_key);
       if(!image)return fail('Image not found',404);
       const headers=new Headers(CORS);
       image.writeHttpMetadata(headers);
@@ -1914,7 +1940,7 @@ async function fanZone(request, env, url, ctx) {
     if(request.method==='POST' && url.pathname==='/fan/profile/image')return await fanProfileImage(request,env,user,id);
     if(url.pathname.startsWith('/fan/social/'))return await fanSocial(request,env,url,user,id,ctx);
     if(url.pathname==='/fan/posts' || url.pathname==='/fan/post' || url.pathname.startsWith('/fan/post/')) {
-      return await fanPosts(request,env,url,user,id);
+      return await fanPosts(request,env,url,user,id,ctx);
     }
     if (request.method === 'GET' && url.pathname === '/fan/state') {
       const resultSync=await fanSyncResults(env);
@@ -2059,6 +2085,14 @@ export function fanImageType(bytes) {
   }
   return type && width>0 && height>0 && width<=6000 && height<=6000 && width*height<=16000000 ? type : null;
 }
+// Comment replies also accept GIFs (animated or not).
+export function fanCommentImageType(bytes) {
+  if(bytes.length>=10 && ['GIF87a','GIF89a'].includes(String.fromCharCode(...bytes.slice(0,6)))) {
+    const width=bytes[6]+bytes[7]*256,height=bytes[8]+bytes[9]*256;
+    return width>0 && height>0 && width<=6000 && height<=6000 && width*height<=16000000 ? 'image/gif' : null;
+  }
+  return fanImageType(bytes);
+}
 async function fanReadForm(request) {
   const max=FAN_IMAGE_LIMIT+65536;
   if(Number(request.headers.get('content-length') || 0)>max) return null;
@@ -2100,7 +2134,7 @@ async function fanProfileImage(request,env,user,id) {
   await env.DB.prepare(`INSERT INTO fan_profile_media(user_id,${column}) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET ${column}=excluded.${column}`).bind(id,now).run();
   return json({ok:true,kind,version:now});
 }
-async function fanPosts(request,env,url,user,id) {
+async function fanPosts(request,env,url,user,id,ctx) {
   const db=env.DB;
   const fail=(error,status=400)=>json({error},status);
   if(request.method==='GET' && url.pathname==='/fan/posts') {
@@ -2132,6 +2166,16 @@ async function fanPosts(request,env,url,user,id) {
     }
     const file=form.get('image');
     const hasImage=file && typeof file!=='string' && file.size>0;
+    let quoteOf='';
+    if(form.get('quote_of')) {
+      // Quote post: always points at the original, never at another repost.
+      const wanted=String(form.get('quote_of'));
+      if(!/^[a-f0-9-]{36}$/.test(wanted))return fail('Invalid post');
+      const target=await db.prepare("SELECT id,quote_of,kind FROM fan_posts WHERE id=? AND hidden=0").bind(wanted).first();
+      if(!target)return fail('Post not found',404);
+      quoteOf=target.kind==='repost' && target.quote_of?target.quote_of:target.id;
+      if(!text && !hasImage)return fail('Add your comment to quote this post');
+    }
     if(!text && !hasImage)return fail('Write something or attach a photo');
     if(kind==='prediction' && !text)return fail('Write your prediction before posting');
     if(kind==='betslip' && !hasImage)return fail('Attach your bet-slip image');
@@ -2151,12 +2195,16 @@ async function fanPosts(request,env,url,user,id) {
     const imageKey=hasImage?`fan-posts/${postId}`:'';
     try {
       if(hasImage)await env.FAN_MEDIA.put(imageKey,bytes,{httpMetadata:{contentType:type}});
-      const insert=db.prepare('INSERT INTO fan_posts(id,user_id,kind,text,image_key,at) VALUES(?,?,?,?,?,?)').bind(postId,id,kind,text,imageKey,now);
+      const insert=db.prepare('INSERT INTO fan_posts(id,user_id,kind,text,image_key,at,quote_of) VALUES(?,?,?,?,?,?,?)').bind(postId,id,kind,text,imageKey,now,quoteOf);
       if(taggedFixture)await db.batch([insert,db.prepare('INSERT INTO fan_post_matches(post_id,fixture_json) VALUES(?,?)').bind(postId,JSON.stringify(taggedFixture))]);
       else await insert.run();
     } catch(e) {
       if(imageKey)await env.FAN_MEDIA.delete(imageKey).catch(()=>{});
       throw e;
+    }
+    if(quoteOf) {
+      const original=await db.prepare('SELECT user_id FROM fan_posts WHERE id=?').bind(quoteOf).first();
+      if(original)await fanNotify(env,ctx,{userId:original.user_id,kind:'quote',actorId:id,actorName:user.name,postId:postId,text,dedupe:`quote:${postId}`});
     }
     return json({ok:true,id:postId});
   }
@@ -2890,7 +2938,17 @@ const FAN_SOCIAL_POST_FIELDS=`p.id,p.user_id,u.name,p.kind,p.text,p.at,COALESCE(
  (SELECT COUNT(*) FROM fan_likes l WHERE l.post_id=p.id) AS likes,
  (SELECT COUNT(*) FROM fan_comments c WHERE c.post_id=p.id AND c.hidden=0) AS comments,
  EXISTS(SELECT 1 FROM fan_likes l WHERE l.post_id=p.id AND l.user_id=?) AS liked,
- COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=p.user_id),0) AS avatar_at`;
+ COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=p.user_id),0) AS avatar_at,
+ (SELECT COUNT(*) FROM fan_post_views v WHERE v.post_id=p.id) AS views,
+ (SELECT COUNT(*) FROM fan_posts r WHERE r.quote_of=p.id AND r.hidden=0) AS reposts,
+ EXISTS(SELECT 1 FROM fan_posts r WHERE r.quote_of=p.id AND r.hidden=0 AND r.kind='repost' AND r.user_id=?1) AS reposted,
+ p.quote_of,
+ (SELECT qu.name FROM fan_posts q JOIN fan_users qu ON qu.id=q.user_id WHERE q.id=p.quote_of AND q.hidden=0) AS q_name,
+ (SELECT q.user_id FROM fan_posts q WHERE q.id=p.quote_of AND q.hidden=0) AS q_user_id,
+ (SELECT q.text FROM fan_posts q WHERE q.id=p.quote_of AND q.hidden=0) AS q_text,
+ (SELECT q.at FROM fan_posts q WHERE q.id=p.quote_of AND q.hidden=0) AS q_at,
+ (SELECT CASE WHEN q.image_key<>'' THEN 1 ELSE 0 END FROM fan_posts q WHERE q.id=p.quote_of AND q.hidden=0) AS q_has_image,
+ COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=(SELECT q.user_id FROM fan_posts q WHERE q.id=p.quote_of)),0) AS q_avatar_at`;
 function fanSocialCursor(raw,type='post') {
   if(!raw)return null;
   const match=(type==='user'? /^(\d{1,16}):([a-f0-9]{64})$/ : /^(\d{1,16}):([a-f0-9-]{36})$/).exec(raw);
@@ -2911,6 +2969,9 @@ function fanNote(kind,actorName,text) {
   const who=String(actorName || 'Someone').slice(0,30);
   if(kind==='follow')return {title:'New follower',body:`${who} started following you`};
   if(kind==='like')return {title:'New like',body:`${who} liked your post`};
+  if(kind==='reply')return {title:'New reply',body:`${who} replied: ${String(text || '').replace(/\s+/g,' ').trim().slice(0,90) || 'sent a photo'}`};
+  if(kind==='repost')return {title:'New repost',body:`${who} reposted your post`};
+  if(kind==='quote')return {title:'New quote',body:`${who} quoted your post: ${String(text || '').replace(/\s+/g,' ').trim().slice(0,90)}`};
   return {title:'New comment',body:`${who} commented: ${String(text || '').replace(/\s+/g,' ').trim().slice(0,90)}`};
 }
 async function fanNotify(env,ctx,n) {
@@ -3046,9 +3107,21 @@ async function fanSocial(request,env,url,user,id,ctx) {
     if(!post)return fail('Post not found',404);
     if(path==='/fan/social/post')return json({post,viewer_id:id});
     const cursor=fanSocialCursor(url.searchParams.get('before'));if(cursor===false)return fail('Invalid page cursor');
-    const result=await db.prepare(`SELECT c.id,c.post_id,c.user_id,u.name,c.text,c.at FROM fan_comments c JOIN fan_users u ON u.id=c.user_id WHERE c.post_id=? AND c.hidden=0 AND (c.at<? OR (c.at=? AND c.id<?)) ORDER BY c.at DESC,c.id DESC LIMIT 31`).bind(postId,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
-    const comments=result.results.slice(0,30),last=comments.at(-1);
-    return json({comments,next:result.results.length>30?`${last.at}:${last.id}`:null,post,viewer_id:id});
+    const COMMENT_FIELDS=`c.id,c.post_id,c.user_id,u.name,c.text,c.at,c.parent_id,c.root_id,CASE WHEN c.image_key<>'' THEN 1 ELSE 0 END AS has_image,
+      (SELECT COUNT(*) FROM fan_comment_likes l WHERE l.comment_id=c.id) AS likes,
+      EXISTS(SELECT 1 FROM fan_comment_likes l WHERE l.comment_id=c.id AND l.user_id=?1) AS liked,
+      COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=c.user_id),0) AS avatar_at,
+      (SELECT pu.name FROM fan_comments pc JOIN fan_users pu ON pu.id=pc.user_id WHERE pc.id=c.parent_id) AS reply_to_name,
+      (SELECT pc.user_id FROM fan_comments pc WHERE pc.id=c.parent_id) AS reply_to_user_id`;
+    // Top-level replies are paged newest first; every reply under them is returned with them.
+    const roots=await db.prepare(`SELECT ${COMMENT_FIELDS} FROM fan_comments c JOIN fan_users u ON u.id=c.user_id WHERE c.post_id=?2 AND c.hidden=0 AND c.root_id='' AND (c.at<?3 OR (c.at=?3 AND c.id<?4)) ORDER BY c.at DESC,c.id DESC LIMIT 31`).bind(id,postId,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
+    const comments=roots.results.slice(0,30),last=comments.at(-1);
+    let replies=[];
+    if(comments.length) {
+      const marks=comments.map(()=>'?').join(',');
+      replies=(await db.prepare(`SELECT ${COMMENT_FIELDS.replace(/\?1/g,'?')} FROM fan_comments c JOIN fan_users u ON u.id=c.user_id WHERE c.post_id=? AND c.hidden=0 AND c.root_id IN (${marks}) ORDER BY c.at ASC,c.id ASC LIMIT 400`).bind(id,postId,...comments.map(c=>c.id)).all()).results;
+    }
+    return json({comments:[...comments,...replies],next:roots.results.length>30?`${last.at}:${last.id}`:null,post,viewer_id:id});
   }
   if(request.method==='GET' && path==='/fan/social/notifications') {
     const rows=await db.prepare(`SELECT n.id,n.kind,n.actor_id,COALESCE((SELECT u.name FROM fan_users u WHERE u.id=n.actor_id),n.actor_name) AS actor_name,n.post_id,n.text,n.at,COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=n.actor_id),0) AS avatar_at FROM fan_notifications n WHERE n.user_id=? ORDER BY n.at DESC LIMIT 50`).bind(id).all();
@@ -3058,6 +3131,46 @@ async function fanSocial(request,env,url,user,id,ctx) {
   }
   if(request.method!=='POST')return fail('Not found',404);
   if(!user)return fail('Choose your Fan Zone nickname first.',403);
+  if(path==='/fan/social/comment' && (request.headers.get('content-type') || '').startsWith('multipart/form-data')) {
+    const form=await fanReadForm(request);
+    if(!form)return fail('Invalid upload or image exceeds 4 MB.',413);
+    const postId=String(form.get('id') || ''),parentId=String(form.get('parent_id') || ''),text=String(form.get('text') || '').trim();
+    if(!/^[a-f0-9-]{36}$/.test(postId))return fail('Invalid post');
+    if(parentId && !/^[a-f0-9-]{36}$/.test(parentId))return fail('Invalid comment');
+    const target=await db.prepare('SELECT id,user_id FROM fan_posts WHERE id=? AND hidden=0').bind(postId).first();
+    if(!target)return fail('Post not found',404);
+    let parent=null;
+    if(parentId) {
+      parent=await db.prepare('SELECT id,user_id,root_id FROM fan_comments WHERE id=? AND post_id=? AND hidden=0').bind(parentId,postId).first();
+      if(!parent)return fail('The comment you are replying to is gone.',404);
+    }
+    const file=form.get('image'),hasImage=file && typeof file!=='string' && file.size>0;
+    if(text.length>500 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(text) || (!text && !hasImage))return fail('Write a reply of 1–500 characters or attach an image');
+    let bytes,type;
+    if(hasImage) {
+      if(!env.FAN_MEDIA)return fail('Image uploads need the FAN_MEDIA R2 binding. Text replies still work.',503);
+      if(file.size>FAN_IMAGE_LIMIT)return fail('Choose an image smaller than 4 MB.',413);
+      bytes=new Uint8Array(await file.arrayBuffer());
+      type=fanCommentImageType(bytes);
+      if(!type)return fail('Choose a JPG, PNG or GIF image, up to 6,000 pixels per side and 16 megapixels.');
+    }
+    if(!await fanSocialBudget(db,id,'comment',60))return fail('Too many comments. Try next hour.',429);
+    const now=Date.now();
+    if(!await db.prepare('UPDATE fan_users SET last_post=? WHERE id=? AND last_post<? RETURNING id').bind(now,id,now-10000).first())return fail('Please wait 10 seconds between posts and comments.',429);
+    const commentId=crypto.randomUUID(),imageKey=hasImage?`fan-comments/${commentId}`:'';
+    // Every reply is filed under the top-level comment it belongs to (replies to replies stay in that thread).
+    const rootId=parent?(parent.root_id || parent.id):'';
+    try {
+      if(hasImage)await env.FAN_MEDIA.put(imageKey,bytes,{httpMetadata:{contentType:type}});
+      await db.prepare('INSERT INTO fan_comments(id,post_id,user_id,text,at,parent_id,root_id,image_key) VALUES(?,?,?,?,?,?,?,?)').bind(commentId,postId,id,text,now,parentId,rootId,imageKey).run();
+    } catch(e) {
+      if(imageKey)await env.FAN_MEDIA.delete(imageKey).catch(()=>{});
+      throw e;
+    }
+    await fanNotify(env,ctx,{userId:target.user_id,kind:'comment',actorId:id,actorName:user.name,postId,text:text || 'Sent a photo',dedupe:`comment:${commentId}`});
+    if(parent && parent.user_id!==target.user_id)await fanNotify(env,ctx,{userId:parent.user_id,kind:'reply',actorId:id,actorName:user.name,postId,text,dedupe:`reply:${commentId}`});
+    return json({ok:true,id:commentId});
+  }
   const raw=await request.text();if(raw.length>4096)return fail('Request too large',413);
   let b;try{b=JSON.parse(raw);}catch{return fail('Invalid request');}
   if(!b || typeof b!=='object' || Array.isArray(b))return fail('Invalid request');
@@ -3128,13 +3241,52 @@ async function fanSocial(request,env,url,user,id,ctx) {
     await fanNotify(env,ctx,{userId:target.user_id,kind:'comment',actorId:id,actorName:user.name,postId:b.id,text,dedupe:`comment:${commentId}`});
     return json({ok:true,id:commentId});
   }
+  if(path==='/fan/social/comment-like') {
+    if(typeof b.id!=='string' || !/^[a-f0-9-]{36}$/.test(b.id) || typeof b.liked!=='boolean')return fail('Invalid like request');
+    const comment=await db.prepare('SELECT c.user_id,c.post_id FROM fan_comments c JOIN fan_posts p ON p.id=c.post_id WHERE c.id=? AND c.hidden=0 AND p.hidden=0').bind(b.id).first();
+    if(!comment)return fail('Comment not found',404);
+    if(!await fanSocialBudget(db,id,'like',300))return fail('Too many like changes. Try next hour.',429);
+    if(b.liked) {
+      await db.prepare('INSERT OR IGNORE INTO fan_comment_likes(comment_id,user_id,at) VALUES(?,?,?)').bind(b.id,id,Date.now()).run();
+      await fanNotify(env,ctx,{userId:comment.user_id,kind:'like',actorId:id,actorName:user.name,postId:comment.post_id,dedupe:`clike:${b.id}:${id}`});
+    } else await db.prepare('DELETE FROM fan_comment_likes WHERE comment_id=? AND user_id=?').bind(b.id,id).run();
+    const count=await db.prepare('SELECT COUNT(*) AS likes FROM fan_comment_likes WHERE comment_id=?').bind(b.id).first();
+    return json({ok:true,liked:b.liked,...count});
+  }
+  if(path==='/fan/social/repost') {
+    if(typeof b.id!=='string' || !/^[a-f0-9-]{36}$/.test(b.id) || typeof b.reposted!=='boolean')return fail('Invalid repost request');
+    const target=await db.prepare('SELECT id,user_id,kind,quote_of FROM fan_posts WHERE id=? AND hidden=0').bind(b.id).first();
+    if(!target)return fail('Post not found',404);
+    // Reposting a repost reposts the original.
+    const originalId=target.kind==='repost' && target.quote_of?target.quote_of:target.id;
+    const original=originalId===target.id?target:await db.prepare('SELECT id,user_id FROM fan_posts WHERE id=? AND hidden=0').bind(originalId).first();
+    if(!original)return fail('Post not found',404);
+    if(!await fanSocialBudget(db,id,'repost',60))return fail('Too many reposts. Try next hour.',429);
+    const existing=await db.prepare("SELECT id FROM fan_posts WHERE quote_of=? AND user_id=? AND kind='repost' AND hidden=0").bind(originalId,id).first();
+    if(b.reposted && !existing) {
+      const now=Date.now(),repostId=crypto.randomUUID();
+      await db.prepare("INSERT INTO fan_posts(id,user_id,kind,text,image_key,at,quote_of) VALUES(?,?,'repost','','',?,?)").bind(repostId,id,now,originalId).run();
+      await fanNotify(env,ctx,{userId:original.user_id,kind:'repost',actorId:id,actorName:user.name,postId:originalId,dedupe:`repost:${originalId}:${id}`});
+    } else if(!b.reposted && existing)await db.prepare('UPDATE fan_posts SET hidden=1 WHERE id=?').bind(existing.id).run();
+    const count=await db.prepare('SELECT COUNT(*) AS reposts FROM fan_posts WHERE quote_of=? AND hidden=0').bind(originalId).first();
+    return json({ok:true,id:originalId,reposted:b.reposted,...count});
+  }
+  if(path==='/fan/social/view') {
+    if(typeof b.id!=='string' || !/^[a-f0-9-]{36}$/.test(b.id))return fail('Invalid post');
+    if(!await db.prepare('SELECT id FROM fan_posts WHERE id=? AND hidden=0').bind(b.id).first())return fail('Post not found',404);
+    if(!await fanSocialBudget(db,id,'view',600))return json({ok:true});
+    await db.prepare('INSERT OR IGNORE INTO fan_post_views(post_id,user_id,at) VALUES(?,?,?)').bind(b.id,id,Date.now()).run();
+    const count=await db.prepare('SELECT COUNT(*) AS views FROM fan_post_views WHERE post_id=?').bind(b.id).first();
+    return json({ok:true,...count});
+  }
   if(['/fan/social/comment-delete','/fan/social/comment-report'].includes(path)) {
     if(typeof b.id!=='string' || !/^[a-f0-9-]{36}$/.test(b.id))return fail('Invalid comment');
-    const comment=await db.prepare(`SELECT c.user_id,p.user_id AS post_owner FROM fan_comments c JOIN fan_posts p ON p.id=c.post_id WHERE c.id=? AND c.hidden=0 AND p.hidden=0`).bind(b.id).first();
+    const comment=await db.prepare(`SELECT c.user_id,c.image_key,p.user_id AS post_owner FROM fan_comments c JOIN fan_posts p ON p.id=c.post_id WHERE c.id=? AND c.hidden=0 AND p.hidden=0`).bind(b.id).first();
     if(!comment)return fail('Comment not found',404);
     if(path.endsWith('comment-delete')) {
       if(comment.user_id!==id && comment.post_owner!==id)return fail('You can only remove your comments or comments on your posts.',403);
       await db.prepare('UPDATE fan_comments SET hidden=1 WHERE id=?').bind(b.id).run();
+      if(comment.image_key && env.FAN_MEDIA)await env.FAN_MEDIA.delete(comment.image_key).catch(e=>console.error('Image cleanup failed',e));
     } else await db.prepare('INSERT OR IGNORE INTO fan_comment_reports(comment_id,user_id,reason) VALUES(?,?,?)').bind(b.id,id,String(b.reason || 'Inappropriate content').slice(0,200)).run();
     return json({ok:true});
   }
