@@ -1395,11 +1395,6 @@ class _ComposePostState extends State<_ComposePost> {
                   ],
                 ),
               ),
-              if (_busy)
-                const Padding(
-                  padding: EdgeInsets.only(top: 16),
-                  child: LinearProgressIndicator(),
-                ),
             ],
           ),
         ),
