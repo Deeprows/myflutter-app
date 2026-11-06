@@ -20,6 +20,13 @@ void main() {
   check(embedInfoFor('https://fb.watch/abc123/').kind == EmbedKind.facebook, 'fb.watch');
   check(embedInfoFor('https://www.youtube.com/shorts/efzxdQeODpU').isPortrait, 'shorts portrait');
   check(embedInfoFor('https://example.com/x').kind == EmbedKind.generic, 'generic');
+  check(embedInfoFor('https://vimeo.com/123456789').kind == EmbedKind.vimeo, 'Vimeo');
+  check(embedInfoFor('https://www.dailymotion.com/video/x8abcde').kind == EmbedKind.dailymotion, 'Dailymotion');
+  check(embedInfoFor('https://dai.ly/x8abcde').kind == EmbedKind.dailymotion, 'Dailymotion short link');
+  check(embedInfoFor('https://filemoon.sx/d/abc123').kind == EmbedKind.filemoon, 'Filemoon');
+  check(embedInfoFor('https://cdn.example.com/live/index.m3u8').kind == EmbedKind.hls, 'HLS stream');
+  check(embedInfoFor('https://cdn.example.com/video.mp4').kind == EmbedKind.direct, 'direct video');
+  check(embedInfoFor('https://cdn.example.com/live/manifest.mpd').kind == EmbedKind.direct, 'DASH stream');
   final fb = facebookEmbedUrl('https://m.facebook.com/watch/?v=123456');
   check(fb.startsWith('https://www.facebook.com/plugins/video.php?href='), 'fb plugin url');
   check(fb.contains('www.facebook.com%2Fwatch'), 'm. host normalised');
