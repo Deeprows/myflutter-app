@@ -11,6 +11,7 @@ import '../models/fan_post_link.dart';
 import '../services/embed_info.dart';
 import '../services/player_html.dart';
 import '../services/stream_resolver.dart';
+import '../screens/browser_screen.dart' show openExternally;
 import '../theme/app_theme.dart';
 
 /// A lightweight play card. In the feed, tapping it opens the post (like a
@@ -51,6 +52,9 @@ class _FanPostVideoState extends State<FanPostVideo>
   /// for m3u8/mp4/mpd, or an embed iframe). Such a page has no reason to
   /// navigate anywhere, so every top-level hop to another site is an ad.
   bool _htmlMode = false;
+
+  /// Width of the video box, so Facebook's plugin is asked for a size that fits.
+  double _boxW = 360;
 
   Future<void> _loadHtml(WebViewController c, String html, {String? baseUrl}) {
     _htmlMode = true;
@@ -335,6 +339,9 @@ class _FanPostVideoState extends State<FanPostVideo>
       }
     }
     try {
+      // Browser-like agent (no "wv"): TikTok and Facebook serve their full
+      // players to it instead of an "open the app" page.
+      await c.setUserAgent(AppConfig.userAgent);
       if (_info.kind == EmbedKind.tiktok) {
         final id = await resolveTikTokId(_url);
         if (!mounted || _controller != c) return;
@@ -346,8 +353,10 @@ class _FanPostVideoState extends State<FanPostVideo>
           return;
         }
       } else if (_info.kind == EmbedKind.facebook && initialUri != null) {
-        await _loadHtml(c, 
-          _iframeHtml(facebookEmbedUrl(_url)),
+        final fbUrl = await resolveFacebookUrl(_url);
+        if (!mounted || _controller != c) return;
+        await _loadHtml(c,
+          _iframeHtml(facebookEmbedUrl(fbUrl, width: _boxW.round().clamp(220, 734))),
           baseUrl: 'https://deeprowss.com',
         );
         return;
@@ -509,6 +518,21 @@ class _FanPostVideoState extends State<FanPostVideo>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (_info.kind == EmbedKind.tiktok || _info.kind == EmbedKind.facebook) ...[
+              // Some TikTok / Facebook videos refuse to be embedded (private,
+              // region-locked, owner turned embedding off): open the original.
+              IconButton.filled(
+                visualDensity: VisualDensity.compact,
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black54,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => openExternally(widget.url),
+                tooltip: 'Open original',
+                icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              ),
+              const SizedBox(width: 4),
+            ],
             IconButton.filled(
               visualDensity: VisualDensity.compact,
               style: IconButton.styleFrom(
@@ -558,6 +582,7 @@ class _FanPostVideoState extends State<FanPostVideo>
         child: LayoutBuilder(
           builder: (context, box) {
             final w = box.maxWidth.isFinite ? box.maxWidth : screen.width;
+            _boxW = w;
             final maxH = math.max(w * 0.5, screen.height * maxFraction);
             final h = (w / (_manualRatio ?? _ratio)).clamp(w * 0.45, maxH).toDouble();
             return AnimatedSize(
