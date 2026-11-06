@@ -1787,8 +1787,8 @@ async function fanInit(db) {
       for(const [table,list] of [
         ['fan_picks',[['market',"TEXT NOT NULL DEFAULT 'score'"],['selection',"TEXT NOT NULL DEFAULT ''"]]],
         // Replies to comments (with an optional image / GIF) and reposts / quotes of posts.
-        ['fan_comments',[['parent_id',"TEXT NOT NULL DEFAULT ''"],['root_id',"TEXT NOT NULL DEFAULT ''"],['image_key',"TEXT NOT NULL DEFAULT ''"]]],
-        ['fan_posts',[['quote_of',"TEXT NOT NULL DEFAULT ''"]]],
+        ['fan_comments',[['parent_id',"TEXT NOT NULL DEFAULT ''"],['root_id',"TEXT NOT NULL DEFAULT ''"],['image_key',"TEXT NOT NULL DEFAULT ''"],['edited_at',"INTEGER NOT NULL DEFAULT 0"]]],
+        ['fan_posts',[['quote_of',"TEXT NOT NULL DEFAULT ''"],['edited_at',"INTEGER NOT NULL DEFAULT 0"]]],
         ['fan_users',[['premium_until',"INTEGER NOT NULL DEFAULT 0"]]],
       ]) {
         const columns=(await db.prepare(`PRAGMA table_info(${table})`).all()).results;
@@ -2140,6 +2140,15 @@ async function fanProfileImage(request,env,user,id) {
   await env.DB.prepare(`INSERT INTO fan_profile_media(user_id,${column}) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET ${column}=excluded.${column}`).bind(id,now).run();
   return json({ok:true,kind,version:now});
 }
+// Premium for editing: Fan Zone weekly premium, or a paid subscription on the
+// install the request comes from (same trust model as /sub/status).
+async function fanCanEdit(env,user,installId) {
+  if(user && Number(user.premium_until || 0)>Date.now())return true;
+  if(typeof installId==='string' && ID_RE.test(installId)) {
+    try { await ensureSchema(env); return (await expiryOf(env,installId))>Date.now(); } catch(_) {}
+  }
+  return false;
+}
 async function fanPosts(request,env,url,user,id,ctx) {
   const db=env.DB;
   const fail=(error,status=400)=>json({error},status);
@@ -2233,6 +2242,23 @@ async function fanPosts(request,env,url,user,id,ctx) {
     }
     await fanNotifyMentions(env,ctx,{text,actorId:id,actorName:user.name,postId,key:`post:${postId}`});
     return json({ok:true,id:postId});
+  }
+  if(request.method==='POST' && url.pathname==='/fan/post/edit') {
+    const raw=await request.text();
+    if(raw.length>20000)return fail('Request too large',413);
+    let b;try{b=JSON.parse(raw);}catch(_){return fail('Invalid request');}
+    if(!b || typeof b.id!=='string' || !/^[a-f0-9-]{36}$/.test(b.id))return fail('Invalid post');
+    const text=typeof b.text==='string'?b.text.trim():'';
+    if(text.length>5000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(text))return fail('Keep your post within 5,000 characters');
+    const post=await db.prepare('SELECT user_id,kind,image_key FROM fan_posts WHERE id=? AND hidden=0').bind(b.id).first();
+    if(!post)return fail('Post not found',404);
+    if(post.user_id!==id)return fail('You can only edit your own posts.',403);
+    if(post.kind==='repost')return fail('Reposts cannot be edited.',400);
+    if(!await fanCanEdit(env,user,b.install_id))return fail('Editing posts is a Premium feature.',402);
+    if(!text && !post.image_key)return fail('A post needs some text or a photo.');
+    if(post.kind==='prediction' && !text)return fail('Write your prediction before saving');
+    await db.prepare('UPDATE fan_posts SET text=?,edited_at=? WHERE id=?').bind(text,Date.now(),b.id).run();
+    return json({ok:true,text,edited_at:Date.now()});
   }
   if(request.method==='POST' && ['/fan/post/report','/fan/post/delete'].includes(url.pathname)) {
     const raw=await request.text();
@@ -2983,7 +3009,7 @@ async function fanNotifyMentions(env,ctx,m) {
     }
   } catch(e) { /* mentions are best effort */ }
 }
-const FAN_SOCIAL_POST_FIELDS=`p.id,p.user_id,${fanHandleSql('p.user_id')} AS handle,u.name,CASE WHEN COALESCE(u.premium_until,0)>CAST(strftime('%s','now') AS INTEGER)*1000 THEN 1 ELSE 0 END AS is_premium,p.kind,p.text,p.at,COALESCE((SELECT t.fixture_json FROM fan_post_matches t WHERE t.post_id=p.id),'') AS match_json,CASE WHEN p.image_key<>'' THEN 1 ELSE 0 END AS has_image,
+const FAN_SOCIAL_POST_FIELDS=`p.id,p.user_id,${fanHandleSql('p.user_id')} AS handle,u.name,CASE WHEN COALESCE(u.premium_until,0)>CAST(strftime('%s','now') AS INTEGER)*1000 THEN 1 ELSE 0 END AS is_premium,p.kind,p.text,p.at,p.edited_at,COALESCE((SELECT t.fixture_json FROM fan_post_matches t WHERE t.post_id=p.id),'') AS match_json,CASE WHEN p.image_key<>'' THEN 1 ELSE 0 END AS has_image,
  (SELECT COUNT(*) FROM fan_likes l WHERE l.post_id=p.id) AS likes,
  (SELECT COUNT(*) FROM fan_comments c WHERE c.post_id=p.id AND c.hidden=0) AS comments,
  EXISTS(SELECT 1 FROM fan_likes l WHERE l.post_id=p.id AND l.user_id=?) AS liked,
@@ -3168,7 +3194,7 @@ async function fanSocial(request,env,url,user,id,ctx) {
     if(!post)return fail('Post not found',404);
     if(path==='/fan/social/post')return json({post,viewer_id:id});
     const cursor=fanSocialCursor(url.searchParams.get('before'));if(cursor===false)return fail('Invalid page cursor');
-    const COMMENT_FIELDS=`c.id,c.post_id,c.user_id,${fanHandleSql('c.user_id')} AS handle,u.name,c.text,c.at,c.parent_id,c.root_id,CASE WHEN c.image_key<>'' THEN 1 ELSE 0 END AS has_image,
+    const COMMENT_FIELDS=`c.id,c.post_id,c.user_id,${fanHandleSql('c.user_id')} AS handle,u.name,c.text,c.at,c.edited_at,c.parent_id,c.root_id,CASE WHEN c.image_key<>'' THEN 1 ELSE 0 END AS has_image,
       (SELECT COUNT(*) FROM fan_comment_likes l WHERE l.comment_id=c.id) AS likes,
       EXISTS(SELECT 1 FROM fan_comment_likes l WHERE l.comment_id=c.id AND l.user_id=?1) AS liked,
       COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=c.user_id),0) AS avatar_at,
@@ -3361,6 +3387,19 @@ async function fanSocial(request,env,url,user,id,ctx) {
     await db.prepare('INSERT OR IGNORE INTO fan_post_views(post_id,user_id,at) VALUES(?,?,?)').bind(b.id,id,Date.now()).run();
     const count=await db.prepare('SELECT COUNT(*) AS views FROM fan_post_views WHERE post_id=?').bind(b.id).first();
     return json({ok:true,...count});
+  }
+  if(path==='/fan/social/comment-edit') {
+    if(typeof b.id!=='string' || !/^[a-f0-9-]{36}$/.test(b.id))return fail('Invalid comment');
+    const text=typeof b.text==='string'?b.text.trim():'';
+    if(text.length>500 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(text))return fail('Write a comment of 1–500 characters');
+    const comment=await db.prepare('SELECT c.user_id,c.image_key FROM fan_comments c JOIN fan_posts p ON p.id=c.post_id WHERE c.id=? AND c.hidden=0 AND p.hidden=0').bind(b.id).first();
+    if(!comment)return fail('Comment not found',404);
+    if(comment.user_id!==id)return fail('You can only edit your own comments.',403);
+    if(!await fanCanEdit(env,user,b.install_id))return fail('Editing comments is a Premium feature.',402);
+    if(!text && !comment.image_key)return fail('Write a comment of 1–500 characters');
+    const now=Date.now();
+    await db.prepare('UPDATE fan_comments SET text=?,edited_at=? WHERE id=?').bind(text,now,b.id).run();
+    return json({ok:true,text,edited_at:now});
   }
   if(['/fan/social/comment-delete','/fan/social/comment-report'].includes(path)) {
     if(typeof b.id!=='string' || !/^[a-f0-9-]{36}$/.test(b.id))return fail('Invalid comment');
