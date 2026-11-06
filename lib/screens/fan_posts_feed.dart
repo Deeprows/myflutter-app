@@ -671,8 +671,25 @@ class _ComposePost extends StatefulWidget {
 
 /// The pasted link as embed info when it is a YouTube, TikTok or Facebook
 /// video link, otherwise null.
+/// What the person pasted, reduced to one link: accepts a plain link, a
+/// player wrapper link (`player.html#https://…m3u8`) or pasted
+/// `<iframe src="…">` embed code, just like the "Play a link" box on Live.
+String _videoLinkFrom(String raw) {
+  final text = raw.trim();
+  final frame = RegExp(
+    r'''<iframe[^>]*?\ssrc\s*=\s*["']([^"']+)["']''',
+    caseSensitive: false,
+  ).firstMatch(text);
+  if (frame != null) {
+    var src = frame.group(1)!.replaceAll('&amp;', '&').trim();
+    if (src.startsWith('//')) src = 'https:$src';
+    return src;
+  }
+  return text;
+}
+
 EmbedInfo? _supportedVideo(String raw) {
-  final link = raw.trim();
+  final link = _videoLinkFrom(raw);
   final u = Uri.tryParse(link);
   if (u == null || (u.scheme != 'http' && u.scheme != 'https') || u.host.isEmpty) {
     return null;
@@ -692,7 +709,8 @@ EmbedInfo? _supportedVideo(String raw) {
     case EmbedKind.direct:
       return StreamResolver.resolve(link).usesHtmlPlayer ? info : null;
     case EmbedKind.generic:
-      return null;
+      // Any other web player / embed page plays too (same as "Play a link").
+      return StreamResolver.resolve(link).kind == StreamKind.invalid ? null : info;
   }
 }
 
@@ -717,7 +735,7 @@ class _ComposePostState extends State<_ComposePost> {
     'prediction': 'Call a score or a player moment before kick-off.',
     'betslip': 'Show your slip. Crop out account details first.',
     'banter': 'Share a hot take with the community.',
-    'video': 'Share a video from YouTube, TikTok, Facebook, Vimeo, Dailymotion, Filemoon or a stream link.',
+    'video': 'Share a video from YouTube, TikTok, Facebook, Vimeo, Dailymotion, Filemoon, a stream link (m3u8, mp4, mpd) or any embed page.',
   };
 
   @override
@@ -855,10 +873,10 @@ class _ComposePostState extends State<_ComposePost> {
   Future<void> _publish() async {
     if (_busy || _picking) return;
     if (_kind == 'video') {
-      final link = _url.text.trim();
+      final link = _videoLinkFrom(_url.text);
       final title = _title.text.trim().replaceAll(RegExp(r'\s*\n\s*'), ' ');
       if (_supportedVideo(link) == null) {
-        _notice('Paste a supported video-site link, .m3u8 stream or direct video URL.');
+        _notice('Paste a video link, .m3u8 / .mp4 / .mpd stream, embed page link or iframe code.');
         return;
       }
       if (title.isEmpty) {
@@ -1130,7 +1148,7 @@ class _ComposePostState extends State<_ComposePost> {
   }
 
   List<Widget> _videoForm() {
-    final link = _url.text.trim();
+    final link = _videoLinkFrom(_url.text);
     final found = _supportedVideo(link);
     final invalid = link.isNotEmpty && found == null;
     return [
@@ -1142,7 +1160,7 @@ class _ComposePostState extends State<_ComposePost> {
         onChanged: (_) => setState(() {}),
         decoration: _fieldDecoration(
           label: 'Video link',
-          hint: 'Paste Vimeo, Dailymotion, Filemoon, .m3u8 or direct video URL',
+          hint: 'Paste any video link: .m3u8, .mp4, .mpd, embed page or iframe code',
           prefix: const Icon(Icons.link_rounded),
           suffix: link.isEmpty
               ? IconButton(
@@ -1156,7 +1174,7 @@ class _ComposePostState extends State<_ComposePost> {
                   icon: const Icon(Icons.close_rounded),
                 ),
           error: invalid
-              ? 'Use a supported video-site link or a valid .m3u8/direct stream URL.'
+              ? 'Enter a valid http(s) link or iframe embed code.'
               : null,
         ),
       ),
@@ -1173,6 +1191,7 @@ class _ComposePostState extends State<_ComposePost> {
           _platformChip(EmbedKind.filemoon, 'Filemoon', Icons.movie_rounded, found),
           _platformChip(EmbedKind.hls, 'M3U8 / HLS', Icons.live_tv_rounded, found),
           _platformChip(EmbedKind.direct, 'Direct stream', Icons.video_file_rounded, found),
+          _platformChip(EmbedKind.generic, 'Embed page', Icons.language_rounded, found),
         ],
       ),
       const SizedBox(height: 14),
