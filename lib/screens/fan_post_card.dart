@@ -1,4 +1,5 @@
 import '../widgets/fan_match_link.dart';
+import '../widgets/fan_edit_sheet.dart';
 import '../widgets/fan_post_video.dart';
 import '../models/fan_post_link.dart';
 import 'package:flutter/material.dart';
@@ -216,6 +217,24 @@ class _FanPostCardState extends State<FanPostCard> {
         _notice('Fan hidden on this device.');
         return;
       }
+      if (action == 'edit' && !_isRepost) {
+        final saved = await fanEditContent(
+          context,
+          title: 'Edit post',
+          initial: '${_post['text']}',
+          maxLength: 5000,
+          save: (text) => FanZoneService.editPost('${_post['id']}', text),
+        );
+        if (saved != null && mounted) {
+          setState(() {
+            _post['text'] = saved;
+            _post['edited_at'] = DateTime.now().millisecondsSinceEpoch;
+          });
+          widget.onChanged?.call();
+          _notice('Post updated.');
+        }
+        return;
+      }
       if (action == 'delete' && !_isRepost) {
         final yes = await showDialog<bool>(
           context: context,
@@ -324,6 +343,8 @@ class _FanPostCardState extends State<FanPostCard> {
               : 'Bookmark post',
         ),
       ),
+      if (mine)
+        const PopupMenuItem(value: 'edit', child: Text('Edit post')),
       if (mine)
         const PopupMenuItem(value: 'delete', child: Text('Delete post')),
       if (!mine) ...const [
@@ -628,7 +649,10 @@ class _FanPostCardState extends State<FanPostCard> {
       'Nov',
       'Dec',
     ];
-    return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')} · ${date.day} ${months[date.month - 1]} ${date.year}';
+    final edited = (_post['edited_at'] is num && (_post['edited_at'] as num) > 0)
+        ? ' · edited'
+        : '';
+    return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')} · ${date.day} ${months[date.month - 1]} ${date.year}$edited';
   }
 
   @override
@@ -820,7 +844,7 @@ class _FanPostCardState extends State<FanPostCard> {
                                 ),
                                 TextSpan(
                                   text:
-                                      '  $handle · ${fanTimeAgo(_post['at']).replaceAll(' ago', '')}',
+                                      '  $handle · ${fanTimeAgo(_post['at']).replaceAll(' ago', '')}${(_post['edited_at'] is num && (_post['edited_at'] as num) > 0) ? ' · edited' : ''}',
                                   style: TextStyle(
                                     color: Ui.muted,
                                     fontSize: 13,
