@@ -580,6 +580,13 @@ class _FanPostCardState extends State<FanPostCard> {
     }
     displayText = displayText.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
     final style = TextStyle(fontSize: detail ? 21 : 15.5, height: 1.42);
+    // Video posts: the first line is the title, the rest is the caption.
+    String? videoTitle;
+    if (kindKey == 'video' && displayText.isNotEmpty) {
+      final nl = displayText.indexOf('\n');
+      videoTitle = nl < 0 ? displayText : displayText.substring(0, nl).trim();
+      displayText = nl < 0 ? '' : displayText.substring(nl).trim();
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -592,7 +599,19 @@ class _FanPostCardState extends State<FanPostCard> {
               icon: kind.icon,
             ),
           ),
-        if (text.isNotEmpty)
+        if (videoTitle != null && videoTitle.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.only(top: detail ? 12 : 2),
+            child: Text(
+              videoTitle,
+              style: TextStyle(
+                fontSize: detail ? 22 : 16.5,
+                fontWeight: FontWeight.w800,
+                height: 1.3,
+              ),
+            ),
+          ),
+        if (displayText.isNotEmpty)
           Padding(
             padding: EdgeInsets.only(top: detail ? 12 : 2),
             child: detail
