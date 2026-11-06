@@ -1769,6 +1769,7 @@ const FAN_SCHEMA = [
   // Social notifications (new follower / like / comment) + the phones that receive them as push.
   `CREATE TABLE IF NOT EXISTS fan_notifications (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, actor_id TEXT NOT NULL, actor_name TEXT NOT NULL DEFAULT '', post_id TEXT NOT NULL DEFAULT '', text TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL, dedupe TEXT NOT NULL, UNIQUE(user_id,dedupe))`,
   `CREATE INDEX IF NOT EXISTS fan_notifications_user ON fan_notifications(user_id,at DESC)`,
+  `CREATE TABLE IF NOT EXISTS fan_handles (user_id TEXT PRIMARY KEY, handle TEXT NOT NULL, lower TEXT NOT NULL UNIQUE, changed_at INTEGER NOT NULL DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS fan_notify_read (user_id TEXT PRIMARY KEY, read_at INTEGER NOT NULL DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS fan_devices (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, updated_at INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS fan_devices_user ON fan_devices(user_id,updated_at DESC)`,
@@ -2230,6 +2231,7 @@ async function fanPosts(request,env,url,user,id,ctx) {
       const original=await db.prepare('SELECT user_id FROM fan_posts WHERE id=?').bind(quoteOf).first();
       if(original)await fanNotify(env,ctx,{userId:original.user_id,kind:'quote',actorId:id,actorName:user.name,postId:postId,text,dedupe:`quote:${postId}`});
     }
+    await fanNotifyMentions(env,ctx,{text,actorId:id,actorName:user.name,postId,key:`post:${postId}`});
     return json({ok:true,id:postId});
   }
   if(request.method==='POST' && ['/fan/post/report','/fan/post/delete'].includes(url.pathname)) {
@@ -2958,7 +2960,30 @@ async function fanRecentForm(env,teamId,kickoff) {
 }
 
 // Social data is keyed by verified account identity; no emails in public DTOs.
-const FAN_SOCIAL_POST_FIELDS=`p.id,p.user_id,u.name,CASE WHEN COALESCE(u.premium_until,0)>CAST(strftime('%s','now') AS INTEGER)*1000 THEN 1 ELSE 0 END AS is_premium,p.kind,p.text,p.at,COALESCE((SELECT t.fixture_json FROM fan_post_matches t WHERE t.post_id=p.id),'') AS match_json,CASE WHEN p.image_key<>'' THEN 1 ELSE 0 END AS has_image,
+// @username of a fan: the one they chose, else the generated fan_<id> default.
+function fanHandleSql(col) {
+  return `COALESCE((SELECT h.handle FROM fan_handles h WHERE h.user_id=${col}),'fan_'||substr(${col},1,12))`;
+}
+async function fanUserByHandle(db,raw) {
+  const handle=String(raw || '').trim().replace(/^@/,'').toLowerCase();
+  if(!/^[a-z0-9_]{3,20}$/.test(handle))return null;
+  const custom=await db.prepare('SELECT user_id FROM fan_handles WHERE lower=?').bind(handle).first();
+  if(custom)return custom.user_id;
+  if(!/^fan_[a-f0-9]{12}$/.test(handle))return null;
+  const u=await db.prepare('SELECT id FROM fan_users WHERE substr(id,1,12)=? AND NOT EXISTS(SELECT 1 FROM fan_handles h WHERE h.user_id=fan_users.id)').bind(handle.slice(4)).first();
+  return u?u.id:null;
+}
+async function fanNotifyMentions(env,ctx,m) {
+  try {
+    const found=[...String(m.text || '').matchAll(/(?:^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,20})/g)].map(x=>x[1].toLowerCase());
+    for(const name of [...new Set(found)].slice(0,5)) {
+      const uid=await fanUserByHandle(env.DB,name);
+      if(!uid || uid===m.actorId || (m.skip || []).includes(uid))continue;
+      await fanNotify(env,ctx,{userId:uid,kind:'mention',actorId:m.actorId,actorName:m.actorName,postId:m.postId,text:m.text,dedupe:`mention:${m.key}:${uid}`});
+    }
+  } catch(e) { /* mentions are best effort */ }
+}
+const FAN_SOCIAL_POST_FIELDS=`p.id,p.user_id,${fanHandleSql('p.user_id')} AS handle,u.name,CASE WHEN COALESCE(u.premium_until,0)>CAST(strftime('%s','now') AS INTEGER)*1000 THEN 1 ELSE 0 END AS is_premium,p.kind,p.text,p.at,COALESCE((SELECT t.fixture_json FROM fan_post_matches t WHERE t.post_id=p.id),'') AS match_json,CASE WHEN p.image_key<>'' THEN 1 ELSE 0 END AS has_image,
  (SELECT COUNT(*) FROM fan_likes l WHERE l.post_id=p.id) AS likes,
  (SELECT COUNT(*) FROM fan_comments c WHERE c.post_id=p.id AND c.hidden=0) AS comments,
  EXISTS(SELECT 1 FROM fan_likes l WHERE l.post_id=p.id AND l.user_id=?) AS liked,
@@ -2969,6 +2994,7 @@ const FAN_SOCIAL_POST_FIELDS=`p.id,p.user_id,u.name,CASE WHEN COALESCE(u.premium
  p.quote_of,
  (SELECT qu.name FROM fan_posts q JOIN fan_users qu ON qu.id=q.user_id WHERE q.id=p.quote_of AND q.hidden=0) AS q_name,
  (SELECT q.user_id FROM fan_posts q WHERE q.id=p.quote_of AND q.hidden=0) AS q_user_id,
+ (SELECT ${fanHandleSql('q.user_id')} FROM fan_posts q WHERE q.id=p.quote_of AND q.hidden=0) AS q_handle,
  (SELECT q.text FROM fan_posts q WHERE q.id=p.quote_of AND q.hidden=0) AS q_text,
  (SELECT q.at FROM fan_posts q WHERE q.id=p.quote_of AND q.hidden=0) AS q_at,
  (SELECT CASE WHEN q.image_key<>'' THEN 1 ELSE 0 END FROM fan_posts q WHERE q.id=p.quote_of AND q.hidden=0) AS q_has_image,
@@ -2993,6 +3019,7 @@ function fanNote(kind,actorName,text) {
   const who=String(actorName || 'Someone').slice(0,30);
   if(kind==='follow')return {title:'New follower',body:`${who} started following you`};
   if(kind==='like')return {title:'New like',body:`${who} liked your post`};
+  if(kind==='mention')return {title:'You were mentioned',body:`${who} mentioned you: ${String(text || '').replace(/\s+/g,' ').trim().slice(0,90)}`};
   if(kind==='reply')return {title:'New reply',body:`${who} replied: ${String(text || '').replace(/\s+/g,' ').trim().slice(0,90) || 'sent a photo'}`};
   if(kind==='repost')return {title:'New repost',body:`${who} reposted your post`};
   if(kind==='quote')return {title:'New quote',body:`${who} quoted your post: ${String(text || '').replace(/\s+/g,' ').trim().slice(0,90)}`};
@@ -3060,7 +3087,11 @@ async function fanSocial(request,env,url,user,id,ctx) {
   if(!['GET','POST'].includes(request.method))return fail('Method not allowed',405);
   if(request.method==='GET' && path==='/fan/social/profile') {
     await fanSyncResults(env);
-    const target=url.searchParams.get('id') || id;
+    let target=url.searchParams.get('id') || id;
+    if(url.searchParams.get('handle')) {
+      target=await fanUserByHandle(db,url.searchParams.get('handle'));
+      if(!target)return fail('Fan not found',404);
+    }
     if(!/^[a-f0-9]{64}$/.test(target))return fail('Invalid fan');
     const profile=await db.prepare(`SELECT u.id,u.name,CASE WHEN COALESCE(u.premium_until,0)>CAST(strftime('%s','now') AS INTEGER)*1000 THEN 1 ELSE 0 END AS is_premium,COALESCE(p.bio,'') AS bio,a.created_at AS joined_at,
       COALESCE((SELECT c.name FROM fan_clubs c WHERE c.user_id=u.id),'') AS club_name,
@@ -3087,7 +3118,7 @@ async function fanSocial(request,env,url,user,id,ctx) {
       {key:'ten-settled',title:'Match regular',description:'Have 10 predictions settled',earned:stats.settled>=10},
       {key:'ten-followers',title:'Fan favourite',description:'Reach 10 followers',earned:profile.followers>=10}
     ];
-    return json({profile:{...profile,handle:`fan_${target.slice(0,12)}`,is_me:target===id,stats,achievements},viewer_id:id});
+    return json({profile:{...profile,handle:(await db.prepare('SELECT handle FROM fan_handles WHERE user_id=?').bind(target).first())?.handle || `fan_${target.slice(0,12)}`,is_me:target===id,stats,achievements},viewer_id:id});
   }
   if(request.method==='GET' && path==='/fan/social/people') {
     const target=url.searchParams.get('id') || id,type=url.searchParams.get('type') || 'followers';
@@ -3095,15 +3126,21 @@ async function fanSocial(request,env,url,user,id,ctx) {
     if(!await db.prepare('SELECT id FROM fan_users WHERE id=? AND NOT EXISTS(SELECT 1 FROM fan_bans b WHERE b.user_id=fan_users.id)').bind(target).first())return fail('Fan not found',404);
     const cursor=fanSocialCursor(url.searchParams.get('before'),'user');if(cursor===false)return fail('Invalid page cursor');
     const owner=type==='followers'?'following_id':'follower_id',person=type==='followers'?'follower_id':'following_id';
-    const result=await db.prepare(`SELECT u.id,u.name,f.at,COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=u.id),0) AS avatar_at,EXISTS(SELECT 1 FROM fan_follows x WHERE x.follower_id=? AND x.following_id=u.id) AS followed FROM fan_follows f JOIN fan_users u ON u.id=f.${person} WHERE f.${owner}=? AND (f.at<? OR (f.at=? AND u.id<?)) ORDER BY f.at DESC,u.id DESC LIMIT 41`).bind(id,target,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
+    const result=await db.prepare(`SELECT u.id,u.name,${fanHandleSql('u.id')} AS handle,f.at,COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=u.id),0) AS avatar_at,EXISTS(SELECT 1 FROM fan_follows x WHERE x.follower_id=? AND x.following_id=u.id) AS followed FROM fan_follows f JOIN fan_users u ON u.id=f.${person} WHERE f.${owner}=? AND (f.at<? OR (f.at=? AND u.id<?)) ORDER BY f.at DESC,u.id DESC LIMIT 41`).bind(id,target,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
     const people=result.results.slice(0,40),last=people.at(-1);
     return json({people,next:result.results.length>40?`${last.at}:${last.id}`:null,viewer_id:id});
+  }
+  if(request.method==='GET' && path==='/fan/social/mentions') {
+    const q=(url.searchParams.get('q') || '').trim().replace(/^@/,'').slice(0,20);
+    if(!/^[A-Za-z0-9_]*$/.test(q))return json({users:[],viewer_id:id});
+    const rows=await db.prepare(`SELECT u.id,u.name,${fanHandleSql('u.id')} AS handle,COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=u.id),0) AS avatar_at FROM fan_users u WHERE NOT EXISTS(SELECT 1 FROM fan_bans b WHERE b.user_id=u.id) AND (${fanHandleSql('u.id')} LIKE ?1 ESCAPE '\\' OR u.name LIKE ?1 ESCAPE '\\') ORDER BY EXISTS(SELECT 1 FROM fan_follows f WHERE f.follower_id=?2 AND f.following_id=u.id) DESC,u.name COLLATE NOCASE LIMIT 6`).bind(q.replace(/[\\%_]/g,'\\$&')+'%',id).all();
+    return json({users:rows.results,viewer_id:id});
   }
   if(request.method==='GET' && path==='/fan/social/search') {
     const q=(url.searchParams.get('q') || '').trim().slice(0,40);
     if(q.length<2)return json({users:[],posts:[],viewer_id:id});
     const like='%'+q.replace(/[\\%_]/g,'\\$&')+'%';
-    const users=await db.prepare(`SELECT u.id,u.name,COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=u.id),0) AS avatar_at FROM fan_users u WHERE u.name LIKE ? ESCAPE '\\' ORDER BY u.name LIMIT 15`).bind(like).all();
+    const users=await db.prepare(`SELECT u.id,u.name,${fanHandleSql('u.id')} AS handle,COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=u.id),0) AS avatar_at FROM fan_users u WHERE u.name LIKE ?1 ESCAPE '\\' OR ${fanHandleSql('u.id')} LIKE ?1 ESCAPE '\\' ORDER BY u.name LIMIT 15`).bind(like).all();
     const posts=await db.prepare(`SELECT ${FAN_SOCIAL_POST_FIELDS} FROM fan_posts p JOIN fan_users u ON u.id=p.user_id WHERE p.hidden=0 AND p.text LIKE ? ESCAPE '\\' ORDER BY p.at DESC,p.id DESC LIMIT 20`).bind(id,like).all();
     return json({users:users.results,posts:posts.results,viewer_id:id});
   }
@@ -3131,12 +3168,13 @@ async function fanSocial(request,env,url,user,id,ctx) {
     if(!post)return fail('Post not found',404);
     if(path==='/fan/social/post')return json({post,viewer_id:id});
     const cursor=fanSocialCursor(url.searchParams.get('before'));if(cursor===false)return fail('Invalid page cursor');
-    const COMMENT_FIELDS=`c.id,c.post_id,c.user_id,u.name,c.text,c.at,c.parent_id,c.root_id,CASE WHEN c.image_key<>'' THEN 1 ELSE 0 END AS has_image,
+    const COMMENT_FIELDS=`c.id,c.post_id,c.user_id,${fanHandleSql('c.user_id')} AS handle,u.name,c.text,c.at,c.parent_id,c.root_id,CASE WHEN c.image_key<>'' THEN 1 ELSE 0 END AS has_image,
       (SELECT COUNT(*) FROM fan_comment_likes l WHERE l.comment_id=c.id) AS likes,
       EXISTS(SELECT 1 FROM fan_comment_likes l WHERE l.comment_id=c.id AND l.user_id=?1) AS liked,
       COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=c.user_id),0) AS avatar_at,
       (SELECT pu.name FROM fan_comments pc JOIN fan_users pu ON pu.id=pc.user_id WHERE pc.id=c.parent_id) AS reply_to_name,
-      (SELECT pc.user_id FROM fan_comments pc WHERE pc.id=c.parent_id) AS reply_to_user_id`;
+      (SELECT pc.user_id FROM fan_comments pc WHERE pc.id=c.parent_id) AS reply_to_user_id,
+      (SELECT ${fanHandleSql('pc.user_id')} FROM fan_comments pc WHERE pc.id=c.parent_id) AS reply_to_handle`;
     // Top-level replies are paged newest first; every reply under them is returned with them.
     const roots=await db.prepare(`SELECT ${COMMENT_FIELDS} FROM fan_comments c JOIN fan_users u ON u.id=c.user_id WHERE c.post_id=?2 AND c.hidden=0 AND c.root_id='' AND (c.at<?3 OR (c.at=?3 AND c.id<?4)) ORDER BY c.at DESC,c.id DESC LIMIT 31`).bind(id,postId,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
     const comments=roots.results.slice(0,30),last=comments.at(-1);
@@ -3193,6 +3231,7 @@ async function fanSocial(request,env,url,user,id,ctx) {
     }
     await fanNotify(env,ctx,{userId:target.user_id,kind:'comment',actorId:id,actorName:user.name,postId,text:text || 'Sent a photo',dedupe:`comment:${commentId}`});
     if(parent && parent.user_id!==target.user_id)await fanNotify(env,ctx,{userId:parent.user_id,kind:'reply',actorId:id,actorName:user.name,postId,text,dedupe:`reply:${commentId}`});
+    await fanNotifyMentions(env,ctx,{text,actorId:id,actorName:user.name,postId,key:`comment:${commentId}`,skip:[target.user_id,parent?.user_id]});
     return json({ok:true,id:commentId});
   }
   const raw=await request.text();if(raw.length>4096)return fail('Request too large',413);
@@ -3229,6 +3268,25 @@ async function fanSocial(request,env,url,user,id,ctx) {
     }
     return json({ok:true});
   }
+  if(path==='/fan/social/handle') {
+    const wanted=typeof b.handle==='string'?b.handle.trim().replace(/^@/,''):'';
+    if(!/^[A-Za-z0-9_]{3,20}$/.test(wanted))return fail('Use 3–20 letters, numbers or underscores.');
+    const lower=wanted.toLowerCase();
+    if((/^fan_[a-f0-9]{12}$/.test(lower) && lower!==`fan_${id.slice(0,12)}`) || ['admin','administrator','support','moderator','staff','official','everyone','all','here'].includes(lower))return fail('That username is reserved.');
+    const mine=await db.prepare('SELECT handle,changed_at FROM fan_handles WHERE user_id=?').bind(id).first();
+    if(mine && mine.handle===wanted)return json({ok:true,handle:wanted});
+    const now=Date.now();
+    if(mine && now-Number(mine.changed_at)<3600000)return fail('You can change your username once per hour.',429);
+    const owner=await fanUserByHandle(db,lower);
+    if(owner && owner!==id)return fail('That username is taken.',409);
+    try {
+      await db.prepare('INSERT INTO fan_handles(user_id,handle,lower,changed_at) VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET handle=excluded.handle,lower=excluded.lower,changed_at=excluded.changed_at').bind(id,wanted,lower,now).run();
+    } catch(e) {
+      if(/UNIQUE/i.test(String(e && e.message || e)))return fail('That username is taken.',409);
+      throw e;
+    }
+    return json({ok:true,handle:wanted});
+  }
   if(path==='/fan/social/follow') {
     if(typeof b.id!=='string' || !/^[a-f0-9]{64}$/.test(b.id) || typeof b.following!=='boolean')return fail('Invalid follow request');
     if(b.id===id)return fail('You cannot follow yourself');
@@ -3263,6 +3321,7 @@ async function fanSocial(request,env,url,user,id,ctx) {
     const commentId=crypto.randomUUID();
     await db.prepare('INSERT INTO fan_comments(id,post_id,user_id,text,at) VALUES(?,?,?,?,?)').bind(commentId,b.id,id,text,now).run();
     await fanNotify(env,ctx,{userId:target.user_id,kind:'comment',actorId:id,actorName:user.name,postId:b.id,text,dedupe:`comment:${commentId}`});
+    await fanNotifyMentions(env,ctx,{text,actorId:id,actorName:user.name,postId:b.id,key:`comment:${commentId}`,skip:[target.user_id]});
     return json({ok:true,id:commentId});
   }
   if(path==='/fan/social/comment-like') {
