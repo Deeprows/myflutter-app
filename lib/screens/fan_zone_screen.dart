@@ -523,7 +523,6 @@ class _FanZoneScreenState extends State<FanZoneScreen>
       ),
       body: Column(
         children: [
-          if (_busy) const LinearProgressIndicator(minHeight: 2),
           if (_failure != null) _failureBanner(),
           Expanded(
             child: switch (widget.page) {
@@ -545,8 +544,6 @@ class _FanZoneScreenState extends State<FanZoneScreen>
       bottom: false,
       child: Column(
         children: [
-          if (_busy && _fixtures.isNotEmpty)
-            const LinearProgressIndicator(minHeight: 2),
           if (_failure != null) _failureBanner(),
           Expanded(
             child: MatchRoomsView(
@@ -1928,11 +1925,6 @@ class _FanZoneScreenState extends State<FanZoneScreen>
           ),
           const SizedBox(height: 6),
           _prizeBanner(),
-          if (!_loadedOnce)
-            const Padding(
-              padding: EdgeInsets.only(top: 10),
-              child: LinearProgressIndicator(),
-            ),
           const SizedBox(height: 20),
           if (rows.isEmpty && _loadedOnce)
             Padding(
