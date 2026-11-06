@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../models/fan_post_link.dart';
 import '../models/fixture.dart';
 import '../services/embed_info.dart';
+import '../services/stream_resolver.dart';
 import '../widgets/fan_post_video.dart';
 import '../services/fan_zone_service.dart';
 import '../services/content_sync.dart';
@@ -652,7 +653,13 @@ EmbedInfo? _supportedVideo(String raw) {
     case EmbedKind.tiktok:
       return tiktokIdFrom(link) != null || isTikTokShortLink(u) ? info : null;
     case EmbedKind.facebook:
+    case EmbedKind.vimeo:
+    case EmbedKind.dailymotion:
+    case EmbedKind.filemoon:
       return info;
+    case EmbedKind.hls:
+    case EmbedKind.direct:
+      return StreamResolver.resolve(link).usesHtmlPlayer ? info : null;
     case EmbedKind.generic:
       return null;
   }
@@ -679,7 +686,7 @@ class _ComposePostState extends State<_ComposePost> {
     'prediction': 'Call a score or a player moment before kick-off.',
     'betslip': 'Show your slip. Crop out account details first.',
     'banter': 'Share a hot take with the community.',
-    'video': 'Share a YouTube, TikTok or Facebook video with a title.',
+    'video': 'Share a video from YouTube, TikTok, Facebook, Vimeo, Dailymotion, Filemoon or a stream link.',
   };
 
   @override
@@ -820,7 +827,7 @@ class _ComposePostState extends State<_ComposePost> {
       final link = _url.text.trim();
       final title = _title.text.trim().replaceAll(RegExp(r'\s*\n\s*'), ' ');
       if (_supportedVideo(link) == null) {
-        _notice('Paste a YouTube, TikTok or Facebook video link.');
+        _notice('Paste a supported video-site link, .m3u8 stream or direct video URL.');
         return;
       }
       if (title.isEmpty) {
@@ -1073,15 +1080,15 @@ class _ComposePostState extends State<_ComposePost> {
             style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 10),
-          step(1, 'Open the video in YouTube, TikTok or Facebook.'),
+          step(1, 'Open a video on YouTube, TikTok, Facebook, Vimeo, Dailymotion or Filemoon, or copy a direct stream URL.'),
           step(2, 'Tap Share, then Copy link.'),
           step(3, 'Paste the link above (or tap the paste button).'),
           step(4, 'Add a title and an optional caption, then tap Post.'),
           Text(
-            'Works with YouTube videos, Shorts and live links, TikTok videos '
-            '(including short vm.tiktok.com links) and public Facebook '
-            'videos, Reels and fb.watch links. Private videos will not play. '
-            'Portrait videos are shown in a tall player automatically.',
+            'Supports YouTube, TikTok, Facebook, Vimeo, Dailymotion and Filemoon embeds, '
+            'plus HLS (.m3u8), DASH (.mpd) and direct video file streams such as MP4/WebM. '
+            'Some hosts may block playback in embedded players. Portrait videos '
+            'are shown in a tall player automatically.',
             style: TextStyle(fontSize: 12, color: Ui.muted, height: 1.4),
           ),
         ],
@@ -1102,7 +1109,7 @@ class _ComposePostState extends State<_ComposePost> {
         onChanged: (_) => setState(() {}),
         decoration: _fieldDecoration(
           label: 'Video link',
-          hint: 'Paste a YouTube, TikTok or Facebook link',
+          hint: 'Paste Vimeo, Dailymotion, Filemoon, .m3u8 or direct video URL',
           prefix: const Icon(Icons.link_rounded),
           suffix: link.isEmpty
               ? IconButton(
@@ -1116,7 +1123,7 @@ class _ComposePostState extends State<_ComposePost> {
                   icon: const Icon(Icons.close_rounded),
                 ),
           error: invalid
-              ? 'Use a YouTube, TikTok or Facebook video link.'
+              ? 'Use a supported video-site link or a valid .m3u8/direct stream URL.'
               : null,
         ),
       ),
@@ -1128,6 +1135,11 @@ class _ComposePostState extends State<_ComposePost> {
           _platformChip(EmbedKind.youtube, 'YouTube', Icons.smart_display_rounded, found),
           _platformChip(EmbedKind.tiktok, 'TikTok', Icons.music_note_rounded, found),
           _platformChip(EmbedKind.facebook, 'Facebook', Icons.facebook_rounded, found),
+          _platformChip(EmbedKind.vimeo, 'Vimeo', Icons.play_circle_outline_rounded, found),
+          _platformChip(EmbedKind.dailymotion, 'Dailymotion', Icons.ondemand_video_rounded, found),
+          _platformChip(EmbedKind.filemoon, 'Filemoon', Icons.movie_rounded, found),
+          _platformChip(EmbedKind.hls, 'M3U8 / HLS', Icons.live_tv_rounded, found),
+          _platformChip(EmbedKind.direct, 'Direct stream', Icons.video_file_rounded, found),
         ],
       ),
       const SizedBox(height: 14),
