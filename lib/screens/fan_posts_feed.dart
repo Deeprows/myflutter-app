@@ -11,6 +11,7 @@ import '../models/fan_post_link.dart';
 import '../models/fixture.dart';
 import '../services/embed_info.dart';
 import '../services/stream_resolver.dart';
+import '../utils/post_links.dart';
 import '../widgets/fan_post_video.dart';
 import '../services/fan_zone_service.dart';
 import '../services/content_sync.dart';
@@ -883,6 +884,9 @@ class _ComposePostState extends State<_ComposePost> {
         _notice('Add a title for your video.');
         return;
       }
+      // Plain web pages (embed pages, WhatsApp / Telegram links...) are Premium.
+      if (isWebPageLink(link) && !await ensureLinkPremium(context)) return;
+      if (!mounted) return;
       final caption = _text.text.trim();
       setState(() => _busy = true);
       try {
@@ -914,6 +918,10 @@ class _ComposePostState extends State<_ComposePost> {
       _notice('Write something or attach an image.');
       return;
     }
+    if (textHasWebPageLink(_text.text) && !await ensureLinkPremium(context)) {
+      return;
+    }
+    if (!mounted) return;
     setState(() => _busy = true);
     try {
       await FanZoneService.publish(
@@ -1160,7 +1168,7 @@ class _ComposePostState extends State<_ComposePost> {
         onChanged: (_) => setState(() {}),
         decoration: _fieldDecoration(
           label: 'Video link',
-          hint: 'Paste any video link: .m3u8, .mp4, .mpd, embed page or iframe code',
+          hint: 'Paste a video link: .m3u8, .mp4, .mpd, YouTube… (web pages: Premium)',
           prefix: const Icon(Icons.link_rounded),
           suffix: link.isEmpty
               ? IconButton(
