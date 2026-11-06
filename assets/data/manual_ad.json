@@ -1,0 +1,7 @@
+{
+  "enabled": false,
+  "id": "sample-ad-1",
+  "image_url": "https://example.com/ad-image.jpg",
+  "download_url": "",
+  "url": "https://example.com/landing-page"
+}
