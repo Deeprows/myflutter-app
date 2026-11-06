@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,6 +10,7 @@ import '../screens/fan_profile_screen.dart';
 import '../screens/fan_widgets.dart';
 import '../screens/content_shortcut_screen.dart';
 import '../screens/highlights_screen.dart';
+import '../screens/notifications_screen.dart';
 import '../screens/live_screen.dart';
 import '../screens/movies_screen.dart';
 import '../screens/tv_screen.dart';
@@ -19,6 +21,7 @@ import '../screens/remove_ads_screen.dart';
 import '../services/auth_service.dart';
 import '../services/fan_zone_service.dart';
 import '../services/notice_service.dart';
+import '../services/notification_center.dart';
 import '../services/post_bookmarks.dart';
 import '../services/app_sharer.dart';
 import '../services/app_updater.dart';
@@ -26,7 +29,6 @@ import '../services/subscription_service.dart';
 import '../services/settings_service.dart';
 import '../utils/l10n.dart';
 import 'language_sheet.dart';
-import 'notification_settings.dart';
 import '../theme/app_theme.dart';
 
 void _toast(BuildContext c, String msg) =>
@@ -174,8 +176,9 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
   Widget _dock(
     IconData icon,
     String label,
-    Future<void> Function(BuildContext) action,
-  ) => Expanded(
+    Future<void> Function(BuildContext) action, {
+    ValueListenable<int>? count,
+  }) => Expanded(
     child: Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(14),
@@ -195,7 +198,18 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
                   color: Ui.card,
                   border: Border.all(color: Ui.line),
                 ),
-                child: Icon(icon, size: 21),
+                child: count == null
+                    ? Icon(icon, size: 21)
+                    : ValueListenableBuilder<int>(
+                        valueListenable: count,
+                        builder: (_, n, _) => Badge(
+                          isLabelVisible: n > 0,
+                          label: Text(n > 99 ? '99+' : '$n'),
+                          backgroundColor: Ui.red,
+                          textColor: Ui.palette.onAccent,
+                          child: Icon(icon, size: 21),
+                        ),
+                      ),
               ),
               const SizedBox(height: 5),
               Text(
@@ -532,7 +546,11 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
                         _dock(
                           Icons.notifications_none_rounded,
                           'Alerts'.tr,
-                          showNotificationSettings,
+                          (c) async {
+                            await _push(c, const NotificationsScreen());
+                            NotificationCenter.instance.refreshBadge();
+                          },
+                          count: NotificationCenter.instance.unread,
                         ),
                         _dock(Icons.tune_rounded, 'More'.tr, showSettingsSheet),
                       ],
