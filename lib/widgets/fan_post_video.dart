@@ -314,6 +314,22 @@ class _FanPostVideoState extends State<FanPostVideo>
           baseUrl: 'https://deeprowss.com',
         );
         return;
+      } else if (_info.kind == EmbedKind.vimeo && initialUri != null) {
+        final id = _vimeoId(initialUri);
+        if (id == null) throw FormatException('Invalid Vimeo video URL');
+        await c.loadHtmlString(
+          _iframeHtml('https://player.vimeo.com/video/$id?autoplay=1&title=0&byline=0&portrait=0'),
+          baseUrl: 'https://deeprowss.com',
+        );
+        return;
+      } else if (_info.kind == EmbedKind.dailymotion && initialUri != null) {
+        final id = _dailymotionId(initialUri);
+        if (id == null) throw FormatException('Invalid Dailymotion video URL');
+        await c.loadHtmlString(
+          _iframeHtml('https://www.dailymotion.com/embed/video/$id?autoplay=1'),
+          baseUrl: 'https://deeprowss.com',
+        );
+        return;
       }
       final youtubeId = _youtubeId(initialUri);
       if (youtubeId != null) {
@@ -345,6 +361,22 @@ class _FanPostVideoState extends State<FanPostVideo>
     }
   }
 
+
+  String? _vimeoId(Uri? uri) {
+    if (uri == null) return null;
+    final match = RegExp(r'/(?:video/)?(\d{6,})').firstMatch(uri.path);
+    return match?.group(1);
+  }
+
+  String? _dailymotionId(Uri? uri) {
+    if (uri == null) return null;
+    if (uri.host.toLowerCase() == 'dai.ly') {
+      return uri.pathSegments.isEmpty ? null : uri.pathSegments.first;
+    }
+    final match = RegExp(r'/(?:video|embed/video)/([A-Za-z0-9]+)').firstMatch(uri.path);
+    return match?.group(1);
+  }
+
   String? _youtubeId(Uri? uri) {
     if (uri == null) return null;
     final host = uri.host.toLowerCase();
@@ -367,6 +399,16 @@ class _FanPostVideoState extends State<FanPostVideo>
         return 'Play TikTok';
       case EmbedKind.facebook:
         return 'Play Facebook video';
+      case EmbedKind.vimeo:
+        return 'Play Vimeo video';
+      case EmbedKind.dailymotion:
+        return 'Play Dailymotion video';
+      case EmbedKind.filemoon:
+        return 'Play Filemoon video';
+      case EmbedKind.hls:
+        return 'Play HLS stream';
+      case EmbedKind.direct:
+        return 'Play video';
       default:
         return 'Play video';
     }
