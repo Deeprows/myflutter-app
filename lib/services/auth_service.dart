@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
+import 'push_service.dart';
 
 class AuthUser {
   final String id, email, name, photo;
@@ -222,6 +223,11 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    // Stop this phone receiving the fan's notifications (needs the sign-in
+    // that is about to end, so it goes first and never blocks sign-out).
+    try {
+      await PushService.instance.unregisterDevice();
+    } catch (_) {}
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_signedOutKey, true);
