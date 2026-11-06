@@ -257,44 +257,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  Widget _header(InboxKind kind) {
-    final (label, _, color) = _sections[kind]!;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 4),
-      child: Row(
-        children: [
-          Container(
-            width: 4,
-            height: 14,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            label.toUpperCase(),
-            style: TextStyle(
-              fontSize: 11,
-              letterSpacing: 1.2,
-              fontWeight: FontWeight.w900,
-              color: Ui.muted,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final children = <Widget>[];
-    for (final kind in InboxKind.values) {
-      final group = _items.where((e) => e.kind == kind).toList();
-      if (group.isEmpty) continue;
-      children.add(_header(kind));
-      children.addAll(group.map(_tile));
+    // One mixed list ordered by time (no section-by-section grouping).
+    // Past items: newest first. Upcoming items (e.g. a kick-off in 2h) are
+    // placed by how close they are to now, so they blend in with the rest.
+    final now = DateTime.now().millisecondsSinceEpoch;
+    int rank(InboxItem i) {
+      final t = i.at?.millisecondsSinceEpoch;
+      if (t == null) return -1 << 52; // undated items go last
+      return t <= now ? t : now - (t - now);
     }
+
+    final sorted = [..._items]..sort((a, b) => rank(b).compareTo(rank(a)));
+    final children = <Widget>[...sorted.map(_tile)];
     return Scaffold(
       backgroundColor: Ui.bg,
       appBar: AppBar(
