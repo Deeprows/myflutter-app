@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../config.dart';
 
 import '../player/mini_player.dart';
 import '../services/content_sync.dart';
@@ -74,10 +76,71 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
       (_) => ContentSync.request(),
     );
 
-    // notice.json: pop up once per notice id, a moment after the app opens.
-    Future<void>.delayed(const Duration(seconds: 2), () {
+    // Telegram invite repeats on app opening until the user taps Join.
+    Future<void>.delayed(const Duration(seconds: 2), () async {
+      if (mounted) await _showTelegramInvite();
       if (mounted) NoticeService.instance.showOnStart(context);
     });
+  }
+
+  Future<void> _showTelegramInvite() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('telegram_join_clicked') == true || !mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: const Color(0xFF111827),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 26, 24, 22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 76, height: 76,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF36AEEA), Color(0xFF1677D2)]),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: const Icon(Icons.telegram_rounded, color: Colors.white, size: 44),
+              ),
+              const SizedBox(height: 18),
+              const Text('Join Deeprowss on Telegram',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 10),
+              const Text('Get updates, new features, match alerts and announcements from our official community.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFFB8C4D6), height: 1.45)),
+              const SizedBox(height: 22),
+              SizedBox(width: double.infinity,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF229ED9),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                  icon: const Icon(Icons.telegram_rounded),
+                  label: const Text('JOIN TELEGRAM', style: TextStyle(fontWeight: FontWeight.w900)),
+                  onPressed: () async {
+                    final uri = Uri.parse(AppConfig.joinUrl);
+                    if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+                      await prefs.setBool('telegram_join_clicked', true);
+                      if (dialogContext.mounted) Navigator.pop(dialogContext);
+                    }
+                  },
+                )),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Maybe later', style: TextStyle(color: Color(0xFF9AA8BC))),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
