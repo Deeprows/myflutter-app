@@ -493,7 +493,7 @@ class _SearchScreenState extends State<SearchScreen> {
         imageUrl: FanZoneService.avatarUrl(id, u['avatar_at']),
       ),
       title: name,
-      subtitle: '@${FanZoneService.handle(id)}',
+      subtitle: '@${FanZoneService.handleOf(u, id)}',
       onTap: () => _openUser(id),
     );
   }
