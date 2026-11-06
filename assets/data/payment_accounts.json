@@ -1,0 +1,27 @@
+{
+  "title": "Deeprowss Payment Accounts",
+  "accounts": [
+    {
+      "id": "opay",
+      "name": "OPay",
+      "type": "bank_transfer",
+      "provider": "OPAY",
+      "account_name": "Taiwo",
+      "account_number": "9028840867",
+      "currency": "NGN",
+      "enabled": true
+    },
+    {
+      "id": "wallet",
+      "name": "USDT Wallet",
+      "type": "crypto_wallet",
+      "provider": "USDT",
+      "network": "TRC20",
+      "wallet_name": "Taiwo",
+      "wallet_address": "TFijBKULxEJuJwgj9nrEcQHvTuweKQoZ2M",
+      "enabled": true
+    }
+  ],
+  "receipt_whatsapp": "https://wa.me/2347041629630",
+  "instructions": "Edit account fields and rebuild the app to update bundled payment details."
+}
