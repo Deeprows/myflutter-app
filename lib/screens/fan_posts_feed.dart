@@ -700,8 +700,9 @@ EmbedInfo? _supportedVideo(String raw) {
     case EmbedKind.youtube:
       return fanVideoUrl(link).contains('/embed/') ? info : null;
     case EmbedKind.tiktok:
-      return tiktokIdFrom(link) != null || isTikTokShortLink(u) ? info : null;
     case EmbedKind.facebook:
+      // TikTok and Facebook videos can no longer be embedded in new posts.
+      return null;
     case EmbedKind.vimeo:
     case EmbedKind.dailymotion:
     case EmbedKind.filemoon:
@@ -736,7 +737,7 @@ class _ComposePostState extends State<_ComposePost> {
     'prediction': 'Call a score or a player moment before kick-off.',
     'betslip': 'Show your slip. Crop out account details first.',
     'banter': 'Share a hot take with the community.',
-    'video': 'Share a video from YouTube, TikTok, Facebook, Vimeo, Dailymotion, Filemoon, a stream link (m3u8, mp4, mpd) or any embed page.',
+    'video': 'Share a video from YouTube, Vimeo, Dailymotion, Filemoon, a stream link (m3u8, mp4, mpd) or any embed page.',
   };
 
   @override
@@ -876,6 +877,11 @@ class _ComposePostState extends State<_ComposePost> {
     if (_kind == 'video') {
       final link = _videoLinkFrom(_url.text);
       final title = _title.text.trim().replaceAll(RegExp(r'\s*\n\s*'), ' ');
+      final blockedKind = embedInfoFor(link).kind;
+      if (blockedKind == EmbedKind.tiktok || blockedKind == EmbedKind.facebook) {
+        _notice('TikTok and Facebook videos cannot be embedded. Use YouTube, Vimeo, Dailymotion, Filemoon or a stream link.');
+        return;
+      }
       if (_supportedVideo(link) == null) {
         _notice('Paste a video link, .m3u8 / .mp4 / .mpd stream, embed page link or iframe code.');
         return;
@@ -1139,12 +1145,12 @@ class _ComposePostState extends State<_ComposePost> {
             style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 10),
-          step(1, 'Open a video on YouTube, TikTok, Facebook, Vimeo, Dailymotion or Filemoon, or copy a direct stream URL.'),
+          step(1, 'Open a video on YouTube, Vimeo, Dailymotion or Filemoon, or copy a direct stream URL.'),
           step(2, 'Tap Share, then Copy link.'),
           step(3, 'Paste the link above (or tap the paste button).'),
           step(4, 'Add a title and an optional caption, then tap Post.'),
           Text(
-            'Supports YouTube, TikTok, Facebook, Vimeo, Dailymotion and Filemoon embeds, '
+            'Supports YouTube, Vimeo, Dailymotion and Filemoon embeds, '
             'plus HLS (.m3u8), DASH (.mpd) and direct video file streams such as MP4/WebM. '
             'Some hosts may block playback in embedded players. Portrait videos '
             'are shown in a tall player automatically.',
@@ -1182,7 +1188,7 @@ class _ComposePostState extends State<_ComposePost> {
                   icon: const Icon(Icons.close_rounded),
                 ),
           error: invalid
-              ? 'Enter a valid http(s) link or iframe embed code.'
+              ? 'This link cannot be embedded. TikTok and Facebook videos are not supported.'
               : null,
         ),
       ),
@@ -1192,8 +1198,6 @@ class _ComposePostState extends State<_ComposePost> {
         runSpacing: 8,
         children: [
           _platformChip(EmbedKind.youtube, 'YouTube', Icons.smart_display_rounded, found),
-          _platformChip(EmbedKind.tiktok, 'TikTok', Icons.music_note_rounded, found),
-          _platformChip(EmbedKind.facebook, 'Facebook', Icons.facebook_rounded, found),
           _platformChip(EmbedKind.vimeo, 'Vimeo', Icons.play_circle_outline_rounded, found),
           _platformChip(EmbedKind.dailymotion, 'Dailymotion', Icons.ondemand_video_rounded, found),
           _platformChip(EmbedKind.filemoon, 'Filemoon', Icons.movie_rounded, found),
