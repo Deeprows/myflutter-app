@@ -2,10 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'stream_resolver.dart';
 
 /// What kind of site a pasted link points at. Used to pick an embed player
 /// and a sensible first guess for the embed's shape (portrait / landscape).
-enum EmbedKind { youtube, tiktok, facebook, generic }
+enum EmbedKind { youtube, tiktok, facebook, vimeo, dailymotion, filemoon, hls, direct, generic }
 
 class EmbedInfo {
   final EmbedKind kind;
@@ -26,6 +27,16 @@ class EmbedInfo {
         return 'Facebook video';
       case EmbedKind.youtube:
         return 'YouTube';
+      case EmbedKind.vimeo:
+        return 'Vimeo';
+      case EmbedKind.dailymotion:
+        return 'Dailymotion';
+      case EmbedKind.filemoon:
+        return 'Filemoon';
+      case EmbedKind.hls:
+        return 'HLS stream';
+      case EmbedKind.direct:
+        return 'Direct stream';
       case EmbedKind.generic:
         return 'video';
     }
@@ -99,6 +110,19 @@ EmbedInfo embedInfoFor(String raw) {
   if (_hostIs(host, 'youtube.com') || host == 'youtu.be') {
     final shorts = u.pathSegments.isNotEmpty && u.pathSegments.first == 'shorts';
     return EmbedInfo(EmbedKind.youtube, shorts ? kPortrait : kLandscape);
+  }
+  if (_hostIs(host, 'vimeo.com')) return const EmbedInfo(EmbedKind.vimeo, kLandscape);
+  if (_hostIs(host, 'dailymotion.com') || host == 'dai.ly') {
+    return const EmbedInfo(EmbedKind.dailymotion, kLandscape);
+  }
+  if (_hostIs(host, 'filemoon.sx') || _hostIs(host, 'filemoon.to') ||
+      host.contains('filemoon')) {
+    return const EmbedInfo(EmbedKind.filemoon, kLandscape);
+  }
+  final stream = StreamResolver.resolve(raw);
+  if (stream.kind == StreamKind.hls) return const EmbedInfo(EmbedKind.hls, kLandscape);
+  if (stream.kind == StreamKind.video || stream.kind == StreamKind.dash) {
+    return const EmbedInfo(EmbedKind.direct, kLandscape);
   }
   return const EmbedInfo(EmbedKind.generic, kLandscape);
 }
