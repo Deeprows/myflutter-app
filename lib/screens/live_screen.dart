@@ -23,6 +23,7 @@ import '../widgets/news_ticker.dart';
 import '../widgets/pitch_painter.dart';
 import 'content_shortcut_screen.dart';
 import 'highlights_screen.dart';
+import 'notifications_screen.dart';
 import 'player_screen.dart';
 import 'support_browser_screen.dart';
 import '../utils/l10n.dart';
@@ -737,6 +738,8 @@ class _Header extends StatelessWidget {
                     'Play a link'.tr,
                     onLink,
                   ),
+
+                  const NotificationBell(round: true),
 
                   round(
                     Icons.refresh_rounded,
