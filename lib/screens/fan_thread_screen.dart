@@ -6,6 +6,7 @@ import '../utils/safe_error_message.dart';
 import '../services/fan_zone_service.dart';
 import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
+import '../widgets/fan_edit_sheet.dart';
 import 'fan_post_card.dart';
 import 'fan_mentions.dart';
 import 'fan_profile_screen.dart';
@@ -204,6 +205,25 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
   }
 
   Future<void> _action(String action, Map<String, dynamic> comment) async {
+    if (action == 'edit') {
+      final saved = await fanEditContent(
+        context,
+        title: 'Edit comment',
+        initial: '${comment['text'] ?? ''}',
+        maxLength: 500,
+        save: (text) => FanZoneService.editComment('${comment['id']}', text),
+      );
+      if (saved != null && mounted) {
+        setState(() {
+          comment['text'] = saved;
+          comment['edited_at'] = DateTime.now().millisecondsSinceEpoch;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Comment updated.')),
+        );
+      }
+      return;
+    }
     if (action == 'delete') {
       final yes = await showDialog<bool>(
         context: context,
@@ -338,7 +358,7 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
                               ),
                               TextSpan(
                                 text:
-                                    '  @${FanZoneService.handleOf(c, '${c['user_id']}')} · ${fanTimeAgo(c['at']).replaceAll(' ago', '')}',
+                                    '  @${FanZoneService.handleOf(c, '${c['user_id']}')} · ${fanTimeAgo(c['at']).replaceAll(' ago', '')}${(c['edited_at'] is num && (c['edited_at'] as num) > 0) ? ' · edited' : ''}',
                                 style: TextStyle(color: Ui.muted, fontSize: 12.5),
                               ),
                             ],
@@ -360,6 +380,11 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
                         ),
                         onSelected: (a) => _action(a, c),
                         itemBuilder: (_) => [
+                          if (mine)
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Text('Edit comment'),
+                            ),
                           if (mine || owner)
                             const PopupMenuItem(
                               value: 'delete',
