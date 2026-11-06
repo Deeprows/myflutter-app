@@ -3139,16 +3139,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                if (_loading && _fixtures.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
-                    child: LinearProgressIndicator(),
-                  )
-                else if (_loading)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 10),
-                    child: LinearProgressIndicator(),
-                  ),
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
