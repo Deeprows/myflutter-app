@@ -135,6 +135,12 @@ const _ua =
 Future<String?> resolveTikTokId(String raw) async {
   final direct = tiktokIdFrom(raw);
   if (direct != null) return direct;
+  final start = Uri.tryParse(raw);
+  if (start != null) {
+    final end = await _followRedirects(start);
+    final id = end == null ? null : tiktokIdFrom(end.toString());
+    if (id != null) return id;
+  }
   try {
     final r = await http
         .get(Uri.parse(raw), headers: {'user-agent': _ua})
@@ -168,10 +174,66 @@ Future<String?> tiktokThumbnail(String raw) async {
   }
 }
 
-String tiktokEmbedUrl(String id) => 'https://www.tiktok.com/embed/v2/$id';
+/// TikTok's embeddable player: just the video with its own controls, and it
+/// starts by itself.
+String tiktokEmbedUrl(String id) =>
+    'https://www.tiktok.com/player/v1/$id?autoplay=1&controls=1&progress_bar=1'
+    '&play_button=1&volume_control=1&fullscreen_button=1&description=0'
+    '&music_info=0&rel=0&native_context_menu=0&closed_caption=0';
+
+/// Follows redirects by hand and returns the final address (the http package
+/// does not report it), or null when the site cannot be reached.
+Future<Uri?> _followRedirects(Uri start) async {
+  final client = http.Client();
+  try {
+    var cur = start;
+    for (var i = 0; i < 6; i++) {
+      final req = http.Request('GET', cur)
+        ..followRedirects = false
+        ..headers['user-agent'] = _ua;
+      final res = await client.send(req).timeout(const Duration(seconds: 8));
+      await res.stream.drain<void>();
+      final loc = res.headers['location'];
+      if (res.statusCode >= 300 && res.statusCode < 400 && loc != null) {
+        cur = cur.resolve(loc);
+        continue;
+      }
+      return cur;
+    }
+    return cur;
+  } catch (_) {
+    return null;
+  } finally {
+    client.close();
+  }
+}
+
+/// Facebook's plugin only understands the real video address. Share links
+/// (facebook.com/share/v/…, /share/r/…) and fb.watch short links are followed
+/// to it first; other links are only cleaned of tracking parameters.
+Future<String> resolveFacebookUrl(String raw) async {
+  var u = Uri.tryParse(raw);
+  if (u == null) return raw;
+  final needsResolve = u.host.toLowerCase() == 'fb.watch' ||
+      u.path.toLowerCase().startsWith('/share/');
+  if (needsResolve) {
+    final end = await _followRedirects(u);
+    if (end != null && isFacebookHost(end.host)) {
+      final next = end.path.startsWith('/login') ? end.queryParameters['next'] : null;
+      u = next != null ? (Uri.tryParse(next) ?? end) : end;
+    }
+  }
+  if (!isFacebookHost(u.host)) return raw;
+  // Keep only what identifies the video (v=… on /watch), drop tracking.
+  final keep = <String, String>{};
+  final v = u.queryParameters['v'];
+  if (v != null && v.isNotEmpty) keep['v'] = v;
+  return Uri.https('www.facebook.com', u.path, keep.isEmpty ? null : keep)
+      .toString();
+}
 
 /// Facebook's official video plugin URL for a video / reel link.
-String facebookEmbedUrl(String raw) {
+String facebookEmbedUrl(String raw, {int width = 734}) {
   var u = Uri.parse(raw);
   final h = u.host.toLowerCase();
   if (h == 'm.facebook.com' ||
@@ -184,7 +246,7 @@ String facebookEmbedUrl(String raw) {
     'href': u.toString(),
     'show_text': 'false',
     'autoplay': 'true',
-    'width': '734',
+    'width': '$width',
   }).toString();
 }
 
