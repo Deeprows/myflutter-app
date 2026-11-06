@@ -1,16 +1,24 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../models/push_target.dart';
+import '../services/fan_zone_service.dart';
 import '../services/notification_center.dart';
 import '../services/push_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/notification_settings.dart';
 import 'content_shortcut_screen.dart';
+import 'fan_profile_screen.dart';
+import 'fan_thread_screen.dart';
+import 'fan_widgets.dart';
 import 'fan_zone_screen.dart';
 import 'prediction_results_screen.dart';
 
-/// In-app notification inbox: live matches and kick-offs, new highlights,
-/// latest movies, trending hashtags and the weekly prediction results.
+/// In-app notification inbox: new followers, likes and comments, live matches
+/// and kick-offs, new highlights, latest movies, trending hashtags and the
+/// weekly prediction results.
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -53,6 +61,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void _tap(InboxItem i) {
     final push = PushService.instance;
     switch (i.kind) {
+      case InboxKind.social:
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => i.socialKind == 'follow' || i.postId.isEmpty
+                ? FanProfileScreen(userId: i.actorId)
+                : FanThreadScreen(postId: i.postId),
+          ),
+        );
       case InboxKind.live:
         final f = i.fixture;
         if (f == null) return;
@@ -95,6 +111,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   static const _sections = <InboxKind, (String, IconData, Color)>{
+    InboxKind.social: ('Activity', Icons.favorite_rounded, Color(0xFFF91880)),
     InboxKind.prediction: ('My predictions', Icons.how_to_vote_rounded, Color(0xFF7C4DFF)),
     InboxKind.live: ('Live matches', Icons.sports_soccer_rounded, Color(0xFFE53935)),
     InboxKind.highlight: ('Highlights', Icons.play_circle_rounded, Color(0xFFFFA000)),
@@ -119,6 +136,48 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return '${(d.inDays / 7).floor()}w ago';
   }
 
+  /// Icon + colour of a social entry (follow / like / comment).
+  static (IconData, Color) _socialStyle(String kind) => switch (kind) {
+    'follow' => (Icons.person_add_alt_1_rounded, const Color(0xFF1D9BF0)),
+    'like' => (Icons.favorite_rounded, const Color(0xFFF91880)),
+    _ => (Icons.chat_bubble_rounded, const Color(0xFF00BA7C)),
+  };
+
+  /// The fan's picture with a small follow / like / comment badge.
+  Widget _socialLeading(InboxItem i) {
+    final (icon, color) = _socialStyle(i.socialKind);
+    final name = i.title.split(' ').first;
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          FanAvatar(
+            name: name,
+            seed: i.actorId,
+            size: 40,
+            imageUrl: FanZoneService.avatarUrl(i.actorId, i.avatarAt),
+          ),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                border: Border.all(color: Ui.bg, width: 2),
+              ),
+              child: Icon(icon, size: 11, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _tile(InboxItem i) {
     final (_, icon, color) = _sections[i.kind]!;
     final isNew = !_seenBefore.contains(i.id);
@@ -129,15 +188,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: .18),
-                shape: BoxShape.circle,
+            if (i.kind == InboxKind.social)
+              _socialLeading(i)
+            else
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: .18),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 20, color: color),
               ),
-              child: Icon(icon, size: 20, color: color),
-            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -277,7 +339,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Live matches, highlights, movies and results will show up here.',
+                            'New followers, likes, comments, live matches, highlights and results will show up here.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Ui.muted),
                           ),
@@ -298,9 +360,56 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
 /// Header bell with an unread count; opens the notification inbox.
 /// With [label] it is drawn like the Thread header actions (icon + name).
-class NotificationBell extends StatelessWidget {
+/// While something is unread the bell gives a little ring every few seconds
+/// and shows the number (99+ at most) so missed notifications get noticed.
+class NotificationBell extends StatefulWidget {
   final String? label;
-  const NotificationBell({super.key, this.label});
+
+  /// Drawn as a small round button (like the Live header's other buttons).
+  final bool round;
+  const NotificationBell({super.key, this.label, this.round = false});
+
+  @override
+  State<NotificationBell> createState() => _NotificationBellState();
+}
+
+class _NotificationBellState extends State<NotificationBell>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ring = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    NotificationCenter.instance.unread.addListener(_sync);
+    _sync();
+  }
+
+  void _sync() {
+    if (!mounted) return;
+    if (NotificationCenter.instance.unread.value > 0) {
+      if (_timer == null) {
+        _timer = Timer.periodic(const Duration(seconds: 8), (_) {
+          if (mounted) _ring.forward(from: 0);
+        });
+        _ring.forward(from: 0);
+      }
+    } else {
+      _timer?.cancel();
+      _timer = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    NotificationCenter.instance.unread.removeListener(_sync);
+    _timer?.cancel();
+    _ring.dispose();
+    super.dispose();
+  }
 
   Future<void> _open(BuildContext context) async {
     await Navigator.of(context).push(
@@ -313,20 +422,60 @@ class NotificationBell extends StatelessWidget {
   Widget build(BuildContext context) => ValueListenableBuilder<int>(
     valueListenable: NotificationCenter.instance.unread,
     builder: (context, n, _) {
-      final icon = Badge(
-        isLabelVisible: n > 0,
-        label: Text(n > 9 ? '9+' : '$n'),
-        backgroundColor: Ui.red,
+      final label = widget.label;
+      final bell = AnimatedBuilder(
+        animation: _ring,
+        builder: (_, child) {
+          final t = _ring.value;
+          // Quick left-right swing that settles.
+          final angle = math.sin(t * math.pi * 7) * 0.38 * (1 - t);
+          return Transform.rotate(
+            angle: n > 0 ? angle : 0,
+            alignment: Alignment.topCenter,
+            child: child,
+          );
+        },
         child: Icon(
           n > 0
               ? Icons.notifications_active_rounded
               : Icons.notifications_none_rounded,
-          size: label == null ? null : 24,
+          size: widget.round ? 19 : (label == null ? null : 24),
+          color: n > 0 ? Ui.red : null,
         ),
       );
+      final icon = Badge(
+        isLabelVisible: n > 0,
+        label: Text(
+          n > 99 ? '99+' : '$n',
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        backgroundColor: Ui.red,
+        textColor: Ui.palette.onAccent,
+        child: bell,
+      );
+      if (widget.round) {
+        return Padding(
+          padding: const EdgeInsets.only(left: 5),
+          child: SizedBox(
+            width: 38,
+            height: 38,
+            child: Material(
+              color: Colors.white.withValues(alpha: .06),
+              shape: const CircleBorder(),
+              child: IconButton(
+                tooltip: n > 0 ? '$n new notifications' : 'Notifications',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+                onPressed: () => _open(context),
+                icon: icon,
+              ),
+            ),
+          ),
+        );
+      }
       if (label == null) {
         return IconButton(
-          tooltip: 'Notifications',
+          tooltip: n > 0 ? '$n new notifications' : 'Notifications',
           onPressed: () => _open(context),
           icon: icon,
         );
@@ -342,11 +491,12 @@ class NotificationBell extends StatelessWidget {
               icon,
               const SizedBox(height: 2),
               Text(
-                label!,
-                style: const TextStyle(
+                label,
+                style: TextStyle(
                   fontSize: 10,
                   height: 1.1,
                   fontWeight: FontWeight.w700,
+                  color: n > 0 ? Ui.red : null,
                 ),
               ),
             ],
