@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:async';\nimport 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -33,6 +33,7 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
   String _method = 'bank'; // 'bank' | 'crypto'
   bool _busy = false;
   bool _checking = true;
+  Map<String, dynamic> _paymentConfig = {};
   String? _error;
   Timer? _poll;
 
@@ -41,6 +42,7 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
     super.initState();
     AdScheduler.instance.hold(); // no ad pop-up while sorting this out
     _sub.addListener(_changed);
+    unawaited(_loadPaymentAccounts());
     _load();
     // While waiting for an answer, look again every 20 seconds so the token
     // shows up by itself as soon as it is made.
@@ -68,6 +70,51 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(msg)));
   }
+
+  Future<void> _loadPaymentAccounts() async {
+    try {
+      final raw = await rootBundle.loadString('assets/data/payment_accounts.json');
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic> && mounted) {
+        setState(() => _paymentConfig = decoded);
+      }
+    } catch (_) {
+      // Keep the values from AppConfig as a safe fallback if the asset is absent
+      // or malformed.
+    }
+  }
+
+  List<Map<String, dynamic>> get _accounts {
+    final raw = _paymentConfig['accounts'];
+    if (raw is List) {
+      return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    return const [];
+  }
+
+  Map<String, dynamic>? _account(String id) {
+    for (final account in _accounts) {
+      if (account['id'] == id && account['enabled'] != false) return account;
+    }
+    return null;
+  }
+
+  Map<String, dynamic> get _bankAccount => _account('opay') ?? const {
+    'provider': AppConfig.payBankProvider,
+    'account_name': AppConfig.payBankAccountName,
+    'account_number': AppConfig.payBankAccountNumber,
+  };
+
+  Map<String, dynamic> get _walletAccount => _account('wallet') ?? const {
+    'provider': AppConfig.payCryptoProvider,
+    'network': AppConfig.payCryptoNetwork,
+    'wallet_name': AppConfig.payCryptoAccountName,
+    'wallet_address': AppConfig.payCryptoAddress,
+  };
+
+  String get _receiptUrl =>
+      (_paymentConfig['receipt_whatsapp'] as String?) ??
+      AppConfig.receiptWhatsappUrl;
 
   Future<void> _load() async {
     final id = await InstallId.get();
@@ -155,14 +202,14 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
   /// payment screenshot there.
   Future<void> _sendReceipt() async {
     final how = _method == 'bank'
-        ? '${AppConfig.payBankProvider} bank transfer'
-        : '${AppConfig.payCryptoProvider} (${AppConfig.payCryptoNetwork})';
+        ? '${_bankAccount['provider'] ?? _bankAccount['name'] ?? 'Bank'} bank transfer'
+        : '${_walletAccount['provider'] ?? _walletAccount['name'] ?? 'Crypto'} (${_walletAccount['network'] ?? ''})';
     final message = 'Hello, I have paid to remove ads on the Deeprowss app.\n'
         'Payment: $how\n'
         'Amount: ${_plan.priceDisplay}\n'
         'My receipt is attached.';
     final uri = buildWhatsappUri(
-        AppConfig.receiptWhatsappUrl, message, _installId);
+        _receiptUrl, message, _installId);
     if (uri == null || !await openExternally(uri.toString())) {
       if (mounted) _toast('Could not open WhatsApp');
     }
@@ -405,12 +452,12 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (bank) ...[
-                _kv('Provider', AppConfig.payBankProvider),
-                _kv('Account name', AppConfig.payBankAccountName),
+                _kv('Provider', '${_bankAccount['provider'] ?? _bankAccount['name'] ?? 'Bank'}'),
+                _kv('Account name', '${_bankAccount['account_name'] ?? _bankAccount['wallet_name'] ?? ''}'),
                 const SizedBox(height: 6),
                 _copyValue(
                   label: 'Account number',
-                  value: AppConfig.payBankAccountNumber,
+                  value: '${_bankAccount['account_number'] ?? ''}',
                   what: 'Account number',
                 ),
                 const SizedBox(height: 10),
@@ -419,19 +466,19 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
                   style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3),
                 ),
               ] else ...[
-                _kv('Provider', AppConfig.payCryptoProvider),
-                _kv('Network', AppConfig.payCryptoNetwork),
-                _kv('Account name', AppConfig.payCryptoAccountName),
+                _kv('Provider', '${_walletAccount['provider'] ?? _walletAccount['name'] ?? 'Crypto'}'),
+                _kv('Network', '${_walletAccount['network'] ?? ''}'),
+                _kv('Account name', '${_walletAccount['wallet_name'] ?? _walletAccount['account_name'] ?? ''}'),
                 const SizedBox(height: 6),
                 _copyValue(
                   label: 'Wallet address',
-                  value: AppConfig.payCryptoAddress,
+                  value: '${_walletAccount['wallet_address'] ?? _walletAccount['address'] ?? ''}',
                   what: 'Wallet address',
                 ),
                 const SizedBox(height: 10),
                 Text(
                   'Send the USDT equivalent of ${_plan.priceDisplay}. Only '
-                  'send on the ${AppConfig.payCryptoNetwork} network, or the '
+                  'send on the ${_walletAccount['network'] ?? ''} network, or the '
                   'funds are lost.',
                   style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3),
                 ),
