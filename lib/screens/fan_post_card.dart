@@ -9,6 +9,7 @@ import 'bookmarks_screen.dart';
 import '../theme/app_theme.dart';
 import 'fan_widgets.dart';
 import 'fan_x_widgets.dart';
+import 'fan_mentions.dart';
 import 'fan_profile_screen.dart';
 import 'fan_thread_screen.dart';
 
@@ -495,7 +496,7 @@ class _FanPostCardState extends State<FanPostCard> {
                                 ),
                                 TextSpan(
                                   text:
-                                      '  @${FanZoneService.handle(userId)} · ${fanTimeAgo(_post['q_at']).replaceAll(' ago', '')}',
+                                      '  @${FanZoneService.handleOf({'handle': _post['q_handle']}, userId)} · ${fanTimeAgo(_post['q_at']).replaceAll(' ago', '')}',
                                   style: TextStyle(color: Ui.muted, fontSize: 12.5),
                                 ),
                               ],
@@ -575,9 +576,23 @@ class _FanPostCardState extends State<FanPostCard> {
             padding: EdgeInsets.only(top: detail ? 12 : 2),
             child: detail
                 ? SelectableText.rich(
-                    TextSpan(children: xRichSpans(displayText, base: style)),
+                    TextSpan(
+                      children: xRichSpans(
+                        displayText,
+                        base: style,
+                        onMention: (h) => openProfileByHandle(context, h),
+                      ),
+                    ),
                   )
-                : Text.rich(TextSpan(children: xRichSpans(displayText, base: style))),
+                : Text.rich(
+                    TextSpan(
+                      children: xRichSpans(
+                        displayText,
+                        base: style,
+                        onMention: (h) => openProfileByHandle(context, h),
+                      ),
+                    ),
+                  ),
           ),
         FanMatchLink(snapshot: '${_post['match_json'] ?? ''}', text: text),
         if (_post['has_image'] == 1) _media(detail),
@@ -620,7 +635,7 @@ class _FanPostCardState extends State<FanPostCard> {
   Widget build(BuildContext context) {
     final mine = '${_post['user_id']}' == widget.viewerId;
     final liked = _post['liked'] == 1 || _post['liked'] == true;
-    final handle = '@${FanZoneService.handle('${_post['user_id']}')}';
+    final handle = '@${FanZoneService.handleOf(_post, '${_post['user_id']}')}';
     if (!widget.openThread)
       return Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -948,6 +963,7 @@ class _QuoteComposerState extends State<_QuoteComposer> {
               focusedBorder: InputBorder.none,
             ),
           ),
+          MentionSuggestions(controller: _text),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -968,7 +984,7 @@ class _QuoteComposerState extends State<_QuoteComposer> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        '${p['name']}  @${FanZoneService.handle(userId)}',
+                        '${p['name']}  @${FanZoneService.handleOf(p, userId)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w800),
