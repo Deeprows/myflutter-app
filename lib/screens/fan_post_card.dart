@@ -10,6 +10,8 @@ import '../services/locale_service.dart';
 import '../services/post_bookmarks.dart';
 import 'bookmarks_screen.dart';
 import '../theme/app_theme.dart';
+import '../config.dart';
+import 'browser_screen.dart' show openExternally;
 import 'fan_widgets.dart';
 import 'fan_x_widgets.dart';
 import 'fan_mentions.dart';
@@ -191,7 +193,53 @@ class _FanPostCardState extends State<FanPostCard> {
     }
   }
 
+  Future<void> _promotePost() async {
+    final postId = '${_post['id']}';
+    final postText = '${_post['text'] ?? ''}'.trim();
+    final snippet = postText.length > 220 ? '${postText.substring(0, 220)}…' : postText;
+    final message = [
+      'Hello Deeprowss Admin, I want to promote my post on the thread page.',
+      'Post ID: $postId',
+      if (snippet.isNotEmpty) 'Post: $snippet',
+      'Please explain the available promotion durations, prices and manual payment steps.',
+    ].join('\n');
+    final whatsapp = Uri.https('wa.me', '/2347041629630', {'text': message});
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Promote this post'),
+        content: const Text(
+          'Make an enquiry with the Deeprowss admin. You can pay manually for '
+          'the number of days you want your post to appear at the top of the '
+          'thread page. Ask the admin about available durations, pricing and '
+          'payment confirmation. Your post will be promoted after the admin '
+          'confirms your payment.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            icon: const Icon(Icons.chat_rounded),
+            label: const Text('Chat admin'),
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              final opened = await openExternally(whatsapp.toString());
+              if (!opened) _notice('Could not open WhatsApp. Please try again.');
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _action(String action) async {
+    if (action == 'promote') {
+      await _promotePost();
+      return;
+    }
     try {
       if (action == 'bookmark') {
         final added = await PostBookmarks.instance.toggle(_post);
@@ -347,6 +395,18 @@ class _FanPostCardState extends State<FanPostCard> {
           ]
         : [
       const PopupMenuItem(value: 'share', child: Text('Share post')),
+      if (!widget.openThread)
+        const PopupMenuItem(
+          value: 'promote',
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.campaign_outlined, size: 18),
+              SizedBox(width: 9),
+              Text('Promote this post'),
+            ],
+          ),
+        ),
       PopupMenuItem(
         value: 'bookmark',
         child: Text(
