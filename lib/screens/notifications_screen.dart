@@ -141,6 +141,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     'follow' => (Icons.person_add_alt_1_rounded, const Color(0xFF1D9BF0)),
     'like' => (Icons.favorite_rounded, const Color(0xFFF91880)),
     'repost' || 'quote' => (Icons.repeat_rounded, const Color(0xFF00BA7C)),
+    'mention' => (Icons.alternate_email_rounded, const Color(0xFF1D9BF0)),
     _ => (Icons.chat_bubble_rounded, const Color(0xFF00BA7C)),
   };
 
