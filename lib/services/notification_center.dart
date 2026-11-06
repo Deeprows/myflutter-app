@@ -8,11 +8,13 @@ import '../models/fan_prediction.dart';
 import '../models/fixture.dart';
 import 'fan_zone_service.dart';
 import 'auth_service.dart';
+import 'content_sync.dart';
 import 'feed_service.dart';
 import 'native_notifier.dart';
+import 'push_service.dart';
 
 /// What an inbox entry is about (also decides its icon, colour and section).
-enum InboxKind { prediction, live, highlight, movie, trending, result }
+enum InboxKind { social, prediction, live, highlight, movie, trending, result }
 
 /// One line in the in-app notification inbox.
 class InboxItem {
@@ -29,6 +31,13 @@ class InboxItem {
   /// Highlight / movie link, or the hashtag, depending on [kind].
   final String ref;
 
+  /// Social entries only: `follow`, `like` or `comment`, the fan who did it,
+  /// the post it happened on and that fan's picture version.
+  final String socialKind;
+  final String actorId;
+  final String postId;
+  final Object? avatarAt;
+
   const InboxItem({
     required this.id,
     required this.kind,
@@ -37,13 +46,18 @@ class InboxItem {
     this.at,
     this.fixture,
     this.ref = '',
+    this.socialKind = '',
+    this.actorId = '',
+    this.postId = '',
+    this.avatarAt,
   });
 }
 
 /// Builds the notification inbox from the same feeds the app already uses:
 /// live matches and kick-offs, new highlights, latest movies, trending
-/// hashtags and the weekly prediction winners. Nothing extra is needed on the
-/// server. [unread] drives the badge on the bell icon.
+/// hashtags and the weekly prediction winners, plus the fan's own activity
+/// (new followers, likes and comments, from the Fan Zone server).
+/// [unread] drives the badge on the bell icon; [start] keeps it fresh.
 class NotificationCenter {
   NotificationCenter._();
   static final NotificationCenter instance = NotificationCenter._();
@@ -61,14 +75,169 @@ class NotificationCenter {
   DateTime _picksCheckedAt = DateTime.fromMillisecondsSinceEpoch(0);
   List<InboxItem> _last = const [];
 
+  // Followers / likes / comments on this fan's posts.
+  List<InboxItem> _social = const [];
+  DateTime _socialAt = DateTime.fromMillisecondsSinceEpoch(0);
+  Set<String> _socialReadIds = <String>{};
+  static const _socialNotifiedKey = 'social_notified';
+
+  Timer? _timer;
+  bool _started = false;
+  bool _foreground = true;
+
   Future<Set<String>> _seen() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_seenKey);
-    if (raw == null || raw.isEmpty) return <String>{};
+    if (raw == null || raw.isEmpty) return {..._socialReadIds};
     try {
-      return (jsonDecode(raw) as List).map((e) => '$e').toSet();
+      return {
+        ...(jsonDecode(raw) as List).map((e) => '$e'),
+        ..._socialReadIds,
+      };
     } catch (_) {
-      return <String>{};
+      return {..._socialReadIds};
+    }
+  }
+
+  // ------------------------------------------------------ follows, likes...
+
+  /// Keeps the bell up to date while the app is open: every minute or so, when
+  /// the app comes back to the foreground, when new content arrives and when
+  /// a push is received. Safe to call more than once.
+  void start() {
+    if (_started) return;
+    _started = true;
+    WidgetsBinding.instance.addObserver(_Lifecycle(this));
+    _timer = Timer.periodic(const Duration(seconds: 75), (_) => poll());
+    ContentSync.tick.addListener(() => refreshBadge());
+    AuthService.instance.addListener(_onAuthChanged);
+    unawaited(refreshBadge());
+  }
+
+  void _onAuthChanged() {
+    _social = const [];
+    _socialReadIds = <String>{};
+    _socialAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _last = _last.where((e) => e.kind != InboxKind.social).toList();
+    unawaited(refreshBadge());
+  }
+
+  /// Cheap check for new follows / likes / comments (one small request).
+  Future<void> poll() async {
+    if (!_foreground) return;
+    try {
+      await _loadSocial(force: true);
+      _last = [..._social, ..._last.where((e) => e.kind != InboxKind.social)];
+      await _refreshBadge(_last);
+      unawaited(PushService.instance.registerDevice());
+      unawaited(_alertNew());
+    } catch (_) {}
+  }
+
+  Future<void> _loadSocial({bool force = false}) async {
+    if (!AuthService.instance.signedIn) {
+      _social = const [];
+      _socialReadIds = <String>{};
+      return;
+    }
+    if (!force &&
+        DateTime.now().difference(_socialAt) < const Duration(seconds: 30)) {
+      return;
+    }
+    _socialAt = DateTime.now();
+    try {
+      final data = await FanZoneService.call('social/notifications');
+      final readAt = (data['read_at'] as num?)?.toInt() ?? 0;
+      final items = <InboxItem>[];
+      final read = <String>{};
+      for (final n in FanZoneService.rows(data['notifications'])) {
+        final id = 'soc:${n['id']}';
+        final atMs = (n['at'] as num?)?.toInt() ?? 0;
+        final kind = '${n['kind']}';
+        final name = '${n['actor_name'] ?? ''}'.trim();
+        final who = name.isEmpty ? 'Someone' : name;
+        final (title, body) = switch (kind) {
+          'follow' => ('$who started following you', 'Tap to view their profile'),
+          'like' => ('$who liked your post', 'Tap to open the post'),
+          _ => ('$who commented on your post', '${n['text'] ?? ''}'),
+        };
+        if (atMs <= readAt) read.add(id);
+        items.add(InboxItem(
+          id: id,
+          kind: InboxKind.social,
+          title: title,
+          body: body,
+          at: DateTime.fromMillisecondsSinceEpoch(atMs),
+          socialKind: kind,
+          actorId: '${n['actor_id'] ?? ''}',
+          postId: '${n['post_id'] ?? ''}',
+          avatarAt: n['avatar_at'],
+        ));
+      }
+      _social = items;
+      _socialReadIds = read;
+    } catch (_) {
+      // Offline: keep what we already have.
+    }
+  }
+
+  /// A push for this entry was already drawn by Firebase, so the in-app
+  /// fallback below must not draw it a second time.
+  Future<void> markNotified(String nid) async {
+    if (nid.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final done = prefs.getStringList(_socialNotifiedKey) ?? <String>[];
+      if (!done.contains('soc:$nid')) done.add('soc:$nid');
+      await prefs.setStringList(_socialNotifiedKey, _trim(done));
+    } catch (_) {}
+  }
+
+  static List<String> _trim(List<String> l) =>
+      l.length > 200 ? l.sublist(l.length - 200) : l;
+
+  /// Fallback "outside the app" alert while the app is open but Firebase
+  /// push did not deliver (for example the server has no push key yet).
+  /// Entries younger than 30 seconds are left alone so a real push can win.
+  Future<void> _alertNew() async {
+    if (!_foreground || _social.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    final first = !prefs.containsKey(_socialNotifiedKey);
+    final done = (prefs.getStringList(_socialNotifiedKey) ?? <String>[]);
+    if (first) {
+      // Existing history is not news: remember it silently.
+      await prefs.setStringList(
+        _socialNotifiedKey,
+        _trim(_social.map((e) => e.id).toList()),
+      );
+      return;
+    }
+    final seen = await _seen();
+    final now = DateTime.now();
+    final fresh = _social.where((i) {
+      if (seen.contains(i.id) || done.contains(i.id)) return false;
+      final at = i.at;
+      return at != null &&
+          now.difference(at) > const Duration(seconds: 30) &&
+          now.difference(at) < const Duration(hours: 1);
+    }).toList();
+    if (fresh.isEmpty) return;
+    for (final i in fresh) {
+      done.add(i.id);
+    }
+    await prefs.setStringList(_socialNotifiedKey, _trim(done));
+    for (final i in fresh.take(3)) {
+      unawaited(NativeNotifier.show(
+        title: i.title,
+        body: i.body,
+        channel: 'social',
+        payload: jsonEncode({
+          'type': 'social',
+          'kind': i.socialKind,
+          'postId': i.postId,
+          'actorId': i.actorId,
+        }),
+      ));
     }
   }
 
@@ -174,6 +343,8 @@ class NotificationCenter {
       await Future.wait([_loadTrending(), _loadResults(), checkPredictions(force: true)]);
     }
     items.insertAll(0, _predictions);
+    await _loadSocial(force: network);
+    items.insertAll(0, _social);
     items.addAll(_trending);
     items.addAll(_results);
 
@@ -348,6 +519,13 @@ class NotificationCenter {
         : unique;
     await prefs.setString(_seenKey, jsonEncode(kept));
     unread.value = 0;
+    if (AuthService.instance.signedIn && _social.isNotEmpty) {
+      _socialReadIds = {..._socialReadIds, ..._social.map((e) => e.id)};
+      unawaited(
+        FanZoneService.call('social/notifications-read', body: {})
+            .then<void>((_) {}, onError: (_) {}),
+      );
+    }
   }
 
   Future<bool> isUnread(String id) async => !(await _seen()).contains(id);
@@ -366,5 +544,18 @@ class NotificationCenter {
     final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
     final m = t.minute.toString().padLeft(2, '0');
     return '$h:$m ${t.hour >= 12 ? 'PM' : 'AM'}';
+  }
+}
+
+/// Tells [NotificationCenter] when the app goes to / comes back from the
+/// background, so it refreshes the bell right when the user returns.
+class _Lifecycle with WidgetsBindingObserver {
+  final NotificationCenter _center;
+  _Lifecycle(this._center);
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _center._foreground = state == AppLifecycleState.resumed;
+    if (_center._foreground) unawaited(_center.refreshBadge());
   }
 }
