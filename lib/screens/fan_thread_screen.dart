@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../utils/safe_error_message.dart';
+import '../utils/post_links.dart';
 import '../services/fan_zone_service.dart';
 import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
@@ -159,6 +160,10 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
 
   Future<void> _send() async {
     if (!_canSend) return;
+    if (textHasWebPageLink(_text.text) && !await ensureLinkPremium(context)) {
+      return;
+    }
+    if (!mounted) return;
     setState(() => _sending = true);
     try {
       await FanZoneService.postComment(
