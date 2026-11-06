@@ -202,24 +202,61 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  Future<String> idToken() async {
+  /// Google ID tokens last about an hour and the plugin can hand back a stale
+  /// cached one, which the Worker then rejects ("Please log in again").
+  /// So an expired (or about to expire) token is refreshed first, and
+  /// [refresh] forces a new one (used after the Worker answers 401).
+  Future<String> idToken({bool refresh = false}) async {
     final user = _user;
     if (user == null) throw Exception('Please log in to Deeprowss.');
-    final account =
-        _google.currentUser ??
-        await _google.signInSilently().timeout(const Duration(seconds: 10));
+    var account = _google.currentUser;
+    if (account != null && refresh) {
+      try {
+        await account.clearAuthCache();
+      } catch (_) {}
+      account = null;
+    }
+    account ??=
+        await _google
+            .signInSilently(reAuthenticate: refresh)
+            .timeout(const Duration(seconds: 10));
     if (account == null ||
         account.email.toLowerCase() != user.email.toLowerCase()) {
       throw Exception(
         'Google could not restore this account. Log out and log in again.',
       );
     }
-    final token = (await account.authentication).idToken;
-    if (token == null || token.isEmpty)
+    var token = (await account.authentication).idToken;
+    if (!refresh && (token == null || _expiresSoon(token))) {
+      try {
+        await account.clearAuthCache();
+      } catch (_) {}
+      final fresh =
+          await _google
+              .signInSilently(reAuthenticate: true)
+              .timeout(const Duration(seconds: 10));
+      token = (await fresh?.authentication)?.idToken ?? token;
+    }
+    if (token == null || token.isEmpty) {
       throw Exception(
         'Could not refresh your sign-in. Check your connection or log in again.',
       );
+    }
     return token;
+  }
+
+  static bool _expiresSoon(String token) {
+    try {
+      final parts = token.split('.');
+      final payload = utf8.decode(
+        base64Url.decode(base64Url.normalize(parts[1])),
+      );
+      final exp = (jsonDecode(payload) as Map)['exp'];
+      if (exp is! num) return false;
+      return exp * 1000 < DateTime.now().millisecondsSinceEpoch + 120000;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> signOut() async {
