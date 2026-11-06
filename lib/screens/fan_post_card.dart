@@ -1,6 +1,8 @@
 import '../widgets/fan_match_link.dart';
 import '../widgets/fan_edit_sheet.dart';
 import '../widgets/fan_post_video.dart';
+import '../widgets/fan_web_link_card.dart';
+import '../utils/post_links.dart';
 import '../models/fan_post_link.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
@@ -897,7 +899,10 @@ class _FanPostCardState extends State<FanPostCard> {
         if (_post['has_image'] == 1) _media(detail),
         if (_quoteOf.isNotEmpty && !_isRepost) _quoteEmbed(),
         for (final link in videoLinks)
-          FanPostVideo(
+          if (isWebPageLink(link) && kindKey != 'video')
+            FanWebLinkCard(key: ValueKey(link), url: link)
+          else
+            FanPostVideo(
             key: ValueKey(link),
             url: link,
             inline: true,
@@ -1196,6 +1201,10 @@ class _QuoteComposerState extends State<_QuoteComposer> {
 
   Future<void> _publish() async {
     if (_busy || _text.text.trim().isEmpty) return;
+    if (textHasWebPageLink(_text.text) && !await ensureLinkPremium(context)) {
+      return;
+    }
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _error = null;
