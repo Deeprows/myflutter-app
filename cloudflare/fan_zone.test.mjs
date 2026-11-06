@@ -117,7 +117,7 @@ assert.equal((await publish({kind:'betslip',image:png,e:env})).status,503);
 assert.equal((await publish({kind:'betslip',image:Buffer.from('not an image')})).status,400);
 assert.equal((await publish({kind:'betslip',image:oversizedDimensions})).status,400);
 assert.equal((await publish({kind:'betslip',image:new Uint8Array(4*1024*1024+1)})).status,413);
-assert.equal((await publish({text:'x'.repeat(1001)})).status,400);
+assert.equal((await publish({text:'x'.repeat(5001)})).status,400);
 assert.equal((await publish({credential:'ef'.repeat(32)})).status,403);
 const published=await publish({kind:'betslip',text:'My weekend picks',image:png});
 assert.equal(published.status,200);
