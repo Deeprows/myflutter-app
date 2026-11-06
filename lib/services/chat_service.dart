@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 /// One comment in a match chat.
@@ -145,9 +146,12 @@ class ChatService {
           )
           .timeout(const Duration(seconds: 12));
       if (res.statusCode == 200) return null;
-      return res.statusCode == 403
-          ? 'Comments are not allowed right now.'
-          : 'Could not send your comment (${res.statusCode}).';
+      if (res.statusCode == 403) {
+        // Firestore rejected the write (security rules / API key).
+        debugPrint('Chat send 403: ${res.body}');
+        return 'Comments are not allowed right now.';
+      }
+      return 'Could not send your comment (${res.statusCode}).';
     } catch (_) {
       return 'Could not send your comment. Check your connection.';
     }
