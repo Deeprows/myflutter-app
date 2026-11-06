@@ -457,7 +457,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             const NotificationBell(label: 'Alerts'),
             _labeled(
               Icons.fact_check_rounded,
-              'My Predictions',
+              'My Results',
               () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const PredictionResultsScreen(),
