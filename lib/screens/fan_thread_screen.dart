@@ -696,7 +696,6 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
       ),
       body: Column(
         children: [
-          if (_loading) const LinearProgressIndicator(minHeight: 2),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _load,
