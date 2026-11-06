@@ -16,6 +16,12 @@ class PushTarget {
   final int? tmdbId;
   final String mediaType;
 
+  /// `social` notifications (new follower / like / comment): what happened,
+  /// who did it and on which post.
+  final String socialKind;
+  final String postId;
+  final String actorId;
+
   const PushTarget({
     required this.kind,
     this.url = '',
@@ -24,13 +30,18 @@ class PushTarget {
     this.kickoffMs,
     this.tmdbId,
     this.mediaType = 'movie',
+    this.socialKind = '',
+    this.postId = '',
+    this.actorId = '',
   });
 
   /// Bottom-tab index: 0 Live, 1 Highlights, 3 Movies.
   int get tab => kind == 'highlights' ? 1 : (kind == 'movies' ? 3 : 0);
 
   /// True when the notification names one specific item to open.
-  bool get hasItem => kind == 'kickoff'
+  bool get hasItem => kind == 'social'
+      ? postId.isNotEmpty || actorId.isNotEmpty
+      : kind == 'kickoff'
       ? home.isNotEmpty && away.isNotEmpty
       : url.isNotEmpty || (kind == 'movies' && tmdbId != null);
 
@@ -48,11 +59,17 @@ class PushTarget {
     var kind = (s('type').isNotEmpty ? s('type') : s('tab')).toLowerCase();
     if (kind == 'live') kind = 'kickoff';
     if (kind == 'trending_movie' || kind == 'trending-movie') kind = 'movies';
-    if (kind != 'kickoff' && kind != 'highlights' && kind != 'movies') {
+    if (kind != 'kickoff' &&
+        kind != 'highlights' &&
+        kind != 'movies' &&
+        kind != 'social') {
       return null;
     }
     return PushTarget(
       kind: kind,
+      socialKind: kind == 'social' ? s('kind').toLowerCase() : '',
+      postId: s('postId'),
+      actorId: s('actorId'),
       url: s('url'),
       home: s('home'),
       away: s('away'),
