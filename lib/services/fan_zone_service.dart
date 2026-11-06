@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
 import 'auth_service.dart';
+import 'install_id.dart';
+import 'subscription_service.dart';
 import '../models/fixture.dart';
 
 /// Uses the signed-in Google identity. The server verifies every ID token.
@@ -93,6 +95,25 @@ class FanZoneService {
       return false;
     }
   }
+
+  /// Editing posts and comments is for Premium members: a paid subscription on
+  /// this install, or the weekly Fan Zone premium. The Worker checks it again.
+  static Future<bool> canEditContent() async {
+    if (SubscriptionService.instance.isPremium) return true;
+    return hasWeeklyPremium();
+  }
+
+  static Future<Map<String, dynamic>> editPost(String id, String text) async =>
+      call(
+        'post/edit',
+        body: {'id': id, 'text': text, 'install_id': await InstallId.get()},
+      );
+
+  static Future<Map<String, dynamic>> editComment(String id, String text) async =>
+      call(
+        'social/comment-edit',
+        body: {'id': id, 'text': text, 'install_id': await InstallId.get()},
+      );
 
   static String postUrl(String postId) =>
       '${AppConfig.feedBase}/fan/share/${Uri.encodeComponent(postId)}';
