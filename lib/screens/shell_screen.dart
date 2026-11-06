@@ -10,6 +10,8 @@ import '../config.dart';
 import '../player/mini_player.dart';
 import '../services/content_sync.dart';
 import '../services/notice_service.dart';
+import '../services/manual_ad_service.dart';
+import '../services/subscription_service.dart';
 import '../services/push_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
@@ -52,6 +54,8 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   DateTime? _lastBack;
   Timer? _autoRefresh;
+  Timer? _manualAdTimer;
+  bool _manualAdShowing = false;
   bool _highlightsOpen = false;
   bool _moviesOpen = false;
 
@@ -80,6 +84,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     Future<void>.delayed(const Duration(seconds: 2), () async {
       if (mounted) await _showTelegramInvite();
       if (mounted) NoticeService.instance.showOnStart(context);
+      if (mounted) _scheduleManualAd();
     });
   }
 
@@ -143,6 +148,30 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     );
   }
 
+  void _scheduleManualAd() {
+    _manualAdTimer?.cancel();
+    if (!mounted || SubscriptionService.instance.isPremium) return;
+    // Telegram's dialog has now appeared and been dismissed; wait two minutes.
+    _manualAdTimer = Timer(const Duration(minutes: 2), () async {
+      await _showManualAd();
+      if (!mounted) return;
+      // Repeat every ten minutes, independently of the existing support ad.
+      _manualAdTimer = Timer.periodic(const Duration(minutes: 10), (_) {
+        _showManualAd();
+      });
+    });
+  }
+
+  Future<void> _showManualAd() async {
+    if (!mounted || _manualAdShowing || SubscriptionService.instance.isPremium) return;
+    _manualAdShowing = true;
+    try {
+      await ManualAdService.instance.show(context);
+    } finally {
+      _manualAdShowing = false;
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) ContentSync.request(force: true);
@@ -151,6 +180,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     _autoRefresh?.cancel();
+    _manualAdTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     PushService.instance.tabRequest.removeListener(_openRequestedTab);
     super.dispose();
