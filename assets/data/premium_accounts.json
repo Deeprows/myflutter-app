@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "description": "Editable Deeprowss Fan Zone premium account list. Add or edit account IDs/usernames. Premium ticks are displayed when premium is true.",
+  "accounts": [
+    {
+      "accountId": "REPLACE_WITH_GOOGLE_USER_ID",
+      "username": "your_username",
+      "displayName": "Premium User",
+      "premium": true,
+      "expiresAt": null,
+      "note": "Example entry. Replace the accountId with the user's Google account ID."
+    }
+  ]
+}
