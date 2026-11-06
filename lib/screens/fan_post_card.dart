@@ -34,6 +34,7 @@ class FanPostCard extends StatefulWidget {
 class _FanPostCardState extends State<FanPostCard> {
   late Map<String, dynamic> _post;
   bool _busy = false,
+      _repostBusy = false,
       _followBusy = false,
       _followKnown = false,
       _followed = false;
@@ -92,13 +93,88 @@ class _FanPostCardState extends State<FanPostCard> {
     }
   }
 
-  Future<void> _thread() async {
+  bool get _isRepost => '${_post['kind']}' == 'repost';
+  String get _quoteOf => '${_post['quote_of'] ?? ''}';
+
+  Future<void> _openPost(String id) async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => FanThreadScreen(postId: '${_post['id']}'),
-      ),
+      MaterialPageRoute<void>(builder: (_) => FanThreadScreen(postId: id)),
     );
     if (mounted) widget.onChanged?.call();
+  }
+
+  /// Opens this post's thread (a plain repost opens the reposted post).
+  Future<void> _thread() => _openPost(
+    _isRepost && _quoteOf.isNotEmpty ? _quoteOf : '${_post['id']}',
+  );
+
+  bool get _reposted => _post['reposted'] == 1 || _post['reposted'] == true;
+
+  /// Repost / undo repost / quote, like the X repost menu.
+  Future<void> _repostMenu() async {
+    if (_repostBusy) return;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(
+                Icons.repeat_rounded,
+                color: _reposted ? const Color(0xFF00BA7C) : null,
+              ),
+              title: Text(_reposted ? 'Undo repost' : 'Repost'),
+              onTap: () => Navigator.pop(ctx, 'repost'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Quote'),
+              onTap: () => Navigator.pop(ctx, 'quote'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == 'repost') await _toggleRepost();
+    if (choice == 'quote') await _quote();
+  }
+
+  Future<void> _toggleRepost() async {
+    setState(() => _repostBusy = true);
+    try {
+      final result = await FanZoneService.call(
+        'social/repost',
+        body: {'id': _post['id'], 'reposted': !_reposted},
+      );
+      if (mounted) {
+        setState(() {
+          _post['reposted'] = result['reposted'] == true ? 1 : 0;
+          _post['reposts'] = result['reposts'];
+        });
+        _notice(result['reposted'] == true ? 'Reposted' : 'Repost removed');
+        widget.onChanged?.call();
+      }
+    } catch (e) {
+      _notice(e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _repostBusy = false);
+    }
+  }
+
+  Future<void> _quote() async {
+    final posted = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (_) => _QuoteComposer(post: _post),
+    );
+    if (posted == true && mounted) {
+      _notice('Quote posted');
+      widget.onChanged?.call();
+    }
   }
 
   Future<void> _action(String action) async {
@@ -139,7 +215,7 @@ class _FanPostCardState extends State<FanPostCard> {
         _notice('Fan hidden on this device.');
         return;
       }
-      if (action == 'delete') {
+      if (action == 'delete' && !_isRepost) {
         final yes = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -169,7 +245,11 @@ class _FanPostCardState extends State<FanPostCard> {
         },
       );
       if (mounted) widget.onChanged?.call();
-      _notice(action == 'delete' ? 'Post deleted.' : 'Report sent for review.');
+      _notice(
+        action == 'delete'
+            ? (_isRepost ? 'Repost removed.' : 'Post deleted.')
+            : 'Report sent for review.',
+      );
     } catch (e) {
       _notice(e.toString().replaceFirst('Exception: ', ''));
     }
@@ -224,7 +304,16 @@ class _FanPostCardState extends State<FanPostCard> {
     onSelected: _action,
     padding: EdgeInsets.zero,
     icon: Icon(Icons.more_horiz_rounded, color: Ui.dim, size: 21),
-    itemBuilder: (_) => [
+    itemBuilder: (_) => _isRepost
+        ? [
+            if (mine)
+              const PopupMenuItem(value: 'delete', child: Text('Undo repost'))
+            else ...const [
+              PopupMenuItem(value: 'report', child: Text('Report post')),
+              PopupMenuItem(value: 'block', child: Text('Hide fan on this device')),
+            ],
+          ]
+        : [
       const PopupMenuItem(value: 'share', child: Text('Share post')),
       PopupMenuItem(
         value: 'bookmark',
@@ -296,31 +385,45 @@ class _FanPostCardState extends State<FanPostCard> {
     ),
   );
 
-  Widget _actions(bool liked) => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
+  Widget _actions(bool liked, {required bool detail}) {
+    final reposts = (_post['reposts'] as num?)?.toInt() ?? 0;
+    final views = (_post['views'] as num?)?.toInt() ?? 0;
+    const green = Color(0xFF00BA7C);
+    final items = <Widget>[
       XAction(
         icon: Icons.chat_bubble_outline_rounded,
-        count: (_post['comments'] as num?)?.toInt() ?? 0,
+        count: detail ? null : (_post['comments'] as num?)?.toInt() ?? 0,
         tooltip: 'Reply to post',
         onTap: widget.openThread ? _thread : widget.onReply,
       ),
       XAction(
+        icon: Icons.repeat_rounded,
+        count: detail ? null : reposts,
+        color: green,
+        active: _reposted,
+        tooltip: _reposted ? 'Reposted' : 'Repost or quote',
+        onTap: _repostBusy ? null : _repostMenu,
+      ),
+      XAction(
         icon: liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-        count: (_post['likes'] as num?)?.toInt() ?? 0,
+        count: detail ? null : (_post['likes'] as num?)?.toInt() ?? 0,
         color: const Color(0xFFF91880),
         active: liked,
         tooltip: liked ? 'Unlike post' : 'Like post',
         onTap: _busy ? null : _like,
       ),
+      if (!detail)
+        XAction(
+          icon: Icons.bar_chart_rounded,
+          count: views,
+          tooltip: 'Views',
+        ),
       ValueListenableBuilder<Set<String>>(
         valueListenable: PostBookmarks.instance.ids,
         builder: (_, saved, _) {
           final on = saved.contains('${_post['id']}');
           return XAction(
-            icon: on
-                ? Icons.bookmark_rounded
-                : Icons.bookmark_border_rounded,
+            icon: on ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
             color: const Color(0xFF1D9BF0),
             active: on,
             tooltip: on ? 'Remove bookmark' : 'Bookmark post',
@@ -328,13 +431,120 @@ class _FanPostCardState extends State<FanPostCard> {
           );
         },
       ),
-      XAction(
-        icon: Icons.ios_share_rounded,
-        tooltip: 'Share post',
-        onTap: () => _action('share'),
+      if (detail)
+        XAction(
+          icon: Icons.ios_share_rounded,
+          tooltip: 'Share post',
+          onTap: () => _action('share'),
+        ),
+    ];
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: items,
+    );
+  }
+
+  /// The post this one quotes (or, for a plain repost, the reposted post).
+  Widget _quoteEmbed() {
+    final name = _post['q_name'];
+    final available = name != null;
+    final text = '${_post['q_text'] ?? ''}';
+    final userId = '${_post['q_user_id'] ?? ''}';
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 4),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: available ? () => _openPost(_quoteOf) : null,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Ui.line),
+          ),
+          child: !available
+              ? Text(
+                  'This post is unavailable.',
+                  style: TextStyle(color: Ui.muted),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        FanAvatar(
+                          name: '$name',
+                          seed: userId,
+                          size: 22,
+                          imageUrl: FanZoneService.avatarUrl(
+                            userId,
+                            _post['q_avatar_at'],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: '$name',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text:
+                                      '  @${FanZoneService.handle(userId)} · ${fanTimeAgo(_post['q_at']).replaceAll(' ago', '')}',
+                                  style: TextStyle(color: Ui.muted, fontSize: 12.5),
+                                ),
+                              ],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (text.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text.rich(
+                          TextSpan(
+                            children: xRichSpans(
+                              text,
+                              base: const TextStyle(fontSize: 14.5, height: 1.38),
+                            ),
+                          ),
+                          maxLines: 6,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    if (_post['q_has_image'] == 1)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 220),
+                            child: Image.network(
+                              FanZoneService.imageUrl(_quoteOf),
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, e, s) => const SizedBox(
+                                height: 60,
+                                child: Center(child: Text('Image unavailable')),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+        ),
       ),
-    ],
-  );
+    );
+  }
 
   Widget _content(bool detail) {
     final kindKey = '${_post['kind']}';
@@ -371,6 +581,7 @@ class _FanPostCardState extends State<FanPostCard> {
           ),
         FanMatchLink(snapshot: '${_post['match_json'] ?? ''}', text: text),
         if (_post['has_image'] == 1) _media(detail),
+        if (_quoteOf.isNotEmpty && !_isRepost) _quoteEmbed(),
         for (final link in videoLinks)
           FanPostVideo(
             key: ValueKey(link),
@@ -482,7 +693,16 @@ class _FanPostCardState extends State<FanPostCard> {
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Wrap(
                 spacing: 20,
+                runSpacing: 6,
                 children: [
+                  Text(
+                    '${_post['views'] ?? 0} Views',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  Text(
+                    '${_post['reposts'] ?? 0} Reposts',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
                   Text(
                     '${_post['likes'] ?? 0} Likes',
                     style: const TextStyle(fontWeight: FontWeight.w700),
@@ -495,9 +715,51 @@ class _FanPostCardState extends State<FanPostCard> {
               ),
             ),
             const XDivider(),
-            _actions(liked),
+            _actions(liked, detail: true),
             const XDivider(),
           ],
+        ),
+      );
+    if (_isRepost)
+      return InkWell(
+        onTap: _thread,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: Ui.line, width: .6)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const SizedBox(width: 24),
+                  Icon(Icons.repeat_rounded, size: 15, color: Ui.muted),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: InkWell(
+                      onTap: _profile,
+                      child: Text(
+                        mine ? 'You reposted' : '${_post['name']} reposted',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Ui.muted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  _menu(mine),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: _quoteEmbed(),
+              ),
+            ],
+          ),
         ),
       );
     return InkWell(
@@ -550,7 +812,7 @@ class _FanPostCardState extends State<FanPostCard> {
                     ],
                   ),
                   _content(false),
-                  _actions(liked),
+                  _actions(liked, detail: false),
                 ],
               ),
             ),
@@ -582,4 +844,150 @@ class _FanImage extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Bottom sheet that adds a comment to a post and publishes it as a quote.
+class _QuoteComposer extends StatefulWidget {
+  final Map<String, dynamic> post;
+  const _QuoteComposer({required this.post});
+  @override
+  State<_QuoteComposer> createState() => _QuoteComposerState();
+}
+
+class _QuoteComposerState extends State<_QuoteComposer> {
+  final _text = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  Future<void> _publish() async {
+    if (_busy || _text.text.trim().isEmpty) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await FanZoneService.publish(
+        kind: 'banter',
+        text: _text.text,
+        quoteOf: '${widget.post['id']}',
+      );
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = e.toString().replaceFirst('Exception: ', '');
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.post;
+    final userId = '${p['user_id']}';
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        12 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              TextButton(
+                onPressed: _busy ? null : () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              const Spacer(),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _text,
+                builder: (_, value, _) => FilledButton(
+                  onPressed: _busy || value.text.trim().isEmpty ? null : _publish,
+                  style: FilledButton.styleFrom(
+                    shape: const StadiumBorder(),
+                    minimumSize: const Size(0, 36),
+                  ),
+                  child: Text(_busy ? 'Posting…' : 'Post'),
+                ),
+              ),
+            ],
+          ),
+          TextField(
+            controller: _text,
+            autofocus: true,
+            enabled: !_busy,
+            minLines: 2,
+            maxLines: 6,
+            maxLength: 1000,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              hintText: 'Add a comment',
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Ui.line),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    FanAvatar(
+                      name: '${p['name']}',
+                      seed: userId,
+                      size: 22,
+                      imageUrl: FanZoneService.avatarUrl(userId, p['avatar_at']),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${p['name']}  @${FanZoneService.handle(userId)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
+                ),
+                if ('${p['text']}'.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      '${p['text']}',
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
