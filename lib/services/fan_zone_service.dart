@@ -64,6 +64,19 @@ class FanZoneService {
   static String handle(String id) =>
       'fan_${id.length <= 12 ? id : id.substring(0, 12)}';
 
+  /// The @username shown for a fan: the one they chose (sent by the server as
+  /// `handle`), otherwise the generated default.
+  static String handleOf(Map m, String id) {
+    final h = '${m['handle'] ?? ''}'.trim();
+    return h.isNotEmpty ? h : handle(id);
+  }
+
+  /// Sets the signed-in fan's @username. Throws with the server's message.
+  static Future<String> setHandle(String handle) async {
+    final data = await call('social/handle', body: {'handle': handle});
+    return '${data['handle'] ?? handle}';
+  }
+
   /// Premium awarded by the weekly Fan Zone leaderboard (separate from a paid
   /// ad-free subscription). The Worker is authoritative for the expiry.
   static Future<bool> hasWeeklyPremium() async {
