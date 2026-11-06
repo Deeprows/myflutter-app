@@ -7,6 +7,7 @@ import '../services/fan_zone_service.dart';
 import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
 import 'fan_post_card.dart';
+import 'fan_mentions.dart';
 import 'fan_profile_screen.dart';
 import 'fan_widgets.dart';
 import 'fan_x_widgets.dart';
@@ -337,7 +338,7 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
                               ),
                               TextSpan(
                                 text:
-                                    '  @${FanZoneService.handle('${c['user_id']}')} · ${fanTimeAgo(c['at']).replaceAll(' ago', '')}',
+                                    '  @${FanZoneService.handleOf(c, '${c['user_id']}')} · ${fanTimeAgo(c['at']).replaceAll(' ago', '')}',
                                 style: TextStyle(color: Ui.muted, fontSize: 12.5),
                               ),
                             ],
@@ -404,6 +405,7 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
                         children: xRichSpans(
                           text,
                           base: const TextStyle(fontSize: 15, height: 1.38),
+                          onMention: (h) => openProfileByHandle(context, h),
                         ),
                       ),
                     ),
@@ -565,6 +567,10 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
                   ),
                 ),
               ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: MentionSuggestions(controller: _text),
+            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
               child: Row(
