@@ -126,7 +126,7 @@ export default {
       return subscriptions(request, env, url);
     }
 
-    if (url.pathname.startsWith("/fan/")) return fanZone(request, env, url);
+    if (url.pathname.startsWith("/fan/")) return fanZone(request, env, url, ctx);
 
     // Feed routes.
     const m = /^\/feed\/([a-z0-9_-]+\.json)$/i.exec(url.pathname);
@@ -1763,6 +1763,12 @@ const FAN_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS fan_comment_reports (comment_id TEXT NOT NULL,user_id TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(comment_id,user_id))`,
   `CREATE TABLE IF NOT EXISTS fan_social_limits (bucket TEXT PRIMARY KEY,count INTEGER NOT NULL,expires INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_limits (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL)`,
+  // Social notifications (new follower / like / comment) + the phones that receive them as push.
+  `CREATE TABLE IF NOT EXISTS fan_notifications (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, actor_id TEXT NOT NULL, actor_name TEXT NOT NULL DEFAULT '', post_id TEXT NOT NULL DEFAULT '', text TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL, dedupe TEXT NOT NULL, UNIQUE(user_id,dedupe))`,
+  `CREATE INDEX IF NOT EXISTS fan_notifications_user ON fan_notifications(user_id,at DESC)`,
+  `CREATE TABLE IF NOT EXISTS fan_notify_read (user_id TEXT PRIMARY KEY, read_at INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS fan_devices (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, updated_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS fan_devices_user ON fan_devices(user_id,updated_at DESC)`,
   // Community moderation: a banned fan cannot sign in, post, comment, chat or use any Fan Zone route.
   `CREATE TABLE IF NOT EXISTS fan_bans (user_id TEXT PRIMARY KEY, reason TEXT NOT NULL DEFAULT '', banned_at INTEGER NOT NULL)`,
   // One-time clean slate: predictions made before the result-checking fix that never got a verified score.
@@ -1801,7 +1807,7 @@ async function fanFixtures(env,timeout=10000) {
     return {...f, kickoff:k};
   }).filter(f => f.id && Number.isFinite(new Date(f.kickoff).getTime()));
 }
-async function fanZone(request, env, url) {
+async function fanZone(request, env, url, ctx) {
   const fail = (message, status = 400) => json({error:message}, status);
   if (!env.DB) return fail('Fan Zone needs the Worker DB binding. See FAN_ZONE_SETUP.md.', 503);
   try {
@@ -1906,7 +1912,7 @@ async function fanZone(request, env, url) {
     if(url.pathname==='/fan/ai-predict')return await fanAiPredict(request,env,id);
     const user = await db.prepare('SELECT * FROM fan_users WHERE id=?').bind(id).first();
     if(request.method==='POST' && url.pathname==='/fan/profile/image')return await fanProfileImage(request,env,user,id);
-    if(url.pathname.startsWith('/fan/social/'))return await fanSocial(request,env,url,user,id);
+    if(url.pathname.startsWith('/fan/social/'))return await fanSocial(request,env,url,user,id,ctx);
     if(url.pathname==='/fan/posts' || url.pathname==='/fan/post' || url.pathname.startsWith('/fan/post/')) {
       return await fanPosts(request,env,url,user,id);
     }
@@ -2897,7 +2903,74 @@ async function fanSocialBudget(db,id,action,max) {
   await db.prepare('DELETE FROM fan_social_limits WHERE expires<?').bind(now).run();
   return counter.count<=max;
 }
-async function fanSocial(request,env,url,user,id) {
+// ---- Social notifications: new follower, like, comment ------------------
+// Stored for the in-app bell and sent as a push (FCM) when the Worker has a
+// FIREBASE_SERVICE_ACCOUNT secret. Pushing is best effort and never blocks or
+// fails the follow / like / comment itself.
+function fanNote(kind,actorName,text) {
+  const who=String(actorName || 'Someone').slice(0,30);
+  if(kind==='follow')return {title:'New follower',body:`${who} started following you`};
+  if(kind==='like')return {title:'New like',body:`${who} liked your post`};
+  return {title:'New comment',body:`${who} commented: ${String(text || '').replace(/\s+/g,' ').trim().slice(0,90)}`};
+}
+async function fanNotify(env,ctx,n) {
+  try {
+    if(!n.userId || n.userId===n.actorId)return;
+    const id=crypto.randomUUID(),now=Date.now();
+    const r=await env.DB.prepare('INSERT OR IGNORE INTO fan_notifications(id,user_id,kind,actor_id,actor_name,post_id,text,at,dedupe) VALUES(?,?,?,?,?,?,?,?,?)')
+      .bind(id,n.userId,n.kind,n.actorId,String(n.actorName || '').slice(0,30),n.postId || '',String(n.text || '').slice(0,200),now,n.dedupe).run();
+    // D1 reports meta.changes, node:sqlite reports changes. 0 = this exact event was already notified.
+    if(!(Number(r?.meta?.changes ?? r?.changes ?? 0)>0))return;
+    await env.DB.prepare('DELETE FROM fan_notifications WHERE user_id=? AND id NOT IN (SELECT id FROM fan_notifications WHERE user_id=? ORDER BY at DESC LIMIT 100)').bind(n.userId,n.userId).run();
+    const note=fanNote(n.kind,n.actorName,n.text);
+    const task=fanPush(env,n.userId,{...note,kind:n.kind,postId:n.postId || '',actorId:n.actorId,nid:id});
+    if(ctx && typeof ctx.waitUntil==='function')ctx.waitUntil(task);else await task;
+  } catch(e) {console.log('fan notify failed',String(e && e.message || e));}
+}
+let fanFcm={token:'',exp:0,account:''};
+function fanB64Url(bytes) {
+  let bin='';for(const b of bytes)bin+=String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+async function fanFcmAccess(sa) {
+  const now=Math.floor(Date.now()/1000);
+  if(fanFcm.token && fanFcm.account===sa.client_email && fanFcm.exp>now+60)return fanFcm.token;
+  const enc=o=>fanB64Url(new TextEncoder().encode(JSON.stringify(o)));
+  const head=enc({alg:'RS256',typ:'JWT'});
+  const claim=enc({iss:sa.client_email,scope:'https://www.googleapis.com/auth/firebase.messaging',aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+3600});
+  const der=Uint8Array.from(atob(String(sa.private_key).replace(/-----[A-Z ]+-----/g,'').replace(/\s+/g,'')),c=>c.charCodeAt(0));
+  const key=await crypto.subtle.importKey('pkcs8',der,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['sign']);
+  const sig=new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,new TextEncoder().encode(head+'.'+claim)));
+  const res=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:head+'.'+claim+'.'+fanB64Url(sig)}),signal:AbortSignal.timeout(10000)});
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok || !data.access_token)throw new Error('Firebase sign-in failed');
+  fanFcm={token:data.access_token,exp:now+Number(data.expires_in || 3000),account:sa.client_email};
+  return fanFcm.token;
+}
+async function fanPush(env,userId,note) {
+  try {
+    if(!env.FIREBASE_SERVICE_ACCOUNT)return;
+    const sa=JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
+    if(!sa.client_email || !sa.private_key || !sa.project_id)return;
+    const devices=await env.DB.prepare('SELECT token FROM fan_devices WHERE user_id=? ORDER BY updated_at DESC LIMIT 5').bind(userId).all();
+    if(!devices.results.length)return;
+    const access=await fanFcmAccess(sa);
+    for(const d of devices.results) {
+      const res=await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`,{method:'POST',
+        headers:{authorization:`Bearer ${access}`,'content-type':'application/json'},signal:AbortSignal.timeout(10000),
+        body:JSON.stringify({message:{token:d.token,notification:{title:note.title,body:note.body},
+          data:{type:'social',kind:note.kind,postId:note.postId || '',actorId:note.actorId || '',nid:note.nid || '',title:note.title,body:note.body},
+          android:{priority:'HIGH',notification:{channel_id:'social'}}}})});
+      if(!res.ok) {
+        const text=await res.text().catch(()=>'');
+        // The phone uninstalled the app or the token expired: stop sending to it.
+        if(res.status===404 || /UNREGISTERED/.test(text))await env.DB.prepare('DELETE FROM fan_devices WHERE token=?').bind(d.token).run();
+      }
+    }
+  } catch(e) {console.log('fan push failed',String(e && e.message || e));}
+}
+async function fanSocial(request,env,url,user,id,ctx) {
   const db=env.DB,fail=(error,status=400)=>json({error},status),path=url.pathname;
   if(!['GET','POST'].includes(request.method))return fail('Method not allowed',405);
   if(request.method==='GET' && path==='/fan/social/profile') {
@@ -2977,6 +3050,12 @@ async function fanSocial(request,env,url,user,id) {
     const comments=result.results.slice(0,30),last=comments.at(-1);
     return json({comments,next:result.results.length>30?`${last.at}:${last.id}`:null,post,viewer_id:id});
   }
+  if(request.method==='GET' && path==='/fan/social/notifications') {
+    const rows=await db.prepare(`SELECT n.id,n.kind,n.actor_id,COALESCE((SELECT u.name FROM fan_users u WHERE u.id=n.actor_id),n.actor_name) AS actor_name,n.post_id,n.text,n.at,COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=n.actor_id),0) AS avatar_at FROM fan_notifications n WHERE n.user_id=? ORDER BY n.at DESC LIMIT 50`).bind(id).all();
+    const read=await db.prepare('SELECT read_at FROM fan_notify_read WHERE user_id=?').bind(id).first();
+    const readAt=Number(read?.read_at || 0);
+    return json({notifications:rows.results,read_at:readAt,unread:rows.results.filter(n=>n.at>readAt).length,viewer_id:id});
+  }
   if(request.method!=='POST')return fail('Not found',404);
   if(!user)return fail('Choose your Fan Zone nickname first.',403);
   const raw=await request.text();if(raw.length>4096)return fail('Request too large',413);
@@ -2999,24 +3078,43 @@ async function fanSocial(request,env,url,user,id) {
     await db.batch(saves);
     return json({ok:true});
   }
+  if(path==='/fan/social/notifications-read') {
+    await db.prepare('INSERT INTO fan_notify_read(user_id,read_at) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET read_at=excluded.read_at').bind(id,Date.now()).run();
+    return json({ok:true});
+  }
+  if(path==='/fan/social/device') {
+    const t=typeof b.token==='string'?b.token.trim():'';
+    if(t.length<20 || t.length>1024 || /\s/.test(t))return fail('Invalid device');
+    if(b.enabled===false)await db.prepare('DELETE FROM fan_devices WHERE token=? AND user_id=?').bind(t,id).run();
+    else {
+      await db.prepare('INSERT INTO fan_devices(token,user_id,updated_at) VALUES(?,?,?) ON CONFLICT(token) DO UPDATE SET user_id=excluded.user_id,updated_at=excluded.updated_at').bind(t,id,Date.now()).run();
+      await db.prepare('DELETE FROM fan_devices WHERE user_id=? AND token NOT IN (SELECT token FROM fan_devices WHERE user_id=? ORDER BY updated_at DESC LIMIT 5)').bind(id,id).run();
+    }
+    return json({ok:true});
+  }
   if(path==='/fan/social/follow') {
     if(typeof b.id!=='string' || !/^[a-f0-9]{64}$/.test(b.id) || typeof b.following!=='boolean')return fail('Invalid follow request');
     if(b.id===id)return fail('You cannot follow yourself');
     if(!await db.prepare('SELECT id FROM fan_users WHERE id=?').bind(b.id).first())return fail('Fan not found',404);
     if(!await fanSocialBudget(db,id,'follow',120))return fail('Too many follow changes. Try next hour.',429);
-    if(b.following)await db.prepare('INSERT OR IGNORE INTO fan_follows(follower_id,following_id,at) VALUES(?,?,?)').bind(id,b.id,Date.now()).run();
-    else await db.prepare('DELETE FROM fan_follows WHERE follower_id=? AND following_id=?').bind(id,b.id).run();
+    if(b.following) {
+      await db.prepare('INSERT OR IGNORE INTO fan_follows(follower_id,following_id,at) VALUES(?,?,?)').bind(id,b.id,Date.now()).run();
+      await fanNotify(env,ctx,{userId:b.id,kind:'follow',actorId:id,actorName:user.name,dedupe:`follow:${id}`});
+    } else await db.prepare('DELETE FROM fan_follows WHERE follower_id=? AND following_id=?').bind(id,b.id).run();
     const count=await db.prepare('SELECT COUNT(*) AS followers FROM fan_follows WHERE following_id=?').bind(b.id).first();
     return json({ok:true,following:b.following,...count});
   }
   if(path==='/fan/social/like' || path==='/fan/social/comment') {
     if(typeof b.id!=='string' || !/^[a-f0-9-]{36}$/.test(b.id))return fail('Invalid post');
-    if(!await db.prepare('SELECT id FROM fan_posts WHERE id=? AND hidden=0').bind(b.id).first())return fail('Post not found',404);
+    const target=await db.prepare('SELECT id,user_id FROM fan_posts WHERE id=? AND hidden=0').bind(b.id).first();
+    if(!target)return fail('Post not found',404);
     if(path==='/fan/social/like') {
       if(typeof b.liked!=='boolean')return fail('Invalid like request');
       if(!await fanSocialBudget(db,id,'like',300))return fail('Too many like changes. Try next hour.',429);
-      if(b.liked)await db.prepare('INSERT OR IGNORE INTO fan_likes(post_id,user_id,at) VALUES(?,?,?)').bind(b.id,id,Date.now()).run();
-      else await db.prepare('DELETE FROM fan_likes WHERE post_id=? AND user_id=?').bind(b.id,id).run();
+      if(b.liked) {
+        await db.prepare('INSERT OR IGNORE INTO fan_likes(post_id,user_id,at) VALUES(?,?,?)').bind(b.id,id,Date.now()).run();
+        await fanNotify(env,ctx,{userId:target.user_id,kind:'like',actorId:id,actorName:user.name,postId:b.id,dedupe:`like:${b.id}:${id}`});
+      } else await db.prepare('DELETE FROM fan_likes WHERE post_id=? AND user_id=?').bind(b.id,id).run();
       const count=await db.prepare('SELECT COUNT(*) AS likes FROM fan_likes WHERE post_id=?').bind(b.id).first();
       return json({ok:true,liked:b.liked,...count});
     }
@@ -3027,6 +3125,7 @@ async function fanSocial(request,env,url,user,id) {
     if(!await db.prepare('UPDATE fan_users SET last_post=? WHERE id=? AND last_post<? RETURNING id').bind(now,id,now-10000).first())return fail('Please wait 10 seconds between posts and comments.',429);
     const commentId=crypto.randomUUID();
     await db.prepare('INSERT INTO fan_comments(id,post_id,user_id,text,at) VALUES(?,?,?,?,?)').bind(commentId,b.id,id,text,now).run();
+    await fanNotify(env,ctx,{userId:target.user_id,kind:'comment',actorId:id,actorName:user.name,postId:b.id,text,dedupe:`comment:${commentId}`});
     return json({ok:true,id:commentId});
   }
   if(['/fan/social/comment-delete','/fan/social/comment-report'].includes(path)) {
