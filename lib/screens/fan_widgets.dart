@@ -206,6 +206,12 @@ class FanKind {
         );
       case 'prediction':
         return FanKind('Prediction', Icons.sports_soccer_rounded, Ui.green);
+      case 'video':
+        return const FanKind(
+          'Embed video',
+          Icons.smart_display_rounded,
+          Color(0xFF8E7CFF),
+        );
       default:
         return FanKind('Banter', Icons.forum_rounded, Ui.redSoft);
     }
