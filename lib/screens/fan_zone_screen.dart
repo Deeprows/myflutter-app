@@ -1638,6 +1638,11 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             'Every registered fan starts on zero. Points are added as soon as a match ends and its final score is confirmed.',
             style: TextStyle(color: Ui.muted),
           ),
+          const SizedBox(height: 6),
+          const Text(
+            'The top 3 weekly leaderboard winners receive 7 days of Premium access and a blue verification tick.',
+            style: TextStyle(color: Color(0xFF1D9BF0), fontSize: 12, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 16),
           ..._winnerCards(),
           if (!_loadedOnce) const LinearProgressIndicator(),
@@ -1694,11 +1699,21 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                             vertical: 16,
                             horizontal: 4,
                           ),
-                          child: Text(
-                            '${rows[i]['name']}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  '${rows[i]['name']}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              if (rows[i]['is_premium'] == 1 || rows[i]['is_premium'] == true) ...[
+                                const SizedBox(width: 4),
+                                const Icon(Icons.verified_rounded, color: Color(0xFF1D9BF0), size: 15),
+                              ],
+                            ],
                           ),
                         ),
                       ),
