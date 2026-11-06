@@ -541,7 +541,7 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
               const SizedBox(width: 12),
               const Expanded(
                 child: Text(
-                  'Go ad-free',
+                  'Upgrade To Premium',
                   style: TextStyle(
                     fontSize: 21,
                     fontWeight: FontWeight.w900,
@@ -555,6 +555,16 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2.2),
                 ),
             ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Top 3 users on the table each week get premium for the week.',
+            style: TextStyle(
+              color: Ui.redSoft,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              height: 1.35,
+            ),
           ),
           const SizedBox(height: 14),
           Text(
