@@ -17,6 +17,7 @@ import 'fan_x_widgets.dart';
 import 'fan_mentions.dart';
 import 'fan_profile_screen.dart';
 import 'fan_thread_screen.dart';
+import 'promote_post_screen.dart';
 
 /// The same post and actions appear in Banter, profiles and comment threads.
 class FanPostCard extends StatefulWidget {
@@ -24,10 +25,14 @@ class FanPostCard extends StatefulWidget {
   final String viewerId;
   final bool openThread;
   final VoidCallback? onChanged, onBlocked, onReply;
+
+  /// True only for the Deeprowss admin: shows Pin / Unpin in the post menu.
+  final bool isAdmin;
   const FanPostCard({
     super.key,
     required this.post,
     required this.viewerId,
+    this.isAdmin = false,
     this.openThread = true,
     this.onChanged,
     this.onBlocked,
@@ -194,42 +199,94 @@ class _FanPostCardState extends State<FanPostCard> {
   }
 
   Future<void> _promotePost() async {
-    final postId = '${_post['id']}';
-    final postText = '${_post['text'] ?? ''}'.trim();
-    final snippet = postText.length > 220 ? '${postText.substring(0, 220)}…' : postText;
-    final message = [
-      'Hello Deeprowss Admin, I want to promote my post on the thread page.',
-      'Post ID: $postId',
-      if (snippet.isNotEmpty) 'Post: $snippet',
-      'Please explain the available promotion durations, prices and manual payment steps.',
-    ].join('\n');
-    final whatsapp = Uri.https('wa.me', '/2347041629630', {'text': message});
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Promote this post'),
-        content: const Text(
-          'Make an enquiry with the Deeprowss admin. You can pay manually for '
-          'the number of days you want your post to appear at the top of the '
-          'thread page. Ask the admin about available durations, pricing and '
-          'payment confirmation. Your post will be promoted after the admin '
-          'confirms your payment.',
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => PromotePostScreen(
+          postId: '${_post['id']}',
+          postText: '${_post['text'] ?? ''}',
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+      ),
+    );
+  }
+
+  bool get _isPinned => _post['pinned'] == 1 || _post['pinned'] == true;
+
+  /// Admin only. Pinned posts show on top of the Thread page as "Sponsored".
+  Future<void> _pin() async {
+    final days = await showDialog<int>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Pin as Sponsored post'),
+        children: [
+          for (final d in const [1, 3, 7, 14, 30])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, d),
+              child: Text('$d day${d == 1 ? '' : 's'}'),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 0),
+            child: const Text('Until I unpin it'),
           ),
-          FilledButton.icon(
-            icon: const Icon(Icons.chat_rounded),
-            label: const Text('Chat admin'),
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              final opened = await openExternally(whatsapp.toString());
-              if (!opened) _notice('Could not open WhatsApp. Please try again.');
-            },
+        ],
+      ),
+    );
+    if (days == null) return;
+    try {
+      await FanZoneService.pinPost('${_post['id']}', pinned: true, days: days);
+      if (!mounted) return;
+      setState(() => _post['pinned'] = 1);
+      _notice('Pinned as Sponsored post');
+      widget.onChanged?.call();
+    } catch (e) {
+      _notice(e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _unpin() async {
+    try {
+      await FanZoneService.pinPost('${_post['id']}', pinned: false);
+      if (!mounted) return;
+      setState(() => _post['pinned'] = 0);
+      _notice('Post unpinned');
+      widget.onChanged?.call();
+    } catch (e) {
+      _notice(e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  /// "Ad" tag (admin ads) and "Sponsored" tag (pinned posts) shown above a post.
+  Widget _tags() {
+    final ad = _post['is_ad'] == 1 || _post['is_ad'] == true;
+    if (!ad && !_isPinned) return const SizedBox.shrink();
+    Widget chip(String text, IconData icon) => Container(
+      margin: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Ui.red.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: Ui.redSoft),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              color: Ui.redSoft,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
           ),
+        ],
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          if (ad) chip('Ad', Icons.campaign_rounded),
+          if (_isPinned) chip('Sponsored', Icons.push_pin_rounded),
         ],
       ),
     );
@@ -238,6 +295,14 @@ class _FanPostCardState extends State<FanPostCard> {
   Future<void> _action(String action) async {
     if (action == 'promote') {
       await _promotePost();
+      return;
+    }
+    if (action == 'pin') {
+      await _pin();
+      return;
+    }
+    if (action == 'unpin') {
+      await _unpin();
       return;
     }
     try {
@@ -395,15 +460,29 @@ class _FanPostCardState extends State<FanPostCard> {
           ]
         : [
       const PopupMenuItem(value: 'share', child: Text('Share post')),
-      if (!widget.openThread)
-        const PopupMenuItem(
-          value: 'promote',
+      const PopupMenuItem(
+        value: 'promote',
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.campaign_outlined, size: 18),
+            SizedBox(width: 9),
+            Text('Promote this post'),
+          ],
+        ),
+      ),
+      if (widget.isAdmin)
+        PopupMenuItem(
+          value: _isPinned ? 'unpin' : 'pin',
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.campaign_outlined, size: 18),
-              SizedBox(width: 9),
-              Text('Promote this post'),
+              Icon(
+                _isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                size: 18,
+              ),
+              const SizedBox(width: 9),
+              Text(_isPinned ? 'Unpin post' : 'Pin as Sponsored'),
             ],
           ),
         ),
@@ -865,6 +944,7 @@ class _FanPostCardState extends State<FanPostCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _tags(),
             Row(
               children: [
                 _avatar(48),
@@ -1026,6 +1106,7 @@ class _FanPostCardState extends State<FanPostCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _tags(),
                   Row(
                     children: [
                       Expanded(
