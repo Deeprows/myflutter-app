@@ -531,7 +531,6 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
     ),
     body: Column(
       children: [
-        if (_loading) const LinearProgressIndicator(minHeight: 2),
         if (_error != null)
           Padding(padding: const EdgeInsets.all(16), child: Text(_error!)),
         if (_profile != null)
@@ -819,7 +818,6 @@ class _EditFanProfileState extends State<_EditFanProfile> {
         bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
       ),
       children: [
-        if (_saving) const LinearProgressIndicator(minHeight: 2),
         SizedBox(
           height: _coverHeight + _avatarSize / 2 + 8,
           child: Stack(
@@ -990,7 +988,6 @@ class _FanPeopleScreenState extends State<FanPeopleScreen> {
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
-          if (_loading) const LinearProgressIndicator(),
           if (_error != null)
             Padding(padding: const EdgeInsets.all(16), child: Text(_error!)),
           if (!_loading && _error == null && _people.isEmpty)
