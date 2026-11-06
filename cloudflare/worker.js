@@ -2151,7 +2151,7 @@ async function fanPosts(request,env,url,user,id,ctx) {
     const cursor=fanSocialCursor(url.searchParams.get('before'),'post');
     if(cursor===false)return fail('Invalid page cursor');
     const rows=await db.prepare(`SELECT ${FAN_SOCIAL_POST_FIELDS} FROM fan_posts p JOIN fan_users u ON u.id=p.user_id WHERE p.hidden=0 AND (?='all' OR p.kind=?) AND (?='' OR p.user_id=?) AND (?='all' OR EXISTS(SELECT 1 FROM fan_follows f WHERE f.follower_id=? AND f.following_id=p.user_id)) AND (p.at<? OR (p.at=? AND p.id<?)) ORDER BY p.at DESC,p.id DESC LIMIT 41`)
-      .bind(kind,kind,author,author,scope,id,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
+      .bind(id,kind,kind,author,author,scope,id,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.at ?? Number.MAX_SAFE_INTEGER,cursor?.id ?? '~').all();
     const posts=rows.results.slice(0,40),last=posts.at(-1);
     return json({posts,next:rows.results.length>40?`${last.at}:${last.id}`:null,id,uploads_enabled:Boolean(env.FAN_MEDIA)});
   }
