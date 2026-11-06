@@ -2154,7 +2154,7 @@ async function fanPosts(request,env,url,user,id,ctx) {
   const fail=(error,status=400)=>json({error},status);
   if(request.method==='GET' && url.pathname==='/fan/posts') {
     const kind=url.searchParams.get('kind') || 'all';
-    if(!['all','prediction','betslip','banter'].includes(kind))return fail('Invalid post filter');
+    if(!['all','prediction','betslip','banter','video'].includes(kind))return fail('Invalid post filter');
     const author=url.searchParams.get('author') || '';
     const scope=url.searchParams.get('scope') || 'all';
     if((author && !/^[a-f0-9]{64}$/.test(author)) || !['all','following'].includes(scope))return fail('Invalid feed');
@@ -2172,7 +2172,7 @@ async function fanPosts(request,env,url,user,id,ctx) {
     if(!form)return fail('Invalid upload or image exceeds 4 MB.',413);
     const kind=String(form.get('kind') || 'banter');
     const text=String(form.get('text') || '').trim();
-    if(!['prediction','betslip','banter'].includes(kind) || text.length>5000)return fail('Choose a post type and keep text within 5,000 characters');
+    if(!['prediction','betslip','banter','video'].includes(kind) || text.length>5000)return fail('Choose a post type and keep text within 5,000 characters');
     const tagged=String(form.get('match_key') || '');
     let taggedFixture=null;
     const rawMatchFixture=String(form.get('match_fixture') || '');
