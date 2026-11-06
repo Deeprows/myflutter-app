@@ -27,6 +27,7 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
   Map<String, dynamic>? _post;
   List<Map<String, dynamic>> _comments = [];
   String _viewer = '';
+  bool _isAdmin = false;
   String? _next, _error;
   bool _loading = false, _sending = false, _picking = false, _viewed = false;
 
@@ -71,6 +72,7 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
       setState(() {
         _post = Map<String, dynamic>.from(data['post'] as Map);
         _viewer = '${data['viewer_id']}';
+        _isAdmin = data['is_admin'] == true;
         final rows = FanZoneService.rows(
           data['comments'],
         ).where((c) => !blocked.contains(c['user_id']));
@@ -503,86 +505,6 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
     );
   }
 
-  /// A clearly labelled, admin-owned sponsored post shown in the reply stream.
-  Widget _threadAdCard() => Container(
-    margin: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-    padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-    decoration: BoxDecoration(
-      color: Ui.card,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: Ui.line, width: .8),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Ui.red.withValues(alpha: .14),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                'Ad',
-                style: TextStyle(
-                  color: Ui.redSoft,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-            const Spacer(),
-            Text('Sponsored', style: TextStyle(color: Ui.muted, fontSize: 11)),
-          ],
-        ),
-        const SizedBox(height: 11),
-        Row(
-          children: [
-            CircleAvatar(
-              radius: 19,
-              backgroundColor: Ui.red,
-              child: const Text(
-                'D',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Deeprowss Admin',
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-                  Text('@DeeprowssAdmin · deeprows@gmail.com',
-                    style: TextStyle(color: Ui.muted, fontSize: 12),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          'Promote your post on Deeprowss. Make an enquiry and pay manually '
-          'for the number of days you want your post to appear at the top of '
-          'the thread page. Contact the admin for available durations, prices '
-          'and booking details.',
-          style: TextStyle(fontSize: 14, height: 1.45),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Icon(Icons.mail_outline_rounded, size: 15, color: Ui.muted),
-            const SizedBox(width: 6),
-            Text('deeprows@gmail.com',
-              style: TextStyle(color: Ui.muted, fontSize: 12)),
-          ],
-        ),
-      ],
-    ),
-  );
-
   Widget _composer() {
     final target = _replyingTo;
     final hint = target == null
@@ -807,6 +729,7 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
                     FanPostCard(
                       post: _post!,
                       viewerId: _viewer,
+                      isAdmin: _isAdmin,
                       openThread: false,
                       onReply: () => _replyTo(null),
                       onChanged: _load,
@@ -817,12 +740,7 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
                       padding: EdgeInsets.all(20),
                       child: Text('No replies yet. Start the conversation.'),
                     ),
-                  for (var i = 0; i < roots.length; i++) ...[
-                    _thread(roots[i]),
-                    // One sponsored post after each four top-level replies
-                    // (the root post plus four replies makes five posts).
-                    if ((i + 1) % 4 == 0) _threadAdCard(),
-                  ],
+                  for (final root in roots) _thread(root),
                   if (_next != null)
                     OutlinedButton(
                       onPressed: _loading ? null : () => _load(more: true),
