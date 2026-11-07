@@ -566,7 +566,7 @@ class _FixtureSupportCard extends StatelessWidget {
                           Icon(Icons.favorite_rounded, color: Ui.red, size: 28),
                           const SizedBox(width: 10),
                           Flexible(child: Builder(builder: (_) {
-                            final words = 'SUPPORT US'.tr.trim().split(' ');
+                            final words = 'SUPPORT ME'.tr.trim().split(' ');
                             final last = words.removeLast();
                             return Text.rich(
                               TextSpan(
@@ -687,7 +687,7 @@ class _Header extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Ui.red.withValues(alpha: .20),
+            Ui.red.withValues(alpha: Ui.isLight ? .05 : .20),
             Ui.bg,
           ],
         ),
@@ -1026,7 +1026,7 @@ class _SectionLabel extends StatelessWidget {
           Text(
             text,
             style: TextStyle(
-              color: live ? Colors.white : Ui.muted,
+              color: live ? Ui.text : Ui.muted,
               fontSize: 10.5,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.0,
@@ -1101,8 +1101,7 @@ class _FilterChip extends StatelessWidget {
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                     color: selected
-                        ? Colors.white
-                        : Ui.muted,
+                        ? Ui.text : Ui.muted,
                   ),
                 ),
               ],
