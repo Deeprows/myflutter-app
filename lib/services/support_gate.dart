@@ -121,11 +121,11 @@ class SupportGate {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Thanks 💗',
+                    Text('Thanks 💗',
                         style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w900,
-                            color: Colors.white)),
+                            color: Ui.text)),
                     const SizedBox(height: 2),
                     Text(
                       'Enjoy $m minutes of uninterrupted streaming.',
