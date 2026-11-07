@@ -68,7 +68,7 @@ class FixtureCard extends StatelessWidget {
         ? Ui.red
         : ended
             ? Ui.dim
-            : Colors.white;
+            : Ui.text;
 
     // -------------------------------------------------------------------------
     // CARD
@@ -81,7 +81,7 @@ class FixtureCard extends StatelessWidget {
         color: live
             ? Ui.red.withValues(alpha: .78)
             : ended
-                ? Colors.white.withValues(alpha: .08)
+                ? Ui.line
                 : Ui.red.withValues(alpha: .34),
         width: live ? 1.2 : 1,
       ),
@@ -174,7 +174,7 @@ class FixtureCard extends StatelessWidget {
                                     sc.scoreText,
                                     maxLines: 1,
                                     style: TextStyle(
-                                      color: ended ? Ui.dim : Colors.white,
+                                      color: ended ? Ui.dim : Ui.text,
                                       fontSize: 20,
                                       fontWeight: FontWeight.w900,
                                       height: 1.1,
@@ -200,7 +200,7 @@ class FixtureCard extends StatelessWidget {
                               style: TextStyle(
                                 color: ended
                                     ? Ui.dim
-                                    : Colors.white,
+                                    : Ui.text,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
                                 height: 1.1,
@@ -357,12 +357,12 @@ class _TeamLogo extends StatelessWidget {
         errorBuilder: (_, __, ___) => const _FallbackTeamLogo(),
         loadingBuilder: (context, child, progress) {
           if (progress == null) return child;
-          return const SizedBox(
+          return SizedBox(
             width: 16,
             height: 16,
             child: CircularProgressIndicator(
               strokeWidth: 1.5,
-              color: Colors.white38,
+              color: Ui.dim,
             ),
           );
         },
@@ -375,10 +375,10 @@ class _FallbackTeamLogo extends StatelessWidget {
   const _FallbackTeamLogo();
 
   @override
-  Widget build(BuildContext context) => const Icon(
+  Widget build(BuildContext context) => Icon(
         Icons.sports_soccer_rounded,
         size: 19,
-        color: Colors.white70,
+        color: Ui.dim,
       );
 }
 
@@ -439,7 +439,7 @@ class _Team extends StatelessWidget {
           style: TextStyle(
             color: muted
                 ? const Color(0xFF858B95)
-                : Colors.white,
+                : Ui.text,
             fontSize: 11.5,
             fontWeight: FontWeight.w700,
             height: 1.15,
