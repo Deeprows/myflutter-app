@@ -1706,7 +1706,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
 
   Widget _tableHead() {
     TextStyle st({bool strong = false}) => TextStyle(
-      color: strong ? Colors.white : Ui.muted,
+      color: strong ? Ui.text : Ui.muted,
       fontSize: 11.5,
       fontWeight: FontWeight.w900,
       letterSpacing: .4,
