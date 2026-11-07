@@ -942,7 +942,7 @@ class _Chip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .05),
+        color: Ui.text.withValues(alpha: .05),
         borderRadius: BorderRadius.circular(99),
         border: Border.all(color: Ui.line),
       ),
@@ -992,7 +992,7 @@ class _Action extends StatelessWidget {
             ),
             child: Column(
               children: [
-                Icon(icon, size: 22, color: Colors.white),
+                Icon(icon, size: 22, color: Ui.text),
                 const SizedBox(height: 6),
                 Text(label,
                     style: const TextStyle(
@@ -1060,7 +1060,7 @@ class _MiniAction extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 16, color: Colors.white),
+                Icon(icon, size: 16, color: Ui.text),
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(label,
