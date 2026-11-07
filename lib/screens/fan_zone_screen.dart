@@ -788,8 +788,8 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                       height: 68,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: .08),
-                        border: Border.all(color: Colors.white24),
+                        color: Ui.text.withValues(alpha: .08),
+                        border: Border.all(color: Ui.line),
                       ),
                       child: const Icon(Icons.person_rounded, size: 32),
                     )
@@ -1026,7 +1026,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: Colors.white.withValues(alpha: .06),
+                color: Ui.text.withValues(alpha: .06),
                 blurRadius: 12,
                 spreadRadius: 1,
               ),
@@ -1459,7 +1459,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
   Widget _scoreChip(String label, String value, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
     decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: .05),
+      color: Ui.text.withValues(alpha: .05),
       borderRadius: BorderRadius.circular(8),
     ),
     child: Row(
