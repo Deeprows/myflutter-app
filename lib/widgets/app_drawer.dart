@@ -693,41 +693,61 @@ Future<void> showSettingsSheet(BuildContext context) {
 Future<void> showThemeSheet(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
-    backgroundColor: Ui.panel,
+    backgroundColor: Colors.transparent,
+    elevation: 0,
     // Lets the sheet grow to the screen height; the list scrolls inside it.
     isScrollControlled: true,
     useSafeArea: true,
-    showDragHandle: true,
     constraints: BoxConstraints(
       maxHeight: MediaQuery.sizeOf(context).height * 0.85,
     ),
-    builder: (ctx) => SafeArea(
-      top: false,
-      child: ValueListenableBuilder<int>(
-        valueListenable: ThemeController.index,
-        builder: (_, selected, _) => SingleChildScrollView(
-          // Extra room at the bottom so the phone's navigation bar never
-          // covers the last theme.
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Choose a theme'.tr,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
+    builder: (ctx) => ValueListenableBuilder<int>(
+      valueListenable: ThemeController.index,
+      builder: (_, selected, _) => Container(
+        // Painted here (not by the sheet) so it follows the chosen theme
+        // the moment a tile is tapped.
+        decoration: BoxDecoration(
+          color: Ui.panel,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            // Extra room at the bottom so the phone's navigation bar never
+            // covers the last theme.
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: Ui.line,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 14),
-              for (var i = 0; i < Palettes.all.length; i++)
-                _ThemeTile(
-                  palette: Palettes.all[i],
-                  selected: i == selected,
-                  onTap: () => ThemeController.set(i),
+                Text(
+                  'Choose a theme'.tr,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: Ui.text,
+                  ),
                 ),
-            ],
+                const SizedBox(height: 14),
+                for (var i = 0; i < Palettes.all.length; i++)
+                  _ThemeTile(
+                    palette: Palettes.all[i],
+                    selected: i == selected,
+                    onTap: () => ThemeController.set(i),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -760,7 +780,7 @@ class _ThemeTile extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: selected ? palette.accent : Ui.line,
+                color: selected ? palette.accent : palette.line,
                 width: selected ? 2 : 1,
               ),
             ),
@@ -772,7 +792,7 @@ class _ThemeTile extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: palette.bg,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Ui.line),
+                    border: Border.all(color: palette.line),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -801,9 +821,10 @@ class _ThemeTile extends StatelessWidget {
                     children: [
                       Text(
                         palette.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
+                          color: palette.text,
                         ),
                       ),
                       const SizedBox(height: 2),
