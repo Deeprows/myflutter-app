@@ -172,7 +172,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(color: Ui.bg, width: 2),
               ),
-              child: Icon(icon, size: 11, color: Colors.white),
+              child: Icon(icon, size: 11, color: Ui.text),
             ),
           ),
         ],
