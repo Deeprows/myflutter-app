@@ -1228,12 +1228,12 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
         child: FilledButton.icon(
           onPressed: _busy ? null : onTap,
           icon: _busy
-              ? const SizedBox(
+              ? SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.2,
-                    color: Colors.white,
+                    color: Ui.text,
                   ),
                 )
               : Icon(icon),
