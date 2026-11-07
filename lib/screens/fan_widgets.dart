@@ -1002,3 +1002,28 @@ class FanBadgeTile extends StatelessWidget {
     );
   }
 }
+
+
+/// X-style verified tick: a blue scalloped badge with a white check.
+/// Shown next to the name of Premium members.
+class FanVerifiedBadge extends StatelessWidget {
+  final double size;
+  const FanVerifiedBadge({super.key, this.size = 20});
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        label: 'Verified Premium member',
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(Icons.new_releases_rounded,
+                  color: const Color(0xFF1D9BF0), size: size),
+              Icon(Icons.check_rounded, color: Colors.white, size: size * 0.64),
+            ],
+          ),
+        ),
+      );
+}
