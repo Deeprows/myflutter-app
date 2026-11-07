@@ -566,7 +566,7 @@ class _FixtureSupportCard extends StatelessWidget {
                           Icon(Icons.favorite_rounded, color: Ui.red, size: 28),
                           const SizedBox(width: 10),
                           Flexible(child: Builder(builder: (_) {
-                            final words = 'SUPPORT ME'.tr.trim().split(' ');
+                            final words = 'SUPPORT US'.tr.trim().split(' ');
                             final last = words.removeLast();
                             return Text.rich(
                               TextSpan(
