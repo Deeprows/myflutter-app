@@ -1681,7 +1681,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           end: Alignment.bottomRight,
           colors: [
             accent.withValues(alpha: verdict ? .16 : .10),
-            Colors.white.withValues(alpha: .025),
+            Ui.text.withValues(alpha: .025),
           ],
         ),
         border: Border.all(color: accent.withValues(alpha: verdict ? .38 : .16)),
@@ -1945,7 +1945,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF222746),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: Colors.white.withValues(alpha: .075)),
+        border: Border.all(color: Ui.text.withValues(alpha: .075)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2261,7 +2261,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               value: value.clamp(0, 1),
               strokeWidth: size * .09,
               strokeCap: StrokeCap.round,
-              backgroundColor: Colors.white.withValues(alpha: .10),
+              backgroundColor: Ui.text.withValues(alpha: .10),
               valueColor: AlwaysStoppedAnimation(c),
             ),
           ),
@@ -2313,7 +2313,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14),
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: on ? _accent : Colors.white.withValues(alpha: .06),
+              color: on ? _accent : Ui.text.withValues(alpha: .06),
               borderRadius: BorderRadius.circular(99),
               border: Border.all(color: on ? _accent : Ui.line),
             ),
@@ -2508,7 +2508,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: .28),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withValues(alpha: .06)),
+              border: Border.all(color: Ui.text.withValues(alpha: .06)),
             ),
             child: Row(
               children: [
