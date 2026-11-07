@@ -33,7 +33,7 @@ class BrandTag extends StatelessWidget {
                   fontStyle: FontStyle.italic,
                   letterSpacing: .8,
                   decoration: TextDecoration.none,
-                  color: Colors.white.withValues(alpha: .72),
+                  color: Ui.text.withValues(alpha: .72),
                 ),
               ),
             ],
