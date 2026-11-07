@@ -1690,149 +1690,174 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     ),
   );
 
-  Widget _podiumSlot(
-    Map<String, dynamic>? r, {
-    required int rank,
-    required String myId,
-  }) {
-    if (r == null) return const Expanded(child: SizedBox());
-    final color = rank == 1 ? _gold : (rank == 2 ? _silver : _bronze);
-    final avatar = rank == 1 ? 68.0 : 54.0;
-    final base = rank == 1 ? 74.0 : (rank == 2 ? 56.0 : 44.0);
+  // ---- Premier League style table -------------------------------------------
+
+  static const double _colStat = 30;
+  static const double _colPts = 40;
+
+  int _n(Map<String, dynamic> r, List<String> keys) {
+    for (final k in keys) {
+      final v = r[k];
+      if (v is num) return v.toInt();
+    }
+    return 0;
+  }
+
+  Widget _tableHead() {
+    TextStyle st({bool strong = false}) => TextStyle(
+      color: strong ? Colors.white : Ui.muted,
+      fontSize: 11.5,
+      fontWeight: FontWeight.w900,
+      letterSpacing: .4,
+    );
+    Widget cell(String t, double w, {bool strong = false}) => SizedBox(
+      width: w,
+      child: Text(t, textAlign: TextAlign.center, style: st(strong: strong)),
+    );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(0, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: Ui.cardDeep,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        border: Border(bottom: BorderSide(color: Ui.line)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 6),
+          SizedBox(width: 34, child: Text('#', textAlign: TextAlign.center, style: st())),
+          const SizedBox(width: 6),
+          Expanded(child: Text('FAN', style: st())),
+          cell('P', _colStat),
+          cell('W', _colStat),
+          cell('L', _colStat),
+          cell('PTS', _colPts, strong: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _tableRow(int index, Map<String, dynamic> r, String myId, {required bool last}) {
     final mine = '${r['id']}' == myId;
-    return Expanded(
+    final pos = index + 1;
+    final w = _n(r, const ['won', 'w']);
+    final l = _n(r, const ['lost', 'l']);
+    final p = w + l;
+    // Prize zone: the top three win Premium every week.
+    final zone = pos == 1 ? _gold : (pos == 2 ? _silver : (pos == 3 ? _bronze : null));
+    Widget stat(int v, {bool dim = false}) => SizedBox(
+      width: _colStat,
+      child: Text(
+        '$v',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 13.5,
+          fontWeight: FontWeight.w700,
+          color: dim ? Ui.dim : null,
+        ),
+      ),
+    );
+    return Material(
+      color: mine ? Ui.red.withValues(alpha: .12) : Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
         onTap: () => _openProfile('${r['id']}'),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            if (rank == 1)
-              const Icon(Icons.workspace_premium_rounded, color: _gold, size: 26),
-            Container(
-              padding: const EdgeInsets.all(2.5),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: color, width: 2.5),
-              ),
-              child: _rankAvatar(r, avatar),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: _nameWithTick(r, size: 13),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              '${r['points'] ?? 0} pts',
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w900,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              height: base,
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: mine ? .32 : .18),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                border: Border.all(color: color.withValues(alpha: .45)),
-              ),
-              child: Text(
-                '$rank',
-                style: TextStyle(
-                  color: color,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
+        child: Container(
+          decoration: BoxDecoration(
+            border: last ? null : Border(bottom: BorderSide(color: Ui.line.withValues(alpha: .6))),
+          ),
+          child: IntrinsicHeight(
+            child: Row(
+              children: [
+                Container(width: 4, color: zone ?? Colors.transparent),
+                const SizedBox(width: 2),
+                SizedBox(
+                  width: 34,
+                  child: Text(
+                    '$pos',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      color: zone ?? Ui.muted,
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    child: Row(
+                      children: [
+                        _rankAvatar(r, 26),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: _nameWithTick(r, size: 13.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                stat(p, dim: true),
+                stat(w),
+                stat(l, dim: true),
+                SizedBox(
+                  width: _colPts,
+                  child: Text(
+                    '${r['points'] ?? 0}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _podium(List<Map<String, dynamic>> rows, String myId) {
-    Map<String, dynamic>? at(int i) => i < rows.length ? rows[i] : null;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+  Widget _tableLegend() {
+    Widget item(String k, String v) => Padding(
+      padding: const EdgeInsets.only(right: 14, bottom: 4),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: '$k ',
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11.5),
+            ),
+            TextSpan(text: v, style: TextStyle(color: Ui.muted, fontSize: 11.5)),
+          ],
+        ),
+      ),
+    );
+    return Wrap(
       children: [
-        _podiumSlot(at(1), rank: 2, myId: myId),
-        _podiumSlot(at(0), rank: 1, myId: myId),
-        _podiumSlot(at(2), rank: 3, myId: myId),
+        item('P', 'Played'),
+        item('W', 'Won'),
+        item('L', 'Lost'),
+        item('PTS', 'Points'),
       ],
     );
   }
 
-  Widget _rankRow(int index, Map<String, dynamic> r, String myId) {
-    final mine = '${r['id']}' == myId;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: mine ? Ui.red.withValues(alpha: .12) : Ui.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: BorderSide(color: mine ? Ui.red.withValues(alpha: .5) : Ui.line),
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => _openProfile('${r['id']}'),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 28,
-                  child: Text(
-                    '${index + 1}',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Ui.muted,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _rankAvatar(r, 38),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: _nameWithTick(r, size: 14.5),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${r['won'] ?? 0} correct · ${r['lost'] ?? 0} missed',
-                        style: TextStyle(color: Ui.muted, fontSize: 11.5),
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '${r['points'] ?? 0}',
-                      style: const TextStyle(
-                        fontSize: 19,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text('pts', style: TextStyle(color: Ui.dim, fontSize: 10.5)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+  Widget _leagueTable(List<Map<String, dynamic>> rows, String myId) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Ui.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Ui.line),
+      ),
+      child: Column(
+        children: [
+          _tableHead(),
+          for (var i = 0; i < rows.length; i++)
+            _tableRow(i, rows[i], myId, last: i == rows.length - 1),
+        ],
       ),
     );
   }
@@ -1871,7 +1896,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                 'Everyone starts on 0. Points land when a match ends and the final score is confirmed.',
                 'Exact score = 3 pts. Right outcome or market = 1 pt. Missed = 0.',
                 'Pushes do not count.',
-                'Ties: points, then wins, then fewer losses, then account ID.',
+                'Ties: points, then wins, then fewer losses, then account ID. P = played, W = won, L = lost.',
                 'Tap any fan to open their profile.',
               ])
                 Padding(
@@ -1925,7 +1950,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
           ),
           const SizedBox(height: 6),
           _prizeBanner(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           if (rows.isEmpty && _loadedOnce)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 36),
@@ -1937,9 +1962,9 @@ class _FanZoneScreenState extends State<FanZoneScreen>
               ),
             )
           else ...[
-            _podium(rows.take(3).toList(), myId),
-            const SizedBox(height: 14),
-            for (var i = 3; i < rows.length; i++) _rankRow(i, rows[i], myId),
+            _leagueTable(rows, myId),
+            const SizedBox(height: 10),
+            _tableLegend(),
           ],
           if (_data['board_next'] != null)
             TextButton(
