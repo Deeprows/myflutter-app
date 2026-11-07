@@ -25,8 +25,9 @@ import 'tv_screen.dart';
 import 'content_shortcut_screen.dart';
 import 'sports_news_screen.dart';
 import '../services/auth_service.dart';
+import '../utils/safe_error_message.dart';
 
-String _error(Object e) => e.toString().replaceFirst('Exception: ', '');
+String _error(Object e) => safeErrorMessage(e);
 
 enum FanZonePage { predict, ranks, banter, rooms }
 
