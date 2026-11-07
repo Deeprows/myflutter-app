@@ -253,7 +253,7 @@ class HighlightCard extends StatelessWidget {
                               fontSize: 19,
                               height: 1.15,
                               fontWeight: FontWeight.w900,
-                              color: Ui.text,
+                              color: Colors.white,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -427,8 +427,8 @@ class _Monogram extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Ui.text.withValues(alpha: .08),
-        border: Border.all(color: Ui.text.withValues(alpha: .16)),
+        color: Colors.white.withValues(alpha: .08),
+        border: Border.all(color: Colors.white.withValues(alpha: .16)),
       ),
       child: Text(
         text,
@@ -436,7 +436,7 @@ class _Monogram extends StatelessWidget {
           fontSize: size * .32,
           fontWeight: FontWeight.w900,
           letterSpacing: .5,
-          color: Ui.text,
+          color: Colors.white,
         ),
       ),
     );
