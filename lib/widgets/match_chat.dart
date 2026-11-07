@@ -272,7 +272,7 @@ class _MatchChatState extends State<MatchChat> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .07),
+                color: Ui.text.withValues(alpha: .07),
                 borderRadius: BorderRadius.circular(99),
               ),
               child: Text(
