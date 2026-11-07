@@ -77,7 +77,7 @@ class _LinkSheetState extends State<_LinkSheet> {
               width: 38,
               height: 4,
               decoration: BoxDecoration(
-                  color: Colors.white24, borderRadius: BorderRadius.circular(9)),
+                  color: Ui.line, borderRadius: BorderRadius.circular(9)),
             ),
           ),
           const SizedBox(height: 16),
