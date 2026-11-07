@@ -668,6 +668,11 @@ void main() {
       expect(Palettes.all.length, 7);
     });
 
+    test('Facebook White is the default theme', () {
+      expect(Palettes.all[Palettes.defaultIndex], same(Palettes.facebook));
+      expect(Ui.palette, same(Palettes.facebook));
+    });
+
     test('Facebook White is the only light theme', () {
       expect(Palettes.facebook.isLight, isTrue);
       expect(Palettes.facebook.accent, const Color(0xFF1877F2));
