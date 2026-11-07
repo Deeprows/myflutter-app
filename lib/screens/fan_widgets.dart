@@ -434,8 +434,8 @@ class TeamCrest extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white.withValues(alpha: .06),
-        border: Border.all(color: Colors.white.withValues(alpha: .10)),
+        color: Ui.text.withValues(alpha: .06),
+        border: Border.all(color: Ui.text.withValues(alpha: .10)),
       ),
       child: url == null
           ? fallback
@@ -596,7 +596,7 @@ class FanHero extends StatelessWidget {
         Positioned.fill(
           child: CustomPaint(
             painter: FanPitchPainter(
-              color: Colors.white.withValues(alpha: .055),
+              color: Ui.text.withValues(alpha: .055),
             ),
           ),
         ),
