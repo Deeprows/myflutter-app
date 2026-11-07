@@ -277,7 +277,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       },
                     ),
               filled: true,
-              fillColor: Colors.white.withValues(alpha: .07),
+              fillColor: Ui.text.withValues(alpha: .07),
               contentPadding: const EdgeInsets.symmetric(vertical: 12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(28),
