@@ -760,7 +760,7 @@ class _ThemeTile extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: selected ? palette.accent : Colors.white12,
+                color: selected ? palette.accent : Ui.line,
                 width: selected ? 2 : 1,
               ),
             ),
