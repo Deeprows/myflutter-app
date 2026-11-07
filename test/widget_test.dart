@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show Color;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:footbolive/models/channel.dart';
@@ -663,7 +664,15 @@ void main() {
       expect(Palettes.rose.watermark, isNull);
       expect(Palettes.cr7.stripes, isFalse);
       expect(Palettes.messi.stripes, isFalse);
-      expect(Palettes.all.length, 6);
+      expect(Palettes.facebook.watermark, isNull);
+      expect(Palettes.all.length, 7);
+    });
+
+    test('Facebook White is the only light theme', () {
+      expect(Palettes.facebook.isLight, isTrue);
+      expect(Palettes.facebook.accent, const Color(0xFF1877F2));
+      expect(Palettes.all.where((p) => p.isLight).length, 1);
+      expect(Palettes.red.isLight, isFalse);
     });
   });
 
