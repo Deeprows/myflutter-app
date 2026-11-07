@@ -19,8 +19,8 @@ class Settings {
   static const _kPlaylists = 'footbolive_playlists';
   static const _kChatName = 'deeprowss_chat_username';
 
-  static Future<int> themeIndex() async =>
-      (await SharedPreferences.getInstance()).getInt(_kTheme) ?? 0;
+  static Future<int> themeIndex([int fallback = 0]) async =>
+      (await SharedPreferences.getInstance()).getInt(_kTheme) ?? fallback;
   static Future<void> setThemeIndex(int v) async =>
       (await SharedPreferences.getInstance()).setInt(_kTheme, v);
 
