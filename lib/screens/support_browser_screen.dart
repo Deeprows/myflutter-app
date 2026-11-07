@@ -259,8 +259,8 @@ class _SupportBrowserScreenState extends State<SupportBrowserScreen> {
                                       ),
                                       if (ready) ...[
                                         const SizedBox(width: 4),
-                                        const Icon(Icons.skip_next_rounded,
-                                            size: 18, color: Colors.white),
+                                        Icon(Icons.skip_next_rounded,
+                                            size: 18, color: Ui.text),
                                       ],
                                     ],
                                   ),
