@@ -9,6 +9,7 @@ import 'auth_screen.dart';
 import 'content_shortcut_screen.dart';
 import 'fan_widgets.dart';
 import 'fan_zone_screen.dart' show FanZonePage, FanZoneScreen;
+import '../utils/safe_error_message.dart';
 
 /// Results board: every prediction the user made, what happened, the points it
 /// earned and how that reflects on the Ranks table.
@@ -66,7 +67,7 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error = safeErrorMessage(e);
         _loading = false;
       });
     }
