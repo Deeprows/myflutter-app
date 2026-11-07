@@ -15,26 +15,12 @@
   },
   {
     "id": "2",
-    "home": "Malaga",
-    "away": "Racing Santander",
-    "league": "LaLiga",
-    "kickoff": "2026-11-07T14:00:00+01:00",
-    "duration": 130,
-    "url": "https://forprivateuse.sbs/embedextra/tv/4.php",
-    "altUrl": "https://taifood-blog.asia/embed/uel/2026-11-05/mil-fer",
-    "altUrl2": "",
-    "altUrl3": "",
-    "homeLogo": "573",
-    "awayLogo": "543"
-  },
-  {
-    "id": "3",
     "home": "Arsenal",
     "away": "Hull City",
     "league": "Premier League",
     "kickoff": "2026-11-07T16:00:00+01:00",
     "duration": 130,
-    "url": "https://realembeds.xyz/embed/01a1b4db-6b1e-72ae-aa5c-ff5b3a50a0ad",
+    "url": "https://ch.nexa.st/stream?id=10",
     "altUrl": "https://realembeds.xyz/embed/01a1b4db-d83c-77e8-b97f-901c2bce96e9",
     "altUrl2": "",
     "altUrl3": "",
@@ -42,7 +28,7 @@
     "awayLogo": "64"
   },
   {
-    "id": "4",
+    "id": "3",
     "home": "Fulham",
     "away": "Newcastle United",
     "league": "Premier League",
@@ -56,35 +42,7 @@
     "awayLogo": "34"
   },
   {
-    "id": "5",
-    "home": "Espanyol",
-    "away": "Deportivo A Coruna",
-    "league": "LaLiga",
-    "kickoff": "2026-11-07T16:15:00+01:00",
-    "duration": 130,
-    "url": "https://forprivateuse.sbs/embedextra/tv/4.php",
-    "altUrl": "https://taifood-blog.asia/embed/uel/2026-11-05/mil-fer",
-    "altUrl2": "",
-    "altUrl3": "",
-    "homeLogo": "540",
-    "awayLogo": "548"
-  },
-  {
-    "id": "6",
-    "home": "Borussia Dortmund",
-    "away": "Elversberg",
-    "league": "Bundesliga",
-    "kickoff": "2026-11-07T15:30:00+01:00",
-    "duration": 130,
-    "url": "https://forprivateuse.sbs/embedextra/tv/4.php",
-    "altUrl": "https://taifood-blog.asia/embed/uel/2026-11-05/mil-fer",
-    "altUrl2": "",
-    "altUrl3": "",
-    "homeLogo": "165",
-    "awayLogo": "181"
-  },
-  {
-    "id": "7",
+    "id": "4",
     "home": "Mainz 05",
     "away": "Bayern Munich",
     "league": "Bundesliga",
@@ -98,49 +56,7 @@
     "awayLogo": "157"
   },
   {
-    "id": "8",
-    "home": "Paderborn",
-    "away": "Eintracht Frankfurt",
-    "league": "Bundesliga",
-    "kickoff": "2026-11-07T15:30:00+01:00",
-    "duration": 130,
-    "url": "https://forprivateuse.sbs/embedextra/tv/4.php",
-    "altUrl": "https://taifood-blog.asia/embed/uel/2026-11-05/mil-fer",
-    "altUrl2": "",
-    "altUrl3": "",
-    "homeLogo": "185",
-    "awayLogo": "169"
-  },
-  {
-    "id": "9",
-    "home": "RB Leipzig",
-    "away": "Augsburg",
-    "league": "Bundesliga",
-    "kickoff": "2026-11-07T15:30:00+01:00",
-    "duration": 130,
-    "url": "https://forprivateuse.sbs/embedextra/tv/4.php",
-    "altUrl": "https://taifood-blog.asia/embed/uel/2026-11-05/mil-fer",
-    "altUrl2": "",
-    "altUrl3": "",
-    "homeLogo": "173",
-    "awayLogo": "170"
-  },
-  {
-    "id": "10",
-    "home": "Osasuna",
-    "away": "Athletic Club",
-    "league": "LaLiga",
-    "kickoff": "2026-11-07T18:30:00+01:00",
-    "duration": 130,
-    "url": "https://forprivateuse.sbs/embedextra/tv/4.php",
-    "altUrl": "https://taifood-blog.asia/embed/uel/2026-11-05/mil-fer",
-    "altUrl2": "",
-    "altUrl3": "",
-    "homeLogo": "727",
-    "awayLogo": "531"
-  },
-  {
-    "id": "11",
+    "id": "5",
     "home": "Nottingham Forest",
     "away": "Manchester City",
     "league": "Premier League",
@@ -154,7 +70,7 @@
     "awayLogo": "50"
   },
   {
-    "id": "12",
+    "id": "6",
     "home": "VfB Stuttgart",
     "away": "Werder Bremen",
     "league": "Bundesliga",
@@ -168,7 +84,7 @@
     "awayLogo": "162"
   },
   {
-    "id": "13",
+    "id": "7",
     "home": "Valencia",
     "away": "Real Madrid",
     "league": "LaLiga",
