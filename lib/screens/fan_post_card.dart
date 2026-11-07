@@ -1,11 +1,11 @@
 import '../widgets/fan_match_link.dart';
 import '../widgets/fan_edit_sheet.dart';
+import '../widgets/fan_share_sheet.dart';
 import '../widgets/fan_post_video.dart';
 import '../widgets/fan_web_link_card.dart';
 import '../utils/post_links.dart';
 import '../models/fan_post_link.dart';
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
 import '../services/fan_zone_service.dart';
 import '../services/post_translation_service.dart';
 import '../services/locale_service.dart';
@@ -334,8 +334,12 @@ class _FanPostCardState extends State<FanPostCard> {
         return;
       }
       if (action == 'share') {
-        await Share.share(
-          '${_post['name']} on Deeprowss\n${_post['text']}\n\n${FanZoneService.postUrl('${_post['id']}')}',
+        if (!mounted) return;
+        await showFanShareSheet(
+          context,
+          author: '${_post['name']}',
+          text: '${_post['text'] ?? ''}',
+          url: FanZoneService.postUrl('${_post['id']}'),
         );
         return;
       }
@@ -607,12 +611,11 @@ class _FanPostCardState extends State<FanPostCard> {
           );
         },
       ),
-      if (detail)
-        XAction(
-          icon: Icons.ios_share_rounded,
-          tooltip: 'Share post',
-          onTap: () => _action('share'),
-        ),
+      XAction(
+        icon: Icons.ios_share_rounded,
+        tooltip: 'Share post',
+        onTap: () => _action('share'),
+      ),
     ];
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
