@@ -206,7 +206,7 @@ class _NowPlayingState extends State<_NowPlaying> {
                     IconButton(
                       tooltip: 'Lyrics',
                       icon: Icon(Icons.lyrics_rounded,
-                          color: _lyrics ? Ui.red : Colors.white),
+                          color: _lyrics ? Ui.red : Ui.text),
                       onPressed: () => setState(() => _lyrics = !_lyrics),
                     ),
                     IconButton(
