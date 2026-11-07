@@ -175,11 +175,14 @@ class Palettes {
   );
 
   static const all = [red, ocean, emerald, rose, messi, cr7, facebook];
+
+  /// Theme used until the user picks another one.
+  static const defaultIndex = 6; // facebook
 }
 
 /// Design tokens. Values follow the active [Palette], so they are getters.
 class Ui {
-  static Palette palette = Palettes.red;
+  static Palette palette = Palettes.facebook;
 
   static Color get bg => palette.bg;
   static Color get panel => palette.panel;
@@ -203,10 +206,10 @@ class Ui {
 /// Holds the selected theme, saves it, and repaints the whole app when it
 /// changes (without losing the current screen).
 class ThemeController {
-  static final ValueNotifier<int> index = ValueNotifier<int>(0);
+  static final ValueNotifier<int> index = ValueNotifier<int>(Palettes.defaultIndex);
 
   static Future<void> load() async {
-    final i = await Settings.themeIndex();
+    final i = await Settings.themeIndex(Palettes.defaultIndex);
     _apply(i.clamp(0, Palettes.all.length - 1));
   }
 
