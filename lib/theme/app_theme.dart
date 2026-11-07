@@ -22,6 +22,13 @@ class Palette {
   /// Text / icon colour on top of [accent] (dark for light accents).
   final Color onAccent;
 
+  /// Main text / icon colour on the app background (white on dark themes,
+  /// near-black on light ones).
+  final Color text;
+
+  /// True for light (white background) themes.
+  final bool isLight;
+
   /// Big faint mark drawn over the whole app while this theme is selected
   /// (null = none). Used by the football-icon themes.
   final String? watermark;
@@ -50,6 +57,8 @@ class Palette {
     this.line = const Color(0x1FFFFFFF),
     this.green = const Color(0xFF22E07A),
     this.onAccent = Colors.white,
+    this.text = Colors.white,
+    this.isLight = false,
     this.watermark,
     this.stripes = false,
     this.stripeColor = Colors.white,
@@ -145,7 +154,27 @@ class Palettes {
     backdropAsset: 'assets/themes/cr7.png',
   );
 
-  static const all = [red, ocean, emerald, rose, messi, cr7];
+  /// Clean white Facebook-style look: light grey feed background, white
+  /// cards, Facebook blue accent.
+  static const facebook = Palette(
+    name: 'Facebook White',
+    tagline: 'Clean white cards with classic blue',
+    bg: Color(0xFFF0F2F5),
+    panel: Color(0xFFFFFFFF),
+    card: Color(0xFFFFFFFF),
+    cardDeep: Color(0xFFF0F2F5),
+    accent: Color(0xFF1877F2),
+    accentSoft: Color(0xFF2D88FF),
+    muted: Color(0xFF65676B),
+    dim: Color(0xFF8A8D91),
+    line: Color(0xFFCED0D4),
+    green: Color(0xFF31A24C),
+    onAccent: Colors.white,
+    text: Color(0xFF050505),
+    isLight: true,
+  );
+
+  static const all = [red, ocean, emerald, rose, messi, cr7, facebook];
 }
 
 /// Design tokens. Values follow the active [Palette], so they are getters.
@@ -162,6 +191,8 @@ class Ui {
   static Color get dim => palette.dim;
   static Color get line => palette.line;
   static Color get green => palette.green;
+  static Color get text => palette.text;
+  static bool get isLight => palette.isLight;
   static const radius = 16.0;
 }
 
@@ -178,11 +209,13 @@ class ThemeController {
   static void _apply(int i) {
     Ui.palette = Palettes.all[i];
     index.value = i;
+    final icons = Ui.isLight ? Brightness.dark : Brightness.light;
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: icons,
+      statusBarBrightness: Ui.isLight ? Brightness.light : Brightness.dark,
       systemNavigationBarColor: Ui.panel,
-      systemNavigationBarIconBrightness: Brightness.light,
+      systemNavigationBarIconBrightness: icons,
     ));
   }
 
@@ -202,23 +235,37 @@ class ThemeController {
 }
 
 ThemeData buildTheme() {
-  final scheme = ColorScheme.dark(
-    primary: Ui.red,
-    onPrimary: Ui.palette.onAccent,
-    secondary: Ui.redSoft,
-    surface: Ui.panel,
-    onSurface: Colors.white,
-    error: Ui.red,
-  );
+  final light = Ui.isLight;
+  final scheme = light
+      ? ColorScheme.light(
+          primary: Ui.red,
+          onPrimary: Ui.palette.onAccent,
+          secondary: Ui.redSoft,
+          surface: Ui.panel,
+          onSurface: Ui.text,
+          error: const Color(0xFFE41E3F),
+        )
+      : ColorScheme.dark(
+          primary: Ui.red,
+          onPrimary: Ui.palette.onAccent,
+          secondary: Ui.redSoft,
+          surface: Ui.panel,
+          onSurface: Colors.white,
+          error: Ui.red,
+        );
 
   return ThemeData(
     useMaterial3: true,
-    brightness: Brightness.dark,
+    brightness: light ? Brightness.light : Brightness.dark,
     colorScheme: scheme,
     scaffoldBackgroundColor: Ui.bg,
     splashFactory: InkRipple.splashFactory,
+    dividerColor: Ui.line,
+    dividerTheme: DividerThemeData(color: Ui.line),
     appBarTheme: AppBarTheme(
-      backgroundColor: Ui.bg,
+      backgroundColor: light ? Ui.panel : Ui.bg,
+      foregroundColor: Ui.text,
+      surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
     ),
@@ -232,7 +279,7 @@ ThemeData buildTheme() {
         return TextStyle(
           fontSize: 12,
           fontWeight: on ? FontWeight.w800 : FontWeight.w600,
-          color: on ? Colors.white : Ui.dim,
+          color: on ? (Ui.isLight ? Ui.red : Colors.white) : Ui.dim,
         );
       }),
       iconTheme: WidgetStateProperty.resolveWith((states) {
@@ -243,10 +290,13 @@ ThemeData buildTheme() {
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: Ui.card,
-      contentTextStyle: const TextStyle(color: Colors.white),
+      contentTextStyle: TextStyle(color: Ui.text),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
-    dialogTheme: DialogThemeData(backgroundColor: Ui.panel),
+    dialogTheme: DialogThemeData(
+      backgroundColor: Ui.panel,
+      surfaceTintColor: Colors.transparent,
+    ),
     drawerTheme: DrawerThemeData(backgroundColor: Ui.cardDeep),
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: Ui.panel,
