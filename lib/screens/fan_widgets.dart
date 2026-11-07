@@ -485,7 +485,7 @@ class _FanSkeletonState extends State<FanSkeleton>
           gradient: LinearGradient(
             begin: Alignment(-1.6 + 3.2 * t, -.3),
             end: Alignment(-.6 + 3.2 * t, .3),
-            colors: [Ui.card, Colors.white.withValues(alpha: .07), Ui.card],
+            colors: [Ui.card, Ui.text.withValues(alpha: .07), Ui.card],
           ),
         ),
       );
@@ -653,7 +653,7 @@ class FanChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
-                color: selected ? Colors.white : Ui.muted,
+                color: selected ? Ui.text : Ui.muted,
               ),
             ),
             if (badge != null) ...[
@@ -661,7 +661,7 @@ class FanChip extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                 decoration: BoxDecoration(
-                  color: selected ? c : Colors.white12,
+                  color: selected ? c : Ui.line,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -785,7 +785,7 @@ class FanLevelAvatar extends StatelessWidget {
             builder: (_, v, __) => CircularProgressIndicator(
               value: v,
               strokeWidth: 4,
-              backgroundColor: Colors.white12,
+              backgroundColor: Ui.line,
               valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
           ),
@@ -993,7 +993,7 @@ class FanBadgeTile extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
-                color: on ? Colors.white : Ui.dim,
+                color: on ? Ui.text : Ui.dim,
               ),
             ),
           ],
