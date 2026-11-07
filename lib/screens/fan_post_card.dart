@@ -1131,6 +1131,16 @@ class _FanPostCardState extends State<FanPostCard> {
                                     fontSize: 15,
                                   ),
                                 ),
+                                if (_post['is_premium'] == 1 ||
+                                    _post['is_premium'] == true)
+                                  const WidgetSpan(
+                                    alignment: PlaceholderAlignment.middle,
+                                    child: Padding(
+                                      padding: EdgeInsets.only(left: 4),
+                                      child: Icon(Icons.verified_rounded,
+                                          color: Color(0xFF1D9BF0), size: 16),
+                                    ),
+                                  ),
                                 TextSpan(
                                   text:
                                       '  $handle · ${fanTimeAgo(_post['at']).replaceAll(' ago', '')}${(_post['edited_at'] is num && (_post['edited_at'] as num) > 0) ? ' · edited' : ''}',
@@ -1300,8 +1310,24 @@ class _QuoteComposerState extends State<_QuoteComposer> {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        '${p['name']}  @${FanZoneService.handleOf(p, userId)}',
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(text: '${p['name']}'),
+                            if (p['is_premium'] == 1 || p['is_premium'] == true)
+                              const WidgetSpan(
+                                alignment: PlaceholderAlignment.middle,
+                                child: Padding(
+                                  padding: EdgeInsets.only(left: 3),
+                                  child: Icon(Icons.verified_rounded,
+                                      color: Color(0xFF1D9BF0), size: 14),
+                                ),
+                              ),
+                            TextSpan(
+                                text:
+                                    '  @${FanZoneService.handleOf(p, userId)}'),
+                          ],
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w800),
