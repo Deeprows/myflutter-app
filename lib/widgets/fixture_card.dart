@@ -136,8 +136,8 @@ class FixtureCard extends StatelessWidget {
                         f.league.tr,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Ui.text,
+                        style: const TextStyle(
+                          color: Colors.white,
                           fontSize: 9.5,
                           fontWeight: FontWeight.w800,
                           height: 1.15,
