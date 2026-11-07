@@ -349,7 +349,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         }
       } catch (_) {}
       if (mounted) {
-        final why = e.toString().replaceFirst('Exception: ', '');
+        final why = safeErrorMessage(e);
         setState(
           () => _extError = why.isEmpty || why.length > 220
               ? 'Could not load more matches. Pull to retry.'
@@ -2175,7 +2175,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                 }
               } catch (e) {
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                  SnackBar(content: Text(safeErrorMessage(e))),
                 );
               }
             },
@@ -2389,7 +2389,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                 unawaited(_loadMyPicks());
               }
             } catch (e) {
-              _snack(e.toString().replaceFirst('Exception: ', ''));
+              _snack(safeErrorMessage(e));
             }
           },
           icon: const Icon(Icons.how_to_vote_rounded, size: 18),
