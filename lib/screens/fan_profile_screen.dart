@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 import '../services/fan_zone_service.dart';
 import '../services/content_sync.dart';
+import '../services/subscription_service.dart';
 import '../widgets/fan_club_picker.dart';
 import '../theme/app_theme.dart';
 import 'fan_posts_feed.dart';
@@ -239,6 +240,13 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
     ],
   );
 
+  /// Premium members get the blue tick. The server says so for everyone; for
+  /// your own profile an active subscription on this install counts too.
+  bool _isPremiumProfile(Map<String, dynamic> p) =>
+      p['is_premium'] == 1 ||
+      p['is_premium'] == true ||
+      (p['is_me'] == true && SubscriptionService.instance.isPremium);
+
   Widget _header() {
     final p = _profile!, stats = Map<String, dynamic>.from(p['stats'] as Map);
     final badges = FanZoneService.rows(p['achievements']);
@@ -332,12 +340,24 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${p['name']}',
-                style: const TextStyle(
-                  fontSize: 21,
-                  fontWeight: FontWeight.w900,
-                ),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      '${p['name']}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  if (_isPremiumProfile(p)) ...[
+                    const SizedBox(width: 6),
+                    const FanVerifiedBadge(size: 22),
+                  ],
+                ],
               ),
               Text('@${p['handle']}', style: TextStyle(color: Ui.muted)),
               if ('${p['club_name'] ?? ''}'.isNotEmpty)
@@ -497,9 +517,9 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                 ),
               ),
-              if (_profile?['is_premium'] == 1 || _profile?['is_premium'] == true) ...[
+              if (_profile != null && _isPremiumProfile(_profile!)) ...[
                 const SizedBox(width: 5),
-                const Icon(Icons.verified_rounded, color: Color(0xFF1D9BF0), size: 18),
+                const FanVerifiedBadge(size: 18),
               ],
             ],
           ),
