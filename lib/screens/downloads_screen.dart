@@ -242,7 +242,7 @@ class _TaskTile extends StatelessWidget {
                             value: t.progress,
                             minHeight: 4,
                             color: t.active ? Ui.red : Ui.dim,
-                            backgroundColor: Colors.white12,
+                            backgroundColor: Ui.line,
                           ),
                         ),
                       ],
