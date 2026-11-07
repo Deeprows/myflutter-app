@@ -327,7 +327,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   /// to fit its slot and ignores the phone's font scale, so long names such
   /// as "Match Room" never wrap or break mid-word.
   Widget _navItem(IconData icon, String label, bool selected) {
-    final color = selected ? Ui.red : Ui.dim;
+    final color = selected ? Ui.red : Ui.navOff;
     return SizedBox(
       width: 58,
       child: Column(
@@ -345,7 +345,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
               style: TextStyle(
                 fontSize: 10.5,
                 height: 1.1,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
                 color: color,
               ),
             ),
@@ -441,8 +441,8 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                       return TextStyle(
                         fontSize: 10,
                         height: 1.0,
-                        fontWeight: on ? FontWeight.w700 : FontWeight.w500,
-                        color: on ? Ui.red : Ui.dim,
+                        fontWeight: on ? FontWeight.w800 : FontWeight.w700,
+                        color: on ? Ui.red : Ui.navOff,
                       );
                     },
                   ),
@@ -451,7 +451,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                       size: 26,
                       color: states.contains(WidgetState.selected)
                           ? Ui.red
-                          : Ui.dim,
+                          : Ui.navOff,
                     ),
                   ),
                 ),
