@@ -823,7 +823,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       Container(
         margin: const EdgeInsets.only(top: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .04),
+          color: Ui.text.withValues(alpha: .04),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: Ui.line),
         ),
@@ -1002,7 +1002,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     margin: const EdgeInsets.only(top: 12),
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: .04),
+      color: Ui.text.withValues(alpha: .04),
       borderRadius: BorderRadius.circular(14),
       border: Border.all(color: Ui.line),
     ),
@@ -1328,7 +1328,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   Widget _oddChip(String label, Object? odd) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
     decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: .06),
+      color: Ui.text.withValues(alpha: .06),
       borderRadius: BorderRadius.circular(10),
     ),
     child: Row(
@@ -1736,7 +1736,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               Text(
                 number.toString().padLeft(2, '0'),
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: .22),
+                  color: Ui.text.withValues(alpha: .22),
                   fontSize: 11,
                   letterSpacing: 1.2,
                   fontWeight: FontWeight.w300,
@@ -1867,7 +1867,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                   fontSize: 13,
                   height: 1.45,
                   fontWeight: FontWeight.w400,
-                  color: Colors.white.withValues(alpha: .86),
+                  color: Ui.text.withValues(alpha: .86),
                 ),
               ),
             ),
@@ -1896,7 +1896,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             Expanded(
               child: SelectableText(
                 bullet.group(1)!,
-                style: TextStyle(fontSize: 13.5, height: 1.55, color: Colors.white.withValues(alpha: .84)),
+                style: TextStyle(fontSize: 13.5, height: 1.55, color: Ui.text.withValues(alpha: .84)),
               ),
             ),
           ],
@@ -1913,7 +1913,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           fontSize: 13.5,
           height: 1.62,
           fontWeight: verdict ? FontWeight.w500 : FontWeight.w400,
-          color: Colors.white.withValues(alpha: verdict ? .94 : .82),
+          color: Ui.text.withValues(alpha: verdict ? .94 : .82),
         ),
       ),
     );
@@ -1989,7 +1989,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           ),
           if (reason.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Container(height: 1, color: Colors.white.withValues(alpha: .07)),
+            Container(height: 1, color: Ui.text.withValues(alpha: .07)),
             const SizedBox(height: 9),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2462,7 +2462,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .08),
+                  color: Ui.text.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(99),
                 ),
                 child: Text(
@@ -2938,10 +2938,10 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                     ),
                   ),
                   child: on
-                      ? const Icon(
+                      ? Icon(
                           Icons.check_rounded,
                           size: 17,
-                          color: Colors.white,
+                          color: Ui.text,
                         )
                       : null,
                 ),
