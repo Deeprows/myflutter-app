@@ -401,8 +401,8 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
                   ),
                   if (ready) ...[
                     const SizedBox(width: 6),
-                    const Icon(Icons.skip_next_rounded,
-                        size: 22, color: Colors.white),
+                    Icon(Icons.skip_next_rounded,
+                        size: 22, color: Ui.text),
                   ],
                 ],
               ),
