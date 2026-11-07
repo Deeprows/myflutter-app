@@ -614,11 +614,11 @@ class _MoviesScreenState extends State<MoviesScreen> {
                                 colors: [Colors.white, Ui.redSoft])
                             .createShader(r),
                         child: Text('Top Movies & Series\nDatabase'.tr,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 29,
                                 height: 1.1,
                                 fontWeight: FontWeight.w900,
-                                color: Colors.white)),
+                                color: Ui.text)),
                       ),
                       const SizedBox(height: 8),
                       Row(
@@ -844,7 +844,7 @@ class _MovieSheet extends StatelessWidget {
                 width: 38,
                 height: 4,
                 decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: Ui.line,
                     borderRadius: BorderRadius.circular(9)),
               ),
             ),
@@ -1046,7 +1046,7 @@ class _Meta extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .05),
+        color: Ui.text.withValues(alpha: .05),
         borderRadius: BorderRadius.circular(99),
         border: Border.all(color: Ui.line),
       ),
@@ -1056,10 +1056,10 @@ class _Meta extends StatelessWidget {
           Icon(icon, size: 13, color: color ?? Ui.muted),
           const SizedBox(width: 5),
           Text(text,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
-                  color: Colors.white)),
+                  color: Ui.text)),
         ],
       ),
     );
