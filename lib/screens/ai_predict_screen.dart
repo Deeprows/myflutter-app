@@ -194,10 +194,10 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           children: [
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'MY PREDICTIONS',
-                    style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w900, color: Color(0xFFB39DFF)),
+                    style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w900, color: _lt(const Color(0xFFB39DFF), const Color(0xFF6A4CD6))),
                   ),
                 ),
                 if (pending > 0)
@@ -447,14 +447,14 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       const SizedBox(height: 14),
       Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Text(
               'MORE MATCHES · ALL LEAGUES',
               style: TextStyle(
                 fontSize: 11,
                 letterSpacing: 1.2,
                 fontWeight: FontWeight.w900,
-                color: Color(0xFFB39DFF),
+                color: _lt(const Color(0xFFB39DFF), const Color(0xFF6A4CD6)),
               ),
             ),
           ),
@@ -1638,7 +1638,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: _aiViolet.withValues(alpha: .28)),
             ),
-            child: Column(
+            child: _DarkText(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
@@ -1659,7 +1659,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                 const SizedBox(height: 12),
                 for (var i = 0; i < picks.length; i++) _aiPickAnalysisCard(i + 1, picks[i]),
               ],
-            ),
+            )),
           ),
       ],
     );
@@ -1668,7 +1668,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   Widget _aiSectionCard(int number, String title, String sub, List<String> lines) {
     final verdict = title.contains('VERDICT');
     final accent = verdict ? _aiVerdict : _aiViolet;
-    final titleColor = verdict ? const Color(0xFF8FF0C2) : const Color(0xFFD2C7FF);
+    final titleColor = verdict ? _lt(const Color(0xFF8FF0C2), const Color(0xFF1E8E5A)) : _lt(const Color(0xFFD2C7FF), const Color(0xFF4B33B8));
 
     return Container(
       width: double.infinity,
@@ -1805,10 +1805,10 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: r == 'W'
-                        ? const Color(0xFF7CE8B5)
+                        ? _lt(const Color(0xFF7CE8B5), const Color(0xFF1B7F52))
                         : r == 'D'
-                            ? const Color(0xFFFFD58F)
-                            : const Color(0xFFFF9A9A),
+                            ? _lt(const Color(0xFFFFD58F), const Color(0xFF9A6200))
+                            : _lt(const Color(0xFFFF9A9A), const Color(0xFFC62828)),
                   ),
                 ),
               ),
@@ -1945,9 +1945,9 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF222746),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: Ui.text.withValues(alpha: .075)),
+        border: Border.all(color: Colors.white.withValues(alpha: .075)),
       ),
-      child: Column(
+      child: _DarkText(child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -1967,7 +1967,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               Expanded(
                 child: Text(
                   market,
-                  style: TextStyle(color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w800),
+                  style: TextStyle(color: const Color(0xFF9EABC0), fontSize: 11, fontWeight: FontWeight.w800),
                 ),
               ),
               if (confidence != null)
@@ -1989,7 +1989,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           ),
           if (reason.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Container(height: 1, color: Ui.text.withValues(alpha: .07)),
+            Container(height: 1, color: Colors.white.withValues(alpha: .07)),
             const SizedBox(height: 9),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2002,14 +2002,14 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                 Expanded(
                   child: SelectableText(
                     reason,
-                    style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.45),
+                    style: TextStyle(color: const Color(0xFF9EABC0), fontSize: 12, height: 1.45),
                   ),
                 ),
               ],
             ),
           ],
         ],
-      ),
+      )),
     );
   }
 
@@ -2086,13 +2086,13 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               ),
               child: const Icon(Icons.auto_awesome_rounded, size: 18, color: Colors.white),
             ),
-            title: const Text(
+            title: Text(
               'COMPREHENSIVE AI ANALYSIS',
               style: TextStyle(
                 fontSize: 12,
                 letterSpacing: 1.6,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFFCEC1FF),
+                color: _lt(const Color(0xFFCEC1FF), const Color(0xFF5B3FD0)),
               ),
             ),
             subtitle: Padding(
@@ -2427,7 +2427,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [const Color(0xFF0F3D26), Ui.card],
+          colors: [_lt(const Color(0xFF0F3D26), const Color(0xFFDDF3E6)), Ui.card],
         ),
         boxShadow: [
           BoxShadow(
@@ -2506,7 +2506,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: .28),
+              color: _lt(Colors.black.withValues(alpha: .28), Ui.text.withValues(alpha: .05)),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Ui.text.withValues(alpha: .06)),
             ),
@@ -2650,7 +2650,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [const Color(0xFF0F3D26), Ui.card],
+                colors: [_lt(const Color(0xFF0F3D26), const Color(0xFFDDF3E6)), Ui.card],
               ),
             ),
             child: Column(
@@ -2700,7 +2700,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: .28),
+                    color: _lt(Colors.black.withValues(alpha: .28), Ui.text.withValues(alpha: .05)),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
@@ -3117,13 +3117,13 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    const Text(
+                    Text(
                       'UPCOMING MATCHES',
                       style: TextStyle(
                         fontSize: 11,
                         letterSpacing: 1.2,
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFFB39DFF),
+                        color: _lt(const Color(0xFFB39DFF), const Color(0xFF6A4CD6)),
                       ),
                     ),
                     const Spacer(),
@@ -3164,4 +3164,23 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       ],
     ),
   );
+}
+
+
+Color _lt(Color dark, Color light) => Ui.isLight ? light : dark;
+
+/// Forces light text and icons on the intentionally dark AI panels, so they
+/// stay readable when the app is using a light theme.
+class _DarkText extends StatelessWidget {
+  final Widget child;
+  const _DarkText({required this.child});
+
+  @override
+  Widget build(BuildContext context) => IconTheme.merge(
+        data: const IconThemeData(color: Colors.white),
+        child: DefaultTextStyle.merge(
+          style: const TextStyle(color: Colors.white),
+          child: child,
+        ),
+      );
 }
