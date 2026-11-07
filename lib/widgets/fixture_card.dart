@@ -136,8 +136,8 @@ class FixtureCard extends StatelessWidget {
                         f.league.tr,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: Ui.text,
                           fontSize: 9.5,
                           fontWeight: FontWeight.w800,
                           height: 1.15,
@@ -416,9 +416,9 @@ class _Team extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: .05),
+            color: Ui.text.withValues(alpha: .05),
             border: Border.all(
-              color: Colors.white.withValues(alpha: .10),
+              color: Ui.text.withValues(alpha: .10),
             ),
           ),
           child: _TeamLogo(logo: logo),
