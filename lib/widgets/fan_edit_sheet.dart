@@ -4,6 +4,7 @@ import '../screens/plans_screen.dart';
 import '../services/fan_zone_service.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/safe_error_message.dart';
 
 /// Edit a post or a comment (Premium members only).
 ///
@@ -113,7 +114,7 @@ class _FanEditSheetState extends State<_FanEditSheet> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _error = e.toString().replaceFirst('Exception: ', '');
+          _error = safeErrorMessage(e);
         });
       }
     }
