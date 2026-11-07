@@ -20,6 +20,7 @@ import 'fan_mentions.dart';
 import 'fan_profile_screen.dart';
 import 'fan_thread_screen.dart';
 import 'promote_post_screen.dart';
+import '../utils/safe_error_message.dart';
 
 /// The same post and actions appear in Banter, profiles and comment threads.
 class FanPostCard extends StatefulWidget {
@@ -110,7 +111,7 @@ class _FanPostCardState extends State<FanPostCard> {
         });
       if (mounted) widget.onChanged?.call();
     } catch (e) {
-      _notice(e.toString().replaceFirst('Exception: ', ''));
+      _notice(safeErrorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -180,7 +181,7 @@ class _FanPostCardState extends State<FanPostCard> {
         widget.onChanged?.call();
       }
     } catch (e) {
-      _notice(e.toString().replaceFirst('Exception: ', ''));
+      _notice(safeErrorMessage(e));
     } finally {
       if (mounted) setState(() => _repostBusy = false);
     }
@@ -240,7 +241,7 @@ class _FanPostCardState extends State<FanPostCard> {
       _notice('Pinned as Sponsored post');
       widget.onChanged?.call();
     } catch (e) {
-      _notice(e.toString().replaceFirst('Exception: ', ''));
+      _notice(safeErrorMessage(e));
     }
   }
 
@@ -252,7 +253,7 @@ class _FanPostCardState extends State<FanPostCard> {
       _notice('Post unpinned');
       widget.onChanged?.call();
     } catch (e) {
-      _notice(e.toString().replaceFirst('Exception: ', ''));
+      _notice(safeErrorMessage(e));
     }
   }
 
@@ -398,7 +399,7 @@ class _FanPostCardState extends State<FanPostCard> {
             : 'Report sent for review.',
       );
     } catch (e) {
-      _notice(e.toString().replaceFirst('Exception: ', ''));
+      _notice(safeErrorMessage(e));
     }
   }
 
@@ -440,7 +441,7 @@ class _FanPostCardState extends State<FanPostCard> {
         widget.onChanged?.call();
       }
     } catch (e) {
-      _notice(e.toString().replaceFirst('Exception: ', ''));
+      _notice(safeErrorMessage(e));
     } finally {
       if (mounted) setState(() => _followBusy = false);
     }
@@ -739,7 +740,7 @@ class _FanPostCardState extends State<FanPostCard> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _translationError = e.toString().replaceFirst('Exception: ', ''));
+      setState(() => _translationError = safeErrorMessage(e));
     } finally {
       if (mounted) setState(() => _translationBusy = false);
     }
@@ -1220,7 +1221,7 @@ class _QuoteComposerState extends State<_QuoteComposer> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _error = e.toString().replaceFirst('Exception: ', '');
+          _error = safeErrorMessage(e);
         });
       }
     }
