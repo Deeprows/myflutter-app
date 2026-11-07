@@ -453,17 +453,17 @@ class _PlansScreenState extends State<PlansScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     child: Center(
                       child: _busy
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 22,
                               height: 22,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2.5, color: Colors.white))
+                                  strokeWidth: 2.5, color: Ui.text))
                           : Text(
                               premium
                                   ? 'Add 1 more $_perLabel'
                                   : 'Pay  •  $_shownPrice/$_perLabel',
-                              style: const TextStyle(
-                                  color: Colors.white,
+                              style: TextStyle(
+                                  color: Ui.text,
                                   fontSize: 17,
                                   fontWeight: FontWeight.w900)),
                     ),
