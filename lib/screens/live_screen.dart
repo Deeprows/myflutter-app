@@ -18,7 +18,6 @@ import '../utils/format.dart';
 import '../widgets/fixture_card.dart';
 import '../widgets/fixture_skeleton.dart';
 import '../services/support_gate.dart';
-import '../widgets/link_sheet.dart';
 import '../widgets/news_ticker.dart';
 import '../widgets/pitch_painter.dart';
 import 'content_shortcut_screen.dart';
@@ -27,6 +26,9 @@ import 'notifications_screen.dart';
 import 'player_screen.dart';
 import 'support_browser_screen.dart';
 import '../utils/l10n.dart';
+import '../services/subscription_service.dart';
+import 'plans_screen.dart';
+import 'remove_ads_screen.dart';
 
 enum _Filter { all, live, upcoming, ended }
 
@@ -423,7 +425,6 @@ class _LiveScreenState extends State<LiveScreen> {
               ticker: _ticker,
               live: live,
               upcoming: upcoming,
-              onLink: () => showLinkSheet(context),
               onRefresh: () async {
                 await _load(remote: true);
 
@@ -626,14 +627,12 @@ class _Header extends StatelessWidget {
   final TickerData ticker;
   final int live;
   final int upcoming;
-  final VoidCallback onLink;
   final VoidCallback onRefresh;
 
   const _Header({
     required this.ticker,
     required this.live,
     required this.upcoming,
-    required this.onLink,
     required this.onRefresh,
   });
 
@@ -733,11 +732,8 @@ class _Header extends StatelessWidget {
                     ),
                   ),
 
-                  round(
-                    Icons.add_link_rounded,
-                    'Play a link'.tr,
-                    onLink,
-                  ),
+                  const _UpgradeButton(),
+                  const SizedBox(width: 6),
 
                   const NotificationBell(round: true),
 
@@ -1151,6 +1147,60 @@ class _Empty extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+
+/// "Upgrade" pill in the Live header. Opens the Premium page and disappears
+/// once the viewer is already Premium.
+class _UpgradeButton extends StatelessWidget {
+  const _UpgradeButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final subs = SubscriptionService.instance;
+    return ListenableBuilder(
+      listenable: subs,
+      builder: (context, _) {
+        if (subs.isPremium) return const SizedBox.shrink();
+        return Material(
+          color: const Color(0xFF1D9BF0).withValues(alpha: .16),
+          shape: const StadiumBorder(
+            side: BorderSide(color: Color(0x551D9BF0)),
+          ),
+          child: InkWell(
+            customBorder: const StadiumBorder(),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    subs.visible ? const PlansScreen() : const RemoveAdsScreen(),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.verified_rounded,
+                    color: Color(0xFF1D9BF0),
+                    size: 17,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Upgrade'.tr,
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
