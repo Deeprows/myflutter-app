@@ -208,7 +208,7 @@ class _MovieInfoPanelState extends State<MovieInfoPanel> {
           child: Container(
             height: 12,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .06),
+              color: Ui.text.withValues(alpha: .06),
               borderRadius: BorderRadius.circular(6),
             ),
           ),
