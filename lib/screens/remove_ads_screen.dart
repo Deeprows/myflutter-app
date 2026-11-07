@@ -876,7 +876,7 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: on ? FontWeight.w800 : FontWeight.w600,
-                color: on ? Colors.white : Ui.muted,
+                color: on ? Ui.text : Ui.muted,
               ),
             ),
           ],
