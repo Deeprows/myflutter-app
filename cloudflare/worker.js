@@ -3349,7 +3349,7 @@ async function fanSocial(request,env,url,user,id,ctx) {
     if(!post)return fail('Post not found',404);
     if(path==='/fan/social/post')return json({post,viewer_id:id,is_admin:await fanIsAdmin(env,id)});
     const cursor=fanSocialCursor(url.searchParams.get('before'));if(cursor===false)return fail('Invalid page cursor');
-    const COMMENT_FIELDS=`c.id,c.post_id,c.user_id,${fanHandleSql('c.user_id')} AS handle,u.name,c.text,c.at,c.edited_at,c.parent_id,c.root_id,CASE WHEN c.image_key<>'' THEN 1 ELSE 0 END AS has_image,
+    const COMMENT_FIELDS=`c.id,c.post_id,c.user_id,${fanHandleSql('c.user_id')} AS handle,u.name,CASE WHEN COALESCE(u.premium_until,0)>CAST(strftime('%s','now') AS INTEGER)*1000 THEN 1 ELSE 0 END AS is_premium,c.text,c.at,c.edited_at,c.parent_id,c.root_id,CASE WHEN c.image_key<>'' THEN 1 ELSE 0 END AS has_image,
       (SELECT COUNT(*) FROM fan_comment_likes l WHERE l.comment_id=c.id) AS likes,
       EXISTS(SELECT 1 FROM fan_comment_likes l WHERE l.comment_id=c.id AND l.user_id=?1) AS liked,
       COALESCE((SELECT m.avatar_at FROM fan_profile_media m WHERE m.user_id=c.user_id),0) AS avatar_at,
