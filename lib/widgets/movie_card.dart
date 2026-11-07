@@ -90,10 +90,10 @@ class MoviePoster extends StatelessWidget {
               style: TextStyle(
                   fontSize: 30,
                   fontWeight: FontWeight.w900,
-                  color: Ui.text.withValues(alpha: .55))),
+                  color: Colors.white.withValues(alpha: .55))),
           const SizedBox(height: 4),
           Icon(Icons.movie_outlined,
-              size: 18, color: Ui.text.withValues(alpha: .35)),
+              size: 18, color: Colors.white.withValues(alpha: .35)),
         ],
       ),
     );
