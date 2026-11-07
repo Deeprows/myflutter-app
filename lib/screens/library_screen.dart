@@ -47,7 +47,7 @@ class LibraryScreen extends StatelessWidget {
             ],
             bottom: TabBar(
               indicatorColor: Ui.red,
-              labelColor: Colors.white,
+              labelColor: Ui.text,
               unselectedLabelColor: Ui.muted,
               labelStyle: const TextStyle(fontWeight: FontWeight.w800),
               tabs: [
