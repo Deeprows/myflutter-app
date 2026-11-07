@@ -111,9 +111,9 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                 child: const Icon(Icons.telegram_rounded, color: Colors.white, size: 44),
               ),
               const SizedBox(height: 18),
-              const Text('Join Deeprowss on Telegram',
+              Text('Join Deeprowss on Telegram',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+                style: TextStyle(color: Ui.text, fontSize: 22, fontWeight: FontWeight.w900)),
               const SizedBox(height: 10),
               const Text('Get updates, new features, match alerts and announcements from our official community.',
                 textAlign: TextAlign.center,
@@ -457,7 +457,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                 ),
                 child: NavigationBar(
                 height: 72,
-                backgroundColor: Ui.bg,
+                backgroundColor: Ui.isLight ? Ui.panel : Ui.bg,
                 indicatorColor: Colors.transparent,
                 // Labels are drawn by _navItem (auto-shrinking, one line).
                 labelBehavior:
