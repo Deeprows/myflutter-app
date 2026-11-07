@@ -47,7 +47,7 @@ class HighlightCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: Ui.card,
             borderRadius: radius,
-            border: Border.all(color: Colors.white.withValues(alpha: .08)),
+            border: Border.all(color: Ui.text.withValues(alpha: .08)),
           ),
           child: InkWell(onTap: onTap, borderRadius: radius, child: child),
         ),
@@ -249,11 +249,11 @@ class HighlightCard extends StatelessWidget {
                             item.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 19,
                               height: 1.15,
                               fontWeight: FontWeight.w900,
-                              color: Colors.white,
+                              color: Ui.text,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -427,8 +427,8 @@ class _Monogram extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white.withValues(alpha: .08),
-        border: Border.all(color: Colors.white.withValues(alpha: .16)),
+        color: Ui.text.withValues(alpha: .08),
+        border: Border.all(color: Ui.text.withValues(alpha: .16)),
       ),
       child: Text(
         text,
@@ -436,7 +436,7 @@ class _Monogram extends StatelessWidget {
           fontSize: size * .32,
           fontWeight: FontWeight.w900,
           letterSpacing: .5,
-          color: Colors.white,
+          color: Ui.text,
         ),
       ),
     );
