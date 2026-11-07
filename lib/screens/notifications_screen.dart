@@ -438,7 +438,7 @@ class _NotificationBellState extends State<NotificationBell>
             width: 38,
             height: 38,
             child: Material(
-              color: Colors.white.withValues(alpha: .06),
+              color: Ui.text.withValues(alpha: .06),
               shape: const CircleBorder(),
               child: IconButton(
                 tooltip: n > 0 ? '$n new notifications' : 'Notifications',
