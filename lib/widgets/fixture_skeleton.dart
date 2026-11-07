@@ -120,11 +120,11 @@ class _Bone extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final base = Color.alphaBlend(
-      Colors.white.withValues(alpha: .07),
+      Ui.text.withValues(alpha: .07),
       Ui.card,
     );
     final shine = Color.alphaBlend(
-      Colors.white.withValues(alpha: .17),
+      Ui.text.withValues(alpha: .17),
       Ui.card,
     );
 
