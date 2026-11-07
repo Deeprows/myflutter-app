@@ -169,8 +169,8 @@ class _ExperienceHubState extends State<ExperienceHub> {
                             title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: Ui.text,
                               fontSize: 14.5,
                               fontWeight: FontWeight.w800,
                               height: 1.15,
@@ -240,11 +240,11 @@ class _ExperienceHubState extends State<ExperienceHub> {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'DEEPROWSS',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Ui.text,
                             fontSize: 20,
                             letterSpacing: 1.2,
                             fontWeight: FontWeight.w900,
@@ -263,10 +263,10 @@ class _ExperienceHubState extends State<ExperienceHub> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     'The game brings us together.',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: Ui.text,
                       fontSize: 24,
                       height: 1.15,
                       letterSpacing: -.6,
