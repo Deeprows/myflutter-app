@@ -772,7 +772,7 @@ class _ThemeTile extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: palette.bg,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white12),
+                    border: Border.all(color: Ui.line),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
