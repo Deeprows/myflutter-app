@@ -116,7 +116,10 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
           ),
         ),
         const SizedBox(height: 2),
-        Text(label, style: TextStyle(fontSize: 11, color: Ui.muted)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: Colors.white70),
+        ),
       ],
     ),
   );
@@ -172,10 +175,10 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
                     ),
                     Text(
                       '${week ?? points}',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 34,
                         fontWeight: FontWeight.w900,
-                        color: Ui.text,
+                        color: Colors.white,
                       ),
                     ),
                     Text(
@@ -199,10 +202,10 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
                   ),
                   Text(
                     _rank != null ? '#$_rank' : '—',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 34,
                       fontWeight: FontWeight.w900,
-                      color: Ui.text,
+                      color: Colors.white,
                     ),
                   ),
                   Text(
