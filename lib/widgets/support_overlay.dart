@@ -302,10 +302,10 @@ class _SupportOverlayState extends State<SupportOverlay>
                 padding: const EdgeInsets.symmetric(vertical: 11),
                 child: Column(
                   children: [
-                    const Text(
+                    Text(
                       'Click Here',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: Ui.text,
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
                         letterSpacing: .3,
@@ -315,7 +315,7 @@ class _SupportOverlayState extends State<SupportOverlay>
                     Text(
                       'Open 1 AD per $mins min',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: .88),
+                        color: Ui.text.withValues(alpha: .88),
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
