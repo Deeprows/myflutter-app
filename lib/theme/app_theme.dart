@@ -193,6 +193,10 @@ class Ui {
   static Color get green => palette.green;
   static Color get text => palette.text;
   static bool get isLight => palette.isLight;
+
+  /// Colour of unselected bottom-bar icons and labels (darker on light
+  /// themes so they stay bold and readable).
+  static Color get navOff => palette.isLight ? palette.muted : palette.dim;
   static const radius = 16.0;
 }
 
@@ -278,13 +282,13 @@ ThemeData buildTheme() {
         final on = states.contains(WidgetState.selected);
         return TextStyle(
           fontSize: 12,
-          fontWeight: on ? FontWeight.w800 : FontWeight.w600,
-          color: on ? (Ui.isLight ? Ui.red : Colors.white) : Ui.dim,
+          fontWeight: on ? FontWeight.w800 : FontWeight.w700,
+          color: on ? (Ui.isLight ? Ui.red : Colors.white) : Ui.navOff,
         );
       }),
       iconTheme: WidgetStateProperty.resolveWith((states) {
         final on = states.contains(WidgetState.selected);
-        return IconThemeData(color: on ? Ui.red : Ui.dim, size: 26);
+        return IconThemeData(color: on ? Ui.red : Ui.navOff, size: 26);
       }),
     ),
     snackBarTheme: SnackBarThemeData(
