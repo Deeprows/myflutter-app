@@ -687,7 +687,7 @@ class SongTile extends StatelessWidget {
                           style: TextStyle(
                               fontSize: 14.5,
                               fontWeight: FontWeight.w800,
-                              color: playing ? Ui.red : Colors.white)),
+                              color: playing ? Ui.red : Ui.text)),
                       const SizedBox(height: 2),
                       Text(entry.folderName,
                           maxLines: 1,
