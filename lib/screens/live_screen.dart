@@ -574,8 +574,8 @@ class _FixtureSupportCard extends StatelessWidget {
                                   if (words.isNotEmpty)
                                     TextSpan(
                                       text: '${words.join(' ')} ',
-                                      style: const TextStyle(
-                                        color: Colors.white,
+                                      style: TextStyle(
+                                        color: Ui.text,
                                         fontSize: 25,
                                       ),
                                     ),
@@ -655,7 +655,7 @@ class _Header extends StatelessWidget {
           width: 38,
           height: 38,
           child: Material(
-            color: Colors.white.withValues(alpha: .06),
+            color: Ui.text.withValues(alpha: .06),
             shape: const CircleBorder(),
             child: IconButton(
               tooltip: tip,
@@ -781,7 +781,7 @@ class _Header extends StatelessWidget {
                     ),
                     const Spacer(),
                     Material(
-                      color: Colors.white.withValues(alpha: .08),
+                      color: Ui.text.withValues(alpha: .08),
                       shape: const StadiumBorder(),
                       child: InkWell(
                         customBorder: const StadiumBorder(),
