@@ -557,7 +557,7 @@ class _PlansScreenState extends State<PlansScreen> {
     Widget chip(String id, IconData icon, String label) {
       final on = _method == id;
       return ChoiceChip(
-        avatar: Icon(icon, size: 16, color: on ? Colors.white : Ui.muted),
+        avatar: Icon(icon, size: 16, color: on ? Ui.text : Ui.muted),
         label: Text(label),
         selected: on,
         showCheckmark: false,
@@ -567,7 +567,7 @@ class _PlansScreenState extends State<PlansScreen> {
         labelStyle: TextStyle(
             fontSize: 12.5,
             fontWeight: FontWeight.w800,
-            color: on ? Colors.white : null),
+            color: on ? Ui.text : null),
         onSelected: _busy ? null : (_) => setState(() => _method = id),
       );
     }
