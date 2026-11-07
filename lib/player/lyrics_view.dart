@@ -176,7 +176,7 @@ class _LyricsViewState extends State<LyricsView> {
                       style: TextStyle(
                         fontSize: on ? 21 : 17,
                         fontWeight: on ? FontWeight.w900 : FontWeight.w700,
-                        color: on ? Colors.white : Colors.white38,
+                        color: on ? Ui.text : Ui.dim,
                         height: 1.2,
                       ),
                       child: Text(text,
