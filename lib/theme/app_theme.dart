@@ -177,12 +177,12 @@ class Palettes {
   static const all = [red, ocean, emerald, rose, messi, cr7, facebook];
 
   /// Theme used until the user picks another one.
-  static const defaultIndex = 6; // facebook
+  static const defaultIndex = 5; // CR7
 }
 
 /// Design tokens. Values follow the active [Palette], so they are getters.
 class Ui {
-  static Palette palette = Palettes.facebook;
+  static Palette palette = Palettes.cr7;
 
   static Color get bg => palette.bg;
   static Color get panel => palette.panel;
