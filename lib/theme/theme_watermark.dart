@@ -35,6 +35,13 @@ class ThemeDecor {
 class ThemeWatermark extends StatelessWidget {
   const ThemeWatermark({super.key});
 
+  /// How strong each decoration is (0 = invisible). Kept very low because it is
+  /// drawn over the whole app and must never hide text, cards or buttons.
+  /// Raise a number a little if you want that part to show more.
+  static const pictureOpacity = .04; // the player picture
+  static const nameOpacity = .025; // the big diagonal name
+  static const stripesOpacity = .02; // the jersey stripes
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<int>(
@@ -65,7 +72,7 @@ class ThemeWatermark extends StatelessWidget {
                   child: FractionallySizedBox(
                     heightFactor: .52,
                     child: Opacity(
-                      opacity: .12,
+                      opacity: pictureOpacity,
                       child: Image.asset(
                         asset,
                         fit: BoxFit.contain,
@@ -92,7 +99,7 @@ class ThemeWatermark extends StatelessWidget {
                             fontWeight: FontWeight.w900,
                             letterSpacing: 6,
                             decoration: TextDecoration.none,
-                            color: Ui.red.withValues(alpha: .06),
+                            color: Ui.red.withValues(alpha: nameOpacity),
                           ),
                         ),
                       ),
@@ -116,7 +123,8 @@ class _StripesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Ui.palette.stripeColor.withValues(alpha: .05);
+      ..color = Ui.palette.stripeColor
+          .withValues(alpha: ThemeWatermark.stripesOpacity);
     for (var x = 0.0; x < size.width; x += _band * 2) {
       canvas.drawRect(Rect.fromLTWH(x, 0, _band, size.height), paint);
     }
