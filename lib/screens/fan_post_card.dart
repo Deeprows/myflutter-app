@@ -979,7 +979,7 @@ class _FanPostCardState extends State<FanPostCard> {
                             ),
                             if (_post['is_premium'] == 1 || _post['is_premium'] == true) ...[
                               const SizedBox(width: 5),
-                              const Icon(Icons.verified_rounded, color: Color(0xFF1D9BF0), size: 17),
+                              const FanVerifiedBadge(size: 17),
                             ],
                           ],
                         ),
@@ -1137,8 +1137,7 @@ class _FanPostCardState extends State<FanPostCard> {
                                     alignment: PlaceholderAlignment.middle,
                                     child: Padding(
                                       padding: EdgeInsets.only(left: 4),
-                                      child: Icon(Icons.verified_rounded,
-                                          color: Color(0xFF1D9BF0), size: 16),
+                                      child: FanVerifiedBadge(size: 16),
                                     ),
                                   ),
                                 TextSpan(
@@ -1319,8 +1318,7 @@ class _QuoteComposerState extends State<_QuoteComposer> {
                                 alignment: PlaceholderAlignment.middle,
                                 child: Padding(
                                   padding: EdgeInsets.only(left: 3),
-                                  child: Icon(Icons.verified_rounded,
-                                      color: Color(0xFF1D9BF0), size: 14),
+                                  child: FanVerifiedBadge(size: 14),
                                 ),
                               ),
                             TextSpan(
