@@ -1002,7 +1002,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     margin: const EdgeInsets.only(top: 12),
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: Ui.text.withValues(alpha: .04),
+      color: Ui.isLight ? Ui.bg : Ui.text.withValues(alpha: .04),
       borderRadius: BorderRadius.circular(14),
       border: Border.all(color: Ui.line),
     ),
@@ -1680,8 +1680,10 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            accent.withValues(alpha: verdict ? .16 : .10),
-            Ui.text.withValues(alpha: .025),
+            accent.withValues(
+              alpha: Ui.isLight ? (verdict ? .10 : .04) : (verdict ? .16 : .10),
+            ),
+            Ui.isLight ? Ui.bg : Ui.text.withValues(alpha: .025),
           ],
         ),
         border: Border.all(color: accent.withValues(alpha: verdict ? .38 : .16)),
@@ -2017,12 +2019,22 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     margin: const EdgeInsets.only(top: 12),
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: const Color(0xFF713DDA).withValues(alpha: .45)),
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [const Color(0xFF713DDA).withValues(alpha: .22), Ui.card],
+      border: Border.all(
+        color: const Color(0xFF713DDA).withValues(alpha: Ui.isLight ? .22 : .45),
       ),
+      // Light theme: a clean white card with only a whisper of violet so the
+      // text stays sharp. Dark theme keeps the richer tint.
+      color: Ui.isLight ? Ui.card : null,
+      gradient: Ui.isLight
+          ? null
+          : LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(0xFF713DDA).withValues(alpha: .22),
+                Ui.card,
+              ],
+            ),
     ),
     padding: const EdgeInsets.all(14),
     child: Column(
