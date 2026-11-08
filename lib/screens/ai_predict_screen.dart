@@ -1555,7 +1555,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
 
   /// Splits the generated read into headed sections and renders each as a
   /// clean card. The original wording is kept; only the presentation changes.
-  Widget _formattedAiAnalysis(String raw) {
+  Widget _formattedAiAnalysis(String raw, {Fixture? fixture, Map? data}) {
     var cleaned = raw.replaceAll('**', '').replaceAll('##', '').replaceAll('###', '').trim();
 
     // Optional PICKS block (rendered as pick cards, as before).
@@ -1628,7 +1628,15 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (var i = 0; i < sections.length; i++)
-          _aiSectionCard(i + 1, sections[i].title, sections[i].sub, sections[i].lines),
+          _aiSectionCard(
+            i + 1,
+            sections[i].title,
+            sections[i].sub,
+            sections[i].lines,
+            body: sections[i].title.contains('TEAM NEWS') && fixture != null && data != null
+                ? _teamNewsBody(fixture, data, sections[i].lines)
+                : null,
+          ),
         if (picks.isNotEmpty)
           Container(
             width: double.infinity,
@@ -1665,7 +1673,322 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     );
   }
 
-  Widget _aiSectionCard(int number, String title, String sub, List<String> lines) {
+  // ---------------------------------------------------------------------------
+  // TEAM NEWS — built from the provider data (names, stats, absences, XI),
+  // so it is complete even when the AI text is short.
+  // ---------------------------------------------------------------------------
+
+  Widget? _teamNewsBody(Fixture f, Map data, List<String> aiLines) {
+    final extras = data['extras'] is Map ? data['extras'] as Map : null;
+    if (extras == null) return null;
+    Map? sideOf(String k) => extras[k] is Map ? extras[k] as Map : null;
+    final home = sideOf('home'), away = sideOf('away');
+    bool has(Map? m) =>
+        m != null &&
+        (m['players'] is List && (m['players'] as List).isNotEmpty ||
+            m['injuries'] is List && (m['injuries'] as List).isNotEmpty ||
+            m['lineup'] is Map ||
+            m['cards'] is Map ||
+            '${m['coach'] ?? ''}'.isNotEmpty);
+    if (!has(home) && !has(away)) return null;
+
+    // AI prose for this section, shown only if it is real sentences with names.
+    final prose = aiLines
+        .where((l) => l.trim().length > 40 && RegExp(r'[a-z]{3}').hasMatch(l))
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _teamNewsSide(f.home, _homeColor, home),
+        const SizedBox(height: 16),
+        _teamNewsSide(f.away, _awayColor, away),
+        if (prose.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(
+            'AI SUMMARY',
+            style: TextStyle(
+              color: Ui.muted,
+              fontSize: 10,
+              letterSpacing: 1.4,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          for (final l in prose) _aiBodyLine(l),
+        ],
+        const SizedBox(height: 4),
+        Text(
+          'Squad stats are for the current season. Absences and lineups come from the data provider and can change before kick-off.',
+          style: TextStyle(color: Ui.dim, fontSize: 10.5, height: 1.35),
+        ),
+      ],
+    );
+  }
+
+  Widget _tnLabel(String text, {IconData? icon, Color? color}) => Padding(
+    padding: const EdgeInsets.only(top: 12, bottom: 7),
+    child: Row(
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 13, color: color ?? Ui.muted),
+          const SizedBox(width: 6),
+        ],
+        Text(
+          text.toUpperCase(),
+          style: TextStyle(
+            color: color ?? Ui.muted,
+            fontSize: 10,
+            letterSpacing: 1.4,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _teamNewsSide(String name, Color color, Map? m) {
+    final players = FanZoneService.rows(m?['players']);
+    final injuries = m?['injuries'] is List ? FanZoneService.rows(m!['injuries']) : null;
+    final lineup = m?['lineup'] is Map ? m!['lineup'] as Map : null;
+    final cards = m?['cards'] is Map ? m!['cards'] as Map : null;
+    final coach = '${m?['coach'] ?? ''}'.trim();
+    final injuredNames = {
+      for (final i in injuries ?? const <Map<String, dynamic>>[])
+        '${i['player']}'.toLowerCase(),
+    };
+
+    String posShort(String p) => switch (p) {
+      'Goalkeeper' => 'GK',
+      'Defender' => 'DEF',
+      'Midfielder' => 'MID',
+      'Attacker' => 'FWD',
+      _ => '—',
+    };
+    String n(dynamic v) => v == null ? '–' : '$v';
+
+    Widget cell(String t, double w, {bool bold = false, Color? c, TextAlign a = TextAlign.center}) =>
+        SizedBox(
+          width: w,
+          child: Text(
+            t,
+            textAlign: a,
+            style: TextStyle(fontSize: 12, fontWeight: bold ? FontWeight.w800 : FontWeight.w500, color: c),
+          ),
+        );
+
+    Widget playerRow(Map<String, dynamic> p) {
+      final out = injuredNames.contains('${p['player']}'.toLowerCase());
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 34,
+              child: Text(
+                posShort('${p['position']}'),
+                style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: .6),
+              ),
+            ),
+            Expanded(
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      '${p['player']}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  if (out) ...[
+                    const SizedBox(width: 6),
+                    const Icon(Icons.healing_rounded, size: 13, color: Color(0xFFEF5350)),
+                  ],
+                ],
+              ),
+            ),
+            cell(n(p['apps']), 30),
+            cell(n(p['goals']), 28, bold: true),
+            cell(n(p['assists']), 28, bold: true),
+            cell(p['rating'] == null ? '–' : (p['rating'] as num).toStringAsFixed(1), 38),
+          ],
+        ),
+      );
+    }
+
+    Widget headerRow() => Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        children: [
+          const SizedBox(width: 34),
+          const Expanded(child: SizedBox()),
+          for (final h in const [('APP', 30.0), ('G', 28.0), ('A', 28.0), ('RTG', 38.0)])
+            SizedBox(
+              width: h.$2,
+              child: Text(
+                h.$1,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Ui.muted, fontSize: 9.5, letterSpacing: .8, fontWeight: FontWeight.w700),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    Widget chip(String text, Color c, IconData icon) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.withValues(alpha: .35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: c),
+          const SizedBox(width: 5),
+          Flexible(child: Text(text, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700))),
+        ],
+      ),
+    );
+
+    final keyOut = [
+      for (final p in players)
+        if (injuredNames.contains('${p['player']}'.toLowerCase())) '${p['player']}',
+    ];
+
+    final lineupPlayers = lineup == null ? <Map<String, dynamic>>[] : FanZoneService.rows(lineup['players']);
+    String xiLine(String pos, String label) {
+      final names = lineupPlayers
+          .where((p) => '${p['pos']}' == pos)
+          .map((p) => p['number'] == null ? '${p['name']}' : '${p['number']} ${p['name']}')
+          .toList();
+      return names.isEmpty ? '' : '$label   ${names.join(' · ')}';
+    }
+
+    final xi = [
+      xiLine('G', 'GK'),
+      xiLine('D', 'DEF'),
+      xiLine('M', 'MID'),
+      xiLine('F', 'FWD'),
+    ].where((e) => e.isNotEmpty).toList();
+    final confirmed = lineup?['source'] == 'confirmed';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: .25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(width: 3, height: 15, color: color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
+                ),
+              ),
+              if (lineup != null && '${lineup['formation']}'.isNotEmpty)
+                Text('${lineup['formation']}', style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 13)),
+            ],
+          ),
+          if (coach.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, left: 11),
+              child: Text('Head coach: $coach', style: TextStyle(color: Ui.muted, fontSize: 11.5)),
+            ),
+
+          _tnLabel('Injuries & suspensions', icon: Icons.healing_rounded, color: const Color(0xFFEF5350)),
+          if (injuries == null)
+            Text('Not available from the provider.', style: TextStyle(color: Ui.muted, fontSize: 12))
+          else if (injuries.isEmpty)
+            Text('No injuries or suspensions reported.', style: TextStyle(color: Ui.muted, fontSize: 12))
+          else ...[
+            if (keyOut.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Key player${keyOut.length > 1 ? 's' : ''} doubtful or out: ${keyOut.join(', ')}',
+                  style: const TextStyle(color: Color(0xFFEF5350), fontSize: 12, fontWeight: FontWeight.w800, height: 1.3),
+                ),
+              ),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final i in injuries)
+                  chip(
+                    [
+                      '${i['player']}',
+                      if ('${i['reason'] ?? ''}'.isNotEmpty) '${i['reason']}'
+                      else if ('${i['type'] ?? ''}'.isNotEmpty) '${i['type']}',
+                    ].join(' · '),
+                    '${i['type']}'.toLowerCase().contains('missing')
+                        ? const Color(0xFFEF5350)
+                        : const Color(0xFFFFB74D),
+                    '${i['type']}'.toLowerCase().contains('missing')
+                        ? Icons.block_rounded
+                        : Icons.help_outline_rounded,
+                  ),
+              ],
+            ),
+          ],
+
+          _tnLabel('Key players · season', icon: Icons.star_rounded, color: const Color(0xFFFFC46B)),
+          if (players.isEmpty)
+            Text('Player stats are not available.', style: TextStyle(color: Ui.muted, fontSize: 12))
+          else ...[
+            headerRow(),
+            for (final p in players) playerRow(p),
+          ],
+
+          if (cards != null) ...[
+            _tnLabel('Discipline · last ${cards['matches']} matches', icon: Icons.style_rounded),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _oddChip('Yellow cards', cards['yellow']),
+                _oddChip('Red cards', cards['red']),
+                if (cards['fouls'] != null) _oddChip('Fouls', cards['fouls']),
+                if (cards['corners'] != null) _oddChip('Corners won', cards['corners']),
+              ],
+            ),
+          ],
+
+          _tnLabel(
+            lineup == null
+                ? 'Lineup'
+                : confirmed
+                ? 'Confirmed XI'
+                : 'Probable XI · from last match',
+            icon: Icons.groups_rounded,
+            color: confirmed ? const Color(0xFF66BB6A) : null,
+          ),
+          if (xi.isEmpty)
+            Text('Lineup not available yet.', style: TextStyle(color: Ui.muted, fontSize: 12))
+          else
+            for (final r in xi)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(r, style: const TextStyle(fontSize: 12.5, height: 1.4)),
+              ),
+        ],
+      ),
+    );
+  }
+
+  Widget _aiSectionCard(int number, String title, String sub, List<String> lines, {Widget? body}) {
     final verdict = title.contains('VERDICT');
     final accent = verdict ? _aiVerdict : _aiViolet;
     final titleColor = verdict ? _lt(const Color(0xFF8FF0C2), const Color(0xFF1E8E5A)) : _lt(const Color(0xFFD2C7FF), const Color(0xFF4B33B8));
@@ -1756,7 +2079,10 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          for (final l in lines) _aiBodyLine(l, verdict: verdict),
+          if (body != null)
+            body
+          else
+            for (final l in lines) _aiBodyLine(l, verdict: verdict),
         ],
       ),
     );
@@ -2117,7 +2443,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             children: [
               Align(
                 alignment: Alignment.centerLeft,
-                child: _formattedAiAnalysis('${data['analysis']}'),
+                child: _formattedAiAnalysis('${data['analysis']}', fixture: f, data: data),
               ),
             ],
           ),
