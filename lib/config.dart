@@ -119,6 +119,11 @@ class AppConfig {
   /// and ready). Ads keep working. Set true to bring Premium back.
   static const showSubscriptions = false;
 
+  /// true = everyone can open the Movies page, but the Play and Download
+  /// buttons send people to upgrade unless they are Premium (the logged-in
+  /// Gmail has paid). false = movies are open to everyone again.
+  static const moviesPremiumOnly = true;
+
   /// ---- Ad-free tokens ------------------------------------------------------
   ///
   /// true = the menu shows "Remove ads". The person taps "Request token", you
