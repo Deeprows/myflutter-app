@@ -1654,7 +1654,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
         ),
         if (_isPremiumRow(r)) ...[
           const SizedBox(width: 3),
-          Icon(Icons.verified_rounded, color: _tick, size: size + 1),
+          FanVerifiedBadge(size: size + 3),
         ],
       ],
     );
