@@ -348,7 +348,7 @@ class _FanPostVideoState extends State<FanPostVideo>
         if (id != null) {
           await _loadHtml(c, 
             _iframeHtml(tiktokEmbedUrl(id)),
-            baseUrl: 'https://deeprowss.com',
+            baseUrl: AppConfig.embedOrigin,
           );
           return;
         }
@@ -357,7 +357,7 @@ class _FanPostVideoState extends State<FanPostVideo>
         if (!mounted || _controller != c) return;
         await _loadHtml(c,
           _iframeHtml(facebookEmbedUrl(fbUrl, width: _boxW.round().clamp(220, 734))),
-          baseUrl: 'https://deeprowss.com',
+          baseUrl: AppConfig.embedOrigin,
         );
         return;
       } else if (_info.kind == EmbedKind.vimeo && initialUri != null) {
@@ -365,7 +365,7 @@ class _FanPostVideoState extends State<FanPostVideo>
         if (id == null) throw FormatException('Invalid Vimeo video URL');
         await _loadHtml(c, 
           _iframeHtml('https://player.vimeo.com/video/$id?autoplay=1&title=0&byline=0&portrait=0'),
-          baseUrl: 'https://deeprowss.com',
+          baseUrl: AppConfig.embedOrigin,
         );
         return;
       } else if (_info.kind == EmbedKind.dailymotion && initialUri != null) {
@@ -373,7 +373,7 @@ class _FanPostVideoState extends State<FanPostVideo>
         if (id == null) throw FormatException('Invalid Dailymotion video URL');
         await _loadHtml(c, 
           _iframeHtml('https://www.dailymotion.com/embed/video/$id?autoplay=1'),
-          baseUrl: 'https://deeprowss.com',
+          baseUrl: AppConfig.embedOrigin,
         );
         return;
       }
@@ -394,7 +394,7 @@ class _FanPostVideoState extends State<FanPostVideo>
         final src = const HtmlEscape(HtmlEscapeMode.attribute).convert(_url);
         await _loadHtml(c, 
           '<html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;background:black"><iframe src="$src" style="border:0;width:100%;height:100%" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></body></html>',
-          baseUrl: 'https://deeprowss.com',
+          baseUrl: AppConfig.embedOrigin,
         );
       } else {
         // Embed page: same desktop-like agent as the match page's player.
