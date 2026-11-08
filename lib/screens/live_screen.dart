@@ -1226,17 +1226,29 @@ class _BrandTitle extends StatelessWidget {
                 shaderCallback: (r) => const LinearGradient(
                   colors: [Color(0xFFFF2D55), Color(0xFFFF8A00)],
                 ).createShader(r),
-                child: Text(
-                  'ROWSS',
-                  style: base.copyWith(
-                    color: Colors.white,
-                    shadows: [
-                      Shadow(
-                        color: const Color(0xFFFF2D55).withValues(alpha: .35),
-                        blurRadius: 10,
+                // Fill + outline stacked: the outline thickens every stroke so
+                // ROWSS looks heavier than the w900 weight alone allows.
+                child: Stack(
+                  children: [
+                    Text(
+                      'ROWSS',
+                      style: base.copyWith(
+                        foreground: Paint()
+                          ..style = PaintingStyle.stroke
+                          ..strokeWidth = 2.2
+                          ..strokeJoin = StrokeJoin.round
+                          ..color = Colors.white,
+                        shadows: [
+                          Shadow(
+                            color:
+                                const Color(0xFFFF2D55).withValues(alpha: .35),
+                            blurRadius: 10,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    Text('ROWSS', style: base.copyWith(color: Colors.white)),
+                  ],
                 ),
               ),
             ],
