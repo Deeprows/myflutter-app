@@ -72,7 +72,8 @@ class _PlansScreenState extends State<PlansScreen> {
   }
 
   Future<void> _load() async {
-    final id = await InstallId.get();
+    // The ID shown to the admin (manual payments) is the Gmail account's.
+    final id = _sub.accountId ?? await InstallId.get();
     final mail = await _sub.savedEmail();
     if (!mounted) return;
     setState(() {
