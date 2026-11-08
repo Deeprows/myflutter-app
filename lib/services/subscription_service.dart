@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
 import '../utils/currency_map.dart';
+import 'auth_service.dart';
 import 'install_id.dart';
 
 /// What the plans page shows. The Worker answers with the naira price and,
@@ -182,6 +183,7 @@ class SubscriptionService extends ChangeNotifier {
   static const _kEmail = 'sub_email';
   static const _kVerified = 'sub_verified_ms'; // last time the Worker confirmed
   static const _kHigh = 'sub_clock_high_ms'; // latest time ever seen
+  static const _kAccount = 'sub_account_id'; // Gmail account the saved copy is for
 
   /// How long the saved copy is trusted without hearing from the Worker. After
   /// this, ad-free switches off until the phone is online again, so a phone
@@ -192,6 +194,7 @@ class SubscriptionService extends ChangeNotifier {
   DateTime? _lastRefresh;
   DateTime? _verified; // last successful answer from the Worker
   DateTime? _high; // clock high-water mark: stops "set the date back" tricks
+  String? _account; // the Gmail account the saved copy belongs to
   Timer? _watch;
   bool _wasPremium = false;
   int _ticks = 0;
@@ -215,7 +218,15 @@ class SubscriptionService extends ChangeNotifier {
     return (h != null && h.isAfter(n)) ? h : n;
   }
 
+  /// Premium belongs to the Gmail account that is logged in, never to the
+  /// phone: no login, or a different account than the saved copy, is Free.
+  bool get _accountMatches {
+    final u = AuthService.instance.user;
+    return u != null && _account == u.id;
+  }
+
   bool get isPremium {
+    if (!_accountMatches) return false;
     final e = _expires;
     if (e == null) return false;
     final now = _now();
@@ -258,6 +269,7 @@ class SubscriptionService extends ChangeNotifier {
       if (v != null && v > 0) _verified = DateTime.fromMillisecondsSinceEpoch(v);
       final h = prefs.getInt(_kHigh);
       if (h != null && h > 0) _high = DateTime.fromMillisecondsSinceEpoch(h);
+      _account = prefs.getString(_kAccount);
       // Phones updated from an older version have no "verified" stamp yet:
       // give them one grace period, the Worker check below renews it.
       if (_expires != null && _verified == null) {
@@ -265,9 +277,82 @@ class SubscriptionService extends ChangeNotifier {
         await prefs.setInt(_kVerified, _verified!.millisecondsSinceEpoch);
       }
     } catch (_) {}
+    // When the person logs in, logs out or switches Gmail, the saved premium
+    // of the previous account must go (see _syncAccount).
+    AuthService.instance.addListener(_syncAccount);
+    await _syncAccount();
     _wasPremium = isPremium;
     _startWatch();
     unawaited(refresh(force: true));
+  }
+
+  /// Keeps the saved copy tied to the logged-in Gmail. Another account (or
+  /// nobody) logged in = the old account's premium is wiped from this phone and
+  /// the new account's own premium is asked from the Worker.
+  Future<void> _syncAccount() async {
+    final auth = AuthService.instance;
+    if (!auth.ready) return; // still restoring the login: do not wipe yet
+    final id = auth.user?.id;
+    if (id == _account) return;
+    _account = id;
+    _expires = null;
+    _verified = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kExpires);
+      await prefs.remove(_kVerified);
+      if (id == null) {
+        await prefs.remove(_kAccount);
+      } else {
+        await prefs.setString(_kAccount, id);
+      }
+    } catch (_) {}
+    _wasPremium = false;
+    notifyListeners();
+    if (id != null) unawaited(refresh(force: true));
+  }
+
+  /// The logged-in Gmail's id (same id the Fan Zone uses), or null.
+  String? get accountId => AuthService.instance.user?.id;
+
+  /// Headers every premium request carries: the Google login (the Worker
+  /// checks it and works out the account itself) and the old phone id, which
+  /// only lets premium bought before accounts existed move to its owner.
+  Future<Map<String, String>> _headers({
+    bool refreshToken = false,
+    bool json = false,
+  }) async {
+    final token = await AuthService.instance.idToken(refresh: refreshToken);
+    return {
+      if (json) 'content-type': 'application/json',
+      'authorization': 'Bearer $token',
+      'x-install-id': await InstallId.get(),
+    };
+  }
+
+  /// Sends a signed-in request; if the Google token was refused (expired) it
+  /// gets a fresh one and tries once more. Returns null when nobody is logged
+  /// in or the login cannot be restored.
+  Future<http.Response?> _signed(
+    Future<http.Response> Function(Map<String, String> headers) send, {
+    bool json = false,
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    if (accountId == null) return null;
+    Map<String, String> h;
+    try {
+      h = await _headers(json: json);
+    } catch (_) {
+      return null;
+    }
+    var r = await send(h).timeout(timeout);
+    if (r.statusCode == 401) {
+      try {
+        h = await _headers(refreshToken: true, json: json);
+        r = await send(h).timeout(timeout);
+      } catch (_) {}
+    }
+    return r;
   }
 
   /// Every minute while ad-free is on: remember the latest time seen, switch
@@ -320,6 +405,7 @@ class SubscriptionService extends ChangeNotifier {
   /// whatever the phone already knows.
   Future<void> refresh({bool force = false}) async {
     if (!enabled) return;
+    if (accountId == null) return; // Free until a Gmail is logged in
     final now = DateTime.now();
     if (!force &&
         _lastRefresh != null &&
@@ -328,11 +414,12 @@ class SubscriptionService extends ChangeNotifier {
     }
     _lastRefresh = now;
     try {
-      final id = await InstallId.get();
-      final r = await http
-          .get(_uri('/sub/status', {'install': id}))
-          .timeout(const Duration(seconds: 12));
-      if (r.statusCode != 200) return;
+      final id = accountId;
+      final r = await _signed(
+        (h) => http.get(_uri('/sub/status', {'install': id ?? ''}), headers: h),
+        timeout: const Duration(seconds: 12),
+      );
+      if (r == null || r.statusCode != 200) return;
       final j = jsonDecode(r.body) as Map<String, dynamic>;
       await _markVerified(j);
       // The Worker is the truth: 0 / a past date (expired or stopped by you)
@@ -402,6 +489,8 @@ class SubscriptionService extends ChangeNotifier {
   }
 
   Future<String> savedEmail() async {
+    final gmail = AuthService.instance.user?.email;
+    if (gmail != null && gmail.isNotEmpty) return gmail;
     try {
       return (await SharedPreferences.getInstance()).getString(_kEmail) ?? '';
     } catch (_) {
@@ -417,25 +506,33 @@ class SubscriptionService extends ChangeNotifier {
     String period = 'month',
     List<String> channels = const [],
   }) async {
-    final id = await InstallId.get();
-    final http.Response r;
+    final id = accountId;
+    if (id == null) {
+      throw Exception('Please log in with your Gmail to go Premium.');
+    }
+    http.Response? res;
     try {
-      r = await http
-          .post(
-            _uri('/sub/start'),
-            headers: {'content-type': 'application/json'},
-            body: jsonEncode({
-              'install_id': id,
-              'email': email,
-              'recurring': recurring,
-              'period': period,
-              if (channels.isNotEmpty) 'channels': channels,
-            }),
-          )
-          .timeout(const Duration(seconds: 20));
+      res = await _signed(
+        (h) => http.post(
+          _uri('/sub/start'),
+          headers: h,
+          body: jsonEncode({
+            'install_id': id,
+            'email': email,
+            'recurring': recurring,
+            'period': period,
+            if (channels.isNotEmpty) 'channels': channels,
+          }),
+        ),
+        json: true,
+      );
     } catch (_) {
       throw Exception('No connection. Check your internet and try again.');
     }
+    if (res == null) {
+      throw Exception('Please log in with your Gmail to go Premium.');
+    }
+    final http.Response r = res;
     Map<String, dynamic> j = {};
     try {
       j = jsonDecode(r.body) as Map<String, dynamic>;
@@ -482,18 +579,20 @@ class SubscriptionService extends ChangeNotifier {
     required String reference,
   }) async {
     try {
-      final id = await InstallId.get();
-      final r = await http
-          .post(
-            _uri('/sub/restore'),
-            headers: {'content-type': 'application/json'},
-            body: jsonEncode({
-              'install_id': id,
-              'email': email,
-              'reference': reference,
-            }),
-          )
-          .timeout(const Duration(seconds: 20));
+      final id = accountId;
+      final r = await _signed(
+        (h) => http.post(
+          _uri('/sub/restore'),
+          headers: h,
+          body: jsonEncode({
+            'install_id': id ?? '',
+            'email': email,
+            'reference': reference,
+          }),
+        ),
+        json: true,
+      );
+      if (r == null) return 'Please log in with your Gmail first.';
       final j = jsonDecode(r.body) as Map<String, dynamic>;
       if (r.statusCode == 200 && j['active'] == true) {
         await _markVerified(j);
@@ -522,11 +621,12 @@ class SubscriptionService extends ChangeNotifier {
   Future<TokenState> tokenStatus() async {
     if (!enabled) return const TokenState('unknown');
     try {
-      final id = await InstallId.get();
-      final r = await http
-          .get(_uri('/sub/token/mine', {'install': id}))
-          .timeout(const Duration(seconds: 12));
-      if (r.statusCode != 200) return const TokenState('unknown');
+      final id = accountId;
+      final r = await _signed(
+        (h) => http.get(_uri('/sub/token/mine', {'install': id ?? ''}), headers: h),
+        timeout: const Duration(seconds: 12),
+      );
+      if (r == null || r.statusCode != 200) return const TokenState('unknown');
       final j = jsonDecode(r.body) as Map<String, dynamic>;
       final state = (j['state'] ?? 'none').toString();
       await _markVerified(j);
@@ -554,19 +654,21 @@ class SubscriptionService extends ChangeNotifier {
     String? currency,
   }) async {
     try {
-      final id = await InstallId.get();
-      final r = await http
-          .post(
-            _uri('/sub/token/request'),
-            headers: {'content-type': 'application/json'},
-            body: jsonEncode({
-              'install_id': id,
-              'contact': contact.trim(),
-              if (days != null) 'days': days,
-              if (currency != null && currency.isNotEmpty) 'currency': currency,
-            }),
-          )
-          .timeout(const Duration(seconds: 20));
+      final id = accountId;
+      final r = await _signed(
+        (h) => http.post(
+          _uri('/sub/token/request'),
+          headers: h,
+          body: jsonEncode({
+            'install_id': id ?? '',
+            'contact': contact.trim(),
+            if (days != null) 'days': days,
+            if (currency != null && currency.isNotEmpty) 'currency': currency,
+          }),
+        ),
+        json: true,
+      );
+      if (r == null) return 'Please log in with your Gmail first.';
       if (r.statusCode == 200) {
         // Already ad-free on the server (e.g. reinstall): pick that up.
         unawaited(refresh(force: true));
@@ -584,14 +686,16 @@ class SubscriptionService extends ChangeNotifier {
     final t = token.trim();
     if (t.isEmpty) return 'Enter your token';
     try {
-      final id = await InstallId.get();
-      final r = await http
-          .post(
-            _uri('/sub/token/redeem'),
-            headers: {'content-type': 'application/json'},
-            body: jsonEncode({'install_id': id, 'token': t}),
-          )
-          .timeout(const Duration(seconds: 20));
+      final id = accountId;
+      final r = await _signed(
+        (h) => http.post(
+          _uri('/sub/token/redeem'),
+          headers: h,
+          body: jsonEncode({'install_id': id ?? '', 'token': t}),
+        ),
+        json: true,
+      );
+      if (r == null) return 'Please log in with your Gmail first.';
       if (r.statusCode == 200) {
         final j = jsonDecode(r.body) as Map<String, dynamic>;
         await _markVerified(j);
