@@ -2057,7 +2057,20 @@ async function fanZone(request, env, url, ctx) {
     if(banned)return json({error:fanBanMessage(banned),banned:true},403);
     if(url.pathname==='/fan/ai-predict/matches')return await fanAiMatches(request,env,id);
     if(url.pathname==='/fan/ai-predict')return await fanAiPredict(request,env,id);
-    const user = await db.prepare('SELECT * FROM fan_users WHERE id=?').bind(id).first();
+    let user = await db.prepare('SELECT * FROM fan_users WHERE id=?').bind(id).first();
+    // A paid subscription lives on the phone's install id. Copy its expiry onto
+    // the fan account so the blue tick shows on posts, comments and ranks.
+    const subInstall=String(request.headers.get('x-install-id') || '');
+    if(user && ID_RE.test(subInstall)) {
+      try {
+        await ensureSchema(env);
+        const paidUntil=await expiryOf(env,subInstall);
+        if(paidUntil>Date.now() && paidUntil>Number(user.premium_until || 0)) {
+          await db.prepare('UPDATE fan_users SET premium_until=? WHERE id=?').bind(paidUntil,id).run();
+          user={...user,premium_until:paidUntil};
+        }
+      } catch(_) {}
+    }
     if(request.method==='GET' && url.pathname==='/fan/premium/status') {
       return json({premium:Boolean(user && Number(user.premium_until || 0)>Date.now()),
         premium_until:Number(user?.premium_until || 0)});
