@@ -368,8 +368,7 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
                                   alignment: PlaceholderAlignment.middle,
                                   child: Padding(
                                     padding: EdgeInsets.only(left: 4),
-                                    child: Icon(Icons.verified_rounded,
-                                      color: Color(0xFF1D9BF0), size: 15),
+                                    child: FanVerifiedBadge(size: 15),
                                   ),
                                 ),
                               TextSpan(
