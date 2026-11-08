@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
 import '../models/channel.dart';
 import '../services/favorites_service.dart';
 import '../services/feed_service.dart';
 import '../services/support_gate.dart';
+import '../services/subscription_service.dart';
 import '../services/content_sync.dart';
 import '../services/nexus_service.dart';
 import '../theme/app_theme.dart';
@@ -15,6 +17,8 @@ import '../widgets/link_sheet.dart';
 import '../widgets/pitch_painter.dart';
 import '../player/player_hub_screen.dart';
 import 'content_shortcut_screen.dart';
+import 'plans_screen.dart';
+import 'remove_ads_screen.dart';
 import 'movies_screen.dart';
 import 'native_player_screen.dart';
 import 'player_screen.dart';
@@ -113,7 +117,94 @@ class _TvScreenState extends State<TvScreen> {
     });
   }
 
-  void _open(Channel c) {
+  static const int _freeChannelsPerDay = 2;
+
+  String _todayKey() {
+    final now = DateTime.now();
+    final day = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    return 'tv_daily_channel_access_$day';
+  }
+
+  String _channelAccessId(Channel c) =>
+      (c.id?.trim().isNotEmpty == true ? c.id!.trim() : '${c.name.trim()}|${c.url.trim()}');
+
+  Future<bool> _allowChannel(Channel c) async {
+    final subscription = SubscriptionService.instance;
+    // Match the movie premium gate: when subscriptions are not configured,
+    // don't strand users behind a paywall.
+    if (!subscription.enabled || subscription.isPremium) return true;
+
+    final prefs = await SharedPreferences.getInstance();
+    final key = _todayKey();
+    final accessed = prefs.getStringList(key) ?? <String>[];
+    final channelId = _channelAccessId(c);
+
+    // Reopening either of the two channels already used today is allowed.
+    if (accessed.contains(channelId)) return true;
+
+    if (accessed.length >= _freeChannelsPerDay) {
+      final upgrade = await showModalBottomSheet<bool>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 4, 22, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.workspace_premium_rounded, size: 46, color: Ui.red),
+                const SizedBox(height: 12),
+                const Text(
+                  'Daily free TV limit reached',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Free users can watch up to 2 different TV channels per day. '
+                  'Upgrade to Premium to watch every channel without limits.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Ui.red,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    icon: const Icon(Icons.workspace_premium_rounded),
+                    label: const Text('Upgrade to Premium',
+                        style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('Not now'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (upgrade != true || !mounted) return false;
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => subscription.visible
+            ? const PlansScreen()
+            : const RemoveAdsScreen(),
+      ));
+      await subscription.refresh(force: true);
+      return subscription.isPremium;
+    }
+
+    accessed.add(channelId);
+    await prefs.setStringList(key, accessed);
+    return true;
+  }
+
+  Future<void> _open(Channel c) async {
+    if (!await _allowChannel(c) || !mounted) return;
     SupportGate.guard(context, () {
       if (mounted) _openNow(c);
     });
