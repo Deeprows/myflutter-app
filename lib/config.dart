@@ -1,3 +1,5 @@
+import 'services/remote_config.dart';
+
 /// Central place for the things you are most likely to edit.
 class AppConfig {
   static const appName = 'Deeprowss';
@@ -41,7 +43,14 @@ class AppConfig {
   /// Origin used as the base URL of the built-in HLS / MP4 / DASH player page.
   /// Some stream hosts only allow requests coming from your own site, so this
   /// mirrors the site the streams were originally played on.
-  static const playerOrigin = 'https://deeprowss.com/';
+  ///
+  /// You can change it WITHOUT an app update: add `"player": {"origin":
+  /// "https://your-new-site.com/"}` to app_config.json (see REMOTE_CONFIG.md).
+  static const defaultPlayerOrigin = 'https://deeprowss.com/';
+  static String get playerOrigin => RemoteConfig.instance.playerOrigin;
+
+  /// [playerOrigin] without the trailing slash (embeds, YouTube origin).
+  static String get embedOrigin => playerOrigin.replaceFirst(RegExp(r'/+$'), '');
 
   /// All content lives inside this repo (`assets/data/*.json`) and ships with
   /// the app: `fixtures.json`, `highlights.json`, `movies.json` and `tv.json`.
