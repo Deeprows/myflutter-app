@@ -565,7 +565,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   /// Slim Reload / Switch / Rotate row used on football match pages.
-  Widget _compactControls({double side = 10, double top = 6}) {
+  Widget _compactControls({double side = 10, double top = 6, bool tip = false}) {
     return Padding(
       padding: EdgeInsets.fromLTRB(side, top, side, 8),
       child: Column(
@@ -576,6 +576,47 @@ class _PlayerScreenState extends State<PlayerScreen>
             const SizedBox(height: 8),
           ],
           _compactRow(),
+          if (tip) ...[
+            const SizedBox(height: 8),
+            _tipBoard(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Slim instruction board between the Reload / Switch / Rotate row and the
+  /// live chat.
+  Widget _tipBoard() {
+    const blue = Color(0xFF1877F2);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: blue.withValues(alpha: Ui.isLight ? .08 : .16),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: blue.withValues(alpha: .35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Icons.info_rounded, size: 15, color: blue),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Double tap on screen to play.\n'
+              'Switch player if default player not working.',
+              style: TextStyle(
+                fontSize: 11.5,
+                height: 1.3,
+                fontWeight: FontWeight.w700,
+                color: Ui.text,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -781,7 +822,7 @@ class _PlayerScreenState extends State<PlayerScreen>
           ),
           AspectRatio(aspectRatio: 16 / 9, child: video),
           if (match) ...[
-            _compactControls(),
+            _compactControls(tip: true),
             Expanded(child: MatchChat(matchName: widget.chatMatch!)),
           ] else if (widget.movie != null)
             Expanded(child: _movieBody())
