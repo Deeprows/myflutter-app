@@ -668,9 +668,9 @@ void main() {
       expect(Palettes.all.length, 7);
     });
 
-    test('Facebook White is the default theme', () {
-      expect(Palettes.all[Palettes.defaultIndex], same(Palettes.facebook));
-      expect(Ui.palette, same(Palettes.facebook));
+    test('CR7 is the default theme', () {
+      expect(Palettes.all[Palettes.defaultIndex], same(Palettes.cr7));
+      expect(Ui.palette, same(Palettes.cr7));
     });
 
     test('Facebook White is the only light theme', () {
