@@ -721,16 +721,7 @@ class _Header extends StatelessWidget {
 
                   const SizedBox(width: 8),
 
-                  const Expanded(
-                    child: Text(
-                      'DEEPROWSS',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.4,
-                      ),
-                    ),
-                  ),
+                  const Expanded(child: _BrandTitle()),
 
                   const _UpgradeButton(),
                   const SizedBox(width: 6),
@@ -1200,6 +1191,69 @@ class _UpgradeButton extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+
+/// Stylised app title: bold italic "DEEP" in the theme text colour, "ROWSS"
+/// in a red-to-orange gradient, a soft glow and a small accent bar beneath.
+class _BrandTitle extends StatelessWidget {
+  const _BrandTitle();
+
+  @override
+  Widget build(BuildContext context) {
+    const base = TextStyle(
+      fontSize: 22,
+      fontWeight: FontWeight.w900,
+      fontStyle: FontStyle.italic,
+      letterSpacing: 1.2,
+      height: 1.0,
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('DEEP', style: base.copyWith(color: Ui.text)),
+              ShaderMask(
+                blendMode: BlendMode.srcIn,
+                shaderCallback: (r) => const LinearGradient(
+                  colors: [Color(0xFFFF2D55), Color(0xFFFF8A00)],
+                ).createShader(r),
+                child: Text(
+                  'ROWSS',
+                  style: base.copyWith(
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        color: const Color(0xFFFF2D55).withValues(alpha: .35),
+                        blurRadius: 10,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          width: 46,
+          height: 3,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(3),
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFF2D55), Color(0xFFFF8A00)],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
