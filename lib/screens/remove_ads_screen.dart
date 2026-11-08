@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:convert';
 
@@ -159,7 +158,9 @@ class _RemoveAdsScreenState extends State<RemoveAdsScreen> {
   // -------------------------------------------------------------
 
   Future<void> _load() async {
-    final id = await InstallId.get();
+    // Premium belongs to the logged-in Gmail account, so its id is the one
+    // shown for manual payments.
+    final id = SubscriptionService.instance.accountId ?? await InstallId.get();
 
     if (!mounted) return;
 
