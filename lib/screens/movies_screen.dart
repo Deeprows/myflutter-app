@@ -111,9 +111,12 @@ class _MoviesScreenState extends State<MoviesScreen> {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Ui.bg.withValues(alpha: .62),
-                Ui.bg.withValues(alpha: .72),
-                Ui.bg.withValues(alpha: .86),
+                // Dark where the white title sits (any theme), then a fade
+                // into the page colour so there is no line under the header.
+                Colors.black.withValues(alpha: .50),
+                Colors.black.withValues(alpha: .58),
+                Color.alphaBlend(Colors.black.withValues(alpha: .25), Ui.bg)
+                    .withValues(alpha: .86),
                 Ui.bg,
               ],
               stops: const [0, .45, .8, 1],
@@ -350,7 +353,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                 Positioned(left: 5, top: 5, child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(color: Ui.red, borderRadius: BorderRadius.circular(8)),
-                  child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                  child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.white)),
                 )),
             ]),
           ),
@@ -389,10 +392,10 @@ class _MoviesScreenState extends State<MoviesScreen> {
                       children: [
                         Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                           decoration: BoxDecoration(color: Ui.red, borderRadius: BorderRadius.circular(30)),
-                          child: const Text('🔥 TRENDING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900))),
+                          child: const Text('🔥 TRENDING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white))),
                         const SizedBox(height: 8),
                         Text(movie.title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                          style: const TextStyle(inherit: false, fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white, shadows: [Shadow(color: Colors.black54, blurRadius: 6)])),
                         const SizedBox(height: 4),
                         Text('${movie.year ?? ''}${movie.rating == null ? '' : '  ·  ★ ${movie.rating}/10'}',
                           style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w700)),
@@ -595,12 +598,7 @@ class _MoviesScreenState extends State<MoviesScreen> {
                                         fontSize: 11,
                                         letterSpacing: 1,
                                         fontWeight: FontWeight.w900,
-                                        color: Ui.redSoft,
-                                        shadows: const [
-                                          Shadow(
-                                              color: Colors.black87,
-                                              blurRadius: 6)
-                                        ])),
+                                        color: Ui.red)),
                               ],
                             ),
                           ),
@@ -609,17 +607,16 @@ class _MoviesScreenState extends State<MoviesScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      ShaderMask(
-                        shaderCallback: (r) => LinearGradient(
-                                colors: [Colors.white, Ui.redSoft])
-                            .createShader(r),
-                        child: Text('Top Movies & Series\nDatabase'.tr,
-                            style: TextStyle(
-                                fontSize: 29,
-                                height: 1.1,
-                                fontWeight: FontWeight.w900,
-                                color: Ui.text)),
-                      ),
+                      // Sits on the dimmed poster, so it is always white.
+                      Text('Top Movies & Series\nDatabase'.tr,
+                          style: const TextStyle(
+                              fontSize: 29,
+                              height: 1.1,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              shadows: [
+                                Shadow(color: Colors.black54, blurRadius: 10)
+                              ])),
                       const SizedBox(height: 8),
                       Row(
                         children: [
