@@ -203,6 +203,18 @@ class RemoteConfig with WidgetsBindingObserver {
   String get scoresUrl => _str('scores', 'url',
       'https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard');
 
+  // ------------------------------------------------------- player origin
+
+  /// Website address the built-in players and embeds present themselves as.
+  /// Change it in app_config.json (`player.origin`) if the domain changes.
+  String get playerOrigin {
+    final v = _str('player', 'origin', AppConfig.defaultPlayerOrigin).trim();
+    if (!v.startsWith('https://') && !v.startsWith('http://')) {
+      return AppConfig.defaultPlayerOrigin;
+    }
+    return v.endsWith('/') ? v : '$v/';
+  }
+
   // --------------------------------------------------------------- share
 
   /// Text sent with the APK when someone taps Share App.
