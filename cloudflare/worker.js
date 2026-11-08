@@ -2801,7 +2801,7 @@ async function fanAiPredict(request,env,id) {
   try {
     const [home,away]=await Promise.all([fanAnalysisForm(env,fixture,homeId,fixture.home,kickoff),fanAnalysisForm(env,fixture,awayId,fixture.away,kickoff)]);
     // Injuries and yellow/red cards are optional extras: any failure just leaves them out.
-    const extras=await Promise.race([fanAiExtras(env,home,away,kickoff),new Promise(r=>setTimeout(()=>r(null),12000))]).catch(()=>null);
+    const extras=await Promise.race([fanAiExtras(env,home,away,kickoff,b.fresh===true),new Promise(r=>setTimeout(()=>r(null),12000))]).catch(()=>null);
     return await fanAiFinish(env,id,{home:fixture.home,away:fixture.away,league:fixture.league,kickoff:fixture.kickoff},home,away,extras?{extras}:{});
   } catch(e) {
     console.error('Automatic match analysis failed',e?.message);
@@ -2981,11 +2981,11 @@ async function fanAiLineup(env,upcomingId,lastMatchId,teamId) {
 }
 // Key players: current-season goals, assists, appearances and rating, from API-Football squad statistics.
 // Kept for 24 hours per club so it costs very few requests (2 per club on a cache miss).
-async function fanAiPlayers(env,teamId,kickoff) {
+async function fanAiPlayers(env,teamId,kickoff,fresh=false) {
   const d=new Date(kickoff),year=d.getUTCFullYear(),season=d.getUTCMonth()>=5?year:year-1;
   const key=`players:v2:${teamId}:${season}`;
   const kept=await fanAiKept(env,key);
-  if(kept && Array.isArray(kept.list) && Date.now()-Number(kept.at || 0)<86400000)return kept.list.length?kept.list:null;
+  if(!fresh && kept && Array.isArray(kept.list) && Date.now()-Number(kept.at || 0)<86400000)return kept.list.length?kept.list:null;
   const load=async yr=>{
     const pages=await Promise.all([1,2].map(n=>fanAiProviderJson(env,`/players?team=${teamId}&season=${yr}&page=${n}`).catch(()=>null)));
     return pages.flatMap(x=>x || []);
@@ -3022,11 +3022,30 @@ async function fanAiPlayers(env,teamId,kickoff) {
   await fanAiKeep(env,key,{at:Date.now(),list}).catch(()=>{});
   return list.length?list:null;
 }
+// Finds a club's API-Football ID from its name (ESPN and typed matches only know the name).
+// A confident match is kept for 30 days, a miss for one day. Only an exact or single close name match is used.
+async function fanAiApiTeamId(env,name) {
+  const norm=fanResultName(name);
+  if(!norm)return null;
+  const key=`apit:${norm}`.slice(0,120);
+  const kept=await fanAiKept(env,key);
+  if(kept && Date.now()-Number(kept.at || 0)<(kept.id?30*86400000:86400000))return kept.id || null;
+  const q=String(name).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9 ]/g,' ').replace(/\s+/g,' ').trim().slice(0,40);
+  if(q.length<3)return null;
+  const res=await fanAiProviderJson(env,`/teams?search=${encodeURIComponent(q)}`);
+  const teams=(res || []).map(r=>r?.team).filter(t=>t && /^[1-9]\d{0,7}$/.test(String(t.id)) && t.name);
+  const exact=teams.filter(t=>fanResultName(t.name)===norm);
+  const close=teams.filter(t=>fanNameLike(t.name,name));
+  const pick=exact.length===1?exact[0]:!exact.length && close.length===1?close[0]:null;
+  const found=pick?String(pick.id):null;
+  await fanAiKeep(env,key,{at:Date.now(),id:found}).catch(()=>{});
+  return found;
+}
 // Current head coach (kept for a week per club).
-async function fanAiCoach(env,teamId) {
+async function fanAiCoach(env,teamId,fresh=false) {
   const key=`coach:${teamId}`;
   const kept=await fanAiKept(env,key);
-  if(kept && Date.now()-Number(kept.at || 0)<7*86400000)return kept.name || null;
+  if(!fresh && kept && Date.now()-Number(kept.at || 0)<7*86400000)return kept.name || null;
   const res=await fanAiProviderJson(env,`/coachs?team=${teamId}`);
   let name=null;
   for(const c of res || []) {
@@ -3091,7 +3110,7 @@ async function fanAiOdds(env,fixtureId) {
   const ca=line(bet(/cards.*over.*under|^over\/under cards/i));if(ca)out.cards=ca;
   return Object.keys(out).length>1?out:null;
 }
-async function fanAiExtras(env,home,away,kickoff) {
+async function fanAiExtras(env,home,away,kickoff,fresh=false) {
   if(!env.API_FOOTBALL_KEY || !(await fanAiConfig(env)).extras)return null;
   const hid=/^[1-9]\d{0,7}$/.test(String(home?.teamId))?String(home.teamId):null;
   const aid=/^[1-9]\d{0,7}$/.test(String(away?.teamId))?String(away.teamId):null;
@@ -3102,10 +3121,10 @@ async function fanAiExtras(env,home,away,kickoff) {
     const matches=form.matches || [];
     const wantPlayers=(await fanAiConfig(env)).players;
     const [coach,injuries,lineup,players,...cards]=await Promise.all([
-      fanAiCoach(env,teamId).catch(()=>null),
+      fanAiCoach(env,teamId,fresh).catch(()=>null),
       fanAiInjuries(env,teamId,kickoff).catch(()=>null),
       fanAiLineup(env,upcomingId,matches[0]?.id,teamId).catch(()=>null),
-      wantPlayers?fanAiPlayers(env,teamId,kickoff).catch(()=>null):null,
+      wantPlayers?fanAiPlayers(env,teamId,kickoff,fresh).catch(()=>null):null,
       ...matches.map(m=>Number.isSafeInteger(m.id)?fanAiCards(env,m.id,teamId).catch(()=>null):null)
     ]);
     const got=cards.filter(Boolean),sum=k=>got.reduce((n,c)=>n+(c[k] || 0),0);
@@ -3188,10 +3207,10 @@ const FAN_AI_TEAM_LEAGUES=FAN_AI_LEAGUES.slice(0,20);
 const FAN_AI_UPCOMING_DAYS=10;
 function fanAiLogo(raw){return typeof raw==='string' && /^https:\/\/(?:[a-z0-9.-]+\.espncdn\.com|(?:[a-z0-9-]+\.)?thesportsdb\.com)\//i.test(raw) && raw.length<300?raw:'';}
 // Small D1-backed cache (one row per key). A failed or empty rebuild falls back to the stale copy.
-async function fanAiCached(env,key,ttl,build) {
+async function fanAiCached(env,key,ttl,build,fresh=false) {
   const now=Date.now(),row=await env.DB.prepare('SELECT data,fetched_at FROM fan_espn_form_cache WHERE cache_key=?').bind(key).first();
   let stale=null;
-  if(row){try{stale=JSON.parse(row.data);}catch{}if(stale && row.fetched_at>now-ttl)return stale;}
+  if(row){try{stale=JSON.parse(row.data);}catch{}if(stale && !fresh && row.fetched_at>now-ttl)return stale;}
   let pending=fanEspnRequests.get(env);if(!pending){pending=new Map();fanEspnRequests.set(env,pending);}
   if(pending.has(key))return pending.get(key);
   const task=(async()=>{
@@ -3252,7 +3271,7 @@ async function fanAiTsdbUpcoming(now,day) {
   }
   return rows;
 }
-function fanAiUpcoming(env) {
+function fanAiUpcoming(env,fresh=false) {
   return fanAiCached(env,'ai-upcoming:v2',1800000,async()=>{
     const now=Date.now(),day=t=>new Date(t).toISOString().slice(0,10).replace(/-/g,'');
     const range=`${day(now)}-${day(now+FAN_AI_UPCOMING_DAYS*86400000)}`;
@@ -3281,7 +3300,7 @@ function fanAiUpcoming(env) {
       complete=out.size>0;
     }
     return {rows:[...out.values()].sort((x,y)=>Date.parse(x.kickoff)-Date.parse(y.kickoff)).slice(0,300),complete};
-  });
+  }  },fresh);
 }
 function fanAiTeams(env) {
   return fanAiCached(env,'ai-teams:v1',21600000,async()=>{
@@ -3329,7 +3348,7 @@ function fanAiFindTeam(index,raw) {
 }
 async function fanAiMatches(request,env,id) {
   if(request.method!=='GET')return json({error:'Method not allowed'},405);
-  const list=await fanAiUpcoming(env);
+  const list=await fanAiUpcoming(env,new URL(request.url).searchParams.get('fresh')==='1');
   if(!list.length) {
     // Say why, so a blocked or misconfigured source can be found quickly.
     const probe=async url=>{try{const r=await fetch(url,{headers:FAN_HTTP,signal:AbortSignal.timeout(6000)});return r.ok?'reachable':`HTTP ${r.status}`;}catch(e){return String(e?.message || 'no connection').slice(0,40);}};
@@ -3379,7 +3398,18 @@ async function fanAiAnyMatch(env,id,b) {
       catch(e){throw e instanceof FanFormError && e.code==='insufficient_results'?new FanFormError(`No team found for "${String(t.name).slice(0,40)}". Check the spelling or use the full club name.`,'team_unavailable'):e;}
     };
     const [homeForm,awayForm]=await Promise.all([formOf(home),formOf(away)]);
-    return await fanAiFinish(env,id,{home:info.home,away:info.away,league:info.league,kickoff:info.kickoff},homeForm,awayForm,{fixture:info});
+    // Team news (coach, injuries, key players, odds, lineups) is optional: any failure just leaves it out.
+    let extras=null;
+    if(env.API_FOOTBALL_KEY) {
+      try {
+        const [hid,aid]=await Promise.all([fanAiApiTeamId(env,info.home).catch(()=>null),fanAiApiTeamId(env,info.away).catch(()=>null)]);
+        if(hid || aid) {
+          const side=tid=>({teamId:tid,matches:[]});
+          extras=await Promise.race([fanAiExtras(env,side(hid),side(aid),kickoff,b.fresh===true),new Promise(r=>setTimeout(()=>r(null),12000))]).catch(()=>null);
+        }
+      } catch(e) {console.error('Any-match extras failed',e?.message);}
+    }
+    return await fanAiFinish(env,id,{home:info.home,away:info.away,league:info.league,kickoff:info.kickoff},homeForm,awayForm,extras?{fixture:info,extras}:{fixture:info});
   } catch(e) {
     console.error('Any-match analysis failed',e?.message);
     const known=e instanceof FanFormError;
@@ -4569,5 +4599,15 @@ async function fanAnalysisForm(env,fixture,teamId,name,kickoff) {
     }
   }
   if(original?.code==='insufficient_results' || lastErr instanceof FanFormError && lastErr.code==='insufficient_results')return {source:'API-Football',teamId,fetchedAt:Date.now(),matches:[],played:0,wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0};
+  // API-Football refused (plan, quota, key, outage) or has no ID: ESPN's free results are always the safety net,
+  // even when api_providers.json lists only API-Football.
+  if(!original || /^(provider_|team_unavailable)/.test(String(original.code || ''))) {
+    for(const src of ['espn','espn_scan']) {
+      if(order.includes(src))continue;
+      try {
+        return src==='espn'?await fanEspnRecentForm(env,fixture,name,kickoff):await fanEspnScanForm(env,name,kickoff);
+      } catch(e) {lastErr=e;}
+    }
+  }
   throw original || lastErr || new FanFormError('No recent-results source is enabled. Check api_providers.json.','team_unavailable');
 }
