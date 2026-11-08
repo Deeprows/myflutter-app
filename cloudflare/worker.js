@@ -3300,7 +3300,7 @@ function fanAiUpcoming(env,fresh=false) {
       complete=out.size>0;
     }
     return {rows:[...out.values()].sort((x,y)=>Date.parse(x.kickoff)-Date.parse(y.kickoff)).slice(0,300),complete};
-  }  },fresh);
+  },fresh);
 }
 function fanAiTeams(env) {
   return fanAiCached(env,'ai-teams:v1',21600000,async()=>{
