@@ -23,6 +23,7 @@ import '../widgets/movie_card.dart';
 import '../widgets/movie_info_panel.dart';
 import '../services/movie_library.dart';
 import '../utils/open_movie.dart';
+import '../utils/premium_gate.dart';
 import 'browser_screen.dart';
 import 'library_screen.dart';
 import 'trailer_player_screen.dart';
@@ -822,9 +823,13 @@ class _MovieSheet extends StatelessWidget {
   const _MovieSheet({required this.movie, required this.onPlay, required this.infoFuture,
     required this.trailerFuture, required this.similarFuture, required this.onMovieTap});
 
-  Future<void> _download(BuildContext context) =>
-      // Deeprows Browser offer; otherwise the phone's own browser.
-      PartnerBrowser.instance.download(context, movie.downloadUrl);
+  Future<void> _download(BuildContext context) async {
+    // Premium only: everyone else is sent to upgrade.
+    if (!await PremiumGate.allowMovies(context)) return;
+    if (!context.mounted) return;
+    // Deeprows Browser offer; otherwise the phone's own browser.
+    await PartnerBrowser.instance.download(context, movie.downloadUrl);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -917,7 +922,7 @@ class _MovieSheet extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 15),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    icon: const Icon(Icons.play_arrow_rounded, size: 24),
+                    icon: Icon(PremiumGate.locked ? Icons.lock_rounded : Icons.play_arrow_rounded, size: 24),
                     label: Text('Play'.tr, style: const TextStyle(fontWeight: FontWeight.w900)),
                   ),
                 ),
@@ -955,7 +960,7 @@ class _MovieSheet extends StatelessWidget {
                         side: BorderSide(color: Ui.line),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
-                      icon: const Icon(Icons.download_rounded),
+                      icon: Icon(PremiumGate.locked ? Icons.lock_rounded : Icons.download_rounded),
                       label: Text('Download'.tr, style: const TextStyle(fontWeight: FontWeight.w800)),
                     ),
                   ),
