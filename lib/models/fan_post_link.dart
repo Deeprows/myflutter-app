@@ -1,3 +1,4 @@
+import '../config.dart';
 /// Only HTTP(S) URLs are accepted; pasted iframe markup is treated as text.
 List<String> fanPostLinks(String text) {
   final links = <String>{};
@@ -35,7 +36,7 @@ String fanVideoUrl(String raw) {
     return Uri.https('www.youtube.com', '/embed/$id', {
       'playsinline': '1',
       'rel': '0',
-      'origin': 'https://deeprowss.com',
+      'origin': AppConfig.embedOrigin,
     }).toString();
   }
   if ((host.startsWith('filemoon.') || host.startsWith('www.filemoon.')) &&
