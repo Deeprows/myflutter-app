@@ -65,12 +65,22 @@ const CORS = {
     "content-type, authorization, x-install-id, x-app-version, x-platform",
 };
 
+// TheSportsDB key: the free shared test key by default. Set a Worker variable THESPORTSDB_KEY (letters/numbers only)
+// to use another free test key (for example 123) or your own supporter key, without a code change.
+let TSDB_KEY='3';
+function fanSetTsdbKey(env) {
+  const k=String(env?.THESPORTSDB_KEY || '').trim();
+  TSDB_KEY=/^[A-Za-z0-9_-]{1,40}$/.test(k)?k:'3';
+}
+
 export default {
   async scheduled(controller,env,ctx) {
+    fanSetTsdbKey(env);
     const task=(async()=>{if(!env.DB)return;await fanInit(env.DB);await fanSyncResults(env);})();
     ctx.waitUntil(task);
   },
   async fetch(request, env, ctx) {
+    fanSetTsdbKey(env);
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
@@ -3052,7 +3062,7 @@ async function fanAiTsdbUpcoming(now,day) {
   const rows=[];
   const dates=Array.from({length:7},(_,i)=>new Date(now+i*86400000).toISOString().slice(0,10));
   const parts=await Promise.allSettled(dates.map(async d=>{
-    const r=await fetch(`https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=${d}&s=Soccer`,{headers:FAN_HTTP,signal:AbortSignal.timeout(7000)});
+    const r=await fetch(`https://www.thesportsdb.com/api/v1/json/${TSDB_KEY}/eventsday.php?d=${d}&s=Soccer`,{headers:FAN_HTTP,signal:AbortSignal.timeout(7000)});
     if(!r.ok)throw new Error('TheSportsDB '+r.status);
     return r.json();
   }));
@@ -3148,7 +3158,7 @@ async function fanAiMatches(request,env,id) {
   if(!list.length) {
     // Say why, so a blocked or misconfigured source can be found quickly.
     const probe=async url=>{try{const r=await fetch(url,{headers:FAN_HTTP,signal:AbortSignal.timeout(6000)});return r.ok?'reachable':`HTTP ${r.status}`;}catch(e){return String(e?.message || 'no connection').slice(0,40);}};
-    const [espn,tsdb]=await Promise.all([probe('https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard'),probe('https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d='+new Date().toISOString().slice(0,10)+'&s=Soccer')]);
+    const [espn,tsdb]=await Promise.all([probe('https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard'),probe(`https://www.thesportsdb.com/api/v1/json/${TSDB_KEY}/eventsday.php?d=`+new Date().toISOString().slice(0,10)+'&s=Soccer')]);
     return json({error:`No upcoming matches found (ESPN: ${espn}, TheSportsDB: ${tsdb}). Please retry later.`,detail:{espn,tsdb}},503);
   }
   return json({matches:list.map(({homeId,awayId,leagueCode,source,...m})=>m)});
@@ -4151,7 +4161,7 @@ async function fanSyncResults(env) {
       }
       if(!result) {
         const days=[-1,0,1].map(d=>new Date(row.kickoff+d*86400000).toISOString().slice(0,10));
-        const sets=await Promise.all(days.map(d=>load(`https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=${d}&s=Soccer`)));
+        const sets=await Promise.all(days.map(d=>load(`https://www.thesportsdb.com/api/v1/json/${TSDB_KEY}/eventsday.php?d=${d}&s=Soccer`)));
         result=fanTsdbFinal(f,sets);
         if(!result)note=leagueData===null?'Score provider is not reachable from the server yet':'Not final on ESPN yet (will keep checking)';
       }
