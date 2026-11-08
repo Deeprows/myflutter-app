@@ -31,6 +31,10 @@
     "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
   },
 
+  "player": {
+    "origin": "https://deeprowss.com/"
+  },
+
   "share": {
     "message": "Get Deeprowss - live football, highlights, TV and movies",
     "link": "https://deeprowss.com/download.html"
