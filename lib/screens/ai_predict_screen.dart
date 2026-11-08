@@ -119,7 +119,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     _selected.retainAll(keys);
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool fresh = false}) async {
     if (!mounted || _loading || _busy) return;
     setState(() => _loading = true);
     try {
@@ -139,7 +139,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-    await _loadExt();
+    await _loadExt(fresh: fresh);
     unawaited(_loadMyPicks());
     if (mounted) setState(_prune);
   }
@@ -293,14 +293,17 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
 
   /// Upcoming matches from ESPN across all leagues, so any match can be picked
   /// and analysed (not just the ones in the app's own list).
-  Future<void> _loadExt() async {
+  Future<void> _loadExt({bool fresh = false}) async {
     if (!mounted || _extLoading) return;
     setState(() {
       _extLoading = true;
       _extError = null;
     });
     try {
-      final data = await FanZoneService.call('ai-predict/matches');
+      final data = await FanZoneService.call(
+        'ai-predict/matches',
+        query: fresh ? {'fresh': '1'} : null,
+      );
       final own = {for (final f in _fixtures) '${_n(f.home)}|${_n(f.away)}'};
       final list = <Fixture>[];
       for (final m in FanZoneService.rows(data['matches'])) {
@@ -762,6 +765,35 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       if (mounted) setState(() => _done++);
     }
     if (mounted) setState(() => _busy = false);
+  }
+
+  final Set<String> _refreshing = <String>{};
+
+  /// Re-runs one analysis with fresh provider data (bypasses the server's saved player/coach data).
+  Future<void> _refreshOne(Fixture f) async {
+    final key = FanZoneService.matchKey(f);
+    if (_busy || _refreshing.contains(key)) return;
+    setState(() => _refreshing.add(key));
+    try {
+      final data = await FanZoneService.call(
+        'ai-predict',
+        body: {..._bodyFor(f), 'fresh': true},
+        timeout: const Duration(seconds: 120),
+      );
+      if (!mounted) return;
+      setState(() {
+        _results[key] = data;
+        _failures.remove(key);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_failText(f, e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing.remove(key));
+    }
   }
 
   String _date(dynamic value) {
@@ -2458,7 +2490,27 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         const SizedBox(height: 4),
         Align(
           alignment: Alignment.centerRight,
-          child: TextButton.icon(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton.icon(
+                onPressed: _refreshing.contains(FanZoneService.matchKey(f))
+                    ? null
+                    : () => _refreshOne(f),
+                icon: _refreshing.contains(FanZoneService.matchKey(f))
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh_rounded, size: 16),
+                label: Text(
+                  _refreshing.contains(FanZoneService.matchKey(f))
+                      ? 'Refreshing…'
+                      : 'Refresh analysis',
+                ),
+              ),
+              TextButton.icon(
             onPressed: () async {
               final analysis = 'Deeprowss AI Predict\\n${f.title}\\n\\n'
                   '${'${data['analysis']}'.replaceAll('**', '')}\\n\\n'
@@ -2519,6 +2571,8 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             },
             icon: const Icon(Icons.ios_share_rounded, size: 18),
             label: const Text('Share analysis'),
+          ),
+            ],
           ),
         ),
       ],
@@ -3430,7 +3484,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         IconButton(
           tooltip: 'Refresh matches',
           icon: const Icon(Icons.refresh_rounded),
-          onPressed: _loading || _busy ? null : _load,
+          onPressed: _loading || _busy ? null : () => _load(fresh: true),
         ),
       ],
     ),
@@ -3438,7 +3492,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       children: [
         Expanded(
           child: RefreshIndicator(
-            onRefresh: _load,
+            onRefresh: () => _load(fresh: true),
             child: ListView(
               controller: _scroll,
               physics: const AlwaysScrollableScrollPhysics(),
