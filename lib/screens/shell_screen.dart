@@ -94,7 +94,11 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     await showDialog<void>(
       context: context,
       barrierDismissible: true,
-      builder: (dialogContext) => Dialog(
+      builder: (dialogContext) => Theme(
+        // The card is always dark, so everything inside uses the dark theme
+        // (otherwise light-theme text colours can leak in as dark-on-dark).
+        data: ThemeData.dark(useMaterial3: true),
+        child: Dialog(
         backgroundColor: const Color(0xFF111827),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         child: Padding(
@@ -113,7 +117,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
               const SizedBox(height: 18),
               Text('Join Deeprowss on Telegram',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Ui.text, fontSize: 22, fontWeight: FontWeight.w900)),
+                style: const TextStyle(inherit: false, color: Colors.white, fontSize: 22, height: 1.25, fontWeight: FontWeight.w900)),
               const SizedBox(height: 10),
               const Text('Get updates, new features, match alerts and announcements from our official community.',
                 textAlign: TextAlign.center,
@@ -144,6 +148,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
             ],
           ),
         ),
+      ),
       ),
     );
   }
