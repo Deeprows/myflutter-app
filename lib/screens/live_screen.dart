@@ -1196,76 +1196,22 @@ class _UpgradeButton extends StatelessWidget {
 }
 
 
-/// Stylised app title: bold italic "DEEP" in the theme text colour, "ROWSS"
-/// in a red-to-orange gradient, a soft glow and a small accent bar beneath.
+/// The app logo (the same round Deeprowss logo as the splash / launcher
+/// icon) in the header, small and left-aligned.
 class _BrandTitle extends StatelessWidget {
   const _BrandTitle();
 
   @override
   Widget build(BuildContext context) {
-    const base = TextStyle(
-      fontSize: 22,
-      fontWeight: FontWeight.w900,
-      fontStyle: FontStyle.italic,
-      letterSpacing: 1.2,
-      height: 1.0,
-    );
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('DEEP', style: base.copyWith(color: Ui.text)),
-              ShaderMask(
-                blendMode: BlendMode.srcIn,
-                shaderCallback: (r) => const LinearGradient(
-                  colors: [Color(0xFFFF2D55), Color(0xFFFF8A00)],
-                ).createShader(r),
-                // Fill + outline stacked: the outline thickens every stroke so
-                // ROWSS looks heavier than the w900 weight alone allows.
-                child: Stack(
-                  children: [
-                    Text(
-                      'ROWSS',
-                      style: base.copyWith(
-                        foreground: Paint()
-                          ..style = PaintingStyle.stroke
-                          ..strokeWidth = 2.2
-                          ..strokeJoin = StrokeJoin.round
-                          ..color = Colors.white,
-                        shadows: [
-                          Shadow(
-                            color:
-                                const Color(0xFFFF2D55).withValues(alpha: .35),
-                            blurRadius: 10,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text('ROWSS', style: base.copyWith(color: Colors.white)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          width: 46,
-          height: 3,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(3),
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFF2D55), Color(0xFFFF8A00)],
-            ),
-          ),
-        ),
-      ],
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Image.asset(
+        'assets/icon/logo_header.png',
+        height: 46,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        semanticLabel: 'Deeprowss',
+      ),
     );
   }
 }
