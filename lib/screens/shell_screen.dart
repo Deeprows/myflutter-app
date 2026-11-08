@@ -327,13 +327,15 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   /// to fit its slot and ignores the phone's font scale, so long names such
   /// as "Match Room" never wrap or break mid-word.
   Widget _navItem(IconData icon, String label, bool selected) {
-    final color = selected ? Ui.red : Ui.navOff;
+    final color = selected
+        ? Ui.red
+        : (Ui.isLight ? const Color(0xFF3B4250) : Ui.navOff);
     return SizedBox(
       width: 58,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 26, color: color),
+          Icon(icon, size: 28, color: color),
           const SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,
@@ -343,9 +345,9 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
               softWrap: false,
               textScaler: TextScaler.noScaling,
               style: TextStyle(
-                fontSize: 10.5,
+                fontSize: 11,
                 height: 1.1,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                fontWeight: FontWeight.w900,
                 color: color,
               ),
             ),
@@ -358,10 +360,10 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   List<NavigationDestination> _navDestinations() {
     final items = <(IconData, IconData, String)>[
       (Icons.sensors_rounded, Icons.sensors_rounded, 'Live'.tr),
-      (Icons.forum_outlined, Icons.forum_rounded, 'Thread'.tr),
-      (Icons.auto_awesome_outlined, Icons.auto_awesome_rounded, 'AI Predict'.tr),
-      (Icons.groups_outlined, Icons.groups_rounded, 'Match Room'.tr),
-      (Icons.person_outline_rounded, Icons.person_rounded, 'Profile'.tr),
+      (Icons.forum_rounded, Icons.forum_rounded, 'Thread'.tr),
+      (Icons.auto_awesome_rounded, Icons.auto_awesome_rounded, 'AI Predict'.tr),
+      (Icons.groups_rounded, Icons.groups_rounded, 'Match Room'.tr),
+      (Icons.person_rounded, Icons.person_rounded, 'Profile'.tr),
       (Icons.search_rounded, Icons.search_rounded, 'Search'.tr),
     ];
     return [
