@@ -1015,6 +1015,34 @@ async function subscriptions(request, env, url) {
   try {
     await ensureSchema(env);
 
+    // Premium belongs to the Gmail account that is logged in (not to the
+    // phone). When Google sign-in is set up, these routes need a valid Google
+    // token and ignore whatever id the app sends: the id is always the
+    // verified account's.
+    const accountBound =
+      path === "/sub/status" ||
+      path === "/sub/start" ||
+      path === "/sub/restore" ||
+      path.startsWith("/sub/token/");
+    if (accountBound && env.GOOGLE_WEB_CLIENT_ID) {
+      const who = await subIdentity(request, env);
+      if (!who) {
+        return json(
+          { error: "Please log in with your Gmail to use Premium.", login: true },
+          401
+        );
+      }
+      const legacyInstall = String(request.headers.get("x-install-id") || "");
+      const bound = await bindToAccount(request, url, who);
+      request = bound.request;
+      url = bound.url;
+      if (path === "/sub/status") {
+        // Premium bought before accounts existed lived on the phone's install
+        // id: hand it to the Gmail it was paid with (never to another one).
+        await claimLegacyPremium(env, who, legacyInstall);
+      }
+    }
+
     if (path === "/sub/status" && request.method === "GET") {
       return subStatus(url, env);
     }
@@ -1247,6 +1275,93 @@ async function hmacHex(secret, text) {
     .join("");
 }
 
+// ---- who is asking (Gmail account) ------------------------------------------
+
+/** The verified Gmail account behind the request, or null. Its id is the
+ *  same id the Fan Zone uses, so one Gmail = one id everywhere. */
+async function subIdentity(request, env) {
+  const token = (request.headers.get("authorization") || "").replace(
+    /^Bearer /,
+    ""
+  );
+  try {
+    const identity = await verifyFanGoogleToken(token, env);
+    if (!identity) return null;
+    return {
+      id: await fanHash("google:" + identity.sub),
+      email: identity.email,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Rewrites the request so the id inside it is the account's id, whatever the
+ *  app (or anybody else) put there. */
+async function bindToAccount(request, url, who) {
+  if (request.method === "GET") {
+    const u = new URL(url.toString());
+    u.searchParams.set("install", who.id);
+    return { request, url: u };
+  }
+  let b = {};
+  try {
+    b = await request.json();
+  } catch {
+    b = {};
+  }
+  if (!b || typeof b !== "object") b = {};
+  b.install_id = who.id;
+  b.account_email = who.email;
+  return {
+    request: new Request(request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: JSON.stringify(b),
+    }),
+    url,
+  };
+}
+
+/** One-time hand-over of premium that was bought on a phone before accounts
+ *  existed. It goes only to the Gmail that paid for it (same e-mail), once,
+ *  and the old phone row is switched off so no second account can use it. */
+async function claimLegacyPremium(env, who, legacyId) {
+  if (!ID_RE.test(legacyId) || legacyId === who.id) return;
+  const row = await env.DB.prepare(
+    "SELECT email, expires_at FROM subs WHERE install_id = ?"
+  )
+    .bind(legacyId)
+    .first();
+  if (
+    !row ||
+    Number(row.expires_at) <= Date.now() ||
+    String(row.email || "").toLowerCase() !== who.email
+  ) {
+    return;
+  }
+  await moveTime(env, legacyId, who, "claimed");
+}
+
+/** Moves the paid time of [fromId] onto the account (never copies it). */
+async function moveTime(env, fromId, who, source) {
+  const now = Date.now();
+  const from = await expiryOf(env, fromId);
+  if (from <= now) return;
+  const mine = await expiryOf(env, who.id);
+  const expires = Math.max(mine, from);
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO subs (install_id, email, expires_at, source, updated_at) VALUES (?, ?, ?, ?, ?) " +
+        "ON CONFLICT(install_id) DO UPDATE SET expires_at = excluded.expires_at, " +
+        "email = excluded.email, source = excluded.source, updated_at = excluded.updated_at"
+    ).bind(who.id, who.email, expires, source, now),
+    env.DB.prepare(
+      "UPDATE subs SET expires_at = 0, email = NULL, source = 'moved', updated_at = ? WHERE install_id = ?"
+    ).bind(now, fromId),
+  ]);
+}
+
 // ---- entitlement -----------------------------------------------------------
 
 async function expiryOf(env, installId) {
@@ -1335,7 +1450,8 @@ async function subStart(request, env, url) {
     return json({ error: "bad request" }, 400);
   }
   const installId = String(b.install_id || "");
-  const email = String(b.email || "").trim().toLowerCase();
+  // Logged in: the receipt and renewals go to the Gmail that owns the premium.
+  const email = String(b.account_email || b.email || "").trim().toLowerCase();
   if (!ID_RE.test(installId)) return json({ error: "bad install id" }, 400);
   if (!EMAIL_RE.test(email)) {
     return json({ error: "Enter a valid e-mail address" }, 400);
@@ -1468,6 +1584,19 @@ async function subRestore(request, env) {
   const expires = Number(row?.e) || 0;
   if (expires <= Date.now()) {
     return json({ error: "That subscription has expired" }, 404);
+  }
+  if (b.account_email) {
+    // Logged-in account: the time MOVES to this Gmail (the old holder loses
+    // it), so one payment can never be used by two accounts.
+    const who = { id: installId, email: String(b.account_email).toLowerCase() };
+    const old = await env.DB.prepare(
+      "SELECT install_id FROM subs WHERE email = ? AND install_id <> ? AND expires_at > ?"
+    )
+      .bind(email, installId, Date.now())
+      .all();
+    for (const r of old.results || []) await moveTime(env, r.install_id, who, "restored");
+    const e = await expiryOf(env, installId);
+    return json({ ok: true, active: e > Date.now(), expires_at: e, now: Date.now() });
   }
   await env.DB.prepare(
     "INSERT INTO subs (install_id, email, expires_at, source, updated_at) VALUES (?, ?, ?, 'restored', ?) " +
@@ -2067,10 +2196,12 @@ async function fanZone(request, env, url, ctx) {
     if(banned)return json({error:fanBanMessage(banned),banned:true},403);
     if(url.pathname==='/fan/ai-predict/matches')return await fanAiMatches(request,env,id);
     if(url.pathname==='/fan/ai-predict')return await fanAiPredict(request,env,id);
+    if(env.GOOGLE_WEB_CLIENT_ID) await fanClearLeakedPremium(env);
     let user = await db.prepare('SELECT * FROM fan_users WHERE id=?').bind(id).first();
     // A paid subscription lives on the phone's install id. Copy its expiry onto
     // the fan account so the blue tick shows on posts, comments and ranks.
-    const subInstall=String(request.headers.get('x-install-id') || '');
+    // With Gmail accounts, premium is the ACCOUNT's (never the phone's).
+    const subInstall=env.GOOGLE_WEB_CLIENT_ID?id:String(request.headers.get('x-install-id') || '');
     if(user && ID_RE.test(subInstall)) {
       try {
         await ensureSchema(env);
@@ -2294,8 +2425,29 @@ async function fanIsAdmin(env,id) {
 }
 // Premium for editing: Fan Zone weekly premium, or a paid subscription on the
 // install the request comes from (same trust model as /sub/status).
+// Before Gmail-bound premium, the Worker copied a phone's paid time onto every
+// account that logged in on that phone. Those copies run up to a month, while a
+// weekly Fan Zone premium never runs past 7 days, so anything further out than
+// that is a leaked copy: clear it once. Real subscribers get theirs copied
+// again (from their own account) on their next request.
+let fanLeakCleared=false;
+async function fanClearLeakedPremium(env) {
+  if(fanLeakCleared)return;
+  try {
+    await env.DB.prepare('CREATE TABLE IF NOT EXISTS sub_flags (k TEXT PRIMARY KEY, at INTEGER NOT NULL DEFAULT 0)').run();
+    const done=await env.DB.prepare("SELECT 1 AS x FROM sub_flags WHERE k='clear_leaked_premium_v1'").first();
+    if(!done) {
+      await env.DB.prepare('UPDATE fan_users SET premium_until=0 WHERE premium_until>?').bind(Date.now()+8*86400000).run();
+      await env.DB.prepare("INSERT OR IGNORE INTO sub_flags(k,at) VALUES('clear_leaked_premium_v1',?)").bind(Date.now()).run();
+    }
+    fanLeakCleared=true;
+  } catch(_) {}
+}
 async function fanCanEdit(env,user,installId) {
   if(user && Number(user.premium_until || 0)>Date.now())return true;
+  // Gmail accounts: only the account's own subscription counts, never an id
+  // sent by the phone.
+  if(env.GOOGLE_WEB_CLIENT_ID)installId=user?.id;
   if(typeof installId==='string' && ID_RE.test(installId)) {
     try { await ensureSchema(env); return (await expiryOf(env,installId))>Date.now(); } catch(_) {}
   }
