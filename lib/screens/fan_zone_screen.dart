@@ -327,7 +327,9 @@ class _FanZoneScreenState extends State<FanZoneScreen>
       FanZonePage.rooms => Icons.groups_rounded,
     };
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      // A pushed page has nothing behind it, so it needs a real background
+      // (otherwise it shows black and the theme text becomes unreadable).
+      backgroundColor: widget.pushed ? Ui.bg : Colors.transparent,
       appBar: widget.embedded
           ? null
           : AppBar(
