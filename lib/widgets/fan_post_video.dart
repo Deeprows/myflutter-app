@@ -480,8 +480,13 @@ class _FanPostVideoState extends State<FanPostVideo>
                   const ColoredBox(color: Color(0xFF171A20)),
             )
           else
-            const ColoredBox(color: Color(0xFF171A20)),
-          const ColoredBox(color: Color(0x55000000)),
+            Image.asset(
+              'assets/themes/cr7.png',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) =>
+                  const ColoredBox(color: Color(0xFF171A20)),
+            ),
+          const ColoredBox(color: Color(0x66000000)),
           Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
