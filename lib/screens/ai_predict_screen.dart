@@ -9,6 +9,7 @@ import '../utils/safe_error_message.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/fixture.dart';
 import '../services/analysis_history.dart';
+import '../services/app_memory.dart';
 import '../services/content_sync.dart';
 import '../models/live_score.dart';
 import '../services/score_service.dart';
@@ -53,6 +54,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   final List<Fixture> _custom = [];
   final TextEditingController _typed = TextEditingController();
   final ScrollController _scroll = ScrollController();
+  final ScrollMemory _scrollMemory = ScrollMemory('ai_predict_scroll');
   final Set<String> _selected = {};
   final Set<String> _dailyFreePicks = {};
   bool _dailyPicksLoaded = false;
@@ -70,6 +72,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(() => _scrollMemory.save(_scroll.offset));
     _loadDailyFreePicks();
     _loadHistory();
     _refreshWeeklyPremium();
@@ -101,6 +104,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   void dispose() {
     ContentSync.tick.removeListener(_sync);
     _typed.dispose();
+    _scrollMemory.dispose();
     _scroll.dispose();
     _rev.dispose();
     super.dispose();
@@ -143,7 +147,11 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     }
     await _loadExt(fresh: fresh);
     unawaited(_loadMyPicks());
-    if (mounted) setState(_prune);
+    if (mounted) {
+      setState(_prune);
+      // Back to where the user was scrolled, once the match list is on screen.
+      _scrollMemory.restoreOnce(() => _scroll, () => mounted);
+    }
   }
 
   /// Loading the state also makes the server check any finished matches.
@@ -675,7 +683,22 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
 
   Future<void> _loadHistory() async {
     final list = await AiHistory.load();
-    if (mounted) setState(() => _history = list);
+    if (!mounted) return;
+    setState(() => _history = list);
+    // The analysis page that was open when the app last closed comes back.
+    if (widget.active) {
+      final pg = PageMemory.consume('analysis');
+      if (pg != null) {
+        for (final e in list) {
+          if (e.key == '${pg['id']}') {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _openHistory(e);
+            });
+            break;
+          }
+        }
+      }
+    }
   }
 
   Future<void> _remember(Fixture f, String key, Map<String, dynamic> data) async {
@@ -3315,7 +3338,10 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
 
   /// Full page for one analysed match: top pick card, more picks and the full analysis.
   void _openMatchPage(Fixture f, String key) {
-    Navigator.of(context).push(
+    // Remembered so the page comes back if the app is closed while it is open.
+    PageMemory.open('analysis', key);
+    Navigator.of(context)
+        .push(
       MaterialPageRoute<void>(
         builder: (_) => ValueListenableBuilder<int>(
           valueListenable: _rev,
@@ -3346,7 +3372,8 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           },
         ),
       ),
-    );
+    )
+        .then((_) => PageMemory.close('analysis', key));
   }
 
   Widget _hero() => Container(
