@@ -526,10 +526,10 @@ class _FanZoneScreenState extends State<FanZoneScreen>
       ),
       body: Column(
         children: [
-          // Thread page: thick straight blue line between the top shortcut
-          // bar (Profile, Ranks, Alerts...) and the For you / Following tabs.
-          if (widget.threadHeader)
-            Container(height: 4, color: const Color(0xFF1877F2)),
+          // Thread page: thick straight line between the top shortcut bar
+          // (Profile, Ranks, Alerts...) and the For you / Following tabs,
+          // in the current theme's accent colour.
+          if (widget.threadHeader) Container(height: 4, color: Ui.red),
           if (_failure != null) _failureBanner(),
           Expanded(
             child: switch (widget.page) {
