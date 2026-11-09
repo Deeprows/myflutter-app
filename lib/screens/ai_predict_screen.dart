@@ -1665,8 +1665,12 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             sections[i].title,
             sections[i].sub,
             sections[i].lines,
-            body: sections[i].title.contains('TEAM NEWS') && fixture != null && data != null
-                ? _teamNewsBody(fixture, data, sections[i].lines)
+            // Team news is shown only from verified provider data, never from the AI's own memory of squads.
+            body: sections[i].title.contains('TEAM NEWS')
+                ? ((fixture != null && data != null
+                          ? _teamNewsBody(fixture, data, sections[i].lines)
+                          : null) ??
+                      _teamNewsUnavailable())
                 : null,
           ),
         if (picks.isNotEmpty)
@@ -1710,6 +1714,12 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   // so it is complete even when the AI text is short.
   // ---------------------------------------------------------------------------
 
+  Widget _teamNewsUnavailable() => Text(
+    'Verified team news (injuries, key players, lineups) is not available for this match, so none is shown. '
+    'Squads change often and we only show what the data provider confirms.',
+    style: TextStyle(color: Ui.muted, fontSize: 12.5, height: 1.4),
+  );
+
   Widget? _teamNewsBody(Fixture f, Map data, List<String> aiLines) {
     final extras = data['extras'] is Map ? data['extras'] as Map : null;
     if (extras == null) return null;
@@ -1724,31 +1734,12 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             '${m['coach'] ?? ''}'.isNotEmpty);
     if (!has(home) && !has(away)) return null;
 
-    // AI prose for this section, shown only if it is real sentences with names.
-    final prose = aiLines
-        .where((l) => l.trim().length > 40 && RegExp(r'[a-z]{3}').hasMatch(l))
-        .toList();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _teamNewsSide(f.home, _homeColor, home),
         const SizedBox(height: 16),
         _teamNewsSide(f.away, _awayColor, away),
-        if (prose.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          Text(
-            'AI SUMMARY',
-            style: TextStyle(
-              color: Ui.muted,
-              fontSize: 10,
-              letterSpacing: 1.4,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          for (final l in prose) _aiBodyLine(l),
-        ],
         const SizedBox(height: 4),
         Text(
           'Squad stats are for the current season. Absences and lineups come from the data provider and can change before kick-off.',
