@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../config.dart';
 
 import '../player/mini_player.dart';
+import '../services/app_memory.dart';
 import '../services/content_sync.dart';
 import '../services/notice_service.dart';
 import '../services/manual_ad_service.dart';
@@ -16,6 +17,7 @@ import '../services/push_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/brand_tag.dart';
+import 'fan_thread_screen.dart';
 import 'fan_zone_screen.dart';
 import 'fan_profile_screen.dart';
 import '../services/auth_service.dart';
@@ -62,11 +64,31 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    // Which page (if any) was open on top of the tab when the app last closed.
+    PageMemory.captureLaunch();
+    final lastPost = PageMemory.consume('post');
+    if (lastPost != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => FanThreadScreen(postId: '${lastPost['id']}'),
+          ),
+        );
+      });
+    }
+    // Reopen on the tab the user was last on.
+    final savedTab = AppMemory.getInt('tab');
+    if (savedTab != null && _order.contains(savedTab)) {
+      _index = savedTab;
+      _visited.add(savedTab);
+    }
     // A notification tap that launched the app, or one tapped while open.
     final pending = PushService.instance.tabRequest.value;
     if (pending != null) {
       _index = _tabFor(pending);
       _visited.add(_index);
+      AppMemory.setInt('tab', _index);
       PushService.instance.tabRequest.value = null;
       if (pending == 1) _openHighlights();
       if (pending == 3) _openMovies();
@@ -201,6 +223,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
         _index = target;
         _visited.add(target);
       });
+      AppMemory.setInt('tab', target);
     }
     if (tab == 1) _openHighlights();
     if (tab == 3) _openMovies();
@@ -478,6 +501,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     _index = target;
                     _visited.add(target);
                   });
+                  AppMemory.setInt('tab', target);
                   if (target == 3) _maybeShowFirstProfile();
                 },
                 destinations: _navDestinations(),
