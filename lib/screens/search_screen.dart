@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../models/fixture.dart';
 import '../models/movie.dart';
+import '../services/app_memory.dart';
 import '../services/fan_zone_service.dart';
 import '../services/feed_service.dart';
 import '../services/support_gate.dart';
@@ -57,6 +58,15 @@ class _SearchScreenState extends State<SearchScreen> {
       if (mounted) setState(() => _movies = v);
     }).catchError((_) {});
     _loadTrending();
+    // The search the user had typed is still there when they come back.
+    final saved = AppMemory.getString('search_query');
+    if (saved != null && saved.trim().length >= 2) {
+      _controller.text = saved;
+      _query = saved;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _run(saved);
+      });
+    }
   }
 
   @override
@@ -81,6 +91,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _onChanged(String value) {
+    AppMemory.setString('search_query', value);
     setState(() => _query = value);
     _debounce?.cancel();
     if (value.trim().length < 2) {
