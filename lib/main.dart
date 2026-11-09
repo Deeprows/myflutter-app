@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'app.dart';
 import 'services/notification_center.dart';
 import 'services/analytics_service.dart';
+import 'services/app_memory.dart';
 import 'services/download_manager.dart';
 import 'services/feed_service.dart';
 import 'services/locale_service.dart';
@@ -25,6 +26,9 @@ Future<void> main() async {
   ]);
 
   await ThemeController.load();
+
+  // Where the user was last (tab, feed view, scroll positions).
+  await AppMemory.init();
 
   // Phone language (or the language picked in the menu).
   await AppLocale.load();
