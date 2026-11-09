@@ -7,6 +7,7 @@ import '../models/fixture.dart';
 import '../models/live_score.dart';
 import '../models/push_target.dart';
 import '../models/ticker.dart';
+import '../services/app_memory.dart';
 import '../services/feed_service.dart';
 import '../services/push_service.dart';
 import '../services/remote_config.dart';
@@ -60,9 +61,13 @@ class _LiveScreenState extends State<LiveScreen> {
   static const String _supportCardUrl =
       'https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60';
 
+  final ScrollController _scroll = ScrollController();
+  final ScrollMemory _scrollMemory = ScrollMemory('live_scroll');
+
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(() => _scrollMemory.save(_scroll.offset));
 
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       final n = DateTime.now();
@@ -170,6 +175,8 @@ class _LiveScreenState extends State<LiveScreen> {
     _scoreTimer?.cancel();
     _retryTimer?.cancel();
     _now.dispose();
+    _scrollMemory.dispose();
+    _scroll.dispose();
 
     super.dispose();
   }
@@ -410,6 +417,10 @@ class _LiveScreenState extends State<LiveScreen> {
     final ended = _fixtures.length - live - upcoming;
 
     final items = _items(now);
+    // Back to where the user was scrolled, once the match list is there.
+    if (_fixtures.isNotEmpty) {
+      _scrollMemory.restoreOnce(() => _scroll, () => mounted);
+    }
 
     return AppRefresh(
       onRefresh: () async {
@@ -418,6 +429,7 @@ class _LiveScreenState extends State<LiveScreen> {
         return !feed.remoteFailedFor('fixtures');
       },
       child: CustomScrollView(
+        controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverToBoxAdapter(
