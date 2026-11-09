@@ -3379,7 +3379,8 @@ async function fanAiAnyMatch(env,id,b) {
       kickoff=Date.parse(m.kickoff);
       if(!(kickoff>Date.now()))return fail('Choose a match that has not started.');
       // League matches use that league directly; cup and continental ties look up each club's domestic league.
-      const index=FAN_AI_DOMESTIC.has(m.leagueCode)?[]:await fanAiTeams(env);
+      // International ties never need the club-league index (saves ~28 ESPN requests, which matters on Worker request limits).
+      const index=FAN_AI_DOMESTIC.has(m.leagueCode) || FAN_NATIONAL_LEAGUE_RE.test(String(m.league || ''))?[]:await fanAiTeams(env);
       const leagueOf=(teamId,fallback)=>index.find(t=>t.id===teamId)?.league || fallback;
       home={id:m.homeId,name:m.home,league:leagueOf(m.homeId,m.leagueCode)};away={id:m.awayId,name:m.away,league:leagueOf(m.awayId,m.leagueCode)};
       info={home:m.home,away:m.away,homeLogo:m.homeLogo,awayLogo:m.awayLogo,league:m.league,kickoff:m.kickoff};
@@ -4494,12 +4495,13 @@ async function fanEspnFormJson(env,key,url,opts={}) {
   if(pending.has(key))return pending.get(key);
   const task=(async()=>{
     // Second ESPN host is tried when the first one errors, rate-limits or times out.
+    let why='';
     for(const host of ['https://site.api.espn.com','https://site.web.api.espn.com']) {
       let response;
-      try{response=await fetch(url.replace('https://site.api.espn.com',host),{headers:FAN_HTTP,signal:AbortSignal.timeout(7000)});}catch(e){console.error('ESPN form fetch failed',host,e?.message);continue;}
+      try{response=await fetch(url.replace('https://site.api.espn.com',host),{headers:FAN_HTTP,signal:AbortSignal.timeout(7000)});}catch(e){why=String(e?.message || 'no connection');console.error('ESPN form fetch failed',host,why);continue;}
       // A club that was not in this league that season has no schedule there: that is "no games", not an outage.
       if((response.status===400 || response.status===404) && opts.emptyOn404)return {events:[]};
-      if(!response.ok){console.error('ESPN form HTTP',response.status,host);continue;}
+      if(!response.ok){why='ESPN HTTP '+response.status;console.error('ESPN form HTTP',response.status,host);continue;}
       const data=await response.json().catch(()=>null);
       if(!data || typeof data!=='object' || (!Array.isArray(data.events) && !Array.isArray(data.sports)))continue;
       await env.DB.prepare('INSERT INTO fan_espn_form_cache(cache_key,data,fetched_at) VALUES(?,?,?) ON CONFLICT(cache_key) DO UPDATE SET data=excluded.data,fetched_at=excluded.fetched_at').bind(key,JSON.stringify(data),now).run();
@@ -4507,10 +4509,11 @@ async function fanEspnFormJson(env,key,url,opts={}) {
     }
     // Both hosts failed: an older copy is far better than no analysis.
     if(stale)return stale;
-    throw new FanFormError('Recent-results sources are unavailable. Please retry later.');
+    throw fanUnavailable(why);
   })();
   pending.set(key,task);try{return await task;}finally{pending.delete(key);}
 }
+function fanUnavailable(why){return new FanFormError('Recent-results sources are unavailable'+(why?' ('+String(why).replace(/[^\w .:\/-]/g,'').slice(0,50)+')':'')+'. Please retry later.');}
 function fanAnalysisName(raw){return fanResultName(raw).replace(/\b(?:18|19)\d{2}\b/g,'').replace(/\s+/g,' ').trim();}
 async function fanEspnRecentForm(env,fixture,name,kickoff) {
   const league=/^[a-z0-9.]{1,40}$/.test(fixture.scoreLeague || '')?fixture.scoreLeague:FAN_RESULT_LEAGUES[fanResultName(fixture.league)];
@@ -4567,11 +4570,11 @@ async function fanEspnScanWindow(env,from,to,keep) {
       const row=await env.DB.prepare('SELECT data FROM fan_espn_form_cache WHERE cache_key=?').bind(key).first();
       if(row){try{return JSON.parse(row.data);}catch{}}
     }
-    let events=null,complete=true;
+    let events=null,complete=true,why='';
     try {
       const response=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates=${from}-${to}&limit=1000`,{headers:FAN_HTTP,signal:AbortSignal.timeout(8000)});
-      if(response.ok){const d=await response.json();if(Array.isArray(d?.events))events=d.events;}
-    } catch(e) {console.error('ESPN scan range failed',from,to,e?.message);}
+      if(response.ok){const d=await response.json();if(Array.isArray(d?.events))events=d.events;}else why='ESPN HTTP '+response.status;
+    } catch(e) {why=String(e?.message || 'no connection');console.error('ESPN scan range failed',from,to,why);}
     if(!events) {
       // ESPN's all-soccer feed is not always reliable for date ranges: fall back to one request per day.
       const days=[];
@@ -4584,7 +4587,7 @@ async function fanEspnScanWindow(env,from,to,keep) {
         return j.events;
       }));
       const ok=parts.filter(x=>x.status==='fulfilled');
-      if(!ok.length)throw new FanFormError('Recent-results sources are unavailable. Please retry later.');
+      if(!ok.length)throw fanUnavailable(why || (parts[0]?.reason?.message));
       complete=ok.length===parts.length;
       events=ok.flatMap(x=>x.value);
     }
@@ -4614,8 +4617,9 @@ async function fanEspnScanForm(env,name,kickoff) {
   for(let batch=0;batch<4 && found.size<5;batch++) {
     const windows=[];
     for(let i=0;i<4;i++){windows.push({from:ymd(end-2*86400000),to:ymd(end),keep:end<now-2*86400000});end-=3*86400000;}
-    const loaded=await Promise.all(windows.map(w=>fanEspnScanWindow(env,w.from,w.to,w.keep).catch(()=>null)));
-    if(loaded.every(x=>x===null))throw new FanFormError('Recent-results sources are unavailable. Please retry later.');
+    let lastWhy='';
+    const loaded=await Promise.all(windows.map(w=>fanEspnScanWindow(env,w.from,w.to,w.keep).catch(e=>{lastWhy=String(e?.message || '').replace(/^Recent-results sources are unavailable ?/,'').replace(/^\(|\)?\. Please retry later\.$/g,'');return null;})));
+    if(loaded.every(x=>x===null))throw fanUnavailable(lastWhy);
     for(const games of loaded)for(const g of games || []) {
       if(g.at>=limit || g.at<now-120*86400000)continue;
       const home=same(g.h.n),away=!home && same(g.a.n);
@@ -4644,15 +4648,25 @@ async function fanNationalSlug(env,slug,from,to,keep) {
   const task=(async()=>{
     const row=await env.DB.prepare('SELECT data,fetched_at FROM fan_espn_form_cache WHERE cache_key=?').bind(key).first();
     if(row && (keep || row.fetched_at>Date.now()-6*3600000)){try{return JSON.parse(row.data);}catch{}}
-    const response=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${from}-${to}&limit=1000`,{headers:FAN_HTTP,signal:AbortSignal.timeout(8000)});
-    // An unknown competition slug is remembered as empty so it is not asked for again all day.
-    if(response.status===400 || response.status===404) {
-      await env.DB.prepare('INSERT INTO fan_espn_form_cache(cache_key,data,fetched_at) VALUES(?,?,?) ON CONFLICT(cache_key) DO UPDATE SET data=excluded.data,fetched_at=excluded.fetched_at').bind(key,'[]',Date.now()).run();
-      return [];
+    let data=null,why='';
+    for(const host of ['https://site.api.espn.com','https://site.web.api.espn.com']) {
+      let response;
+      try{response=await fetch(`${host}/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${from}-${to}&limit=1000`,{headers:FAN_HTTP,signal:AbortSignal.timeout(8000)});}catch(e){why=String(e?.message || 'no connection');continue;}
+      // An unknown competition slug is remembered as empty so it is not asked for again all day.
+      if(response.status===400 || response.status===404) {
+        await env.DB.prepare('INSERT INTO fan_espn_form_cache(cache_key,data,fetched_at) VALUES(?,?,?) ON CONFLICT(cache_key) DO UPDATE SET data=excluded.data,fetched_at=excluded.fetched_at').bind(key,'[]',Date.now()).run();
+        return [];
+      }
+      if(!response.ok){why='ESPN HTTP '+response.status;continue;}
+      const d=await response.json().catch(()=>null);
+      if(Array.isArray(d?.events)){data=d;break;}
+      why='ESPN invalid data';
     }
-    if(!response.ok)throw new Error('ESPN '+response.status);
-    const data=await response.json();
-    if(!Array.isArray(data?.events))throw new Error('ESPN invalid data');
+    if(!data) {
+      // Both hosts failed: an older copy of this window is better than nothing.
+      if(row){try{return JSON.parse(row.data);}catch{}}
+      throw new Error(why || 'ESPN unavailable');
+    }
     const names=t=>[t?.displayName,t?.shortDisplayName,t?.name,t?.location].filter(x=>typeof x==='string').slice(0,4);
     const games=[];
     for(const e of data.events) {
@@ -4674,10 +4688,10 @@ async function fanNationalForm(env,name,kickoff,espnId=null) {
   const want=fanNationalKey(name),id=espnId && /^\d{1,9}$/.test(String(espnId))?String(espnId):null;
   // Two 150-day windows, newest first. A window that ended over two days ago never changes, so it is kept for good.
   const chunks=[{from:ymd(limit-150*86400000),to:ymd(limit),keep:false},{from:ymd(limit-300*86400000),to:ymd(limit-151*86400000),keep:limit-151*86400000<now-2*86400000}];
-  const found=new Map();let reached=0;
+  const found=new Map();let reached=0,lastWhy='';
   const scan=async slugs=>{
     const jobs=[];
-    for(const slug of slugs)for(const ch of chunks)jobs.push(fanNationalSlug(env,slug,ch.from,ch.to,ch.keep).then(g=>{reached++;return g;}).catch(()=>null));
+    for(const slug of slugs)for(const ch of chunks)jobs.push(fanNationalSlug(env,slug,ch.from,ch.to,ch.keep).then(g=>{reached++;return g;}).catch(e=>{lastWhy=String(e?.message || '');return null;}));
     for(const games of await Promise.all(jobs))for(const g of games || []) {
       if(g.at>=limit || g.at<limit-300*86400000)continue;
       const isH=(id && g.h.i===id) || g.h.n.some(n=>fanNationalKey(n)===want);
@@ -4690,7 +4704,7 @@ async function fanNationalForm(env,name,kickoff,espnId=null) {
   await scan(FAN_NATIONAL_CORE);
   // Other confederations' competitions are only asked when Europe plus friendlies did not give enough games.
   if(found.size<5)await scan(FAN_NATIONAL_OTHER);
-  if(!reached)throw new FanFormError('Recent-results sources are unavailable. Please retry later.');
+  if(!reached)throw fanUnavailable(lastWhy);
   const rows=[...found.values()].sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)).slice(0,5);
   if(rows.length<3)throw new FanFormError('Not enough verified recent results were found for "'+String(name).slice(0,40)+'". No analysis was generated.','insufficient_results');
   return {source:'ESPN',teamId:'espn:national',fetchedAt:now,matches:rows,played:rows.length,wins:rows.filter(r=>r.result==='W').length,draws:rows.filter(r=>r.result==='D').length,losses:rows.filter(r=>r.result==='L').length,goalsFor:rows.reduce((n,r)=>n+r.goalsFor,0),goalsAgainst:rows.reduce((n,r)=>n+r.goalsAgainst,0)};
@@ -4723,7 +4737,7 @@ async function fanAnalysisForm(env,fixture,teamId,name,kickoff) {
     }
   }
   // Last resort for a side nothing else could find (e.g. a national team in a competition we did not recognise).
-  if(!nationalTried && !teamId) {
+  if(!nationalTried) {
     try{return await fanNationalForm(env,name,kickoff);}catch(e){if(e instanceof FanFormError && e.code==='insufficient_results')lastErr=e;}
   }
   if(original?.code==='insufficient_results' || lastErr instanceof FanFormError && lastErr.code==='insufficient_results')return {source:'API-Football',teamId,fetchedAt:Date.now(),matches:[],played:0,wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0};
