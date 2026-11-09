@@ -663,6 +663,15 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     FocusScope.of(context).unfocus();
   }
 
+  /// Closes one analysis card: removes its result and deselects the match.
+  void _dismissResult(String key) {
+    setState(() {
+      _selected.remove(key);
+      _results.remove(key);
+      _failures.remove(key);
+    });
+  }
+
   void _removeCustom(Fixture f) {
     if (_busy) return;
     final key = FanZoneService.matchKey(f);
@@ -3060,9 +3069,20 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                       typed ? 'YOUR MATCHUP' : '${dayLabel(k, DateTime.now())} · ${fmtTime(k)}',
                       style: TextStyle(color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w700),
                     ),
+                    const SizedBox(width: 4),
+                    // Removes this analysis and deselects the match, so no scrolling down to untick it.
+                    IconButton(
+                      tooltip: 'Remove',
+                      onPressed: _busy ? null : () => _dismissResult(key),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      color: Ui.muted,
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 6),
                 Row(
                   children: [
                     TeamCrest(logo: f.homeLogo, size: 38),
@@ -3416,42 +3436,12 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_busy)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  minHeight: 4,
-                  value: _total == 0 ? null : (_done / _total).clamp(0.0, 1.0),
-                ),
-              ),
-            ),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF7C4DFF),
-                disabledBackgroundColor: Ui.card,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                textStyle: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              onPressed: _busy || n == 0 ? null : _analyse,
-              icon: const Icon(Icons.auto_awesome_rounded, size: 20),
-              label: Text(
-                _busy
-                    ? 'Analysing… $_done/$_total'
-                    : n == 0
-                    ? 'Select matches to analyse'
-                    : 'Analyse $n match${n == 1 ? '' : 'es'}',
-              ),
-            ),
+          _AnalyseButton(
+            busy: _busy,
+            done: _done,
+            total: _total,
+            count: n,
+            onPressed: _analyse,
           ),
         ],
       ),
@@ -3566,4 +3556,158 @@ class _DarkText extends StatelessWidget {
           child: child,
         ),
       );
+}
+
+
+/// The "Analyse" button. While working it shows progress itself: a purple fill that grows with each finished
+/// match (and creeps forward during the current one), a moving shine and a spinner.
+class _AnalyseButton extends StatefulWidget {
+  const _AnalyseButton({
+    required this.busy,
+    required this.done,
+    required this.total,
+    required this.count,
+    required this.onPressed,
+  });
+
+  final bool busy;
+  final int done, total, count;
+  final VoidCallback onPressed;
+
+  @override
+  State<_AnalyseButton> createState() => _AnalyseButtonState();
+}
+
+class _AnalyseButtonState extends State<_AnalyseButton> with TickerProviderStateMixin {
+  static const _purple = Color(0xFF7C4DFF);
+  late final AnimationController _shine = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1500),
+  );
+  // Eases toward (but never reaches) the end of the match being analysed, so the bar always moves.
+  late final AnimationController _creep = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 45),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.busy) _start();
+  }
+
+  void _start() {
+    _shine.repeat();
+    _creep.forward(from: 0);
+  }
+
+  @override
+  void didUpdateWidget(_AnalyseButton old) {
+    super.didUpdateWidget(old);
+    if (widget.busy && !old.busy) {
+      _start();
+    } else if (!widget.busy && old.busy) {
+      _shine.stop();
+      _creep.stop();
+    } else if (widget.busy && widget.done != old.done) {
+      _creep.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _shine.dispose();
+    _creep.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final busy = widget.busy;
+    final enabled = !busy && widget.count > 0;
+    final label = busy
+        ? 'Analysing… ${widget.done}/${widget.total}'
+        : widget.count == 0
+        ? 'Select matches to analyse'
+        : 'Analyse ${widget.count} match${widget.count == 1 ? '' : 'es'}';
+    final fg = busy || enabled ? Colors.white : Ui.muted;
+
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: label,
+      child: SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Material(
+            color: enabled
+                ? _purple
+                : busy
+                ? _purple.withValues(alpha: .22)
+                : Ui.card,
+            child: InkWell(
+              onTap: enabled ? widget.onPressed : null,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  if (busy)
+                    Positioned.fill(
+                      child: AnimatedBuilder(
+                        animation: Listenable.merge([_shine, _creep]),
+                        builder: (context, _) {
+                          final total = widget.total == 0 ? 1 : widget.total;
+                          final inFlight = Curves.easeOut.transform(_creep.value) * 0.9;
+                          final progress = ((widget.done + inFlight) / total).clamp(0.0, 1.0);
+                          final t = _shine.value;
+                          return Align(
+                            alignment: Alignment.centerLeft,
+                            child: FractionallySizedBox(
+                              widthFactor: progress < 0.04 ? 0.04 : progress,
+                              heightFactor: 1,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment(-2 + 4 * t, 0),
+                                    end: Alignment(-1 + 4 * t, 0),
+                                    colors: [
+                                      _purple,
+                                      Color.lerp(_purple, Colors.white, .35)!,
+                                      _purple,
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (busy)
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
+                        )
+                      else
+                        Icon(Icons.auto_awesome_rounded, size: 20, color: fg),
+                      const SizedBox(width: 8),
+                      Text(
+                        label,
+                        style: TextStyle(color: fg, fontSize: 15, fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
