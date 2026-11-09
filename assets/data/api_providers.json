@@ -11,10 +11,19 @@
         "keyEnv": "GEMINI_API_KEY"
       },
       {
+        "id": "openai",
+        "label": "OpenAI",
+        "type": "openai",
+        "enabled": true,
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-4.1-mini",
+        "keyEnv": "OPENAI_API_KEY"
+      },
+      {
         "id": "groq",
         "label": "Groq",
         "type": "openai",
-        "enabled": false,
+        "enabled": true,
         "baseUrl": "https://api.groq.com/openai/v1",
         "model": "llama-3.3-70b-versatile",
         "keyEnv": "GROQ_API_KEY"
@@ -23,7 +32,7 @@
         "id": "openrouter",
         "label": "OpenRouter",
         "type": "openai",
-        "enabled": false,
+        "enabled": true,
         "baseUrl": "https://openrouter.ai/api/v1",
         "model": "meta-llama/llama-3.3-70b-instruct:free",
         "keyEnv": "OPENROUTER_API_KEY"
@@ -32,7 +41,7 @@
         "id": "mistral",
         "label": "Mistral",
         "type": "openai",
-        "enabled": false,
+        "enabled": true,
         "baseUrl": "https://api.mistral.ai/v1",
         "model": "mistral-small-latest",
         "keyEnv": "MISTRAL_API_KEY"
@@ -41,7 +50,7 @@
         "id": "cerebras",
         "label": "Cerebras",
         "type": "openai",
-        "enabled": false,
+        "enabled": true,
         "baseUrl": "https://api.cerebras.ai/v1",
         "model": "llama3.1-8b",
         "keyEnv": "CEREBRAS_API_KEY"
