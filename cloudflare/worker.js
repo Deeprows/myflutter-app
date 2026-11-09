@@ -2834,7 +2834,7 @@ async function fanAiGemini(env,system,user,modelOverride) {
 // Safety: a provider may only use a secret named like *_API_KEY and only talk to a host on this list, so an edited
 // JSON can never send one of your other secrets (Paystack, DB...) anywhere. Add a host here (or in the AI_EXTRA_HOSTS
 // variable, comma separated) to allow a brand-new provider.
-const FAN_AI_HOSTS=['api.groq.com','openrouter.ai','api.mistral.ai','api.cerebras.ai','api.together.xyz','api.deepseek.com','api.sambanova.ai','models.github.ai','generativelanguage.googleapis.com'];
+const FAN_AI_HOSTS=['api.openai.com','api.groq.com','openrouter.ai','api.mistral.ai','api.cerebras.ai','api.together.xyz','api.deepseek.com','api.sambanova.ai','models.github.ai','generativelanguage.googleapis.com'];
 const FAN_AI_CONFIG_URL='https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/api_providers.json';
 let fanAiConfigCache={at:0,cfg:null};
 // Defaults = how the Worker behaved before api_providers.json existed.
