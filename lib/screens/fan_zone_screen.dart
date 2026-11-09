@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models/fixture.dart';
+import '../services/app_memory.dart';
 import '../services/content_sync.dart';
 import '../services/fan_zone_service.dart';
 import '../services/feed_service.dart';
@@ -72,6 +73,8 @@ class _FanZoneScreenState extends State<FanZoneScreen>
   bool _saving = false;
   bool _foreground = true;
   bool _loadedOnce = false;
+  final ScrollController _roomsScroll = ScrollController();
+  final ScrollMemory _roomsMemory = ScrollMemory('rooms_scroll');
   bool _openOnly = false;
   bool _showAllHistory = false;
   String _league = '';
@@ -83,6 +86,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     ContentSync.tick.addListener(_sync);
+    _roomsScroll.addListener(() => _roomsMemory.save(_roomsScroll.offset));
     if (widget.active) _refresh();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => _sync());
   }
@@ -108,6 +112,8 @@ class _FanZoneScreenState extends State<FanZoneScreen>
     WidgetsBinding.instance.removeObserver(this);
     ContentSync.tick.removeListener(_sync);
     _timer?.cancel();
+    _roomsMemory.dispose();
+    _roomsScroll.dispose();
     _roomsTrigger.dispose();
     super.dispose();
   }
@@ -182,8 +188,29 @@ class _FanZoneScreenState extends State<FanZoneScreen>
           _busy = false;
           _loadedOnce = true;
         });
+        _restoreRoom();
       }
     }
+  }
+
+  /// Reopens the match-room chat that was open when the app last closed.
+  void _restoreRoom() {
+    if (!widget.active) return;
+    final pg = PageMemory.consume('room');
+    if (pg == null) return;
+    final room = '${pg['id']}';
+    final title = '${pg['title'] ?? ''}';
+    Fixture? match;
+    if (room != 'lounge') {
+      for (final f in _fixtures) {
+        if (FanZoneService.matchKey(f) == room) match = f;
+      }
+      if (match == null) return;
+    }
+    final m = match;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _discussion(room, title.isEmpty ? (m?.title ?? 'Fan lounge') : title, match: m);
+    });
   }
 
   void _notice(String text, {String? action, VoidCallback? onAction}) {
@@ -545,7 +572,14 @@ class _FanZoneScreenState extends State<FanZoneScreen>
   }
 
   // Match Room tab: live match rooms as cards (own page, no app bar).
-  Widget _roomsPage() => Scaffold(
+  Widget _roomsPage() {
+    if (_loadedOnce && _fixtures.isNotEmpty) {
+      _roomsMemory.restoreOnce(() => _roomsScroll, () => mounted);
+    }
+    return _roomsScaffold();
+  }
+
+  Widget _roomsScaffold() => Scaffold(
     backgroundColor: Colors.transparent,
     body: SafeArea(
       bottom: false,
@@ -554,6 +588,7 @@ class _FanZoneScreenState extends State<FanZoneScreen>
           if (_failure != null) _failureBanner(),
           Expanded(
             child: MatchRoomsView(
+              controller: _roomsScroll,
               fixtures: _fixtures,
               loading: !_loadedOnce,
               onRefresh: _refresh,
@@ -2373,6 +2408,7 @@ class _FanDiscussionState extends State<_FanDiscussion>
     super.initState();
     _joined = widget.name.isNotEmpty;
     _myId = widget.myId;
+    PageMemory.open('room', widget.room, {'title': widget.title});
     WidgetsBinding.instance.addObserver(this);
     _refresh();
     _poll = Timer.periodic(const Duration(seconds: 8), (_) {
@@ -2388,6 +2424,7 @@ class _FanDiscussionState extends State<_FanDiscussion>
 
   @override
   void dispose() {
+    PageMemory.close('room', widget.room);
     _poll?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _input.dispose();
