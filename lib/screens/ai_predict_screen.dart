@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/safe_error_message.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/fixture.dart';
+import '../services/analysis_history.dart';
 import '../services/content_sync.dart';
 import '../models/live_score.dart';
 import '../services/score_service.dart';
@@ -70,6 +71,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   void initState() {
     super.initState();
     _loadDailyFreePicks();
+    _loadHistory();
     _refreshWeeklyPremium();
     ContentSync.tick.addListener(_sync);
     if (widget.active) _load();
@@ -663,6 +665,171 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     FocusScope.of(context).unfocus();
   }
 
+  // ---------------------------------------------------------------------------
+  // ANALYSIS HISTORY — opened analyses are saved on the device for 24 hours
+  // (or until removed, if the user keeps one) so they can be reopened without re-analysing.
+  // ---------------------------------------------------------------------------
+
+  List<AiHistoryEntry> _history = [];
+  bool _historyExpanded = false;
+
+  Future<void> _loadHistory() async {
+    final list = await AiHistory.load();
+    if (mounted) setState(() => _history = list);
+  }
+
+  Future<void> _remember(Fixture f, String key, Map<String, dynamic> data) async {
+    // A typed matchup is saved with the real clubs the server resolved.
+    final fixture = _all.firstWhere(
+      (x) => FanZoneService.matchKey(x) == key,
+      orElse: () => f,
+    );
+    try {
+      final list = await AiHistory.save(fixture, key, data);
+      if (mounted) setState(() => _history = list);
+    } catch (_) {}
+  }
+
+  Future<void> _toggleKeep(AiHistoryEntry e) async {
+    final list = await AiHistory.setKept(e.key, !e.kept);
+    if (!mounted) return;
+    setState(() => _history = list);
+    _snack(
+      e.kept
+          ? 'Will clear 24 hours after it was analysed.'
+          : 'Kept. It stays until you remove it.',
+    );
+  }
+
+  Future<void> _deleteHistory(AiHistoryEntry e) async {
+    final list = await AiHistory.remove(e.key);
+    if (mounted) setState(() => _history = list);
+  }
+
+  /// Reopens a saved analysis on its own page, with nothing to re-run.
+  void _openHistory(AiHistoryEntry e) {
+    _results.putIfAbsent(e.key, () => e.data);
+    _openMatchPage(e.fixture, e.key);
+  }
+
+  static String _left(Duration d) {
+    if (d.inMinutes < 1) return 'less than a minute';
+    if (d.inHours < 1) return '${d.inMinutes} min';
+    return '${d.inHours}h ${d.inMinutes % 60}m';
+  }
+
+  List<Widget> _historySection() {
+    final items = _history.where((e) => !e.expired).toList();
+    if (items.isEmpty) return const [];
+    final shown = _historyExpanded ? items : items.take(3).toList();
+    return [
+      const SizedBox(height: 18),
+      Row(
+        children: [
+          Icon(Icons.history_rounded, size: 15, color: Ui.muted),
+          const SizedBox(width: 6),
+          Text(
+            'RECENT ANALYSES',
+            style: TextStyle(
+              fontSize: 11,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w900,
+              color: _lt(const Color(0xFFB39DFF), const Color(0xFF6A4CD6)),
+            ),
+          ),
+          const Spacer(),
+          Text(
+            'Cleared after 24h unless kept',
+            style: TextStyle(fontSize: 10.5, color: Ui.muted),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      for (final e in shown) _historyTile(e),
+      if (items.length > 3)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: () => setState(() => _historyExpanded = !_historyExpanded),
+            child: Text(
+              _historyExpanded ? 'Show less' : 'Show all ${items.length}',
+            ),
+          ),
+        ),
+    ];
+  }
+
+  Widget _historyTile(AiHistoryEntry e) {
+    final f = e.fixture;
+    final pick = _resolve(e.data, 'AI pick');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Ui.card,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openHistory(e),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: e.kept ? _accent.withValues(alpha: .55) : Ui.line,
+              ),
+            ),
+            child: Row(
+              children: [
+                TeamCrest(logo: f.homeLogo, size: 32),
+                const SizedBox(width: 3),
+                TeamCrest(logo: f.awayLogo, size: 32),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        f.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        e.kept
+                            ? 'Kept · ${pick.title}'
+                            : 'Clears in ${_left(e.remaining)} · ${pick.title}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11.5, color: Ui.muted),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: e.kept ? 'Stop keeping' : 'Keep',
+                  onPressed: () => _toggleKeep(e),
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    e.kept ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                    size: 21,
+                    color: e.kept ? _accent : Ui.muted,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Remove',
+                  onPressed: () => _deleteHistory(e),
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(Icons.close_rounded, size: 20, color: Ui.muted),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Closes one analysis card: removes its result and deselects the match.
   void _dismissResult(String key) {
     setState(() {
@@ -767,6 +934,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             }
           }
         });
+        unawaited(_remember(f, key, data));
       } catch (e) {
         if (!mounted) return;
         setState(() => _failures[key] = _failText(f, e));
@@ -794,6 +962,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         _results[key] = data;
         _failures.remove(key);
       });
+      unawaited(_remember(f, key, data));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3487,6 +3656,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                 if (_custom.isNotEmpty) const SizedBox(height: 10),
                 for (final f in _custom) _matchTile(f),
                 ..._resultWidgets(),
+                ..._historySection(),
                 const SizedBox(height: 16),
                 Row(
                   children: [
