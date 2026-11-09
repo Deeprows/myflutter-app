@@ -14,6 +14,7 @@ import '../services/stream_resolver.dart';
 import '../utils/post_links.dart';
 import '../widgets/fan_post_video.dart';
 import '../services/fan_zone_service.dart';
+import '../services/app_memory.dart';
 import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
 import '../utils/safe_error_message.dart';
@@ -86,9 +87,19 @@ class _FanPostsFeedState extends State<FanPostsFeed>
   bool _busy = false, _uploads = false, _foreground = true, _loadedOnce = false;
   Timer? _poll;
 
+  // The main Thread feed remembers For you / Following, the filter and the scroll position.
+  final ScrollController _scroll = ScrollController();
+  final ScrollMemory _scrollMemory = ScrollMemory('thread_scroll');
+
   @override
   void initState() {
     super.initState();
+    if (widget.authorId == null) {
+      if (AppMemory.getString('thread_scope') == 'following') _scope = 'following';
+      final k = AppMemory.getString('thread_kind');
+      if (k != null && _labels.containsKey(k)) _kind = k;
+      _scroll.addListener(() => _scrollMemory.save(_scroll.offset));
+    }
     WidgetsBinding.instance.addObserver(this);
     ContentSync.tick.addListener(_sync);
     widget.roomsTrigger?.addListener(_roomsRequested);
@@ -123,6 +134,8 @@ class _FanPostsFeedState extends State<FanPostsFeed>
     ContentSync.tick.removeListener(_sync);
     widget.roomsTrigger?.removeListener(_roomsRequested);
     _poll?.cancel();
+    _scrollMemory.dispose();
+    _scroll.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -172,6 +185,9 @@ class _FanPostsFeedState extends State<FanPostsFeed>
           _busy = false;
           _loadedOnce = true;
         });
+        if (widget.authorId == null && !more && _failure == null) {
+          _scrollMemory.restoreOnce(() => _scroll, () => mounted);
+        }
       }
     }
   }
@@ -405,6 +421,10 @@ class _FanPostsFeedState extends State<FanPostsFeed>
                       _posts = [];
                       _failure = null;
                     });
+                    if (widget.authorId == null) {
+                      AppMemory.setString('thread_kind', kind);
+                      _scrollMemory.reset();
+                    }
                     _load();
                   },
           ),
@@ -478,6 +498,8 @@ class _FanPostsFeedState extends State<FanPostsFeed>
       _posts = [];
       _next = null;
     });
+    AppMemory.setString('thread_scope', value);
+    _scrollMemory.reset();
     _load();
   }
 
@@ -499,6 +521,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
     final list = RefreshIndicator(
       onRefresh: _load,
       child: ListView(
+        controller: home ? _scroll : null,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.only(bottom: home ? 96 : 28),
         children: [
