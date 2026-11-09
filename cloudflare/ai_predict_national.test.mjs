@@ -26,7 +26,15 @@ const BY_SLUG={'uefa.nations':[game('1',60,T.tr,T.be,1,1),game('2',30,T.be,T.tr,
   'fifa.friendly':[game('4',120,T.tr,['1','Wales'],2,1),game('5',250,T.fi,T.al,1,0),game('6',150,T.al,['2','Malta'],3,0)],
   'fifa.worldq.uefa':[game('7',90,['3','Georgia'],T.tr,1,3),game('8',100,T.al,['4','Serbia'],0,1),game('9',70,T.fi,['5','Greece'],2,2),game('10',80,T.be,['6','Wales'],2,0),game('11',95,['7','Austria'],T.be,1,1)]};
 let calls=0;
+const KICK=new Date(Date.now()+3*DAY).toISOString();
+const FEED=[{id:'9',home:'Czechia',away:'Spain',league:'UEFA Nations League - League A',kickoff:KICK,homeLogo:'770',awayLogo:'9'}];
+T.cz=['468','Czechia'];T.es=['164','Spain'];
+BY_SLUG['uefa.nations'].push(game('21',40,T.cz,['8','Ukraine'],1,0),game('22',55,['9','Albania'],T.cz,0,2),game('23',75,T.es,['10','Serbia'],3,0),game('24',50,T.cz,T.es,0,1));
+BY_SLUG['fifa.friendly'].push(game('25',110,T.es,['11','Egypt'],2,1),game('26',130,T.cz,['12','Poland'],1,1),game('27',160,['13','Italy'],T.es,0,0));
+let apiFootballCalls=0;
 globalThis.fetch=async(url)=>{const u=String(url);
+  if(u.endsWith('/fixtures.json'))return new Response(JSON.stringify(FEED));
+  if(u.includes('api-football') || u.includes('api-sports')){apiFootballCalls++;return new Response(JSON.stringify({errors:{plan:'Free plans do not have access to this season, try from 2022 to 2024.'},response:[]}));}
   if(u==='https://www.googleapis.com/oauth2/v3/certs')return new Response(JSON.stringify({keys:[jwk]}),{headers:{'cache-control':'public,max-age=3600'}});
   if(u.startsWith('https://site.api.espn.com/')) {
     const slug=u.split('/soccer/')[1].split('/')[0];calls++;
@@ -50,4 +58,10 @@ r=await call('ai-predict',{body:{custom:{home:'Albania',away:'Finland'}},bearer:
 const o2=await r.json();assert.equal(r.status,200,JSON.stringify(o2));
 assert.ok(o2.home.played>=3&&o2.away.played>=3);
 assert.equal(o2.home.teamId,'espn:national');
+// API-Football refuses (plan error) for a fixture that HAS team IDs: ESPN must take over.
+env.API_FOOTBALL_KEY='k';
+r=await call('ai-predict',{body:{key:'9|'+new Date(KICK).getTime()},bearer:alice});
+const o3=await r.json();assert.equal(r.status,200,JSON.stringify(o3));
+assert.ok(apiFootballCalls>0,'API-Football was tried first');
+assert.match(o3.dataSource||'',/ESPN/);assert.ok(o3.home.played>=3&&o3.away.played>=3);
 console.log('AI national: Türkiye vs Belgium and Albania vs Finland get form from international competitions; ESPN calls',calls);
