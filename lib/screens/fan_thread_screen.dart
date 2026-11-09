@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../utils/safe_error_message.dart';
 import '../utils/post_links.dart';
 import '../services/fan_zone_service.dart';
+import '../services/app_memory.dart';
 import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
 import '../widgets/fan_edit_sheet.dart';
@@ -40,11 +41,13 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
   @override
   void initState() {
     super.initState();
+    PageMemory.open('post', widget.postId);
     _load();
   }
 
   @override
   void dispose() {
+    PageMemory.close('post', widget.postId);
     _replyFocus.dispose();
     _text.dispose();
     super.dispose();
