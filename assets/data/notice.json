@@ -1,11 +1,11 @@
 {
-  "enabled": false,
+  "enabled": true,
   "id": "App Update",
   "title": "App Update",
-  "message": "Kindly update to get latest features. Ignore if you're currently using v 1.0.685",
+  "message": "🚨 SYSTEM UPDATE. STAY TUNED",
   "popup": true,
-  "button_text": "Update App",
-  "button_url": "https://files.catbox.moe/shr2zj.apk",
-  "ok_text": "Later",
+  "button_text": "DEEPROWSS UPGRADING",
+  "button_url": "",
+  "ok_text": "I understand",
   "expires": ""
 }
