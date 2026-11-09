@@ -14,8 +14,12 @@ class MatchRoomsView extends StatelessWidget {
   final VoidCallback onOpenLounge;
   final void Function(Fixture) onOpenMatch;
 
+  /// Lets the owner remember and restore the scroll position.
+  final ScrollController? controller;
+
   const MatchRoomsView({
     super.key,
+    this.controller,
     required this.fixtures,
     required this.loading,
     required this.onRefresh,
@@ -138,6 +142,7 @@ class MatchRoomsView extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: CustomScrollView(
+        controller: controller,
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: slivers,
       ),
