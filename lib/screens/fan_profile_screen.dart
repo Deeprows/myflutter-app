@@ -622,6 +622,19 @@ class _EditFanProfileState extends State<_EditFanProfile> {
     super.dispose();
   }
 
+  int get _handleNextChange {
+    final v = widget.profile['handle_next_change_at'];
+    return v is num ? v.toInt() : 0;
+  }
+
+  bool get _handleLocked =>
+      _handleNextChange > DateTime.now().millisecondsSinceEpoch;
+
+  String get _handleUnlockDate {
+    final d = DateTime.fromMillisecondsSinceEpoch(_handleNextChange);
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  }
+
   Future<void> _pick(String kind) async {
     if (_picking || _saving) return;
     setState(() => _picking = true);
@@ -682,6 +695,16 @@ class _EditFanProfileState extends State<_EditFanProfile> {
       _error = null;
     });
     try {
+      // Username first: if it is taken or still locked, nothing else is saved.
+      final wantedHandle = _username.text.trim().replaceAll('@', '');
+      if (!_handleLocked &&
+          wantedHandle.isNotEmpty &&
+          wantedHandle != '${widget.profile['handle'] ?? ''}') {
+        await FanZoneService.setHandle(wantedHandle);
+        widget.profile['handle'] = wantedHandle;
+        widget.profile['handle_next_change_at'] =
+            DateTime.now().add(const Duration(days: 60)).millisecondsSinceEpoch;
+      }
       await FanZoneService.call(
         'social/profile',
         body: {
@@ -692,12 +715,6 @@ class _EditFanProfileState extends State<_EditFanProfile> {
           'club_logo': _clubLogo,
         },
       );
-      final wantedHandle = _username.text.trim().replaceAll('@', '');
-      if (wantedHandle.isNotEmpty &&
-          wantedHandle != '${widget.profile['handle'] ?? ''}') {
-        await FanZoneService.setHandle(wantedHandle);
-        widget.profile['handle'] = wantedHandle;
-      }
       final avatar = _avatar, cover = _cover;
       if (avatar != null && !_avatarSent) {
         await FanZoneService.uploadProfileImage(kind: 'avatar', image: avatar);
@@ -879,16 +896,18 @@ class _EditFanProfileState extends State<_EditFanProfile> {
               TextField(
                 controller: _username,
                 maxLength: 20,
-                enabled: !_saving,
+                enabled: !_saving && !_handleLocked,
                 autocorrect: false,
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9_@]')),
                 ],
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Username',
                   prefixText: '@',
-                  helperText:
-                      '3–20 letters, numbers or _. Can be changed once an hour.',
+                  helperText: _handleLocked
+                      ? 'You can change your username again on $_handleUnlockDate.'
+                      : '3–20 letters, numbers or _. Must be unique. Once set, it can be changed every 60 days.',
+                  helperMaxLines: 2,
                 ),
               ),
               TextField(
