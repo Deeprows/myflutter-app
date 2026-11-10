@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import '../services/ad_shield.dart';
+import '../services/dailymotion_check.dart';
 import '../config.dart';
 import '../models/fan_post_link.dart';
 import '../services/embed_info.dart';
@@ -47,6 +48,10 @@ class _FanPostVideoState extends State<FanPostVideo>
   bool _settled = false;
   static const _redirectGate = Duration(seconds: 5);
   bool _loading = false, _failed = false;
+
+  /// Dailymotion says this video cannot be embedded (owner turned it off,
+  /// private or removed): show a clear message instead of "Forbidden".
+  bool _dmBlocked = false;
 
   /// True while the WebView shows a page we built ourselves (our HTML5 player
   /// for m3u8/mp4/mpd, or an embed iframe). Such a page has no reason to
@@ -284,6 +289,7 @@ class _FanPostVideoState extends State<FanPostVideo>
     setState(() {
       _loading = true;
       _failed = false;
+      _dmBlocked = false;
     });
     final stream = StreamResolver.resolve(_url);
     final initialUri = Uri.tryParse(_url);
@@ -371,8 +377,18 @@ class _FanPostVideoState extends State<FanPostVideo>
       } else if (_info.kind == EmbedKind.dailymotion && initialUri != null) {
         final id = _dailymotionId(initialUri);
         if (id == null) throw FormatException('Invalid Dailymotion video URL');
-        await _loadHtml(c, 
-          _iframeHtml('https://www.dailymotion.com/embed/video/$id?autoplay=1'),
+        if (await DailymotionCheck.check(id) == DailymotionEmbed.blocked) {
+          if (!mounted || _controller != c) return;
+          setState(() {
+            _dmBlocked = true;
+            _failed = true;
+            _loading = false;
+          });
+          return;
+        }
+        if (!mounted || _controller != c) return;
+        await _loadHtml(c,
+          _iframeHtml(DailymotionCheck.playerUrl(id)),
           baseUrl: AppConfig.embedOrigin,
         );
         return;
@@ -418,14 +434,7 @@ class _FanPostVideoState extends State<FanPostVideo>
     return match?.group(1);
   }
 
-  String? _dailymotionId(Uri? uri) {
-    if (uri == null) return null;
-    if (uri.host.toLowerCase() == 'dai.ly') {
-      return uri.pathSegments.isEmpty ? null : uri.pathSegments.first;
-    }
-    final match = RegExp(r'/(?:video|embed/video)/([A-Za-z0-9]+)').firstMatch(uri.path);
-    return match?.group(1);
-  }
+  String? _dailymotionId(Uri? uri) => DailymotionCheck.idFrom(uri);
 
   String? _youtubeId(Uri? uri) {
     if (uri == null) return null;
@@ -464,7 +473,36 @@ class _FanPostVideoState extends State<FanPostVideo>
     }
   }
 
+  Widget _blockedCard() => ColoredBox(
+    color: const Color(0xFF171A20),
+    child: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.block_rounded, color: Colors.white70, size: 34),
+            const SizedBox(height: 8),
+            const Text(
+              'The owner of this Dailymotion video does not allow it to be '
+              'played outside Dailymotion.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white, fontSize: 13, height: 1.35),
+            ),
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: () => openExternally(widget.url),
+              icon: const Icon(Icons.open_in_new_rounded, size: 16),
+              label: const Text('Open on Dailymotion'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
   Widget _preview() {
+    if (_dmBlocked) return _blockedCard();
     final thumb = _youtubeThumbnail ?? _tiktokThumb;
     return InkWell(
       onTap: widget.onTapPreview ?? _play,
@@ -523,7 +561,9 @@ class _FanPostVideoState extends State<FanPostVideo>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_info.kind == EmbedKind.tiktok || _info.kind == EmbedKind.facebook) ...[
+            if (_info.kind == EmbedKind.tiktok ||
+                _info.kind == EmbedKind.facebook ||
+                _info.kind == EmbedKind.dailymotion) ...[
               // Some TikTok / Facebook videos refuse to be embedded (private,
               // region-locked, owner turned embedding off): open the original.
               IconButton.filled(
