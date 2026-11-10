@@ -160,6 +160,23 @@ class RemoteConfig with WidgetsBindingObserver {
   int get supportSkipAfterSeconds =>
       _int('ads', 'skipAfterSeconds', AppConfig.supportSkipAfterSeconds);
 
+  // "Or watch ad" unlock (Movies + TV channels)
+
+  bool get adUnlockEnabled =>
+      _bool('ads', 'unlockEnabled', AppConfig.adUnlockEnabled);
+
+  /// Seconds the ad must run before Skip Ad appears (at least 5).
+  int get adUnlockSeconds {
+    final v = _int('ads', 'unlockSeconds', AppConfig.adUnlockSeconds);
+    return v < 5 ? 5 : v;
+  }
+
+  /// Minutes of access after the ad (at least 1).
+  int get adUnlockMinutes {
+    final v = _int('ads', 'unlockMinutes', AppConfig.adUnlockMinutes);
+    return v < 1 ? 1 : v;
+  }
+
   // -------------------------------------------------------------- movies
 
   String get embedBase =>
