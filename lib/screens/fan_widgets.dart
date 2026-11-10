@@ -229,6 +229,88 @@ BoxDecoration fanBox({Color? border, Color? color, double radius = 16}) =>
       border: Border.all(color: border ?? Ui.line),
     );
 
+/// Full-screen preview of a fan's profile photo (pinch to zoom, tap to close).
+/// Does nothing when the fan has no photo.
+Future<void> showFanPhotoPreview(
+  BuildContext context, {
+  required String? imageUrl,
+  required String name,
+  required String seed,
+}) {
+  final url = imageUrl;
+  if (url == null || url.isEmpty) return Future.value();
+  return showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Close',
+    barrierColor: Colors.black.withValues(alpha: .92),
+    transitionDuration: const Duration(milliseconds: 180),
+    pageBuilder: (ctx, _, __) => Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.of(ctx).maybePop(),
+              child: Center(
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 5,
+                  child: Image.network(
+                    url,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (_, child, progress) => progress == null
+                        ? child
+                        : const SizedBox(
+                            width: 36,
+                            height: 36,
+                            child: CircularProgressIndicator(strokeWidth: 3),
+                          ),
+                    errorBuilder: (_, __, ___) => FanAvatar(
+                      name: name,
+                      seed: seed,
+                      size: 160,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Close',
+                    icon: const Icon(Icons.close_rounded, color: Colors.white),
+                    onPressed: () => Navigator.of(ctx).maybePop(),
+                  ),
+                  Expanded(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+    transitionBuilder: (_, anim, __, child) =>
+        FadeTransition(opacity: anim, child: child),
+  );
+}
+
 class FanAvatar extends StatelessWidget {
   final String name;
   final String seed;
