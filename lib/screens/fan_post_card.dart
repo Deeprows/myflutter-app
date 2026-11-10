@@ -1,4 +1,5 @@
 import '../widgets/fan_match_link.dart';
+import '../widgets/fan_poll_view.dart';
 import '../widgets/fan_edit_sheet.dart';
 import '../widgets/fan_share_sheet.dart';
 import '../widgets/fan_post_video.dart';
@@ -901,6 +902,13 @@ class _FanPostCardState extends State<FanPostCard> {
           ),
         FanMatchLink(snapshot: '${_post['match_json'] ?? ''}', text: text),
         if (_post['has_image'] == 1) _media(detail),
+        if (FanPollView.hasPoll(_post))
+          FanPollView(
+            key: ValueKey('poll-${_post['id']}'),
+            post: _post,
+            // Also update the feed's copy so a rebuild keeps the vote.
+            onVoted: (u) => widget.post.addAll(u),
+          ),
         if (_quoteOf.isNotEmpty && !_isRepost) _quoteEmbed(),
         for (final link in videoLinks)
           if (isWebPageLink(link) && kindKey != 'video')
