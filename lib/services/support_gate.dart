@@ -37,6 +37,9 @@ class SupportGate {
 
   static bool _shownThisLaunch = false;
 
+  /// An ad was just watched (the unlock ad): skip the first-tap ad this launch.
+  static void markShown() => _shownThisLaunch = true;
+
   /// True while the first-tap overlay is on screen.
   static bool get showing => _showing;
 
