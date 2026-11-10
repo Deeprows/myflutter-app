@@ -12,6 +12,7 @@ import 'services/feed_service.dart';
 import 'services/locale_service.dart';
 import 'services/push_service.dart';
 import 'services/remote_config.dart';
+import 'services/ad_unlock.dart';
 import 'services/subscription_service.dart';
 import 'theme/app_theme.dart';
 
@@ -39,6 +40,7 @@ Future<void> main() async {
 
   // Free / Premium: reads the saved copy only; the Worker is asked later.
   await SubscriptionService.instance.init();
+  await AdUnlock.instance.load();
 
   await DownloadManager.instance.init();
 
