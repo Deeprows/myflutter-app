@@ -8,6 +8,7 @@ import '../screens/bookmarks_screen.dart';
 import '../screens/browser_screen.dart';
 import '../screens/fan_profile_screen.dart';
 import '../screens/fan_widgets.dart';
+import '../screens/guide_screen.dart';
 import '../screens/content_shortcut_screen.dart';
 import '../screens/highlights_screen.dart';
 import '../screens/notifications_screen.dart';
@@ -533,6 +534,11 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
                       (c) => _push(c, const PlaylistsScreen()),
                     ),
                     _heading('Support'.tr),
+                    _row(
+                      Icons.menu_book_rounded,
+                      'Instructions'.tr,
+                      (c) => _push(c, const GuideScreen()),
+                    ),
                     _row(
                       Icons.support_agent_rounded,
                       'Contact Us'.tr,
