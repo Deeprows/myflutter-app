@@ -11,6 +11,7 @@ import '../services/subscription_service.dart';
 import '../widgets/fan_club_picker.dart';
 import '../theme/app_theme.dart';
 import 'fan_posts_feed.dart';
+import 'guide_screen.dart';
 import 'fan_widgets.dart';
 import 'fan_x_widgets.dart';
 
@@ -535,6 +536,11 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
         ],
       ),
       actions: [
+        IconButton(
+          tooltip: 'Instructions',
+          onPressed: () => GuideScreen.open(context),
+          icon: const Icon(Icons.menu_book_outlined),
+        ),
         IconButton(
           tooltip: 'Refresh profile',
           onPressed: _loading ? null : _load,
