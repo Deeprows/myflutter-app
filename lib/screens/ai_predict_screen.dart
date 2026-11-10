@@ -61,6 +61,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   final ScrollController _scroll = ScrollController();
   final ScrollMemory _scrollMemory = ScrollMemory('ai_predict_scroll');
   final Set<String> _selected = {};
+  final Map<String, BetSlipPick> _slipSelections = {}; // selectable AI Picks for the printable slip
   final Set<String> _dailyFreePicks = {};
   bool _dailyPicksLoaded = false;
   bool _weeklyPremium = false;
@@ -1989,7 +1990,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                for (var i = 0; i < picks.length; i++) _aiPickAnalysisCard(i + 1, picks[i]),
+                for (var i = 0; i < picks.length; i++) _aiPickAnalysisCard(i + 1, picks[i], fixture: fixture),
               ],
             )),
           ),
@@ -2558,7 +2559,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     );
   }
 
-  Widget _aiPickAnalysisCard(int number, String source) {
+  Widget _aiPickAnalysisCard(int number, String source, {Fixture? fixture}) {
     final text = source.replaceFirst(RegExp(r'^\d+\.\s*'), '').trim();
     final reasonIndex = text.toLowerCase().indexOf('reason:');
     final pickText = reasonIndex >= 0 ? text.substring(0, reasonIndex).trim() : text;
@@ -2577,14 +2578,32 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       _ => Ui.muted,
     };
     final cleanSelection = selection.replaceAll(RegExp(r'\s*\((high|medium|low)\)', caseSensitive: false), '').trim();
+    final matchKey = fixture == null ? 'unknown-match' : FanZoneService.matchKey(fixture);
+    final slipKey = '$matchKey|${market.toLowerCase()}|${cleanSelection.toLowerCase()}';
+    final selectedOnSlip = _slipSelections.containsKey(slipKey);
 
-    return Container(
+    return InkWell(
+      borderRadius: BorderRadius.circular(13),
+      onTap: fixture == null ? null : () {
+        setState(() {
+          if (selectedOnSlip) {
+            _slipSelections.remove(slipKey);
+          } else {
+            _slipSelections[slipKey] = BetSlipPick(
+              market: market, pick: cleanSelection, confidence: confidence ?? 'N/A',
+              matchTitle: fixture.genderTitle, league: fixture.league, kickoff: fixture.kickoff.year >= 2090 ? null : fixture.kickoff,
+            );
+          }
+        });
+        _rev.value++;
+      },
+      child: Container(
       margin: const EdgeInsets.only(bottom: 9),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFF222746),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: Colors.white.withValues(alpha: .075)),
+        border: Border.all(color: selectedOnSlip ? const Color(0xFF8B70FF) : Colors.white.withValues(alpha: .075), width: selectedOnSlip ? 1.6 : 1),
       ),
       child: _DarkText(child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2619,6 +2638,8 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                   ),
                   child: Text(confidence, style: TextStyle(color: confidenceColor, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: .5)),
                 ),
+              const SizedBox(width: 7),
+              Icon(selectedOnSlip ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded, color: selectedOnSlip ? const Color(0xFFB39DFF) : const Color(0xFF9EABC0), size: 19),
             ],
           ),
           const SizedBox(height: 9),
@@ -2649,6 +2670,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           ],
         ],
       )),
+      ),
     );
   }
 
@@ -3497,12 +3519,36 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                         _fullAnalysis(f, data),
                       ],
                     ),
+              bottomNavigationBar: _slipSelections.isNotEmpty ? _betSlipBar() : null,
             );
           },
         ),
       ),
     )
         .then((_) => PageMemory.close('analysis', key));
+  }
+
+  Widget _betSlipBar() => Container(
+    padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+    decoration: BoxDecoration(color: Ui.card, border: Border(top: BorderSide(color: Ui.line))),
+    child: Row(children: [
+      Container(width: 34, height: 34, alignment: Alignment.center, decoration: BoxDecoration(color: const Color(0xFF8B70FF).withValues(alpha: .15), borderRadius: BorderRadius.circular(10)), child: Text('${_slipSelections.length}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF8B70FF)))),
+      const SizedBox(width: 10),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [const Text('MY BET SLIP', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)), Text('${_slipSelections.length} selections · tap AI picks to add/remove', style: TextStyle(color: Ui.muted, fontSize: 10))])),
+      TextButton(onPressed: () { setState(_slipSelections.clear); _rev.value++; }, child: const Text('Clear')),
+      const SizedBox(width: 4),
+      FilledButton.icon(onPressed: _printSelectedSlip, icon: const Icon(Icons.print_rounded, size: 17), label: const Text('Print')),
+    ]),
+  );
+
+  Future<void> _printSelectedSlip() async {
+    final picks = _slipSelections.values.toList();
+    if (picks.isEmpty) return;
+    try {
+      await BetSlipPdf.printSelected(picks: picks);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(safeErrorMessage(e))));
+    }
   }
 
   Widget _hero() => Container(
@@ -3932,6 +3978,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           ),
         ),
         _actionBar(),
+        if (_slipSelections.isNotEmpty) _betSlipBar(),
       ],
     ),
   );
