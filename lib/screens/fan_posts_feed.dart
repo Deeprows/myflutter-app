@@ -748,6 +748,58 @@ class _ComposePostState extends State<_ComposePost> {
   Uint8List? _image;
   bool _busy = false, _picking = false, _asAd = false;
 
+  // Poll builder (X-style): 2 to 4 short choices and a length.
+  bool _pollOn = false;
+  final List<TextEditingController> _choices = [
+    TextEditingController(),
+    TextEditingController(),
+  ];
+  int _pollHours = 24;
+  static const _pollLengths = {
+    1: '1 hour',
+    6: '6 hours',
+    24: '1 day',
+    72: '3 days',
+    168: '7 days',
+  };
+
+  bool get _pollAllowed => _kind == 'banter' || _kind == 'prediction';
+
+  void _togglePoll() {
+    if (_busy) return;
+    if (!_pollOn && _image != null) {
+      _notice('Remove the photo first. A poll cannot include a photo.');
+      return;
+    }
+    setState(() => _pollOn = !_pollOn);
+  }
+
+  void _addChoice() {
+    if (_choices.length >= 4) return;
+    setState(() => _choices.add(TextEditingController()));
+  }
+
+  void _removeChoice(int i) {
+    if (_choices.length <= 2) return;
+    setState(() => _choices.removeAt(i).dispose());
+  }
+
+  /// The cleaned poll choices, or null (after showing a notice) when invalid.
+  List<String>? _validPoll() {
+    final opts = _choices
+        .map((c) => c.text.trim().replaceAll(RegExp(r'\s+'), ' '))
+        .toList();
+    if (opts.any((o) => o.isEmpty)) {
+      _notice('Fill in every poll choice, or remove the empty ones.');
+      return null;
+    }
+    if (opts.map((o) => o.toLowerCase()).toSet().length != opts.length) {
+      _notice('Poll choices must be different.');
+      return null;
+    }
+    return opts;
+  }
+
   static const _hints = {
     'prediction': 'Arsenal 2-1 Chelsea. Saka scores, Palmer gets one back…',
     'betslip': 'Add a caption for your slip (optional)…',
@@ -768,6 +820,9 @@ class _ComposePostState extends State<_ComposePost> {
     _text.dispose();
     _url.dispose();
     _title.dispose();
+    for (final c in _choices) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -935,6 +990,15 @@ class _ComposePostState extends State<_ComposePost> {
       }
       return;
     }
+    List<String>? pollOptions;
+    if (_pollOn && _pollAllowed) {
+      if (_text.text.trim().isEmpty) {
+        _notice('Ask a question for your poll.');
+        return;
+      }
+      pollOptions = _validPoll();
+      if (pollOptions == null) return;
+    }
     if (_kind == 'betslip' && _image == null) {
       _notice('Attach your bet-slip image.');
       return;
@@ -958,6 +1022,8 @@ class _ComposePostState extends State<_ComposePost> {
         isAd: _asAd,
         text: _text.text,
         image: _image,
+        pollOptions: pollOptions,
+        pollHours: _pollHours,
         matchKey: _taggedMatch == null
             ? null
             : FanZoneService.matchKey(_taggedMatch!),
@@ -990,7 +1056,12 @@ class _ComposePostState extends State<_ComposePost> {
           ),
           child: InkWell(
             customBorder: const StadiumBorder(),
-            onTap: _busy ? null : () => setState(() => _kind = kind),
+            onTap: _busy
+                ? null
+                : () => setState(() {
+                    _kind = kind;
+                    if (!_pollAllowed) _pollOn = false;
+                  }),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
@@ -1282,6 +1353,103 @@ class _ComposePostState extends State<_ComposePost> {
     ];
   }
 
+  Widget _pollBuilder() => Container(
+    decoration: fanBox(radius: 16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+          child: Column(
+            children: [
+              for (var i = 0; i < _choices.length; i++)
+                Padding(
+                  padding: EdgeInsets.only(top: i == 0 ? 0 : 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _choices[i],
+                          enabled: !_busy,
+                          maxLength: 25,
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: _fieldDecoration(
+                            label: 'Choice ${i + 1}'
+                                '${i >= 2 ? ' (optional)' : ''}',
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 44,
+                        child: i == 0
+                            ? IconButton(
+                                tooltip: 'Remove poll',
+                                onPressed: _busy ? null : _togglePoll,
+                                icon: const Icon(Icons.close_rounded),
+                              )
+                            : (i == _choices.length - 1 && _choices.length < 4)
+                            ? IconButton(
+                                tooltip: 'Add a choice',
+                                onPressed: _busy ? null : _addChoice,
+                                icon: Icon(Icons.add_rounded, color: Ui.red),
+                              )
+                            : (i >= 2)
+                            ? IconButton(
+                                tooltip: 'Remove choice',
+                                onPressed: _busy ? null : () => _removeChoice(i),
+                                icon: const Icon(Icons.remove_circle_outline),
+                              )
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Divider(height: 1, color: Ui.line),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Poll length',
+                      style: TextStyle(fontSize: 13, color: Ui.muted),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _pollLengths[_pollHours] ?? '1 day',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Ui.red,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuButton<int>(
+                tooltip: 'Poll length',
+                enabled: !_busy,
+                icon: const Icon(Icons.expand_more_rounded),
+                initialValue: _pollHours,
+                onSelected: (v) => setState(() => _pollHours = v),
+                itemBuilder: (_) => [
+                  for (final e in _pollLengths.entries)
+                    PopupMenuItem(value: e.key, child: Text(e.value)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
   List<Widget> _standardForm(FanKind k) => [
     Container(
       padding: const EdgeInsets.all(4),
@@ -1297,7 +1465,7 @@ class _ComposePostState extends State<_ComposePost> {
             textCapitalization: TextCapitalization.sentences,
             decoration: InputDecoration(
               counterText: '',
-              hintText: _hints[_kind],
+              hintText: _pollOn ? 'Ask a question…' : _hints[_kind],
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
@@ -1310,6 +1478,23 @@ class _ComposePostState extends State<_ComposePost> {
       ),
     ),
     const SizedBox(height: 14),
+    if (_pollOn && _pollAllowed) ...[
+      _pollBuilder(),
+    ] else ...[
+      if (_pollAllowed) ...[
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _togglePoll,
+          icon: const Icon(Icons.poll_outlined),
+          label: const Text('Add a poll'),
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+        ),
+        const SizedBox(height: 10),
+      ],
+      ..._imageAttach(),
+    ],
+  ];
+
+  List<Widget> _imageAttach() => [
     if (_image != null)
       Stack(
         children: [
