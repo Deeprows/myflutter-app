@@ -5,7 +5,10 @@
     "enabled": true,
     "supportUrl": "https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60",
     "intervalMinutes": 10,
-    "skipAfterSeconds": 6
+    "skipAfterSeconds": 6,
+    "unlockEnabled": true,
+    "unlockSeconds": 40,
+    "unlockMinutes": 10
   },
 
   "movies": {
