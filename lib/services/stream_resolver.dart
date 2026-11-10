@@ -1,3 +1,5 @@
+import 'dailymotion_check.dart';
+
 /// Works out how a link should be played inside the WebView.
 enum StreamKind { hls, dash, video, embed, invalid }
 
@@ -11,6 +13,17 @@ class ResolvedStream {
       kind == StreamKind.hls ||
       kind == StreamKind.dash ||
       kind == StreamKind.video;
+
+  /// The Dailymotion video id when this is a Dailymotion link or embed
+  /// (dailymotion.com/video|embed, geo.dailymotion.com player, dai.ly).
+  String? get dailymotionId {
+    final uri = Uri.tryParse(url);
+    final host = uri?.host.toLowerCase() ?? '';
+    if (!(host == 'dai.ly' || host == 'dailymotion.com' || host.endsWith('.dailymotion.com'))) {
+      return null;
+    }
+    return DailymotionCheck.idFrom(uri);
+  }
 
   String get label {
     switch (kind) {
@@ -36,8 +49,16 @@ class StreamResolver {
   static final _http = RegExp(r'^https?://', caseSensitive: false);
 
   static ResolvedStream resolve(String raw) {
-    final trimmed = raw.trim();
+    var trimmed = raw.trim();
     if (trimmed.isEmpty) return const ResolvedStream('', StreamKind.invalid);
+    // A pasted embed code (<iframe ... src="https://...">): use its src.
+    if (trimmed.contains('<')) {
+      final m = RegExp(r'''src\s*=\s*["']([^"']+)["']''', caseSensitive: false)
+          .firstMatch(trimmed);
+      if (m != null) {
+        trimmed = m.group(1)!.replaceAll('&amp;', '&').trim();
+      }
+    }
     final s = trimmed.split(RegExp(r'\s+')).first;
 
     var candidate = _extractInner(s) ?? s;
