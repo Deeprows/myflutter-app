@@ -7,10 +7,16 @@ class BetSlipPick {
   final String market;
   final String pick;
   final String confidence;
+  final String matchTitle;
+  final String league;
+  final DateTime? kickoff;
   const BetSlipPick({
     required this.market,
     required this.pick,
     required this.confidence,
+    this.matchTitle = '',
+    this.league = '',
+    this.kickoff,
   });
 }
 
@@ -201,4 +207,54 @@ class BetSlipPdf {
       onLayout: (_) async => doc.save(),
     );
   }
+  /// Prints a combined slip containing selections from multiple matches.
+  static Future<void> printSelected({required List<BetSlipPick> picks}) async {
+    if (picks.isEmpty) return;
+    final now = DateTime.now();
+    final slipNo = 'DR-${now.millisecondsSinceEpoch.toRadixString(36).toUpperCase()}';
+    const ink = PdfColors.grey900;
+    const soft = PdfColors.grey600;
+    pw.Widget cell(String text, {bool bold = false, double size = 9}) => pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 6),
+      child: pw.Text(_latin(text), style: pw.TextStyle(fontSize: size, fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal, color: ink)),
+    );
+    final doc = pw.Document(title: 'Deeprowss bet slip $slipNo');
+    doc.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(28),
+      build: (_) => [
+        pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+          pw.Text('DEEPROWSS BET SLIP', style: pw.TextStyle(fontSize: 17, fontWeight: pw.FontWeight.bold, color: ink)),
+          pw.Text(slipNo, style: const pw.TextStyle(fontSize: 9, color: soft)),
+        ]),
+        pw.SizedBox(height: 5), pw.Divider(thickness: 1.2, color: ink),
+        pw.SizedBox(height: 4),
+        pw.Text('${picks.length} selections', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: ink)),
+        pw.SizedBox(height: 12),
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.grey500, width: .6),
+          columnWidths: const {0: pw.FixedColumnWidth(22), 1: pw.FlexColumnWidth(2.5), 2: pw.FlexColumnWidth(1.8), 3: pw.FlexColumnWidth(2.3), 4: pw.FixedColumnWidth(48)},
+          children: [
+            pw.TableRow(decoration: const pw.BoxDecoration(color: PdfColors.grey200), children: [
+              cell('#', bold: true), cell('Match / League', bold: true), cell('Market', bold: true), cell('Selection', bold: true), cell('Conf.', bold: true, size: 8),
+            ]),
+            for (var i = 0; i < picks.length; i++) pw.TableRow(children: [
+              cell('${i + 1}'),
+              cell([picks[i].matchTitle, if (picks[i].league.trim().isNotEmpty) picks[i].league, if (picks[i].kickoff != null) _date(picks[i].kickoff!)].join('\n'), size: 8.5),
+              cell(picks[i].market, size: 8.5), cell(picks[i].pick, bold: true, size: 9), cell(picks[i].confidence.toUpperCase(), size: 7.5),
+            ]),
+          ],
+        ),
+        pw.SizedBox(height: 18),
+        pw.Row(children: [
+          for (final label in ['Bookmaker / booking code', 'Stake', 'Potential win'])
+            pw.Expanded(child: pw.Container(margin: const pw.EdgeInsets.only(right: 8), padding: const pw.EdgeInsets.all(8), height: 46, decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey500), borderRadius: pw.BorderRadius.all(pw.Radius.circular(4))), child: pw.Text(label, style: const pw.TextStyle(fontSize: 8, color: soft)))),
+        ]),
+        pw.SizedBox(height: 18),
+        pw.Text('Generated ${_date(now)} from Deeprowss AI analysis. Picks are informational only; outcomes are uncertain and no results are guaranteed. Odds must be filled in separately. 18+ only. Bet responsibly.', style: const pw.TextStyle(fontSize: 8, color: soft)),
+      ],
+    ));
+    await Printing.layoutPdf(name: 'deeprowss-bet-slip-$slipNo.pdf', format: PdfPageFormat.a4, onLayout: (_) async => doc.save());
+  }
+
 }
