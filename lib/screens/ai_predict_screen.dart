@@ -1814,8 +1814,11 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       final m = _aiHeadingRe.firstMatch(line);
       if (m != null) {
         cur = m.group(1)!.replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
-        final rest =
+        var rest =
             (m.group(2) ?? '').replaceFirst(RegExp(r'^[\s:\-–—]+'), '').trim();
+        // "MATCH OVERVIEW and likely game pattern": the words after the title are
+        // a sub-heading, not the start of the text, so they are not posted.
+        if (rest.isNotEmpty && RegExp(r'^[a-zà-ÿ]').hasMatch(rest)) rest = '';
         final list = blocks.putIfAbsent(cur, () => <String>[]);
         if (rest.isNotEmpty) list.add(rest);
         continue;
@@ -2851,6 +2854,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                   final draft = await showModalBottomSheet<_ShareDraft>(
                     context: context,
                     isScrollControlled: true,
+                    useSafeArea: true,
                     showDragHandle: true,
                     builder: (_) => _CommunityShareSheet(initialText: summary),
                   );
@@ -4171,11 +4175,16 @@ class _CommunityShareSheetState extends State<_CommunityShareSheet> {
   Widget build(BuildContext context) {
     final text = _text.text.trim();
     return Padding(
+      // Keep the Post button clear of the phone's navigation bar; when the
+      // keyboard is open it already sits above it.
       padding: EdgeInsets.fromLTRB(
         16,
         0,
         16,
-        16 + MediaQuery.of(context).viewInsets.bottom,
+        16 +
+            (MediaQuery.of(context).viewInsets.bottom > 0
+                ? MediaQuery.of(context).viewInsets.bottom
+                : MediaQuery.of(context).viewPadding.bottom),
       ),
       child: SingleChildScrollView(
         child: Column(
