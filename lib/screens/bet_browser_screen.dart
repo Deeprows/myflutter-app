@@ -1,14 +1,31 @@
-import 'dart:math' as math;
+import 'dart:async';
+import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
-import '../services/bet_browser_session.dart';
 import '../theme/app_theme.dart';
 
-/// Top betting platforms by region. They open inside the app; the person logs
-/// in on the bookmaker's own page (the app never sees or stores passwords).
+/// One betting site shown as a bookmark.
+class BetSite {
+  final String name;
+  final String url;
+  final bool custom;
+  const BetSite(this.name, this.url, {this.custom = false});
+
+  String get host => Uri.tryParse(url)?.host ?? '';
+
+  Map<String, String> toJson() => {'name': name, 'url': url};
+  static BetSite fromJson(Map<String, dynamic> j) =>
+      BetSite('${j['name']}', '${j['url']}', custom: true);
+}
+
+/// Top betting platforms by region. Opens inside the app; the person logs in
+/// on the bookmaker's own page (the app never sees or stores passwords).
 const _africa = <BetSite>[
   BetSite('Bet9ja', 'https://www.bet9ja.com'),
   BetSite('SportyBet', 'https://www.sportybet.com'),
@@ -54,152 +71,170 @@ const _americas = <BetSite>[
   BetSite('Pinnacle', 'https://www.pinnacle.com'),
 ];
 
-// ------------------------------------------------------------- look & feel
+/// A normal mobile Chrome identity: bookmaker log-in pages often refuse
+/// the default "wv" WebView identity.
+const _chromeUa =
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 '
+    '(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
 
-bool get _light => Ui.isLight;
+const _prefsKey = 'bet_hub_custom_sites_v1';
 
-/// Text colours that stay readable on the Bet Hub gradient in both themes.
-Color get _ink => _light ? const Color(0xFF1B1530) : Colors.white;
-Color get _inkSoft =>
-    _light ? const Color(0xFF5B5470) : Colors.white.withValues(alpha: .66);
-
-BoxDecoration _glass({double radius = 16, bool strong = false}) => BoxDecoration(
-      color: _light
-          ? Colors.white.withValues(alpha: strong ? .85 : .65)
-          : Colors.white.withValues(alpha: strong ? .13 : .07),
-      borderRadius: BorderRadius.circular(radius),
-      border: Border.all(
-        color: _light
-            ? const Color(0xFF8E6BFF).withValues(alpha: .18)
-            : Colors.white.withValues(alpha: .13),
-      ),
-    );
-
-/// Night-pitch gradient with soft colour glows and faint pitch markings.
-class _HubBackground extends StatelessWidget {
-  const _HubBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: _light
-                  ? const [Color(0xFFF4EFFF), Color(0xFFFFEEF5), Color(0xFFE9F3FF)]
-                  : const [Color(0xFF0A0720), Color(0xFF1A0F3C), Color(0xFF3A1040)],
-            ),
-          ),
-        ),
-        CustomPaint(painter: _HubPainter(_light)),
-      ],
-    );
-  }
-}
-
-class _HubPainter extends CustomPainter {
-  final bool light;
-  const _HubPainter(this.light);
-
-  @override
-  void paint(Canvas canvas, Size s) {
-    void glow(Offset c, double r, Color col) {
-      final rect = Rect.fromCircle(center: c, radius: r);
-      canvas.drawCircle(
-        c,
-        r,
-        Paint()
-          ..shader = RadialGradient(
-            colors: [col.withValues(alpha: light ? .30 : .42), col.withValues(alpha: 0)],
-          ).createShader(rect),
-      );
-    }
-
-    glow(Offset(s.width * .88, s.height * .06), s.width * .75, const Color(0xFF8E6BFF));
-    glow(Offset(s.width * .05, s.height * .48), s.width * .70, const Color(0xFFFF5C8A));
-    glow(Offset(s.width * .92, s.height * .92), s.width * .80, const Color(0xFF2EA8FF));
-
-    // Faint football-pitch markings, drawn rotated across the page.
-    final line = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6
-      ..color = (light ? const Color(0xFF6A4CD6) : Colors.white)
-          .withValues(alpha: light ? .08 : .07);
-    canvas.save();
-    canvas.translate(s.width / 2, s.height * .62);
-    canvas.rotate(-math.pi / 14);
-    final w = s.width * 1.15;
-    final h = w * .62;
-    final pitch = Rect.fromCenter(center: Offset.zero, width: w, height: h);
-    canvas.drawRRect(RRect.fromRectAndRadius(pitch, const Radius.circular(18)), line);
-    canvas.drawLine(Offset(0, -h / 2), Offset(0, h / 2), line);
-    canvas.drawCircle(Offset.zero, h * .17, line);
-    canvas.drawCircle(Offset.zero, 3, line..style = PaintingStyle.fill);
-    line.style = PaintingStyle.stroke;
-    final boxW = w * .15, boxH = h * .5;
-    canvas.drawRect(Rect.fromLTWH(-w / 2, -boxH / 2, boxW, boxH), line);
-    canvas.drawRect(Rect.fromLTWH(w / 2 - boxW, -boxH / 2, boxW, boxH), line);
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_HubPainter old) => old.light != light;
-}
-
-// ------------------------------------------------------------------ screen
-
-/// "Bet Hub": a Chrome-style in-app browser with tabs, history and betting
-/// bookmarks. The tabs live in [BetBrowserSession], so closing this screen
-/// only minimises the browser.
+/// "Bet Hub": a Chrome-style in-app browser with betting bookmarks.
 class BetBrowserScreen extends StatefulWidget {
   const BetBrowserScreen({super.key});
-
-  static void open(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const BetBrowserScreen()),
-    );
-  }
 
   @override
   State<BetBrowserScreen> createState() => _BetBrowserScreenState();
 }
 
 class _BetBrowserScreenState extends State<BetBrowserScreen> {
-  final _s = BetBrowserSession.instance;
+  late final WebViewController _wc;
   final _addr = TextEditingController();
   final _focus = FocusNode();
+  final ValueNotifier<double> _progress = ValueNotifier<double>(0);
+
+  List<BetSite> _custom = [];
+  bool _home = true;
+  bool _canBack = false;
+  bool _canFwd = false;
+  bool _error = false;
+  String _curUrl = '';
+  String _curTitle = '';
+
+  /// Links that open a new tab/window would do nothing inside the app, so
+  /// they are opened in the same page instead.
+  static const _clickFix = '''
+(function(){
+  if (window.__bhFix) return; window.__bhFix = true;
+  window.open = function(u){ if (u) { location.href = u; } return window; };
+  document.addEventListener('click', function(e){
+    var a = e.target && e.target.closest ? e.target.closest('a[target]') : null;
+    if (a && a.target !== '_self') { a.target = '_self'; }
+  }, true);
+})();
+''';
 
   @override
   void initState() {
     super.initState();
-    _s.addListener(_onSession);
-    _s.init();
-    _syncAddr();
+    _loadCustom();
+    _wc = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.white)
+      ..setUserAgent(_chromeUa)
+      ..setNavigationDelegate(NavigationDelegate(
+        onNavigationRequest: (r) {
+          final s = Uri.tryParse(r.url)?.scheme.toLowerCase() ?? '';
+          const ok = {'http', 'https', 'about', 'data', 'blob'};
+          return ok.contains(s)
+              ? NavigationDecision.navigate
+              : NavigationDecision.prevent;
+        },
+        onPageStarted: (u) {
+          _fix();
+          if (!mounted) return;
+          setState(() {
+            _error = false;
+            _setUrl(u);
+          });
+        },
+        onProgress: (p) => _progress.value = p / 100,
+        onUrlChange: (c) {
+          if (c.url != null && mounted) setState(() => _setUrl(c.url!));
+        },
+        onPageFinished: (u) async {
+          _fix();
+          _progress.value = 1;
+          final t = await _wc.getTitle();
+          final b = await _wc.canGoBack();
+          final f = await _wc.canGoForward();
+          if (!mounted) return;
+          setState(() {
+            _setUrl(u);
+            _curTitle = t ?? '';
+            _canBack = b;
+            _canFwd = f;
+          });
+        },
+        onWebResourceError: (e) {
+          if (e.isForMainFrame == true && mounted) {
+            setState(() => _error = true);
+          }
+        },
+      ));
+
+    final p = _wc.platform;
+    if (p is AndroidWebViewController) {
+      // Keeps people logged in and lets log-in pages that use 3rd-party
+      // cookies work.
+      final cookies = WebViewCookieManager().platform;
+      if (cookies is AndroidWebViewCookieManager) {
+        cookies.setAcceptThirdPartyCookies(p, true);
+      }
+      // KYC / document uploads on bookmaker sites.
+      p.setOnShowFileSelector((params) async {
+        try {
+          final r = await FilePicker.platform.pickFiles(
+            allowMultiple: params.mode == FileSelectorMode.openMultiple,
+          );
+          if (r == null) return <String>[];
+          return r.paths
+              .whereType<String>()
+              .map((e) => Uri.file(e).toString())
+              .toList();
+        } catch (_) {
+          return <String>[];
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
-    _s.removeListener(_onSession);
     _addr.dispose();
     _focus.dispose();
+    _progress.dispose();
     super.dispose();
   }
 
-  void _onSession() {
-    if (!mounted) return;
-    _syncAddr();
-    setState(() {});
+  void _fix() {
+    try {
+      _wc.runJavaScript(_clickFix);
+    } catch (_) {}
   }
 
-  void _syncAddr() {
-    if (_focus.hasFocus) return;
-    final t = _s.tab;
-    _addr.text = t.home ? '' : t.url;
+  void _setUrl(String u) {
+    _curUrl = u;
+    if (!_focus.hasFocus) _addr.text = u;
   }
+
+  // ---------------------------------------------------------------- storage
+
+  Future<void> _loadCustom() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final raw = sp.getString(_prefsKey);
+      if (raw == null) return;
+      final list = (jsonDecode(raw) as List)
+          .whereType<Map>()
+          .map((m) => BetSite.fromJson(Map<String, dynamic>.from(m)))
+          .toList();
+      if (mounted) setState(() => _custom = list);
+    } catch (_) {}
+  }
+
+  Future<void> _saveCustom() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.setString(
+          _prefsKey, jsonEncode(_custom.map((s) => s.toJson()).toList()));
+    } catch (_) {}
+  }
+
+  bool get _curIsBookmarked => _custom.any((s) => _sameUrl(s.url, _curUrl));
+
+  bool _sameUrl(String a, String b) =>
+      a.replaceAll(RegExp(r'/+$'), '') == b.replaceAll(RegExp(r'/+$'), '');
 
   // ------------------------------------------------------------- navigation
 
@@ -219,7 +254,14 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
     final url = _toUrl(input);
     if (url.isEmpty) return;
     _focus.unfocus();
-    _s.load(_s.tab, url);
+    setState(() {
+      _home = false;
+      _error = false;
+      _curUrl = url;
+      _addr.text = url;
+    });
+    _progress.value = 0.05;
+    _wc.loadRequest(Uri.parse(url));
   }
 
   Future<void> _onBack() async {
@@ -227,38 +269,38 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
       _focus.unfocus();
       return;
     }
-    final t = _s.tab;
-    if (!t.home && t.wc != null) {
-      if (await t.wc!.canGoBack()) {
-        await t.wc!.goBack();
+    if (!_home) {
+      if (await _wc.canGoBack()) {
+        await _wc.goBack();
         return;
       }
-      _s.showHome(t);
+      if (mounted) setState(() => _home = true);
       return;
     }
-    // On the bookmarks page: leave. The tabs stay, so this minimises.
     if (mounted) Navigator.of(context).pop();
   }
 
-  void _minimise() {
+  void _showHome() {
     _focus.unfocus();
-    Navigator.of(context).pop();
+    setState(() => _home = true);
   }
 
-  // ------------------------------------------------------------ bookmarks
+  // -------------------------------------------------------------- bookmarks
 
   Future<void> _toggleBookmark() async {
-    final t = _s.tab;
-    if (t.home || t.url.isEmpty) return;
-    if (_s.isCustom(t.url)) {
-      await _s.removeCustomUrl(t.url);
+    if (_home || _curUrl.isEmpty) return;
+    if (_curIsBookmarked) {
+      setState(() => _custom.removeWhere((s) => _sameUrl(s.url, _curUrl)));
+      await _saveCustom();
       _toast('Removed from My sites');
       return;
     }
-    final name = t.title.trim().isNotEmpty
-        ? t.title.trim()
-        : t.host;
-    await _s.addCustom(BetSite(name, t.url, custom: true));
+    final host = Uri.tryParse(_curUrl)?.host ?? '';
+    final name = _curTitle.trim().isNotEmpty
+        ? _curTitle.trim()
+        : host.replaceFirst('www.', '');
+    setState(() => _custom.add(BetSite(name, _curUrl, custom: true)));
+    await _saveCustom();
     _toast('Saved to My sites');
   }
 
@@ -312,11 +354,10 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
       _toast('That does not look like a website address');
       return;
     }
-    await _s.addCustom(BetSite(
-      n.isEmpty ? uri.host.replaceFirst('www.', '') : n,
-      link,
-      custom: true,
-    ));
+    setState(() => _custom.add(BetSite(
+        n.isEmpty ? uri.host.replaceFirst('www.', '') : n, link,
+        custom: true)));
+    await _saveCustom();
   }
 
   Future<void> _siteMenu(BetSite s) async {
@@ -332,7 +373,10 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
         ),
       ),
     );
-    if (del == true) await _s.removeCustomUrl(s.url);
+    if (del == true) {
+      setState(() => _custom.remove(s));
+      await _saveCustom();
+    }
   }
 
   Future<void> _clearData() async {
@@ -354,57 +398,10 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
       ),
     );
     if (ok != true) return;
-    await _s.clearBrowsingData();
+    await WebViewCookieManager().clearCookies();
+    await _wc.clearCache();
+    await _wc.clearLocalStorage();
     _toast('Browsing data cleared');
-  }
-
-  Future<void> _closeHub() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Ui.panel,
-        title: const Text('Close all tabs?'),
-        content: const Text('Every open tab will be closed. You stay logged in on the sites.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Close all')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    _s.closeAll();
-    if (mounted) Navigator.of(context).pop();
-  }
-
-  // ------------------------------------------------------- tabs & history
-
-  Future<void> _openTabs() async {
-    _focus.unfocus();
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Ui.panel,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => FractionallySizedBox(
-        heightFactor: .88,
-        child: _TabsSheet(session: _s),
-      ),
-    );
-  }
-
-  Future<void> _openHistory() async {
-    _focus.unfocus();
-    final url = await Navigator.of(context).push<String>(
-      MaterialPageRoute<String>(builder: (_) => _HistoryScreen(session: _s)),
-    );
-    if (url != null && url.isNotEmpty) _s.load(_s.tab, url);
   }
 
   void _toast(String m) {
@@ -418,8 +415,6 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final t = _s.tab;
-    final top = MediaQuery.of(context).padding.top + kToolbarHeight;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -427,256 +422,169 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
       },
       child: Scaffold(
         backgroundColor: Ui.bg,
-        extendBodyBehindAppBar: true,
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          iconTheme: IconThemeData(color: _ink),
           titleSpacing: 0,
-          leading: IconButton(
-            tooltip: 'Minimise',
-            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 30),
-            onPressed: _minimise,
-          ),
-          title: Text('Bet Hub',
-              style: TextStyle(fontWeight: FontWeight.w900, color: _ink)),
+          title: const Text('Bet Hub',
+              style: TextStyle(fontWeight: FontWeight.w900)),
           actions: [
             IconButton(
-              tooltip: 'Minimise',
-              icon: const Icon(Icons.close_fullscreen_rounded, size: 20),
-              onPressed: _minimise,
+              tooltip: 'Home',
+              icon: const Icon(Icons.home_rounded),
+              onPressed: _showHome,
             ),
             PopupMenuButton<String>(
-              iconColor: _ink,
               onSelected: (v) {
-                switch (v) {
-                  case 'new':
-                    _s.newTab();
-                    break;
-                  case 'tabs':
-                    _openTabs();
-                    break;
-                  case 'history':
-                    _openHistory();
-                    break;
-                  case 'add':
-                    _addSiteDialog();
-                    break;
-                  case 'clear':
-                    _clearData();
-                    break;
-                  case 'close':
-                    _closeHub();
-                    break;
-                }
+                if (v == 'add') _addSiteDialog();
+                if (v == 'clear') _clearData();
               },
               itemBuilder: (_) => const [
-                PopupMenuItem(value: 'new', child: Text('New tab')),
-                PopupMenuItem(value: 'tabs', child: Text('All tabs')),
-                PopupMenuItem(value: 'history', child: Text('History')),
                 PopupMenuItem(value: 'add', child: Text('Add a site')),
                 PopupMenuItem(value: 'clear', child: Text('Clear browsing data')),
-                PopupMenuItem(value: 'close', child: Text('Close all tabs')),
               ],
             ),
           ],
         ),
-        body: Stack(
+        body: Column(
           children: [
-            const Positioned.fill(child: _HubBackground()),
-            Padding(
-              padding: EdgeInsets.only(top: top),
-              child: Column(
+            _addressBar(),
+            ValueListenableBuilder<double>(
+              valueListenable: _progress,
+              builder: (_, v, _) => SizedBox(
+                height: 2,
+                child: (!_home && v > 0 && v < 1)
+                    ? LinearProgressIndicator(value: v, minHeight: 2)
+                    : null,
+              ),
+            ),
+            Expanded(
+              child: IndexedStack(
+                index: _home ? 0 : 1,
                 children: [
-                  _addressBar(t),
-                  ValueListenableBuilder<double>(
-                    valueListenable: t.progress,
-                    builder: (_, v, _) => SizedBox(
-                      height: 2,
-                      child: (!t.home && v > 0 && v < 1)
-                          ? LinearProgressIndicator(
-                              value: v,
-                              minHeight: 2,
-                              backgroundColor: Colors.transparent,
-                            )
-                          : null,
-                    ),
-                  ),
-                  Expanded(child: _content(t)),
-                  _navBar(t),
+                  _homeView(),
+                  _error ? _errorView() : WebViewWidget(controller: _wc),
                 ],
               ),
             ),
+            if (!_home) _navBar(),
           ],
         ),
       ),
     );
   }
 
-  Widget _content(BetTab t) {
-    if (t.home || t.wc == null) return _homeView();
-    if (t.error) return _errorView(t);
-    return WebViewWidget(key: ValueKey(t.id), controller: t.wc!);
-  }
-
-  Widget _addressBar(BetTab t) {
-    final page = !t.home && t.wc != null;
-    final starred = page && _s.isCustom(t.url);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
-      child: Container(
-        height: 46,
-        decoration: _glass(radius: 26, strong: true),
-        child: Row(
-          children: [
-            const SizedBox(width: 14),
-            Icon(
-              !page
-                  ? Icons.search_rounded
-                  : (t.url.startsWith('https')
-                      ? Icons.lock_outline_rounded
-                      : Icons.info_outline_rounded),
-              size: 18,
-              color: _inkSoft,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _addr,
-                focusNode: _focus,
-                keyboardType: TextInputType.url,
-                textInputAction: TextInputAction.go,
-                autocorrect: false,
-                style: TextStyle(fontSize: 14, color: _ink),
-                cursorColor: const Color(0xFF8E6BFF),
-                decoration: InputDecoration(
-                  hintText: 'Search or type a website',
-                  hintStyle: TextStyle(color: _inkSoft),
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  filled: false,
-                  isDense: true,
-                ),
-                onTap: () => _addr.selection =
-                    TextSelection(baseOffset: 0, extentOffset: _addr.text.length),
-                onSubmitted: _go,
+  Widget _addressBar() => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+        child: Container(
+          height: 44,
+          decoration: BoxDecoration(
+            color: Ui.card,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Ui.line),
+          ),
+          child: Row(
+            children: [
+              const SizedBox(width: 14),
+              Icon(
+                _home
+                    ? Icons.search_rounded
+                    : (_curUrl.startsWith('https')
+                        ? Icons.lock_outline_rounded
+                        : Icons.info_outline_rounded),
+                size: 18,
+                color: Ui.muted,
               ),
-            ),
-            if (page)
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _addr,
+                  focusNode: _focus,
+                  keyboardType: TextInputType.url,
+                  textInputAction: TextInputAction.go,
+                  autocorrect: false,
+                  style: const TextStyle(fontSize: 14),
+                  decoration: const InputDecoration(
+                    hintText: 'Search or type a website',
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                  onTap: () => _addr.selection = TextSelection(
+                      baseOffset: 0, extentOffset: _addr.text.length),
+                  onSubmitted: _go,
+                ),
+              ),
+              if (!_home)
+                IconButton(
+                  tooltip: _curIsBookmarked ? 'Remove bookmark' : 'Bookmark',
+                  icon: Icon(
+                    _curIsBookmarked
+                        ? Icons.star_rounded
+                        : Icons.star_border_rounded,
+                    color: _curIsBookmarked ? Colors.amber : Ui.muted,
+                  ),
+                  onPressed: _toggleBookmark,
+                ),
+              if (!_home)
+                IconButton(
+                  tooltip: 'Reload',
+                  icon: Icon(Icons.refresh_rounded, color: Ui.muted),
+                  onPressed: () => _wc.reload(),
+                ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _navBar() => Container(
+        decoration: BoxDecoration(
+          color: Ui.panel,
+          border: Border(top: BorderSide(color: Ui.line)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
               IconButton(
-                tooltip: starred ? 'Remove bookmark' : 'Bookmark',
-                icon: Icon(
-                  starred ? Icons.star_rounded : Icons.star_border_rounded,
-                  color: starred ? Colors.amber : _inkSoft,
-                ),
-                onPressed: _toggleBookmark,
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: _canBack ? () => _wc.goBack() : null,
               ),
-            if (page)
               IconButton(
-                tooltip: 'Reload',
-                icon: Icon(Icons.refresh_rounded, color: _inkSoft),
-                onPressed: () => _s.reload(t),
+                icon: const Icon(Icons.arrow_forward_rounded),
+                onPressed: _canFwd ? () => _wc.goForward() : null,
               ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _navBar(BetTab t) {
-    final page = !t.home && t.wc != null;
-    return Container(
-      decoration: BoxDecoration(
-        color: _light
-            ? Colors.white.withValues(alpha: .8)
-            : const Color(0xFF0A0720).withValues(alpha: .9),
-        border: Border(
-          top: BorderSide(color: _ink.withValues(alpha: .10)),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            IconButton(
-              tooltip: 'Back',
-              color: _ink,
-              icon: const Icon(Icons.arrow_back_rounded),
-              onPressed: page && t.canBack ? () => _s.goBack(t) : null,
-            ),
-            IconButton(
-              tooltip: 'Forward',
-              color: _ink,
-              icon: const Icon(Icons.arrow_forward_rounded),
-              onPressed: page && t.canFwd ? () => _s.goForward(t) : null,
-            ),
-            IconButton(
-              tooltip: 'Bookmarks',
-              color: _ink,
-              icon: const Icon(Icons.home_rounded),
-              onPressed: () {
-                _focus.unfocus();
-                _s.showHome(t);
-              },
-            ),
-            IconButton(
-              tooltip: 'Tabs',
-              icon: Container(
-                width: 22,
-                height: 22,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  border: Border.all(color: _ink, width: 2),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '${_s.tabs.length}',
-                  style: TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.w900, color: _ink),
-                ),
+              IconButton(
+                icon: const Icon(Icons.grid_view_rounded),
+                tooltip: 'Bookmarks',
+                onPressed: _showHome,
               ),
-              onPressed: _openTabs,
-            ),
-            IconButton(
-              tooltip: 'History',
-              color: _ink,
-              icon: const Icon(Icons.history_rounded),
-              onPressed: _openHistory,
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
-  }
+      );
 
-  Widget _errorView(BetTab t) => Container(
-        color: _light ? Colors.white : const Color(0xFF120B2B),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.wifi_off_rounded, size: 48, color: _inkSoft),
-                const SizedBox(height: 12),
-                Text('This page could not be loaded',
-                    style: TextStyle(fontWeight: FontWeight.w800, color: _ink)),
-                const SizedBox(height: 4),
-                Text(
-                  'Check your connection or try again. Some sites are not available in every country.',
+  Widget _errorView() => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.wifi_off_rounded, size: 48, color: Ui.muted),
+              const SizedBox(height: 12),
+              const Text('This page could not be loaded',
+                  style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text('Check your connection or try again. Some sites are not available in every country.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: _inkSoft, fontSize: 12),
-                ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () => _s.reload(t),
-                  child: const Text('Try again'),
-                ),
-              ],
-            ),
+                  style: TextStyle(color: Ui.muted, fontSize: 12)),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () {
+                  setState(() => _error = false);
+                  _wc.reload();
+                },
+                child: const Text('Try again'),
+              ),
+            ],
           ),
         ),
       );
@@ -684,54 +592,23 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
   Widget _homeView() => ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
         children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF8E6BFF), Color(0xFFFF5C8A)],
-                  ),
-                ),
-                child: const Icon(Icons.local_fire_department_rounded,
-                    color: Colors.white, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Your betting sites, one tap away',
-                        style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                            color: _ink)),
-                    Text('Open as many tabs as you like. Minimise to keep them running.',
-                        style: TextStyle(fontSize: 11, color: _inkSoft)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          _section('MY SITES', _s.custom, showAdd: true),
+          _section('MY SITES', _custom, showAdd: true),
           _section('AFRICA', _africa),
           _section('EUROPE', _europe),
           _section('AMERICAS', _americas),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           Text(
             '18+ only. Betting can be addictive, so play responsibly. '
             'Availability depends on your country. You log in on each '
             'bookmaker\'s own page; Deeprowss never sees or stores your passwords.',
-            style: TextStyle(fontSize: 11, color: _inkSoft, height: 1.4),
+            style: TextStyle(fontSize: 11, color: Ui.muted, height: 1.4),
           ),
         ],
       );
 
   Widget _section(String title, List<BetSite> sites, {bool showAdd = false}) {
     return Padding(
-      padding: const EdgeInsets.only(top: 18),
+      padding: const EdgeInsets.only(top: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -739,9 +616,11 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
             title,
             style: TextStyle(
               fontSize: 11,
-              letterSpacing: 1.4,
+              letterSpacing: 1.2,
               fontWeight: FontWeight.w900,
-              color: _light ? const Color(0xFF6A4CD6) : const Color(0xFFC9B8FF),
+              color: Ui.isLight
+                  ? const Color(0xFF6A4CD6)
+                  : const Color(0xFFB39DFF),
             ),
           ),
           const SizedBox(height: 10),
@@ -769,16 +648,20 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
         child: Column(
           children: [
             Container(
-              width: 56,
-              height: 56,
-              decoration: _glass(radius: 18, strong: true),
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: Ui.card,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Ui.line),
+              ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(16),
                 child: CachedNetworkImage(
                   imageUrl:
                       'https://www.google.com/s2/favicons?domain=${s.host}&sz=64',
-                  width: 56,
-                  height: 56,
+                  width: 54,
+                  height: 54,
                   fit: BoxFit.scaleDown,
                   errorWidget: (_, _, _) => _letter(s),
                   placeholder: (_, _) => _letter(s),
@@ -790,8 +673,7 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
               s.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w700, color: _ink),
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
             ),
           ],
         ),
@@ -801,7 +683,7 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
         child: Text(
           s.name.isEmpty ? '?' : s.name[0].toUpperCase(),
           style: TextStyle(
-              fontSize: 20, fontWeight: FontWeight.w900, color: _inkSoft),
+              fontSize: 20, fontWeight: FontWeight.w900, color: Ui.muted),
         ),
       );
 
@@ -811,443 +693,18 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
         child: Column(
           children: [
             Container(
-              width: 56,
-              height: 56,
+              width: 54,
+              height: 54,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: _inkSoft),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Ui.muted.withValues(alpha: .6)),
               ),
-              child: Icon(Icons.add_rounded, color: _inkSoft),
+              child: Icon(Icons.add_rounded, color: Ui.muted),
             ),
             const SizedBox(height: 6),
-            Text('Add site',
-                style: TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.w700, color: _ink)),
+            const Text('Add site',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
           ],
         ),
       );
-}
-
-// ---------------------------------------------------------------- tab list
-
-class _TabsSheet extends StatelessWidget {
-  final BetBrowserSession session;
-  const _TabsSheet({required this.session});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: session,
-      builder: (context, _) {
-        final tabs = session.tabs;
-        return Column(
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Ui.muted.withValues(alpha: .5),
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 12, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${tabs.length} ${tabs.length == 1 ? 'tab' : 'tabs'}',
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w900),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: session.closeAll,
-                    child: const Text('Close all'),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1.05,
-                ),
-                itemCount: tabs.length,
-                itemBuilder: (_, i) => _card(context, tabs[i], i),
-              ),
-            ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      session.newTab();
-                      Navigator.pop(context);
-                    },
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('New tab'),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _card(BuildContext context, BetTab t, int i) {
-    final here = i == session.current;
-    final hasPage = t.wc != null;
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: () {
-        session.select(i);
-        Navigator.pop(context);
-      },
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 4, 12),
-        decoration: BoxDecoration(
-          color: Ui.card,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: here ? const Color(0xFF8E6BFF) : Ui.line,
-            width: here ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                if (hasPage && t.host.isNotEmpty)
-                  CachedNetworkImage(
-                    imageUrl:
-                        'https://www.google.com/s2/favicons?domain=${t.host}&sz=32',
-                    width: 16,
-                    height: 16,
-                    errorWidget: (_, _, _) => const Icon(Icons.public, size: 16),
-                  )
-                else
-                  const Icon(Icons.add_box_outlined, size: 16),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    t.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w800),
-                  ),
-                ),
-                SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    iconSize: 18,
-                    tooltip: 'Close tab',
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => session.closeTab(i),
-                  ),
-                ),
-              ],
-            ),
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      hasPage ? Icons.language_rounded : Icons.grid_view_rounded,
-                      size: 34,
-                      color: Ui.muted,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      hasPage ? t.host : 'Bookmarks',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 11, color: Ui.muted),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (here)
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'YOU ARE HERE',
-                  style: TextStyle(
-                    fontSize: 10,
-                    letterSpacing: 1,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF8E6BFF),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ----------------------------------------------------------------- history
-
-class _HistoryScreen extends StatefulWidget {
-  final BetBrowserSession session;
-  const _HistoryScreen({required this.session});
-
-  @override
-  State<_HistoryScreen> createState() => _HistoryScreenState();
-}
-
-class _HistoryScreenState extends State<_HistoryScreen> {
-  final _q = TextEditingController();
-
-  @override
-  void dispose() {
-    _q.dispose();
-    super.dispose();
-  }
-
-  String _day(DateTime d) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final that = DateTime(d.year, d.month, d.day);
-    final diff = today.difference(that).inDays;
-    if (diff == 0) return 'Today';
-    if (diff == 1) return 'Yesterday';
-    return '${d.day}/${d.month}/${d.year}';
-  }
-
-  String _time(DateTime d) =>
-      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: widget.session,
-      builder: (context, _) {
-        final q = _q.text.trim().toLowerCase();
-        final all = widget.session.history
-            .where((e) =>
-                q.isEmpty ||
-                e.title.toLowerCase().contains(q) ||
-                e.url.toLowerCase().contains(q))
-            .toList();
-        final rows = <Object>[];
-        String? last;
-        for (final e in all) {
-          final label = _day(DateTime.fromMillisecondsSinceEpoch(e.at));
-          if (label != last) {
-            rows.add(label);
-            last = label;
-          }
-          rows.add(e);
-        }
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('History',
-                style: TextStyle(fontWeight: FontWeight.w900)),
-            actions: [
-              TextButton(
-                onPressed: widget.session.history.isEmpty
-                    ? null
-                    : () => widget.session.clearHistory(),
-                child: const Text('Clear all'),
-              ),
-            ],
-          ),
-          body: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                child: TextField(
-                  controller: _q,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    hintText: 'Search history',
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    isDense: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: rows.isEmpty
-                    ? Center(
-                        child: Text(
-                          widget.session.history.isEmpty
-                              ? 'No history yet'
-                              : 'Nothing matches',
-                          style: TextStyle(color: Ui.muted),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: rows.length,
-                        itemBuilder: (_, i) {
-                          final r = rows[i];
-                          if (r is String) {
-                            return Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-                              child: Text(
-                                r.toUpperCase(),
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  letterSpacing: 1.2,
-                                  fontWeight: FontWeight.w900,
-                                  color: Color(0xFF8E6BFF),
-                                ),
-                              ),
-                            );
-                          }
-                          final e = r as BetHistoryEntry;
-                          final host = Uri.tryParse(e.url)?.host ?? '';
-                          return Dismissible(
-                            key: ValueKey('${e.url}_${e.at}'),
-                            direction: DismissDirection.endToStart,
-                            background: Container(
-                              color: Colors.red.withValues(alpha: .8),
-                              alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.only(right: 20),
-                              child: const Icon(Icons.delete_outline_rounded,
-                                  color: Colors.white),
-                            ),
-                            onDismissed: (_) => widget.session.removeHistory(e),
-                            child: ListTile(
-                              leading: CachedNetworkImage(
-                                imageUrl:
-                                    'https://www.google.com/s2/favicons?domain=$host&sz=32',
-                                width: 22,
-                                height: 22,
-                                errorWidget: (_, _, _) =>
-                                    const Icon(Icons.public, size: 22),
-                              ),
-                              title: Text(
-                                e.title.isEmpty ? host : e.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    fontSize: 14, fontWeight: FontWeight.w700),
-                              ),
-                              subtitle: Text(
-                                e.url,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 11, color: Ui.muted),
-                              ),
-                              trailing: Text(
-                                _time(DateTime.fromMillisecondsSinceEpoch(e.at)),
-                                style: TextStyle(fontSize: 11, color: Ui.muted),
-                              ),
-                              onTap: () => Navigator.pop(context, e.url),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ---------------------------------------------------------------- mini bar
-
-/// Shown on the AI Predict page while Bet Hub is minimised, like a mini
-/// player: tap it to come back to your tabs exactly where you left them.
-class BetMiniBar extends StatelessWidget {
-  const BetMiniBar({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = BetBrowserSession.instance;
-    return ListenableBuilder(
-      listenable: s,
-      builder: (context, _) {
-        if (!s.hasPages) return const SizedBox.shrink();
-        final t = s.tab;
-        final n = s.pageCount;
-        final sub = t.wc != null && t.host.isNotEmpty ? t.host : 'Bookmarks';
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () => BetBrowserScreen.open(context),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF2A1A5E), Color(0xFF5A1B55)],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withValues(alpha: .15)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.local_fire_department_rounded,
-                        color: Colors.white, size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Bet Hub · $n ${n == 1 ? 'tab' : 'tabs'} open',
-                            style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white),
-                          ),
-                          Text(
-                            sub,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.white.withValues(alpha: .7)),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Text('OPEN',
-                        style: TextStyle(
-                            fontSize: 11,
-                            letterSpacing: 1,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white)),
-                    IconButton(
-                      tooltip: 'Close Bet Hub',
-                      iconSize: 18,
-                      color: Colors.white,
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: s.closeAll,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
