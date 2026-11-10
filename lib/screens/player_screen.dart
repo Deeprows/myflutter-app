@@ -1,3 +1,4 @@
+import 'dart:convert' show HtmlEscape, HtmlEscapeMode;
 import 'dart:ui' show ImageFilter;
 
 import 'package:android_intent_plus/android_intent.dart';
@@ -12,6 +13,7 @@ import '../config.dart';
 import '../models/movie.dart';
 import '../models/movie_info.dart';
 import '../services/ad_shield.dart';
+import '../services/dailymotion_check.dart';
 import '../services/background_playback.dart';
 import '../services/movie_library.dart';
 import '../services/player_html.dart';
@@ -286,6 +288,17 @@ class _PlayerScreenState extends State<PlayerScreen>
         await _wc.loadHtmlString(
           buildPlayerHtml(s, lowQuality: low),
           baseUrl: _playerBase(s.url),
+        );
+      } else if (s.dailymotionId != null) {
+        // Dailymotion refuses to play when its embed page is opened as a bare
+        // page, so show it inside an iframe like a normal website embed.
+        final src = const HtmlEscape(HtmlEscapeMode.attribute)
+            .convert(DailymotionCheck.playerUrl(s.dailymotionId!));
+        await _wc.loadHtmlString(
+          '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head>'
+          '<body style="margin:0;background:#000"><iframe src="$src" style="position:fixed;inset:0;width:100%;height:100%;border:0" '
+          'allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
+          baseUrl: AppConfig.embedOrigin,
         );
       } else {
         await _wc.loadRequest(Uri.parse(s.url));
