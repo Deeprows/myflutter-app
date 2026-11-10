@@ -182,6 +182,14 @@ class AppConfig {
   static const supportUrl =
       'https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60';
   static const adIntervalMinutes = 10;
+
+  /// "Or watch ad" unlock: a free person can watch one ad page for
+  /// [adUnlockSeconds] seconds (Skip Ad appears after that) to unlock Movies
+  /// and TV channels for [adUnlockMinutes] minutes. After that the ad comes
+  /// back. Premium people never see it. false = the option is hidden.
+  static const adUnlockEnabled = true;
+  static const adUnlockSeconds = 40;
+  static const adUnlockMinutes = 10;
   static const supportViewSeconds = 6; // seconds after load before Skip Ad appears (never auto-closes)
 
   /// If the support page cannot load (offline / dead link) nobody is locked
