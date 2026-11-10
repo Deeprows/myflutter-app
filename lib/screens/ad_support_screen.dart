@@ -32,7 +32,20 @@ class AdSupportScreen extends StatefulWidget {
 
   /// Page loaded in the background by [AdPreloader] (null = load it here).
   final PreloadedAd? preloaded;
-  const AdSupportScreen({super.key, required this.url, this.preloaded});
+
+  /// Seconds after the page has loaded before Skip Ad appears
+  /// (null = the normal [RemoteConfig.supportSkipAfterSeconds]).
+  final int? skipAfterSeconds;
+
+  /// Short text for the top bar while the ad runs (e.g. the unlock offer).
+  final String? note;
+  const AdSupportScreen({
+    super.key,
+    required this.url,
+    this.preloaded,
+    this.skipAfterSeconds,
+    this.note,
+  });
 
   @override
   State<AdSupportScreen> createState() => _AdSupportScreenState();
@@ -59,6 +72,9 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
   bool _engaged = false; // the person tapped the ad: no automatic ending
 
   static const _settleDelay = Duration(milliseconds: 1400);
+
+  int get _skipAfter =>
+      widget.skipAfterSeconds ?? RemoteConfig.instance.supportSkipAfterSeconds;
 
   @override
   void initState() {
@@ -171,7 +187,7 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
       _elapsed.value = e;
       // No automatic ending: the ad stays until the person taps Skip Ad.
       // Once the Skip button is available there is nothing left to count.
-      if (e >= RemoteConfig.instance.supportSkipAfterSeconds) {
+      if (e >= _skipAfter) {
         t.cancel();
         _tick = null;
         _elapsed.value = e;
@@ -294,7 +310,7 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
 
   bool get _canSkip =>
       _phase == _Phase.ready &&
-      _elapsed.value >= RemoteConfig.instance.supportSkipAfterSeconds;
+      _elapsed.value >= _skipAfter;
 
   static const _yellow = Color(0xFFFFCC00);
 
@@ -374,7 +390,7 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
     return ValueListenableBuilder<double>(
       valueListenable: _elapsed,
       builder: (_, e, _) {
-        final wait = RemoteConfig.instance.supportSkipAfterSeconds - e;
+        final wait = _skipAfter - e;
         final ready = wait <= 0;
         return Material(
           color: Colors.black.withValues(alpha: .78),
@@ -451,13 +467,13 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
                           valueListenable: _elapsed,
                           builder: (_, e, _) {
                             final ready =
-                                e >= RemoteConfig.instance.supportSkipAfterSeconds;
+                                e >= _skipAfter;
                             return Text(
                               _engaged
                                   ? 'Ad · tap Continue when you are done'
                                   : (ready
                                       ? 'Ad · tap Skip Ad to continue'
-                                      : 'Ad'),
+                                      : (widget.note ?? 'Ad')),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -486,7 +502,7 @@ class _AdSupportScreenState extends State<AdSupportScreen> {
                     minHeight: 3,
                     value: _engaged
                         ? 1.0
-                        : (e / RemoteConfig.instance.supportSkipAfterSeconds)
+                        : (e / _skipAfter)
                             .clamp(0.0, 1.0)
                             .toDouble(),
                     backgroundColor: Ui.line,
