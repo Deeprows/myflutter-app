@@ -58,9 +58,10 @@ class Fixture {
         _womenRe.hasMatch(league);
   }
 
-  /// "Chelsea vs Leeds (men)" / "Chelsea vs Leeds (women)" so a men's and a
-  /// women's match between clubs with the same name can never be confused.
-  String get genderTitle => '$title (${isWomen ? 'women' : 'men'})';
+  /// Men's matches (the default) show the plain title; only women's matches get
+  /// a "(women)" tag, so a men's and a women's match between clubs with the same
+  /// name can never be confused. `isWomen` still tells the AI which side it is.
+  String get genderTitle => isWomen ? '$title (women)' : title;
   DateTime get endTime => kickoff.add(Duration(minutes: durationMin));
   bool get hasStream => url.trim().isNotEmpty;
   bool get hasAlt =>
