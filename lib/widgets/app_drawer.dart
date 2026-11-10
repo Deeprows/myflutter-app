@@ -44,6 +44,24 @@ Future<void> _openLink(BuildContext c, String url, String label) async {
   }
 }
 
+/// "Contact Us": opens the admin WhatsApp chat with a ready-made message.
+Future<void> _contactUs(BuildContext c) async {
+  final base = Uri.tryParse(AppConfig.adminWhatsappUrl);
+  if (base == null || AppConfig.adminWhatsappUrl.isEmpty) {
+    _toast(c, '{label} link is not set up yet'.trArgs({'label': 'Contact Us'}));
+    return;
+  }
+  final uri = base.replace(
+    queryParameters: {
+      ...base.queryParameters,
+      'text': 'Hello Admin, I need help with Deeprowss.',
+    },
+  );
+  if (!await openExternally(uri.toString()) && c.mounted) {
+    _toast(c, 'Could not open the link'.tr);
+  }
+}
+
 /// Side menu in the style of the X (Twitter) menu, tidied up:
 ///  * profile header (or a Sign in button when signed out) with follower stats
 ///  * content shortcuts grouped under small headings, rounded tap targets
@@ -513,6 +531,12 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
                       Icons.playlist_play_rounded,
                       'Playlists'.tr,
                       (c) => _push(c, const PlaylistsScreen()),
+                    ),
+                    _heading('Support'.tr),
+                    _row(
+                      Icons.support_agent_rounded,
+                      'Contact Us'.tr,
+                      _contactUs,
                     ),
                   ],
                 ),
