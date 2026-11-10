@@ -33,7 +33,8 @@ async function call(path,{body,bearer,e=env}={}){
 
 const FUTURE=new Date(Date.now()+2*86400000).toISOString();
 let scoreboardCalls=0,teamsCalls=0,scheduleCalls=0;
-const TEAMS={'eng.1':[['359','Arsenal','Arsenal','ARS'],['363','Chelsea','Chelsea','CHE'],['382','Manchester City','Manchester City','MCI'],['360','Manchester United','Manchester United','MUN']],
+const TEAMS={'eng.1':[['359','Arsenal','Arsenal','ARS'],['363','Chelsea','Chelsea','CHE'],['382','Manchester City','Manchester City','MCI'],['360','Manchester United','Manchester United','MUN'],['341','Leeds United','Leeds','LEE']],
+  'eng.w.1':[['9363','Chelsea','Chelsea','CHE'],['9341','Leeds','Leeds','LEE']],
   'esp.1':[['86','Real Madrid','Real Madrid','RMA'],['89','Real Sociedad','Real Sociedad','RSO']]};
 globalThis.fetch=async(url)=>{
   const u=String(url);
@@ -47,6 +48,7 @@ globalThis.fetch=async(url)=>{
         const e={id:'8001',date:FUTURE,competitions:[{status:{type:{state:'pre',name:'STATUS_SCHEDULED'}},competitors:[{homeAway:'home',team:{id:'86',displayName:'Real Madrid'}},{homeAway:'away',team:{id:'359',displayName:'Arsenal'}}]}]};
         return new Response(JSON.stringify({events:[e]}));
       }
+      if(slug==='eng.w.1')return new Response(JSON.stringify({events:[{id:'9901',date:FUTURE,competitions:[{status:{type:{state:'pre',name:'STATUS_SCHEDULED'}},competitors:[{homeAway:'home',team:{id:'9363',displayName:'Chelsea'}},{homeAway:'away',team:{id:'9341',displayName:'Leeds'}}]}]}]}));
       if(slug!=='eng.1')return new Response(JSON.stringify({events:[]}));
       const mk=(id,state,name,date,h,a)=>({id,date,competitions:[{status:{type:{state,name}},competitors:[{homeAway:'home',team:{id:h[0],displayName:h[1],logo:'https://a.espncdn.com/i/teamlogos/soccer/500/'+h[0]+'.png'}},{homeAway:'away',team:{id:a[0],displayName:a[1],logo:'https://evil.example/x.png'}}]}]});
       return new Response(JSON.stringify({events:[
@@ -77,7 +79,7 @@ const alice=await token();assert.equal((await call('auth',{body:{mode:'signup',i
 assert.equal((await call('ai-predict/matches')).status,401,'list requires login');
 let r=await call('ai-predict/matches',{bearer:alice});assert.equal(r.status,200);
 let list=(await r.json()).matches;
-assert.equal(list.length,2,'finished, postponed and already-started matches are not listed');
+assert.equal(list.length,3,'finished, postponed and already-started matches are not listed (2 men + 1 women)');
 list=list.filter(m=>m.id==='eng.1:7001');assert.equal(list.length,1);
 assert.equal(list[0].id,'eng.1:7001');assert.equal(list[0].home,'Arsenal');assert.equal(list[0].league,'Premier League');
 assert.match(list[0].homeLogo,/espncdn\.com/);assert.equal(list[0].awayLogo,'','non-ESPN logo hosts are dropped');
@@ -109,7 +111,18 @@ r=await call('ai-predict',{body:{custom:{home:'Real Madrid',away:'Arsenal'}},bea
 // abbreviations / short names
 r=await call('ai-predict',{body:{custom:{home:'MUN',away:'Arsenal'}},bearer:alice});assert.equal(r.status,200);assert.equal((await r.json()).fixture.home,'Manchester United');
 // ambiguity and unknown teams never reach the model
-const before=runs;
+let before=runs;
+// Men's and women's clubs with the same name are kept apart.
+r=await call('ai-predict',{body:{custom:{home:'Chelsea',away:'Leeds United'}},bearer:alice});assert.equal(r.status,200);
+let g=await r.json();assert.equal(g.gender,'men');assert.equal(g.fixture.home,'Chelsea');assert.equal(lastPrompt.fixture.gender,'men');
+r=await call('ai-predict',{body:{custom:{home:'Chelsea',away:'Leeds',gender:'women'}},bearer:alice});assert.equal(r.status,200);
+g=await r.json();assert.equal(g.gender,'women');assert.equal(lastPrompt.fixture.gender,'women');assert.ok(JSON.stringify(lastPrompt.home).includes('9363'),'women\'s Chelsea (not the men\'s 363) was analysed');
+r=await call('ai-predict',{body:{custom:{home:'Chelsea Women',away:'Leeds (W)'}},bearer:alice});assert.equal(r.status,200);assert.equal((await r.json()).gender,'women');
+r=await call('ai-predict',{body:{custom:{home:'Chelsea',away:'Leeds',gender:'women'}},bearer:alice});
+r=await call('ai-predict/matches',{bearer:alice});const ml=(await r.json()).matches;
+assert.ok(ml.some(m=>m.gender==='women' && m.home==='Chelsea' && m.away==='Leeds'),'women match listed with gender');
+assert.ok(ml.some(m=>m.gender==='men'),'men matches tagged');
+before=runs;
 r=await call('ai-predict',{body:{custom:{home:'Real',away:'Arsenal'}},bearer:alice});assert.equal(r.status,422);
 let bad=await r.json();assert.deepEqual(bad.candidates.sort(),['Real Madrid','Real Sociedad']);assert.match(bad.error,/Be more specific/);
 r=await call('ai-predict',{body:{custom:{home:'Arsenal',away:'Nonexistent Rovers'}},bearer:alice});assert.equal(r.status,422);assert.match((await r.json()).error,/No team found/);
@@ -127,8 +140,8 @@ sql.exec("DELETE FROM fan_espn_form_cache WHERE cache_key LIKE 'ai-%'");
 const okFetch=globalThis.fetch;let failing=true;
 globalThis.fetch=async(u,o)=>String(u).includes('/soccer/')&&failing&&!String(u).includes('eng.1')?new Response('{}',{status:500}):okFetch(u,o);
 r=await call('ai-predict',{body:{custom:{home:'Chelsea',away:'Arsenal'}},bearer:alice});assert.equal(r.status,200,'partial index still works for clubs it found');
-assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM fan_espn_form_cache WHERE cache_key='ai-teams:v2'").get().n,0,'partial team index not cached');
+assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM fan_espn_form_cache WHERE cache_key='ai-teams:v3'").get().n,0,'partial team index not cached');
 failing=false;globalThis.fetch=okFetch;
 r=await call('ai-predict',{body:{custom:{home:'Real Madrid',away:'Arsenal'}},bearer:alice});assert.equal(r.status,200,'full index rebuilt on next request');
-assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM fan_espn_form_cache WHERE cache_key='ai-teams:v2'").get().n,1);
+assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM fan_espn_form_cache WHERE cache_key='ai-teams:v3'").get().n,1);
 console.log('AI any-match: cup ties use domestic form; partial rebuilds are not cached.');
