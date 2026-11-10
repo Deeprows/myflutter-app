@@ -83,29 +83,48 @@ const _prefsKey = 'bet_hub_custom_sites_v1';
 class BetBrowserScreen extends StatefulWidget {
   const BetBrowserScreen({super.key});
 
+  /// True while the browser has a page open in the background (minimised).
+  static bool get hasOpenPages => _BetBrowserScreenState._tabUrls.any((u) => u.isNotEmpty);
+
   @override
   State<BetBrowserScreen> createState() => _BetBrowserScreenState();
 }
 
 class _BetBrowserScreenState extends State<BetBrowserScreen> {
-  final List<WebViewController> _tabs = [];
-  final List<String> _tabUrls = [];
-  final List<String> _tabTitles = [];
-  int _activeTab = 0;
-  final List<Map<String, String>> _history = [];
-  WebViewController get _wc => _tabs[_activeTab];
+  // The browser session (tabs, pages, history) is kept here, outside the
+  // screen, so minimising the browser and opening it again from another page
+  // brings back exactly the pages that were open.
+  static final List<WebViewController> _tabs = [];
+  static final List<String> _tabUrls = [];
+  static final List<String> _tabTitles = [];
+  static int _activeTab = 0;
+  static final List<Map<String, String>> _history = [];
+  static WebViewController get _wc => _tabs[_activeTab];
+  static final ValueNotifier<double> _progress = ValueNotifier<double>(0);
+  static bool _home = true;
+  static bool _canBack = false;
+  static bool _canFwd = false;
+  static bool _error = false;
+  static String _curUrl = '';
+  static String _curTitle = '';
+
+  /// The screen currently showing the session (null while minimised).
+  static _BetBrowserScreenState? _live;
 
   final _addr = TextEditingController();
   final _focus = FocusNode();
-  final ValueNotifier<double> _progress = ValueNotifier<double>(0);
 
   List<BetSite> _custom = [];
-  bool _home = true;
-  bool _canBack = false;
-  bool _canFwd = false;
-  bool _error = false;
-  String _curUrl = '';
-  String _curTitle = '';
+
+  void _rebuild() {
+    if (mounted) setState(() {});
+  }
+
+  static void _setUrlS(String u) {
+    _curUrl = u;
+    final l = _live;
+    if (l != null && l.mounted && !l._focus.hasFocus) l._addr.text = u;
+  }
 
   /// Links that open a new tab/window would do nothing inside the app, so
   /// they are opened in the same page instead.
@@ -123,13 +142,18 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
   @override
   void initState() {
     super.initState();
+    _live = this;
     _loadCustom();
-    _addTab(initial: true);
+    if (_tabs.isEmpty) {
+      _addTab(initial: true);
+    } else {
+      _addr.text = _curUrl;
+    }
     _focus.addListener(() { if (mounted) setState(() {}); });
 
   }
 
-  WebViewController _buildController() {
+  static WebViewController _buildController() {
     late final WebViewController controller;
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -143,31 +167,37 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
         },
         onPageStarted: (u) {
           try { controller.runJavaScript(_clickFix); } catch (_) {}
-          if (!mounted || !_tabs.contains(controller) || _wc != controller) return;
-          setState(() { _error = false; _home = false; _setUrl(u); });
+          if (!_tabs.contains(controller) || _wc != controller) return;
+          _error = false; _home = false; _setUrlS(u);
+          _live?._rebuild();
         },
         onProgress: (p) { if (_tabs.contains(controller) && _wc == controller) _progress.value = p / 100; },
         onUrlChange: (c) {
-          if (c.url != null && mounted && _tabs.contains(controller) && _wc == controller) setState(() => _setUrl(c.url!));
+          if (c.url != null && _tabs.contains(controller) && _wc == controller) {
+            _setUrlS(c.url!);
+            _live?._rebuild();
+          }
         },
         onPageFinished: (u) async {
           try { controller.runJavaScript(_clickFix); } catch (_) {}
           final title = await controller.getTitle();
           final back = await controller.canGoBack();
           final forward = await controller.canGoForward();
-          if (!mounted || !_tabs.contains(controller) || _wc != controller) return;
-          setState(() {
-            _setUrl(u); _curTitle = title ?? ''; _canBack = back; _canFwd = forward;
-            _tabUrls[_activeTab] = u; _tabTitles[_activeTab] = _curTitle;
-            if (u.startsWith('http')) {
-              _history.removeWhere((e) => e['url'] == u);
-              _history.insert(0, {'url': u, 'title': _curTitle});
-              if (_history.length > 60) _history.removeLast();
-            }
-          });
+          if (!_tabs.contains(controller) || _wc != controller) return;
+          _setUrlS(u); _curTitle = title ?? ''; _canBack = back; _canFwd = forward;
+          _tabUrls[_activeTab] = u; _tabTitles[_activeTab] = _curTitle;
+          if (u.startsWith('http')) {
+            _history.removeWhere((e) => e['url'] == u);
+            _history.insert(0, {'url': u, 'title': _curTitle});
+            if (_history.length > 60) _history.removeLast();
+          }
+          _live?._rebuild();
         },
         onWebResourceError: (e) {
-          if (e.isForMainFrame == true && mounted && _wc == controller) setState(() => _error = true);
+          if (e.isForMainFrame == true && _tabs.contains(controller) && _wc == controller) {
+            _error = true;
+            _live?._rebuild();
+          }
         },
       ));
     final platform = controller.platform;
@@ -248,7 +278,7 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
   void dispose() {
     _addr.dispose();
     _focus.dispose();
-    _progress.dispose();
+    if (_live == this) _live = null;
     super.dispose();
   }
 
@@ -258,10 +288,7 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
     } catch (_) {}
   }
 
-  void _setUrl(String u) {
-    _curUrl = u;
-    if (!_focus.hasFocus) _addr.text = u;
-  }
+  void _setUrl(String u) => _setUrlS(u);
 
   // ---------------------------------------------------------------- storage
 
@@ -336,6 +363,26 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
       return;
     }
     if (mounted) Navigator.of(context).pop();
+  }
+
+  /// Leaves the browser without closing anything: the tabs and pages stay
+  /// loaded and are there again the next time Bet Hub is opened.
+  void _minimise() {
+    _focus.unfocus();
+    Navigator.of(context).pop();
+  }
+
+  /// Closes every tab and starts over with one empty tab.
+  void _closeBrowser() {
+    for (final c in _tabs) {
+      try { c.loadRequest(Uri.parse('about:blank')); } catch (_) {}
+    }
+    _tabs..clear()..add(_buildController());
+    _tabUrls..clear()..add('');
+    _tabTitles..clear()..add('New tab');
+    _activeTab = 0; _home = true; _error = false; _canBack = false; _canFwd = false;
+    _curUrl = ''; _curTitle = ''; _progress.value = 0;
+    Navigator.of(context).pop();
   }
 
   void _showHome() {
@@ -485,7 +532,7 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
           title: const Text('Bet Hub',
               style: TextStyle(fontWeight: FontWeight.w900)),
           actions: [
-            IconButton(tooltip: 'Minimise browser', icon: const Icon(Icons.keyboard_arrow_down_rounded), onPressed: () => Navigator.of(context).maybePop()),
+            IconButton(tooltip: 'Minimise (keeps your pages open)', icon: const Icon(Icons.keyboard_arrow_down_rounded), onPressed: _minimise),
           ],
         ),
         body: Column(
@@ -608,6 +655,7 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
           item(Icons.history_rounded, 'History', _showHistory),
           item(Icons.add_link_rounded, 'Add a site', _addSiteDialog),
           item(Icons.delete_sweep_outlined, 'Clear browsing data', _clearData),
+          item(Icons.close_rounded, 'Close browser and all tabs', _closeBrowser),
           const SizedBox(height: 8),
         ]),
       ),
