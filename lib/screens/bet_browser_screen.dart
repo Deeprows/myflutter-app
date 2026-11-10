@@ -125,6 +125,7 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
     super.initState();
     _loadCustom();
     _addTab(initial: true);
+    _focus.addListener(() { if (mounted) setState(() {}); });
 
   }
 
@@ -484,24 +485,12 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
           title: const Text('Bet Hub',
               style: TextStyle(fontWeight: FontWeight.w900)),
           actions: [
-            IconButton(tooltip: 'History', icon: const Icon(Icons.history_rounded), onPressed: _showHistory),
             IconButton(tooltip: 'Minimise browser', icon: const Icon(Icons.keyboard_arrow_down_rounded), onPressed: () => Navigator.of(context).maybePop()),
-            PopupMenuButton<String>(
-              onSelected: (v) {
-                if (v == 'add') _addSiteDialog();
-                if (v == 'clear') _clearData();
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'add', child: Text('Add a site')),
-                PopupMenuItem(value: 'clear', child: Text('Clear browsing data')),
-              ],
-            ),
           ],
         ),
         body: Column(
           children: [
             _addressBar(),
-            _tabStrip(),
             ValueListenableBuilder<double>(
               valueListenable: _progress,
               builder: (_, v, _) => SizedBox(
@@ -520,46 +509,171 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
                 ],
               ),
             ),
-            if (!_home) _navBar(),
+            if (!_focus.hasFocus) _bottomBar(),
           ],
         ),
       ),
     );
   }
 
-  Widget _tabStrip() => Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(color: Ui.panel, border: Border(bottom: BorderSide(color: Ui.line))),
-        child: Row(children: [
-          Expanded(child: ListView.separated(
-            scrollDirection: Axis.horizontal, itemCount: _tabs.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 6),
-            itemBuilder: (_, i) => InkWell(
-              onTap: () => _switchTab(i), borderRadius: BorderRadius.circular(18),
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 155),
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: i == _activeTab ? Ui.card : Colors.transparent,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: i == _activeTab ? const Color(0xFF8B70FF) : Ui.line),
-                ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.public_rounded, size: 14, color: Ui.muted),
-                  const SizedBox(width: 6),
-                  Flexible(child: Text(_tabTitles[i].isEmpty ? 'New tab' : _tabTitles[i], maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700))),
-                  const SizedBox(width: 4),
-                  InkWell(onTap: () => _closeTab(i), child: const Icon(Icons.close_rounded, size: 14)),
+  // ------------------------------------------------------ tabs & bottom bar
+
+  void _showTabs() {
+    _focus.unfocus();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Ui.panel,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(ctx).size.height * .7,
+            child: Column(children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 10, 6),
+                child: Row(children: [
+                  Expanded(child: Text('${_tabs.length} ${_tabs.length == 1 ? 'tab' : 'tabs'}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFF7257E8)),
+                    onPressed: () { Navigator.pop(ctx); _addTab(); },
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('New tab'),
+                  ),
                 ]),
               ),
-            ),
-          )),
-          const SizedBox(width: 6),
-          InkWell(onTap: () => _addTab(), borderRadius: BorderRadius.circular(18),
-            child: Container(width: 34, height: 34, decoration: BoxDecoration(color: const Color(0xFF7257E8), borderRadius: BorderRadius.circular(17)), child: const Icon(Icons.add_rounded, color: Colors.white, size: 20))),
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+                  itemCount: _tabs.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) {
+                    final active = i == _activeTab;
+                    final title = _tabTitles[i].isEmpty ? 'New tab' : _tabTitles[i];
+                    final url = _tabUrls[i];
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () { Navigator.pop(ctx); _switchTab(i); },
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+                        decoration: BoxDecoration(
+                          color: Ui.card,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: active ? const Color(0xFF8B70FF) : Ui.line, width: active ? 1.6 : 1),
+                        ),
+                        child: Row(children: [
+                          Icon(Icons.public_rounded, size: 20, color: Ui.muted),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                            if (url.isNotEmpty) Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: Ui.muted)),
+                          ])),
+                          IconButton(
+                            tooltip: 'Close tab',
+                            icon: const Icon(Icons.close_rounded, size: 20),
+                            onPressed: () {
+                              _closeTab(i);
+                              setSheet(() {});
+                            },
+                          ),
+                        ]),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showMenu() {
+    _focus.unfocus();
+    Widget item(IconData icon, String label, VoidCallback onTap) => ListTile(
+          leading: Icon(icon),
+          title: Text(label),
+          onTap: () { Navigator.pop(context); onTap(); },
+        );
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Ui.panel,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 8),
+          item(Icons.home_rounded, 'Home', _showHome),
+          if (!_home) item(_curIsBookmarked ? Icons.star_rounded : Icons.star_border_rounded, _curIsBookmarked ? 'Remove bookmark' : 'Bookmark this page', _toggleBookmark),
+          if (!_home) item(Icons.refresh_rounded, 'Reload', () => _wc.reload()),
+          item(Icons.history_rounded, 'History', _showHistory),
+          item(Icons.add_link_rounded, 'Add a site', _addSiteDialog),
+          item(Icons.delete_sweep_outlined, 'Clear browsing data', _clearData),
+          const SizedBox(height: 8),
         ]),
-      );
+      ),
+    );
+  }
+
+  /// Chrome-style bottom bar: back, forward, new tab, tab switcher, menu.
+  /// Sits above the phone's navigation (gesture bar or buttons).
+  Widget _bottomBar() {
+    // From a page, Back always works (it falls back to Home when there is no history).
+    final canBack = !_home;
+    return Container(
+      decoration: BoxDecoration(
+        color: Ui.panel,
+        border: Border(top: BorderSide(color: Ui.line)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 52,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              IconButton(
+                tooltip: 'Back',
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: canBack ? _onBack : null,
+              ),
+              IconButton(
+                tooltip: 'Forward',
+                icon: const Icon(Icons.arrow_forward_rounded),
+                onPressed: (!_home && _canFwd) ? () => _wc.goForward() : null,
+              ),
+              InkWell(
+                onTap: () => _addTab(),
+                customBorder: const CircleBorder(),
+                child: Container(
+                  width: 38, height: 38,
+                  decoration: const BoxDecoration(color: Color(0xFF7257E8), shape: BoxShape.circle),
+                  child: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Tabs',
+                onPressed: _showTabs,
+                icon: Container(
+                  width: 24, height: 24,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Theme.of(context).iconTheme.color ?? Colors.white, width: 2),
+                  ),
+                  child: Text('${_tabs.length}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Menu',
+                icon: const Icon(Icons.more_vert_rounded),
+                onPressed: _showMenu,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _addressBar() => Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
@@ -618,31 +732,6 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
                   icon: Icon(Icons.refresh_rounded, color: Ui.muted),
                   onPressed: () => _wc.reload(),
                 ),
-            ],
-          ),
-        ),
-      );
-
-  Widget _navBar() => Container(
-        decoration: BoxDecoration(
-          color: Ui.panel,
-          border: Border(top: BorderSide(color: Ui.line)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back_rounded),
-                onPressed: _canBack ? () => _wc.goBack() : null,
-              ),
-              IconButton(
-                icon: const Icon(Icons.arrow_forward_rounded),
-                onPressed: _canFwd ? () => _wc.goForward() : null,
-              ),
-              IconButton(icon: const Icon(Icons.history_rounded), tooltip: 'History', onPressed: _showHistory),
-              IconButton(icon: const Icon(Icons.home_rounded), tooltip: 'Home', onPressed: _showHome),
             ],
           ),
         ),
