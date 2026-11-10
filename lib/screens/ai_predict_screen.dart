@@ -3528,17 +3528,45 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         .then((_) => PageMemory.close('analysis', key));
   }
 
-  Widget _betSlipBar() => Container(
-    padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-    decoration: BoxDecoration(color: Ui.card, border: Border(top: BorderSide(color: Ui.line))),
-    child: Row(children: [
-      Container(width: 34, height: 34, alignment: Alignment.center, decoration: BoxDecoration(color: const Color(0xFF8B70FF).withValues(alpha: .15), borderRadius: BorderRadius.circular(10)), child: Text('${_slipSelections.length}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF8B70FF)))),
-      const SizedBox(width: 10),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [const Text('MY BET SLIP', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)), Text('${_slipSelections.length} selections · tap AI picks to add/remove', style: TextStyle(color: Ui.muted, fontSize: 10))])),
-      TextButton(onPressed: () { setState(_slipSelections.clear); _rev.value++; }, child: const Text('Clear')),
-      const SizedBox(width: 4),
-      FilledButton.icon(onPressed: _printSelectedSlip, icon: const Icon(Icons.print_rounded, size: 17), label: const Text('Print')),
-    ]),
+  void _openBetSlipPreview() {
+    if (_slipSelections.isEmpty) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => _BetSlipPreviewScreen(
+        entries: _slipSelections.entries.toList(),
+        onRemove: (key) {
+          setState(() => _slipSelections.remove(key));
+          _rev.value++;
+        },
+        onPrint: _printSelectedSlip,
+        onClear: () {
+          setState(_slipSelections.clear);
+          _rev.value++;
+        },
+      ),
+    ));
+  }
+
+  Widget _betSlipBar() => SafeArea(
+    top: false,
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      decoration: BoxDecoration(color: Ui.card, border: Border(top: BorderSide(color: Ui.line))),
+      child: Row(children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: _openBetSlipPreview,
+          child: Container(width: 38, height: 38, alignment: Alignment.center, decoration: BoxDecoration(color: const Color(0xFF8B70FF).withValues(alpha: .15), borderRadius: BorderRadius.circular(10)), child: Text('${_slipSelections.length}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF8B70FF)))),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: InkWell(
+          onTap: _openBetSlipPreview,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [const Text('MY BET SLIP', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)), Text('${_slipSelections.length} selections · tap to preview', style: TextStyle(color: Ui.muted, fontSize: 10))]),
+        )),
+        TextButton(onPressed: () { setState(_slipSelections.clear); _rev.value++; }, child: const Text('Clear')),
+        const SizedBox(width: 4),
+        FilledButton.icon(onPressed: _printSelectedSlip, icon: const Icon(Icons.print_rounded, size: 17), label: const Text('Print')),
+      ]),
+    ),
   );
 
   Future<void> _printSelectedSlip() async {
@@ -3984,6 +4012,74 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   );
 }
 
+
+class _BetSlipPreviewScreen extends StatefulWidget {
+  const _BetSlipPreviewScreen({required this.entries, required this.onRemove, required this.onPrint, required this.onClear});
+  final List<MapEntry<String, BetSlipPick>> entries;
+  final ValueChanged<String> onRemove;
+  final VoidCallback onPrint;
+  final VoidCallback onClear;
+
+  @override
+  State<_BetSlipPreviewScreen> createState() => _BetSlipPreviewScreenState();
+}
+
+class _BetSlipPreviewScreenState extends State<_BetSlipPreviewScreen> {
+  late List<MapEntry<String, BetSlipPick>> _entries;
+
+  @override
+  void initState() {
+    super.initState();
+    _entries = List.of(widget.entries);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Ui.bg,
+    appBar: AppBar(title: const Text('My Bet Slip', style: TextStyle(fontWeight: FontWeight.w900)), actions: [
+      if (_entries.isNotEmpty) IconButton(tooltip: 'Clear slip', icon: const Icon(Icons.delete_outline_rounded), onPressed: () {
+        widget.onClear();
+        setState(_entries.clear);
+      }),
+    ]),
+    body: _entries.isEmpty
+      ? const Center(child: Text('Your bet slip is empty. Add predictions from AI analysis.'))
+      : ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 24), children: [
+          Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF713DDA), Color(0xFF007FAD)]), borderRadius: BorderRadius.circular(18)), child: Row(children: [
+            const Icon(Icons.receipt_long_rounded, color: Colors.white, size: 30), const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('BET SLIP PREVIEW', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1)), Text('${_entries.length} ${_entries.length == 1 ? 'selection' : 'selections'} · printable summary', style: const TextStyle(color: Colors.white70))])),
+          ])),
+          const SizedBox(height: 14),
+          for (var i = 0; i < _entries.length; i++) ...[
+            _previewPickCard(i + 1, _entries[i]),
+            const SizedBox(height: 10),
+          ],
+          const SizedBox(height: 8),
+          Text('AI predictions are informational and are not guaranteed outcomes.', style: TextStyle(color: Ui.muted, fontSize: 12)),
+        ]),
+    bottomNavigationBar: _entries.isEmpty ? null : SafeArea(top: false, child: Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      decoration: BoxDecoration(color: Ui.card, border: Border(top: BorderSide(color: Ui.line))),
+      child: FilledButton.icon(onPressed: widget.onPrint, icon: const Icon(Icons.print_rounded), label: const Text('Print / Save PDF'), style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50))),
+    )),
+  );
+
+  Widget _previewPickCard(int number, MapEntry<String, BetSlipPick> entry) {
+    final pick = entry.value;
+    final confidence = pick.confidence.toUpperCase();
+    final color = confidence.contains('HIGH') ? const Color(0xFF48D597) : confidence.contains('MEDIUM') ? const Color(0xFFFFC46B) : Ui.muted;
+    return Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Ui.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: Ui.line)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [Container(width: 30, height: 30, alignment: Alignment.center, decoration: BoxDecoration(color: const Color(0xFF8B70FF).withValues(alpha: .18), borderRadius: BorderRadius.circular(9)), child: Text('$number', style: const TextStyle(color: Color(0xFFB39DFF), fontWeight: FontWeight.w900))), const SizedBox(width: 10), Expanded(child: Text(pick.matchTitle.isEmpty ? 'Football match' : pick.matchTitle, style: const TextStyle(fontWeight: FontWeight.w900), maxLines: 2, overflow: TextOverflow.ellipsis)), IconButton(tooltip: 'Remove selection', onPressed: () { widget.onRemove(entry.key); setState(() => _entries.removeWhere((e) => e.key == entry.key)); }, icon: const Icon(Icons.close_rounded, color: Colors.redAccent))]),
+      if (pick.league.isNotEmpty) Padding(padding: const EdgeInsets.only(left: 40), child: Text(pick.league, style: TextStyle(color: Ui.muted, fontSize: 11))),
+      const Divider(height: 22),
+      Text(pick.market, style: TextStyle(color: Ui.muted, fontWeight: FontWeight.w700, fontSize: 12)),
+      const SizedBox(height: 5),
+      Text(pick.pick, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 8),
+      Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5), decoration: BoxDecoration(color: color.withValues(alpha: .13), borderRadius: BorderRadius.circular(20)), child: Text('Confidence: ${pick.confidence}', style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 11))),
+    ]));
+  }
+}
 
 Color _lt(Color dark, Color light) => Ui.isLight ? light : dark;
 
