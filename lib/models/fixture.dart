@@ -22,6 +22,10 @@ class Fixture {
   /// the general feed does not list this match.
   final String scoreLeague;
 
+  /// `women` for a women's match, `men` for a men's match, empty when unknown
+  /// (treated as men's unless the names/league say otherwise).
+  final String gender;
+
   const Fixture({
     required this.id,
     required this.home,
@@ -35,9 +39,28 @@ class Fixture {
     this.altUrl = '',
     this.moreUrls = const [],
     this.scoreLeague = '',
+    this.gender = '',
   });
 
   String get title => '$home vs $away';
+
+  static final RegExp _womenRe = RegExp(
+    r"\b(?:women|womens|woman|ladies|feminin\w*|femenin\w*|femminile|frauen|dames|nwsl|wsl)\b|\(\s*w\s*\)|\sW$",
+    caseSensitive: false,
+  );
+
+  /// True for women's matches: the server's tag first, then the names/league.
+  bool get isWomen {
+    if (gender == 'women') return true;
+    if (gender == 'men') return false;
+    return _womenRe.hasMatch(home) ||
+        _womenRe.hasMatch(away) ||
+        _womenRe.hasMatch(league);
+  }
+
+  /// "Chelsea vs Leeds (men)" / "Chelsea vs Leeds (women)" so a men's and a
+  /// women's match between clubs with the same name can never be confused.
+  String get genderTitle => '$title (${isWomen ? 'women' : 'men'})';
   DateTime get endTime => kickoff.add(Duration(minutes: durationMin));
   bool get hasStream => url.trim().isNotEmpty;
   bool get hasAlt =>
