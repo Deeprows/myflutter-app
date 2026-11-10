@@ -36,7 +36,14 @@ assert.equal((await call('social/handle',{handle:'bad name'})).status,400);
 assert.equal((await call('social/handle',{handle:'fan_'+bId.slice(0,12)})).status,400);
 assert.equal((await call('social/handle',{handle:'Alice_FC'})).status,200);
 assert.equal((await call('social/handle',{handle:'alice_fc'},b)).status,409);
-assert.equal((await call('social/handle',{handle:'Other_One'})).status,429);
+// Rename is locked for 60 days after the first username is set.
+let locked=await call('social/handle',{handle:'Other_One'});
+assert.equal(locked.status,429);
+assert.ok((await locked.json()).next_change_at>Date.now()+59*86400000);
+// Look-alikes of another fan's username are refused.
+assert.equal((await call('social/handle',{handle:'alicefc'},b)).status,409);
+assert.equal((await call('social/handle',{handle:'A1ice_FC'},b)).status,409);
+assert.equal((await call('social/handle',{handle:'Deeprowss_Admin'},b)).status,400);
 p=await (await call('social/profile')).json();
 assert.equal(p.profile.handle,'Alice_FC');
 // look up by handle (any case), old default no longer resolves
@@ -59,4 +66,11 @@ const notes=await (await call('social/notifications',null,a)).json();
 assert.ok(notes.notifications.some(n=>n.kind==='mention'));
 const own=await (await call('social/notifications',null,b)).json();
 assert.ok(!own.notifications.some(n=>n.kind==='mention'));
+// After 60 days the owner can rename; the old name is held for them, not free to copy.
+sql.prepare('UPDATE fan_handles SET changed_at=? WHERE user_id=?').run(Date.now()-61*86400000,aId);
+assert.equal((await call('social/handle',{handle:'Alice_Pro'})).status,200);
+assert.equal((await call('social/handle',{handle:'Alice_FC'},b)).status,409);
+// Nicknames cannot copy another fan's username or nickname.
+assert.equal((await call('social/profile',{name:'Alice_Pro',bio:''},b)).status,409);
+assert.equal((await call('social/profile',{name:'Admin',bio:''},b)).status,409);
 console.log('Fan handles and @mentions: custom username, uniqueness, lookup, suggestions and mention notifications passed.');
