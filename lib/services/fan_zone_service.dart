@@ -179,6 +179,8 @@ class FanZoneService {
     Map<String, dynamic>? matchFixture,
     String? quoteOf,
     bool isAd = false,
+    List<String>? pollOptions,
+    int pollHours = 24,
   }) async {
     final request = http.MultipartRequest(
       'POST',
@@ -192,6 +194,8 @@ class FanZoneService {
       if (matchFixture != null) 'match_fixture': jsonEncode(matchFixture),
       if (quoteOf != null && quoteOf.isNotEmpty) 'quote_of': quoteOf,
       if (isAd) 'is_ad': '1',
+      if (pollOptions != null)
+        'poll': jsonEncode({'options': pollOptions, 'hours': pollHours}),
     });
     if (image != null) {
       if (image.length > 4 * 1024 * 1024) {
@@ -269,6 +273,11 @@ class FanZoneService {
       body: {'id': postId, 'pinned': pinned, if (pinned) 'days': days},
     );
   }
+
+  /// Votes in a poll. Returns the server's fresh `poll_counts` (JSON text) and
+  /// `poll_mine` (the option you picked).
+  static Future<Map<String, dynamic>> votePoll(String postId, int option) =>
+      call('social/poll-vote', body: {'id': postId, 'option': option});
 
   /// Counts a view of a post (one per fan). Never throws: views are best effort.
   static Future<int?> recordView(String postId) async {
