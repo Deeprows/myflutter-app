@@ -564,18 +564,15 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  /// Slim Reload / Switch / Rotate row used on football match pages.
+  /// Single slim row on football match pages:
+  /// Stream 1 2 3 4  ·  reload icon  ·  rotate icon.
   Widget _compactControls({double side = 10, double top = 6, bool tip = false}) {
     return Padding(
       padding: EdgeInsets.fromLTRB(side, top, side, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_sources.length > 2) ...[
-            Align(alignment: Alignment.centerLeft, child: _sourcePicker()),
-            const SizedBox(height: 8),
-          ],
-          _compactRow(),
+          _mergedControlRow(),
           if (tip) ...[
             const SizedBox(height: 8),
             _tipBoard(),
@@ -585,7 +582,30 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  /// Slim instruction board between the Reload / Switch / Rotate row and the
+  Widget _mergedControlRow() {
+    return Row(
+      children: [
+        Expanded(
+          child: _sources.length > 1
+              ? SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: _sourcePicker(),
+                )
+              : const SizedBox.shrink(),
+        ),
+        const SizedBox(width: 8),
+        _IconAction(
+            icon: Icons.refresh_rounded, tooltip: 'Reload', onTap: _start),
+        const SizedBox(width: 8),
+        _IconAction(
+            icon: Icons.screen_rotation_rounded,
+            tooltip: 'Rotate',
+            onTap: _toggleLandscape),
+      ],
+    );
+  }
+
+  /// Slim instruction board between the stream / reload / rotate row and the
   /// live chat.
   Widget _tipBoard() {
     const blue = Color(0xFF1877F2);
@@ -607,8 +627,8 @@ class _PlayerScreenState extends State<PlayerScreen>
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Double tap on screen to play.\n'
-              'Switch player if default player not working.',
+              'Double tap the screen to play.\n'
+              'Not working? Try another stream number.',
               style: TextStyle(
                 fontSize: 11.5,
                 height: 1.3,
@@ -617,34 +637,6 @@ class _PlayerScreenState extends State<PlayerScreen>
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _compactRow() {
-    return Padding(
-      padding: EdgeInsets.zero,
-      child: Row(
-        children: [
-          Expanded(
-              child: _MiniAction(
-                  icon: Icons.refresh_rounded, label: 'Reload', onTap: _start)),
-          const SizedBox(width: 8),
-          Expanded(
-              child: _MiniAction(
-                  icon: Icons.swap_horiz_rounded,
-                  label: _sources.length > 1
-                      ? 'Switch ${_srcIdx + 1}/${_sources.length}'
-                      : 'Switch',
-                  enabled: _sources.length > 1,
-                  onTap: _switchSource)),
-          const SizedBox(width: 8),
-          Expanded(
-              child: _MiniAction(
-                  icon: Icons.screen_rotation_rounded,
-                  label: 'Rotate',
-                  onTap: _toggleLandscape)),
         ],
       ),
     );
@@ -1069,50 +1061,31 @@ class _RoundButton extends StatelessWidget {
   }
 }
 
-/// Compact pill button: icon and label side by side.
-class _MiniAction extends StatelessWidget {
+/// Compact round icon-only button (reload / rotate).
+class _IconAction extends StatelessWidget {
   final IconData icon;
-  final String label;
+  final String tooltip;
   final VoidCallback onTap;
-  final bool enabled;
-  const _MiniAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.enabled = true,
-  });
+  const _IconAction(
+      {required this.icon, required this.tooltip, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: enabled ? 1 : .4,
-      child: Material(
-        color: Ui.card,
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(99),
-        child: InkWell(
-          onTap: enabled ? onTap : null,
-          borderRadius: BorderRadius.circular(99),
-          child: Container(
-            height: 34,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(99),
-              border: Border.all(color: Ui.line),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 16, color: Ui.text),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w800)),
-                ),
-              ],
-            ),
+        child: Container(
+          width: 38,
+          height: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Ui.card,
+            borderRadius: BorderRadius.circular(99),
+            border: Border.all(color: Ui.line),
           ),
+          child: Icon(icon, size: 18, color: Ui.text),
         ),
       ),
     );
