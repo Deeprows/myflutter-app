@@ -321,13 +321,24 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
                     color: Ui.bg,
                     shape: BoxShape.circle,
                   ),
-                  child: FanAvatar(
-                    name: '${p['name']}',
-                    seed: widget.userId,
-                    size: _avatarSize,
-                    imageUrl: FanZoneService.avatarUrl(
-                      widget.userId,
-                      p['avatar_at'],
+                  child: GestureDetector(
+                    onTap: () => showFanPhotoPreview(
+                      context,
+                      imageUrl: FanZoneService.avatarUrl(
+                        widget.userId,
+                        p['avatar_at'],
+                      ),
+                      name: '${p['name']}',
+                      seed: widget.userId,
+                    ),
+                    child: FanAvatar(
+                      name: '${p['name']}',
+                      seed: widget.userId,
+                      size: _avatarSize,
+                      imageUrl: FanZoneService.avatarUrl(
+                        widget.userId,
+                        p['avatar_at'],
+                      ),
                     ),
                   ),
                 ),
