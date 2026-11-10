@@ -3808,9 +3808,13 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           padding: const EdgeInsets.symmetric(vertical: 10),
           child: InkWell(
             borderRadius: BorderRadius.circular(20),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const BetBrowserScreen()),
-            ),
+            onTap: () => Navigator.of(context)
+                .push(
+                  MaterialPageRoute<void>(builder: (_) => const BetBrowserScreen()),
+                )
+                .then((_) {
+              if (mounted) setState(() {});
+            }),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               alignment: Alignment.center,
@@ -3820,13 +3824,24 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                 ),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.local_fire_department_rounded,
+                  // Green dot: pages are still open in the minimised browser.
+                  if (BetBrowserScreen.hasOpenPages)
+                    Container(
+                      width: 7,
+                      height: 7,
+                      margin: const EdgeInsets.only(right: 5),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF48D597),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  const Icon(Icons.local_fire_department_rounded,
                       size: 15, color: Colors.white),
-                  SizedBox(width: 4),
-                  Text(
+                  const SizedBox(width: 4),
+                  const Text(
                     'Bet Hub',
                     style: TextStyle(
                       fontSize: 12,
