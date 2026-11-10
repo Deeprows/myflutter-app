@@ -7,6 +7,8 @@ import '../config.dart';
 import '../models/channel.dart';
 import '../services/favorites_service.dart';
 import '../services/feed_service.dart';
+import '../services/ad_unlock.dart';
+import '../services/remote_config.dart';
 import '../services/support_gate.dart';
 import '../services/subscription_service.dart';
 import '../services/content_sync.dart';
@@ -133,6 +135,9 @@ class _TvScreenState extends State<TvScreen> {
     // Match the movie premium gate: when subscriptions are not configured,
     // don't strand users behind a paywall.
     if (!subscription.enabled || subscription.isPremium) return true;
+    await AdUnlock.instance.load();
+    // Watched the ad in the last ten minutes: every channel is open.
+    if (AdUnlock.instance.isUnlocked) return true;
 
     final prefs = await SharedPreferences.getInstance();
     final key = _todayKey();
@@ -143,7 +148,7 @@ class _TvScreenState extends State<TvScreen> {
     if (accessed.contains(channelId)) return true;
 
     if (accessed.length >= _freeChannelsPerDay) {
-      final upgrade = await showModalBottomSheet<bool>(
+      final upgrade = await showModalBottomSheet<String>(
         context: context,
         showDragHandle: true,
         builder: (ctx) => SafeArea(
@@ -169,7 +174,7 @@ class _TvScreenState extends State<TvScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: () => Navigator.of(ctx).pop(true),
+                    onPressed: () => Navigator.of(ctx).pop('premium'),
                     style: FilledButton.styleFrom(
                       backgroundColor: Ui.red,
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -179,8 +184,29 @@ class _TvScreenState extends State<TvScreen> {
                         style: TextStyle(fontWeight: FontWeight.w900)),
                   ),
                 ),
+                if (AdUnlock.instance.available) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.of(ctx).pop('ad'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Ui.red,
+                        side: BorderSide(color: Ui.red.withValues(alpha: .7)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: const Icon(Icons.ondemand_video_rounded, size: 20),
+                      label: Text(
+                        'or watch ad ${RemoteConfig.instance.adUnlockSeconds} secs every ten '
+                        'minutes to unlock access',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
+                ],
                 TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(false),
+                  onPressed: () => Navigator.of(ctx).pop('no'),
                   child: const Text('Not now'),
                 ),
               ],
@@ -188,7 +214,12 @@ class _TvScreenState extends State<TvScreen> {
           ),
         ),
       );
-      if (upgrade != true || !mounted) return false;
+      if (!mounted) return false;
+      if (upgrade == 'ad') {
+        final ok = await AdUnlock.instance.watchAd(context);
+        return ok && mounted;
+      }
+      if (upgrade != 'premium') return false;
       await Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (_) => subscription.visible
             ? const PlansScreen()
