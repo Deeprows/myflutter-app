@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 
 import '../models/fan_post_link.dart';
 import '../models/fixture.dart';
+import '../services/dailymotion_check.dart';
 import '../services/embed_info.dart';
 import '../services/stream_resolver.dart';
 import '../utils/post_links.dart';
@@ -967,6 +968,21 @@ class _ComposePostState extends State<_ComposePost> {
       if (title.isEmpty) {
         _notice('Add a title for your video.');
         return;
+      }
+      // Dailymotion shows "Forbidden" when the owner turned embedding off:
+      // say so now instead of publishing a video nobody can play.
+      if (embedInfoFor(link).kind == EmbedKind.dailymotion) {
+        final dmId = DailymotionCheck.idFrom(Uri.tryParse(link));
+        if (dmId != null) {
+          setState(() => _busy = true);
+          final dm = await DailymotionCheck.check(dmId);
+          if (mounted) setState(() => _busy = false);
+          if (!mounted) return;
+          if (dm == DailymotionEmbed.blocked) {
+            _notice('This Dailymotion video cannot be embedded (the owner turned embedding off, or it is private or removed). Try another video.');
+            return;
+          }
+        }
       }
       // Plain web pages (embed pages, WhatsApp / Telegram links...) are Premium.
       if (isWebPageLink(link) && !await ensureLinkPremium(context)) return;
