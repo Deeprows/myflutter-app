@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../screens/plans_screen.dart';
 import '../screens/remove_ads_screen.dart';
+import '../services/ad_unlock.dart';
+import '../services/remote_config.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 
@@ -16,14 +18,16 @@ class PremiumGate {
   static bool get locked =>
       AppConfig.moviesPremiumOnly &&
       SubscriptionService.instance.enabled &&
-      !SubscriptionService.instance.isPremium;
+      !SubscriptionService.instance.isPremium &&
+      !AdUnlock.instance.isUnlocked;
 
   /// Returns true when the person may go ahead (already Premium, or just
   /// upgraded). Otherwise explains, opens the upgrade page and returns false
   /// if they did not upgrade.
   static Future<bool> allowMovies(BuildContext context) async {
+    await AdUnlock.instance.load();
     if (!locked) return true;
-    final go = await showModalBottomSheet<bool>(
+    final go = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (ctx) => SafeArea(
@@ -49,7 +53,7 @@ class PremiumGate {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: () => Navigator.of(ctx).pop(true),
+                  onPressed: () => Navigator.of(ctx).pop('premium'),
                   style: FilledButton.styleFrom(
                     backgroundColor: Ui.red,
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -61,8 +65,29 @@ class PremiumGate {
                   ),
                 ),
               ),
+              if (AdUnlock.instance.available) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(ctx).pop('ad'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Ui.red,
+                      side: BorderSide(color: Ui.red.withValues(alpha: .7)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.ondemand_video_rounded, size: 20),
+                    label: Text(
+                      'or watch ad ${RemoteConfig.instance.adUnlockSeconds} secs every ten '
+                      'minutes to unlock access',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ],
               TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
+                onPressed: () => Navigator.of(ctx).pop('no'),
                 child: const Text('Not now'),
               ),
             ],
@@ -70,7 +95,9 @@ class PremiumGate {
         ),
       ),
     );
-    if (go != true || !context.mounted) return false;
+    if (!context.mounted) return false;
+    if (go == 'ad') return AdUnlock.instance.watchAd(context);
+    if (go != 'premium') return false;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => SubscriptionService.instance.visible
