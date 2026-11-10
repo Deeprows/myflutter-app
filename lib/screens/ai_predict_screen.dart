@@ -3708,13 +3708,13 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
                 disabledBorder: InputBorder.none,
-                hintText: 'Type a match, e.g. Arsenal vs Chelsea (switch Men/Women)',
+                hintText: 'Type a match, e.g. Arsenal vs Chelsea',
                 hintStyle: TextStyle(fontSize: 13.5, color: Ui.dim),
               ),
             ),
           ),
           Tooltip(
-            message: 'Men\'s or women\'s clubs',
+            message: 'Tap to search women\'s teams',
             child: InkWell(
               borderRadius: BorderRadius.circular(14),
               onTap: _busy ? null : () => setState(() => _typedWomen = !_typedWomen),
@@ -3725,7 +3725,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(
-                  _typedWomen ? 'Women' : 'Men',
+                  'Women',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
