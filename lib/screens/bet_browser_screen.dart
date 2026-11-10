@@ -88,7 +88,13 @@ class BetBrowserScreen extends StatefulWidget {
 }
 
 class _BetBrowserScreenState extends State<BetBrowserScreen> {
-  late final WebViewController _wc;
+  final List<WebViewController> _tabs = [];
+  final List<String> _tabUrls = [];
+  final List<String> _tabTitles = [];
+  int _activeTab = 0;
+  final List<Map<String, String>> _history = [];
+  WebViewController get _wc => _tabs[_activeTab];
+
   final _addr = TextEditingController();
   final _focus = FocusNode();
   final ValueNotifier<double> _progress = ValueNotifier<double>(0);
@@ -118,75 +124,123 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
   void initState() {
     super.initState();
     _loadCustom();
-    _wc = WebViewController()
+    _addTab(initial: true);
+
+  }
+
+  WebViewController _buildController() {
+    late final WebViewController controller;
+    controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.white)
+      ..setBackgroundColor(const Color(0xFF10131D))
       ..setUserAgent(_chromeUa)
       ..setNavigationDelegate(NavigationDelegate(
         onNavigationRequest: (r) {
-          final s = Uri.tryParse(r.url)?.scheme.toLowerCase() ?? '';
+          final scheme = Uri.tryParse(r.url)?.scheme.toLowerCase() ?? '';
           const ok = {'http', 'https', 'about', 'data', 'blob'};
-          return ok.contains(s)
-              ? NavigationDecision.navigate
-              : NavigationDecision.prevent;
+          return ok.contains(scheme) ? NavigationDecision.navigate : NavigationDecision.prevent;
         },
         onPageStarted: (u) {
-          _fix();
-          if (!mounted) return;
-          setState(() {
-            _error = false;
-            _setUrl(u);
-          });
+          try { controller.runJavaScript(_clickFix); } catch (_) {}
+          if (!mounted || !_tabs.contains(controller) || _wc != controller) return;
+          setState(() { _error = false; _home = false; _setUrl(u); });
         },
-        onProgress: (p) => _progress.value = p / 100,
+        onProgress: (p) { if (_tabs.contains(controller) && _wc == controller) _progress.value = p / 100; },
         onUrlChange: (c) {
-          if (c.url != null && mounted) setState(() => _setUrl(c.url!));
+          if (c.url != null && mounted && _tabs.contains(controller) && _wc == controller) setState(() => _setUrl(c.url!));
         },
         onPageFinished: (u) async {
-          _fix();
-          _progress.value = 1;
-          final t = await _wc.getTitle();
-          final b = await _wc.canGoBack();
-          final f = await _wc.canGoForward();
-          if (!mounted) return;
+          try { controller.runJavaScript(_clickFix); } catch (_) {}
+          final title = await controller.getTitle();
+          final back = await controller.canGoBack();
+          final forward = await controller.canGoForward();
+          if (!mounted || !_tabs.contains(controller) || _wc != controller) return;
           setState(() {
-            _setUrl(u);
-            _curTitle = t ?? '';
-            _canBack = b;
-            _canFwd = f;
+            _setUrl(u); _curTitle = title ?? ''; _canBack = back; _canFwd = forward;
+            _tabUrls[_activeTab] = u; _tabTitles[_activeTab] = _curTitle;
+            if (u.startsWith('http')) {
+              _history.removeWhere((e) => e['url'] == u);
+              _history.insert(0, {'url': u, 'title': _curTitle});
+              if (_history.length > 60) _history.removeLast();
+            }
           });
         },
         onWebResourceError: (e) {
-          if (e.isForMainFrame == true && mounted) {
-            setState(() => _error = true);
-          }
+          if (e.isForMainFrame == true && mounted && _wc == controller) setState(() => _error = true);
         },
       ));
-
-    final p = _wc.platform;
-    if (p is AndroidWebViewController) {
-      // Keeps people logged in and lets log-in pages that use 3rd-party
-      // cookies work.
+    final platform = controller.platform;
+    if (platform is AndroidWebViewController) {
       final cookies = WebViewCookieManager().platform;
-      if (cookies is AndroidWebViewCookieManager) {
-        cookies.setAcceptThirdPartyCookies(p, true);
-      }
-      // KYC / document uploads on bookmaker sites.
-      p.setOnShowFileSelector((params) async {
+      if (cookies is AndroidWebViewCookieManager) cookies.setAcceptThirdPartyCookies(platform, true);
+      platform.setOnShowFileSelector((params) async {
         try {
-          final r = await FilePicker.platform.pickFiles(
-            allowMultiple: params.mode == FileSelectorMode.openMultiple,
-          );
-          if (r == null) return <String>[];
-          return r.paths
-              .whereType<String>()
-              .map((e) => Uri.file(e).toString())
-              .toList();
-        } catch (_) {
-          return <String>[];
-        }
+          final result = await FilePicker.platform.pickFiles(allowMultiple: params.mode == FileSelectorMode.openMultiple);
+          if (result == null) return <String>[];
+          return result.paths.whereType<String>().map((e) => Uri.file(e).toString()).toList();
+        } catch (_) { return <String>[]; }
       });
     }
+    return controller;
+  }
+
+  void _addTab({bool initial = false, String? url}) {
+    final controller = _buildController();
+    setState(() {
+      _tabs.add(controller); _tabUrls.add(url ?? ''); _tabTitles.add('New tab');
+      _activeTab = _tabs.length - 1; _home = url == null; _error = false;
+      _curUrl = url ?? ''; _curTitle = 'New tab'; _canBack = false; _canFwd = false; _addr.text = url ?? '';
+    });
+    if (url != null) controller.loadRequest(Uri.parse(url));
+  }
+
+  Future<void> _switchTab(int index) async {
+    if (index < 0 || index >= _tabs.length || index == _activeTab) return;
+    setState(() {
+      _activeTab = index; _curUrl = _tabUrls[index]; _curTitle = _tabTitles[index];
+      _home = _curUrl.isEmpty; _error = false; _addr.text = _curUrl; _canBack = false; _canFwd = false;
+    });
+    final back = await _wc.canGoBack(); final forward = await _wc.canGoForward();
+    if (mounted) setState(() { _canBack = back; _canFwd = forward; });
+  }
+
+  void _closeTab(int index) {
+    if (_tabs.length == 1) {
+      _tabs[index].loadRequest(Uri.parse('about:blank'));
+      setState(() { _tabUrls[index] = ''; _tabTitles[index] = 'New tab'; _activeTab = index; _home = true; _curUrl = ''; _curTitle = ''; });
+      return;
+    }
+    setState(() {
+      _tabs.removeAt(index); _tabUrls.removeAt(index); _tabTitles.removeAt(index);
+      if (_activeTab >= _tabs.length) _activeTab = _tabs.length - 1;
+      else if (index < _activeTab) _activeTab--;
+      _curUrl = _tabUrls[_activeTab]; _curTitle = _tabTitles[_activeTab]; _home = _curUrl.isEmpty; _addr.text = _curUrl;
+    });
+  }
+
+  void _showHistory() {
+    showModalBottomSheet(
+      context: context, backgroundColor: Ui.panel, isScrollControlled: true,
+      builder: (ctx) => SafeArea(child: SizedBox(
+        height: MediaQuery.of(ctx).size.height * .65,
+        child: Column(children: [
+          Padding(padding: const EdgeInsets.all(18), child: Row(children: [
+            const Icon(Icons.history_rounded), const SizedBox(width: 10),
+            const Expanded(child: Text('Browsing history', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+            TextButton(onPressed: () { setState(() => _history.clear()); Navigator.pop(ctx); }, child: const Text('Clear')),
+          ])),
+          Expanded(child: _history.isEmpty
+            ? Center(child: Text('No browsing history yet', style: TextStyle(color: Ui.muted)))
+            : ListView.builder(itemCount: _history.length, itemBuilder: (_, i) {
+                final item = _history[i];
+                return ListTile(leading: const Icon(Icons.public_rounded),
+                  title: Text(item['title']?.isNotEmpty == true ? item['title']! : item['url']!, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(item['url']!, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  onTap: () { Navigator.pop(ctx); _go(item['url']!); });
+              })),
+        ]),
+      )),
+    );
   }
 
   @override
@@ -258,6 +312,9 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
       _home = false;
       _error = false;
       _curUrl = url;
+      _tabUrls[_activeTab] = url;
+      _tabTitles[_activeTab] = Uri.tryParse(url)?.host ?? 'Loading…';
+      _curTitle = _tabTitles[_activeTab];
       _addr.text = url;
     });
     _progress.value = 0.05;
@@ -427,11 +484,8 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
           title: const Text('Bet Hub',
               style: TextStyle(fontWeight: FontWeight.w900)),
           actions: [
-            IconButton(
-              tooltip: 'Home',
-              icon: const Icon(Icons.home_rounded),
-              onPressed: _showHome,
-            ),
+            IconButton(tooltip: 'History', icon: const Icon(Icons.history_rounded), onPressed: _showHistory),
+            IconButton(tooltip: 'Minimise browser', icon: const Icon(Icons.keyboard_arrow_down_rounded), onPressed: () => Navigator.of(context).maybePop()),
             PopupMenuButton<String>(
               onSelected: (v) {
                 if (v == 'add') _addSiteDialog();
@@ -447,6 +501,7 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
         body: Column(
           children: [
             _addressBar(),
+            _tabStrip(),
             ValueListenableBuilder<double>(
               valueListenable: _progress,
               builder: (_, v, _) => SizedBox(
@@ -461,7 +516,7 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
                 index: _home ? 0 : 1,
                 children: [
                   _homeView(),
-                  _error ? _errorView() : WebViewWidget(controller: _wc),
+                  _error ? _errorView() : WebViewWidget(key: ValueKey(_activeTab), controller: _wc),
                 ],
               ),
             ),
@@ -471,6 +526,40 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
       ),
     );
   }
+
+  Widget _tabStrip() => Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(color: Ui.panel, border: Border(bottom: BorderSide(color: Ui.line))),
+        child: Row(children: [
+          Expanded(child: ListView.separated(
+            scrollDirection: Axis.horizontal, itemCount: _tabs.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 6),
+            itemBuilder: (_, i) => InkWell(
+              onTap: () => _switchTab(i), borderRadius: BorderRadius.circular(18),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 155),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: i == _activeTab ? Ui.card : Colors.transparent,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: i == _activeTab ? const Color(0xFF8B70FF) : Ui.line),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.public_rounded, size: 14, color: Ui.muted),
+                  const SizedBox(width: 6),
+                  Flexible(child: Text(_tabTitles[i].isEmpty ? 'New tab' : _tabTitles[i], maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700))),
+                  const SizedBox(width: 4),
+                  InkWell(onTap: () => _closeTab(i), child: const Icon(Icons.close_rounded, size: 14)),
+                ]),
+              ),
+            ),
+          )),
+          const SizedBox(width: 6),
+          InkWell(onTap: () => _addTab(), borderRadius: BorderRadius.circular(18),
+            child: Container(width: 34, height: 34, decoration: BoxDecoration(color: const Color(0xFF7257E8), borderRadius: BorderRadius.circular(17)), child: const Icon(Icons.add_rounded, color: Colors.white, size: 20))),
+        ]),
+      );
 
   Widget _addressBar() => Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
@@ -552,11 +641,8 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
                 icon: const Icon(Icons.arrow_forward_rounded),
                 onPressed: _canFwd ? () => _wc.goForward() : null,
               ),
-              IconButton(
-                icon: const Icon(Icons.grid_view_rounded),
-                tooltip: 'Bookmarks',
-                onPressed: _showHome,
-              ),
+              IconButton(icon: const Icon(Icons.history_rounded), tooltip: 'History', onPressed: _showHistory),
+              IconButton(icon: const Icon(Icons.home_rounded), tooltip: 'Home', onPressed: _showHome),
             ],
           ),
         ),
@@ -589,7 +675,14 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
         ),
       );
 
-  Widget _homeView() => ListView(
+  Widget _homeView() => Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [Color(0xFF20183B), Color(0xFF111B2B), Color(0xFF080D16)],
+          ),
+        ),
+        child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
         children: [
           _section('MY SITES', _custom, showAdd: true),
@@ -604,7 +697,7 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
             style: TextStyle(fontSize: 11, color: Ui.muted, height: 1.4),
           ),
         ],
-      );
+      ));
 
   Widget _section(String title, List<BetSite> sites, {bool showAdd = false}) {
     return Padding(
