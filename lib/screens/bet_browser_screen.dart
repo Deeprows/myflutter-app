@@ -822,10 +822,10 @@ class _BetBrowserScreenState extends State<BetBrowserScreen> {
         child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
         children: [
-          _section('MY SITES', _custom, showAdd: true),
           _section('AFRICA', _africa),
           _section('EUROPE', _europe),
           _section('AMERICAS', _americas),
+          _section('MY SITES', _custom, showAdd: true),
           const SizedBox(height: 8),
           Text(
             '18+ only. Betting can be addictive, so play responsibly. '
