@@ -99,6 +99,15 @@ class AppConfig {
   /// Empty = download from GitHub only.
   static const feedBase = 'https://deeprowss-feed.deeprows.workers.dev';
 
+  /// Optional hosted copy of the Reels setup (same shape as
+  /// `assets/data/reels_channels.json`, which is also the shape of the
+  /// Deeprowss browser's `remote/config.json`). Edit that file on GitHub and
+  /// Reels change without a new APK. Empty, or unreachable = the copy bundled
+  /// in the app is used.
+  ///
+  /// Example: `https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/reels_channels.json`
+  static const reelsConfigUrl = '';
+
   /// Scrolling ticker on the home screen (same shape as
   /// `assets/data/ticker.json`).
   /// Set this to a raw URL to change the ticker text without a new APK.
