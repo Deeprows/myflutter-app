@@ -2592,15 +2592,15 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     final colon = pickText.indexOf(':');
     final market = colon > 0 ? pickText.substring(0, colon).trim() : 'Prediction';
     final selection = colon > 0 ? pickText.substring(colon + 1).trim() : pickText;
-    final confidenceMatch = RegExp(r'\((high|medium|low)\)', caseSensitive: false).firstMatch(selection);
-    final confidence = confidenceMatch?.group(1)?.toUpperCase();
+    final split = BetSlipPick.splitConfidence(selection);
+    final confidence = split.confidence;
     final confidenceColor = switch (confidence) {
       'HIGH' => const Color(0xFF48D597),
       'MEDIUM' => const Color(0xFFFFC46B),
       'LOW' => const Color(0xFF9EABC0),
       _ => Ui.muted,
     };
-    final cleanSelection = selection.replaceAll(RegExp(r'\s*\((high|medium|low)\)', caseSensitive: false), '').trim();
+    final cleanSelection = split.pick;
     final matchKey = fixture == null ? 'unknown-match' : FanZoneService.matchKey(fixture);
     final slipKey = '$matchKey|${market.toLowerCase()}|${cleanSelection.toLowerCase()}';
     final selectedOnSlip = _slipSelections.containsKey(slipKey);
@@ -2875,8 +2875,10 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                       if (p is Map && '${p['pick'] ?? ''}'.trim().isNotEmpty)
                         BetSlipPick(
                           market: '${p['market'] ?? ''}',
-                          pick: '${p['pick']}',
-                          confidence: '${p['confidence'] ?? ''}',
+                          pick: BetSlipPick.splitConfidence('${p['pick']}').pick,
+                          confidence: '${p['confidence'] ?? ''}'.trim().isNotEmpty
+                              ? '${p['confidence']}'
+                              : (BetSlipPick.splitConfidence('${p['pick']}').confidence ?? ''),
                         ),
                   ];
                   if (picks.isEmpty) {
