@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config.dart';
-import 'auth_service.dart';
 
 class SportsReel {
   final String id, title, channel, category, thumb;
@@ -64,46 +63,5 @@ class SportsReelsService {
           .toList(),
       unavailable: data['unavailable'] == true,
     );
-  }
-
-  static const _api = 'https://www.googleapis.com/youtube/v3/videos';
-
-  /// true = liked, false = not liked, null = unknown (not signed in / error).
-  static Future<bool?> isLiked(String id) async {
-    final token = await AuthService.instance.youtubeAccessToken();
-    if (token == null) return null;
-    try {
-      final res = await http
-          .get(Uri.parse('$_api/getRating?id=$id'),
-              headers: {'Authorization': 'Bearer $token'})
-          .timeout(const Duration(seconds: 10));
-      if (res.statusCode != 200) return null;
-      final items = (jsonDecode(res.body) as Map)['items'];
-      if (items is List && items.isNotEmpty) {
-        return (items.first as Map)['rating'] == 'like';
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  /// Likes or un-likes a reel on the user's own YouTube account.
-  /// Returns an error message, or null on success.
-  static Future<String?> setLike(String id, bool like) async {
-    if (!AuthService.instance.signedIn) return 'Log in with Gmail to like reels.';
-    final token = await AuthService.instance.youtubeAccessToken();
-    if (token == null) return 'Allow YouTube access to like reels.';
-    try {
-      final res = await http
-          .post(Uri.parse('$_api/rate?id=$id&rating=${like ? 'like' : 'none'}'),
-              headers: {'Authorization': 'Bearer $token'})
-          .timeout(const Duration(seconds: 10));
-      if (res.statusCode == 204 || res.statusCode == 200) return null;
-      if (res.statusCode == 401 || res.statusCode == 403) {
-        return 'YouTube refused the like. Log out and log in again.';
-      }
-      return 'Could not like this reel. Try again.';
-    } catch (_) {
-      return 'No connection. Try again.';
-    }
   }
 }
