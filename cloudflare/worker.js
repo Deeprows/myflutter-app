@@ -3279,12 +3279,31 @@ async function fanAiEspn(path) {
   return response.json();
 }
 // Free fallback 1: ESPN's all-soccer scoreboard (every league ESPN covers, in one request per few days).
+// ESPN's all-soccer scoreboard lists the competitions once at the top ("leagues") and tags each event with the
+// competition id inside its uid ("s:600~l:700~e:123"). Reading that gives every match its real league name.
+function fanEspnLeagueNames(feed) {
+  const names=new Map();
+  for(const l of Array.isArray(feed?.leagues)?feed.leagues:[]) {
+    const name=String(l?.name || l?.midsizeName || l?.shortName || l?.abbreviation || '').trim();
+    if(!name)continue;
+    for(const id of [l.id,/(?:^|~)l:(\d+)/.exec(String(l.uid || ''))?.[1]])if(id!==undefined && id!==null)names.set(String(id),name);
+  }
+  return names;
+}
+function fanEspnEventLeague(e,comp,names) {
+  const direct=[e?.leagueName,comp?.league?.name,e?.league?.name].find(x=>typeof x==='string' && x.trim());
+  if(direct)return direct.trim();
+  const id=/(?:^|~)l:(\d+)/.exec(String(e?.uid || comp?.uid || ''))?.[1] || e?.leagueId;
+  return (id!==undefined && names?.get(String(id))) || 'Other leagues';
+}
+const fanAiLeagueName=slug=>{const l=[...FAN_AI_LEAGUES,...FAN_AI_EXTRA_TEAM_LEAGUES,...FAN_AI_WOMEN_LEAGUES].find(x=>x[0]===slug);return l?l[1]:null;};
 async function fanAiEspnAllUpcoming(now,day) {
   // One request per day, like the Live screen does (date ranges are not reliable on the all-soccer feed).
   const rows=[],dayList=Array.from({length:FAN_AI_UPCOMING_DAYS+1},(_,i)=>day(now+i*86400000));
   const parts=await Promise.allSettled(dayList.map(d=>fanAiEspn(`all/scoreboard?dates=${d}&limit=500`).catch(()=>fanAiEspn(`all/scoreboard?dates=${d}`))));
   for(const part of parts) {
     if(part.status!=='fulfilled')continue;
+    const leagueNames=fanEspnLeagueNames(part.value);
     for(const e of Array.isArray(part.value?.events)?part.value.events:[]) {
       const comp=e?.competitions?.[0],status=e?.status || comp?.status,type=status?.type;
       if(type?.state!=='pre' || /POSTPONED|CANCEL|SUSPEND|ABANDON/i.test(String(type?.name || '')))continue;
@@ -3292,7 +3311,7 @@ async function fanAiEspnAllUpcoming(now,day) {
       if(!Number.isFinite(at) || at<=now || !/^\d{1,12}$/.test(String(e.id)) || !Array.isArray(comp?.competitors))continue;
       const h=comp.competitors.find(c=>c?.homeAway==='home')?.team,a=comp.competitors.find(c=>c?.homeAway==='away')?.team;
       if(!h || !a || !/^\d{1,9}$/.test(String(h.id)) || !/^\d{1,9}$/.test(String(a.id)) || !h.displayName || !a.displayName || String(h.id)===String(a.id))continue;
-      rows.push({id:`all:${e.id}`,home:String(h.displayName).slice(0,80),away:String(a.displayName).slice(0,80),homeId:String(h.id),awayId:String(a.id),homeLogo:fanAiLogo(h.logo),awayLogo:fanAiLogo(a.logo),league:String(e.leagueName || comp?.league?.name || 'Other leagues').slice(0,60),leagueCode:'all',kickoff:new Date(at).toISOString()});
+      rows.push({id:`all:${e.id}`,home:String(h.displayName).slice(0,80),away:String(a.displayName).slice(0,80),homeId:String(h.id),awayId:String(a.id),homeLogo:fanAiLogo(h.logo),awayLogo:fanAiLogo(a.logo),league:fanEspnEventLeague(e,comp,leagueNames).slice(0,60),leagueCode:'all',kickoff:new Date(at).toISOString()});
     }
   }
   return rows;
@@ -3318,7 +3337,7 @@ async function fanAiTsdbUpcoming(now,day) {
   return rows;
 }
 function fanAiUpcoming(env,fresh=false) {
-  return fanAiCached(env,'ai-upcoming:v3',1800000,async()=>{
+  return fanAiCached(env,'ai-upcoming:v4',1800000,async()=>{
     const now=Date.now(),day=t=>new Date(t).toISOString().slice(0,10).replace(/-/g,'');
     const range=`${day(now)}-${day(now+FAN_AI_UPCOMING_DAYS*86400000)}`;
     const settled=await Promise.allSettled(FAN_AI_LEAGUES.map(async([slug,name])=>[slug,name,await fanAiEspn(`${slug}/scoreboard?dates=${range}&limit=300`)]));
@@ -3411,7 +3430,7 @@ function fanAiFindTeam(fullIndex,raw,women=false) {
       return {error:`"${shown}" matches several teams. Be more specific: ${names.join(', ')}.`,candidates:names};
     }
   }
-  return {error:`No ${women?"women's ":''}team found for "${shown}". Check the spelling or use the full club name.`};
+  return {error:`No ${women?"women's ":''}team found for "${shown}". Check the spelling or use the full club name.`,suggest:fanAiSuggest(index,q)};
 }
 async function fanAiMatches(request,env,id) {
   if(request.method!=='GET')return json({error:'Method not allowed'},405);
@@ -3450,7 +3469,7 @@ async function fanAiAnyMatch(env,id,b) {
       const h=fanAiFindTeam(index,c.home,women),a=fanAiFindTeam(index,c.away,women);
       // A club that is not in the ESPN team lists is still analysed, by name (any club ESPN has results for).
       // Women's sides keep a "Women" tag in the lookup name so they can never inherit the men's results.
-      const typed=(r,raw)=>r.team || (r.candidates?.length?null:{id:null,name:(women?fanAiStripWomen(raw)+' Women':String(raw).trim()).slice(0,60),league:null,logo:''});
+      const typed=(r,raw)=>r.team || (r.candidates?.length?null:{id:null,name:(women?fanAiStripWomen(raw)+' Women':String(raw).trim()).slice(0,60),league:null,logo:'',fuzzy:r.suggest || []});
       const ht=typed(h,c.home),at=typed(a,c.away);
       for(const [r,t] of [[h,ht],[a,at]])if(!t)return fail(r.error,422,{code:'team_unavailable',candidates:r.candidates || []});
       if(ht.id?ht.id===at.id:fanResultName(ht.name)===fanResultName(at.name))return fail('Choose two different teams.');
@@ -3459,6 +3478,8 @@ async function fanAiAnyMatch(env,id,b) {
       info={home:ht.name.replace(/ Women$/,''),away:at.name.replace(/ Women$/,''),homeLogo:ht.logo,awayLogo:at.logo,league:'Your matchup',kickoff:null,gender:women?'women':'men'};
     }
     if(b.ext!==undefined && !await fanSocialBudget(env.DB,id,'ai-attempt',FAN_AI_ATTEMPT_LIMIT_PER_HOUR))return fail('Analysis request limit reached. Retry after the next UTC hour.',429);
+    // A lookup that resolved the club under its proper name remembers it, so the app can show the real name and crest.
+    const mark=(form,r)=>{if(form && r?.name)Object.defineProperty(form,'resolved',{value:{name:String(r.name).slice(0,60),logo:typeof r.logo==='string'?r.logo:'',league:typeof r.leagueName==='string'?r.leagueName:''},enumerable:false,configurable:true});return form;};
     const formOf=async t=>{
       // National teams (Nations League, qualifiers, friendlies) have their own results source: ask it first.
       if(FAN_NATIONAL_LEAGUE_RE.test(String(info.league || ''))){try{return await fanNationalForm(env,t.name,kickoff,t.id);}catch{}}
@@ -3466,16 +3487,42 @@ async function fanAiAnyMatch(env,id,b) {
         try{return await fanEspnScheduleForm(env,t.league,t.id,kickoff);}
         catch(e){
           try{return await fanEspnScanForm(env,t.name,kickoff);}
-          catch{try{return await fanNationalForm(env,t.name,kickoff,t.id);}catch{throw e;}}
+          catch{try{return await fanNationalForm(env,t.name,kickoff,t.id);}catch{
+            try{const f=await fanTsdbTeamForm(env,t.name,kickoff,info.gender==='women');return mark(f,f.club);}catch{}
+            throw e;
+          }}
         }
       }
+      // A club ESPN does not list (typed by the person). One precise name lookup comes first: it is about 3 requests,
+      // where the all-soccer scan below is up to 48 and still misses clubs ESPN does not cover.
+      let thin=null;
+      try{
+        const form=await fanTsdbTeamForm(env,t.name,kickoff,info.gender==='women');
+        return mark(form,form.club);
+      }catch(e){if(e instanceof FanFormError && e.club)thin=e;}
+      // A near-miss spelling ("Feberbache" for Fenerbahçe) is only trusted once the exact name found nothing,
+      // and only when a single club is that close.
+      if(!thin && t.fuzzy?.length===1 && t.fuzzy[0].id && t.fuzzy[0].league) {
+        const c=t.fuzzy[0];
+        try{return mark(await fanEspnScheduleForm(env,c.league,c.id,kickoff),{...c,leagueName:fanAiLeagueName(c.league)});}catch{}
+      }
+      if(thin)throw thin;
       try{return await fanEspnScanForm(env,t.name,kickoff);}
       catch(e){
         try{return await fanNationalForm(env,t.name,kickoff,t.id);}catch{}
-        throw e instanceof FanFormError && e.code==='insufficient_results'?new FanFormError('No team found for "'+String(t.name).slice(0,40)+'". Check the spelling or use the full club name.','team_unavailable'):e;
+        const hint=t.fuzzy?.length>1?' Did you mean '+t.fuzzy.map(c=>c.name).join(', ')+'?':'';
+        throw e instanceof FanFormError && e.code==='insufficient_results'?new FanFormError('No team found for "'+String(t.name).slice(0,40)+'". Check the spelling or use the full club name.'+hint,'team_unavailable'):e;
       }
     };
     const [homeForm,awayForm]=await Promise.all([formOf(home),formOf(away)]);
+    if(b.ext===undefined) {
+      if(homeForm.resolved){info.home=homeForm.resolved.name;if(homeForm.resolved.logo)info.homeLogo=fanAiLogo(homeForm.resolved.logo);}
+      if(awayForm.resolved){info.away=awayForm.resolved.name;if(awayForm.resolved.logo)info.awayLogo=fanAiLogo(awayForm.resolved.logo);}
+      if(fanResultName(info.home)===fanResultName(info.away))return fail('Choose two different teams.');
+      // Name the competition when both clubs play in the same one, instead of a generic "Your matchup".
+      const lh=homeForm.resolved?.league || fanAiLeagueName(home.league),la=awayForm.resolved?.league || fanAiLeagueName(away.league);
+      if(lh && lh===la)info.league=lh;
+    }
     // Team news (coach, injuries, key players, odds, lineups) is optional: any failure just leaves it out.
     let extras=null;
     if(env.API_FOOTBALL_KEY) {
@@ -3491,9 +3538,10 @@ async function fanAiAnyMatch(env,id,b) {
     }
     return await fanAiFinish(env,id,{home:info.home,away:info.away,league:info.league,kickoff:info.kickoff,gender:info.gender},homeForm,awayForm,extras?{fixture:info,extras}:{fixture:info});
   } catch(e) {
-    console.error('Any-match analysis failed',e?.message);
+    console.error('Any-match analysis failed',e?.stack || e?.message);
     const known=e instanceof FanFormError;
-    return json({error:known?e.message:'AI is temporarily unavailable. Please try again later.',code:known?e.code:'ai_unavailable'},known && ['insufficient_results','team_unavailable','league_unavailable'].includes(e.code)?422:503);
+    const busy=!known && /subrequest|too many|limit/i.test(String(e?.message || ''));
+    return json({error:known?e.message:busy?'The server is busy looking up results. Please retry in a minute.':'AI is temporarily unavailable. Please try again later.',code:known?e.code:busy?'busy':'ai_unavailable'},known && ['insufficient_results','team_unavailable','league_unavailable'].includes(e.code)?422:503);
   }
 }
 class FanFormError extends Error {constructor(message,code='provider_unavailable'){super(message);this.code=code;}}
@@ -4308,7 +4356,7 @@ const FAN_RESULT_LEAGUES={
 function fanResultName(raw) {
   const aliases={man:'manchester',utd:'united',st:'saint',nottm:'nottingham',spurs:'tottenham',wolves:'wolverhampton'};
   const stop=new Set(['fc','cf','afc','sc','ac','as','ssc','cd','ud','fk','sk','bk','club','the','sv']);
-  return String(raw || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(t=>t && !stop.has(t) && !/^(?:1[89]\d\d|20[0-2]\d|0\d)$/.test(t)).map(t=>aliases[t] || t).join(' ');
+  return String(raw || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/ß/g,'ss').replace(/[øæœđłðþħ]/g,c=>({'ø':'o','æ':'ae','œ':'oe','đ':'d','ł':'l','ð':'d','þ':'th','ħ':'h'})[c]).replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(t=>t && !stop.has(t) && !/^(?:1[89]\d\d|20[0-2]\d|0\d)$/.test(t)).map(t=>aliases[t] || t).join(' ');
 }
 // Providers name clubs differently ("Como 1907" / "Como", "Al-Kholood" / "Al Kholood"). Two names match when they
 // are equal, or one is a whole-word subset of the other and carries a distinctive word.
@@ -4820,6 +4868,124 @@ async function fanNationalForm(env,name,kickoff,espnId=null) {
   const rows=[...found.values()].sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)).slice(0,5);
   if(rows.length<3)throw new FanFormError('Not enough verified recent results were found for "'+String(name).slice(0,40)+'". No analysis was generated.','insufficient_results');
   return {source:'ESPN',teamId:'espn:national',fetchedAt:now,matches:rows,played:rows.length,wins:rows.filter(r=>r.result==='W').length,draws:rows.filter(r=>r.result==='D').length,losses:rows.filter(r=>r.result==='L').length,goalsFor:rows.reduce((n,r)=>n+r.goalsFor,0),goalsAgainst:rows.reduce((n,r)=>n+r.goalsAgainst,0)};
+}
+// ---- Typo tolerance and a precise name lookup for clubs ESPN does not list ----
+// Edit distance where swapping two neighbouring letters counts once ("Feberbache" is two edits from "Fenerbahce").
+function fanEditDistance(a,b,max=3) {
+  if(a===b)return 0;
+  if(Math.abs(a.length-b.length)>max)return max+1;
+  const d=Array.from({length:a.length+1},(_,i)=>[i]);
+  for(let j=1;j<=b.length;j++)d[0][j]=j;
+  for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++) {
+    d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+    if(i>1 && j>1 && a[i-1]===b[j-2] && a[i-2]===b[j-1])d[i][j]=Math.min(d[i][j],d[i-2][j-2]+1);
+  }
+  return d[a.length][b.length];
+}
+// Short words must be exact ("Lecco" is not a typo of "Lecce"); longer ones may be one to three letters off.
+function fanTypoAllowance(len){return len<6?0:len<9?1:len<12?2:3;}
+// Total edits to turn every typed word into a different word of the club's name; null when too far apart.
+function fanTypoDistance(typed,club) {
+  const q=typed.split(' ').filter(Boolean),have=club.split(' ').filter(Boolean);
+  if(!q.length || !have.length)return null;
+  const used=new Set();let total=0;
+  for(const w of q) {
+    let best=null,at=-1;
+    have.forEach((h,i)=>{
+      if(used.has(i))return;
+      const allow=Math.min(fanTypoAllowance(w.length),fanTypoAllowance(h.length)),d=fanEditDistance(w,h,allow);
+      if(d<=allow && (best===null || d<best)){best=d;at=i;}
+    });
+    if(best===null)return null;
+    used.add(at);total+=best;
+  }
+  return total;
+}
+// The closest club names in ESPN's lists to a misspelt name (only the single nearest distance, at most four clubs).
+function fanAiSuggest(index,q) {
+  const scored=[];
+  for(const t of index) {
+    let best=null;
+    for(const k of new Set([fanAnalysisName(t.name),...(t.keys || [])])) {
+      const d=fanTypoDistance(q,k);
+      if(d!==null && d>0 && (best===null || d<best))best=d;
+    }
+    if(best!==null)scored.push({t,d:best});
+  }
+  if(!scored.length)return [];
+  const min=Math.min(...scored.map(x=>x.d)),seen=new Map();
+  for(const x of scored)if(x.d===min && !seen.has(x.t.name))seen.set(x.t.name,x.t);
+  return [...seen.values()].slice(0,4).map(t=>({id:t.id,name:t.name,league:t.league,logo:t.logo}));
+}
+// TheSportsDB (free) knows clubs in far more leagues than ESPN's lists do. Responses are trimmed before they are kept.
+async function fanTsdbJson(env,cacheKey,ttl,path,shape) {
+  const row=await env.DB.prepare('SELECT data,fetched_at FROM fan_espn_form_cache WHERE cache_key=?').bind(cacheKey).first().catch(()=>null);
+  if(row && row.fetched_at>Date.now()-ttl){try{return JSON.parse(row.data);}catch{}}
+  let data=null;
+  try {
+    const r=await fetch(`https://www.thesportsdb.com/api/v1/json/${TSDB_KEY}/${path}`,{headers:FAN_HTTP,signal:AbortSignal.timeout(7000)});
+    if(r.ok)data=await r.json().catch(()=>null);
+  } catch {}
+  if(!data || typeof data!=='object') {
+    if(row){try{return JSON.parse(row.data);}catch{}}
+    throw new FanFormError('TheSportsDB is unavailable.','provider_unavailable');
+  }
+  const out=shape(data);
+  await env.DB.prepare('INSERT INTO fan_espn_form_cache(cache_key,data,fetched_at) VALUES(?,?,?) ON CONFLICT(cache_key) DO UPDATE SET data=excluded.data,fetched_at=excluded.fetched_at').bind(cacheKey,JSON.stringify(out),Date.now()).run().catch(()=>{});
+  return out;
+}
+// Search spellings, best first: as typed, without "FC"/"SK" style words, then with common local letters put back.
+function fanTsdbQueries(name) {
+  const typed=String(name || '').replace(/\s+/g,' ').trim(),core=fanResultName(typed);
+  const out=[typed];
+  if(core && core!==typed.toLowerCase())out.push(core);
+  const base=core || typed.toLowerCase();
+  for(const [from,to] of [['o','ø'],['o','ö'],['u','ü'],['a','ä'],['ae','æ'],['ss','ß'],['a','å']]) {
+    if(out.length>=4)break;
+    if(base.includes(from))out.push(base.replace(from,to));
+  }
+  return [...new Set(out.filter(q=>q.length>=2))].slice(0,4);
+}
+function fanTsdbEventAt(e){
+  const ts=String(e?.strTimestamp || '');
+  return Date.parse(ts?`${ts.replace(' ','T')}${/[zZ]|[+-]\d\d:?\d\d$/.test(ts)?'':'Z'}`:`${e?.dateEvent}T${e?.strTime || '00:00:00'}Z`);
+}
+async function fanTsdbTeamForm(env,name,kickoff,women=false) {
+  const typed=women?fanAiStripWomen(name):String(name || '').trim(),want=fanNameCore(typed);
+  if(!want)throw new FanFormError('No team found for "'+String(name).slice(0,40)+'". Check the spelling or use the full club name.','team_unavailable');
+  let team=null;
+  for(const q of fanTsdbQueries(typed)) {
+    const data=await fanTsdbJson(env,('tsdb:v1:search:'+q.toLowerCase()).slice(0,120),86400000,'searchteams.php?t='+encodeURIComponent(q),d=>({teams:(Array.isArray(d?.teams)?d.teams:[]).slice(0,25).map(t=>({id:String(t.idTeam || ''),name:String(t.strTeam || ''),alt:String(t.strAlternate || ''),sport:String(t.strSport || ''),gender:String(t.strGender || ''),badge:String(t.strBadge || t.strTeamBadge || ''),league:String(t.strLeague || '').slice(0,60)}))}));
+    const rows=data.teams.filter(t=>/^\d{1,9}$/.test(t.id) && t.name && /^soccer$/i.test(t.sport) && (/^female$/i.test(t.gender) || FAN_WOMEN_RE.test(t.name))===women);
+    const namesOf=t=>[t.name,...t.alt.split(/[;,]/).map(x=>x.trim()).filter(Boolean)];
+    const exact=rows.filter(t=>namesOf(t).some(n=>fanNameCore(women?fanAiStripWomen(n):n)===want));
+    const like=exact.length?exact:rows.filter(t=>namesOf(t).some(n=>fanNameLike(typed,women?fanAiStripWomen(n):n)));
+    const distinct=[...new Set(like.map(t=>t.id))];
+    // Two different clubs with one name: guessing would analyse the wrong side, so leave it to the next lookup.
+    if(distinct.length===1 || (distinct.length>1 && new Set(like.map(t=>fanNameCore(t.name))).size===1)){team=like[0];break;}
+  }
+  if(!team)throw new FanFormError('No team found for "'+String(name).slice(0,40)+'". Check the spelling or use the full club name.','team_unavailable');
+  const last=await fanTsdbJson(env,'tsdb:v1:last:'+team.id,3*3600000,'eventslast.php?id='+team.id,d=>({results:(Array.isArray(d?.results)?d.results:[]).slice(0,12).map(e=>({sport:e.strSport,status:e.strStatus,ts:e.strTimestamp,date:e.dateEvent,time:e.strTime,hid:e.idHomeTeam,aid:e.idAwayTeam,h:e.strHomeTeam,a:e.strAwayTeam,hs:e.intHomeScore,as:e.intAwayScore}))}));
+  const now=Date.now(),limit=Math.min(now,kickoff),found=new Map();
+  for(const e of last.results) {
+    if((e.sport && !/^soccer$/i.test(e.sport)) || !/^(?:FT|Match Finished)$/i.test(String(e.status || '')))continue;
+    const at=fanTsdbEventAt({strTimestamp:e.ts,dateEvent:e.date,strTime:e.time});
+    if(!Number.isFinite(at) || at>=limit || at<now-400*86400000)continue;
+    const isH=String(e.hid)===team.id || (!e.hid && fanNameLike(typed,e.h)),isA=!isH && (String(e.aid)===team.id || (!e.aid && fanNameLike(typed,e.a)));
+    if(!isH && !isA)continue;
+    const hs=fanResultScore(e.hs),as=fanResultScore(e.as);
+    if(hs===null || as===null)continue;
+    const gf=isH?hs:as,ga=isH?as:hs;
+    found.set(String(at)+e.h,{date:new Date(at).toISOString(),opponent:String((isH?e.a:e.h) || 'Opponent').slice(0,100),venue:isH?'home':'away',goalsFor:gf,goalsAgainst:ga,result:gf>ga?'W':gf<ga?'L':'D'});
+  }
+  const rows=[...found.values()].sort((x,y)=>Date.parse(y.date)-Date.parse(x.date)).slice(0,5);
+  if(rows.length<3) {
+    const err=new FanFormError('Found "'+team.name.slice(0,40)+'" but fewer than 3 recent completed matches are on record for it, so no analysis was generated.','insufficient_results');
+    err.club=team.name;throw err;
+  }
+  const form={source:'TheSportsDB',teamId:'tsdb:'+team.id,fetchedAt:now,matches:rows,played:rows.length,wins:rows.filter(r=>r.result==='W').length,draws:rows.filter(r=>r.result==='D').length,losses:rows.filter(r=>r.result==='L').length,goalsFor:rows.reduce((n,r)=>n+r.goalsFor,0),goalsAgainst:rows.reduce((n,r)=>n+r.goalsAgainst,0)};
+  Object.defineProperty(form,'club',{value:{name:team.name,leagueName:team.league || '',logo:/^https:\/\/(?:[a-z0-9-]+\.)?thesportsdb\.com\//i.test(team.badge)?team.badge:''},enumerable:false});
+  return form;
 }
 async function fanAnalysisForm(env,fixture,teamId,name,kickoff) {
   // Which sources are tried, and in what order, comes from api_providers.json (data.form.sources).
