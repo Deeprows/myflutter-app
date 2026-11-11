@@ -4954,10 +4954,12 @@ async function fanNationalFormLive(env,name,kickoff,espnId=null) {
   // Two 150-day windows, newest first. A window that ended over two days ago never changes, so it is kept for good.
   const chunks=[{from:ymd(limit-150*86400000),to:ymd(limit),keep:false},{from:ymd(limit-300*86400000),to:ymd(limit-151*86400000),keep:limit-151*86400000<now-2*86400000}];
   const found=new Map();let reached=0,lastWhy='';
-  const scan=async slugs=>{
+  let seen=0;
+  const scan=async (slugs,chs=chunks)=>{
     const jobs=[];
-    for(const slug of slugs)for(const ch of chunks)jobs.push(fanNationalSlug(env,slug,ch.from,ch.to,ch.keep).then(g=>{reached++;return g;}).catch(e=>{lastWhy=String(e?.message || '');return null;}));
+    for(const slug of slugs)for(const ch of chs)jobs.push(fanNationalSlug(env,slug,ch.from,ch.to,ch.keep).then(g=>{reached++;return g;}).catch(e=>{lastWhy=String(e?.message || '');return null;}));
     for(const games of await Promise.all(jobs))for(const g of games || []) {
+      seen++;
       if(g.at>=limit || g.at<limit-300*86400000)continue;
       const isH=(id && g.h.i===id) || g.h.n.some(n=>fanNationalKey(n)===want);
       const isA=!isH && ((id && g.a.i===id) || g.a.n.some(n=>fanNationalKey(n)===want));
@@ -4969,9 +4971,14 @@ async function fanNationalFormLive(env,name,kickoff,espnId=null) {
   await scan(FAN_NATIONAL_CORE);
   // Other confederations' competitions are only asked when Europe plus friendlies did not give enough games.
   if(found.size<5)await scan(FAN_NATIONAL_OTHER);
+  // A very wide date range can come back truncated; when nothing at all was found ask again in 50-day slices.
+  if(!found.size) {
+    const fine=[];for(let i=0;i<6;i++){const hi=limit-i*50*86400000,lo=hi-50*86400000+86400000;fine.push({from:ymd(lo),to:ymd(hi),keep:hi<now-2*86400000});}
+    await scan(['uefa.nations','fifa.friendly','fifa.worldq.uefa','fifa.world'],fine);
+  }
   if(!reached)throw fanUnavailable(lastWhy);
   const rows=[...found.values()].sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)).slice(0,5);
-  if(rows.length<1)throw new FanFormError('No verified completed recent results were found for "'+String(name).slice(0,40)+'".','insufficient_results');
+  if(rows.length<1)throw new FanFormError('No verified completed recent results were found for "'+String(name).slice(0,40)+'" (international sources checked: '+seen+' finished games'+(lastWhy?'; last error: '+String(lastWhy).replace(/[^\w .:\/-]/g,'').slice(0,40):'')+').','insufficient_results');
   return {source:'ESPN',teamId:'espn:national',fetchedAt:now,matches:rows,played:rows.length,wins:rows.filter(r=>r.result==='W').length,draws:rows.filter(r=>r.result==='D').length,losses:rows.filter(r=>r.result==='L').length,goalsFor:rows.reduce((n,r)=>n+r.goalsFor,0),goalsAgainst:rows.reduce((n,r)=>n+r.goalsAgainst,0)};
 }
 // ---- Typo tolerance and a precise name lookup for clubs ESPN does not list ----
@@ -5129,12 +5136,9 @@ async function fanAnalysisForm(env,fixture,teamId,name,kickoff) {
   if(!nationalTried) {
     try{return await fanNationalForm(env,name,kickoff);}catch(e){natErr=e;if(e instanceof FanFormError && e.code==='insufficient_results')lastErr=e;}
   }
-  // National sides get one more independent source (TheSportsDB) before giving up.
-  if(international || fanIsNationalTeam(name)) {
-    try{return await fanTsdbTeamForm(env,name,kickoff,false);}catch(e){if(!natErr)natErr=e;}
-    // The live lookups were unreachable (not "reached and empty"): say so, never "no verified results".
-    if(natErr instanceof FanFormError && natErr.code!=='insufficient_results' && natErr.code!=='team_unavailable')throw natErr;
-  }
+  // A national side must never be answered from club feeds or a loose name search (that returned another club's games).
+  // If the international lookup itself failed, report that failure instead of pretending the team has no results.
+  if(natErr instanceof FanFormError && natErr.code!=='team_unavailable' && (international || fanIsNationalTeam(name)))throw natErr;
   if(original?.code==='insufficient_results' || lastErr instanceof FanFormError && lastErr.code==='insufficient_results')return {source:'API-Football',teamId,fetchedAt:Date.now(),matches:[],played:0,wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0};
   // API-Football refused (plan, quota, key, outage) or has no ID: ESPN's free results are always the safety net,
   // even when api_providers.json lists only API-Football.
