@@ -1,7 +1,7 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import '../services/sports_reels_service.dart';
 import '../theme/app_theme.dart';
 import 'browser_screen.dart';
@@ -98,7 +98,7 @@ class _SportsReelsViewState extends State<SportsReelsView> {
                   itemCount: items.length,
                   onPageChanged: (i) => setState(() => _index = i),
                   itemBuilder: (_, i) => _ReelPage(
-                    key: ValueKey('${items[i].id}-${i == _index}'),
+                    key: ValueKey(items[i].id),
                     reel: items[i],
                     active: i == _index,
                   ),
@@ -143,41 +143,156 @@ class _ReelPage extends StatefulWidget {
   State<_ReelPage> createState() => _ReelPageState();
 }
 
-class _ReelPageState extends State<_ReelPage> {
+class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
   WebViewController? _web;
   bool _ready = false;
+  bool _failed = false;
+  bool _starting = false;
+  bool _appResumed = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.active) _start();
   }
 
-  void _start() {
-    final id = widget.reel.id;
-    final html = '''<!DOCTYPE html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}
-iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style></head><body>
-<iframe src="https://www.youtube.com/embed/$id?autoplay=1&playsinline=1&controls=0&loop=1&playlist=$id&rel=0&modestbranding=1&fs=0"
- allow="autoplay; encrypted-media" referrerpolicy="strict-origin-when-cross-origin"></iframe></body></html>''';
-    _web = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.black)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageFinished: (_) {
-            if (mounted) setState(() => _ready = true);
-          },
-          // Stay on the embed; never let the page navigate away.
-          onNavigationRequest: (r) => r.url.startsWith('about:') ||
-                  r.url.startsWith('https://www.youtube.com/embed/') ||
-                  r.url.startsWith('https://www.youtube-nocookie.com/embed/')
-              ? NavigationDecision.navigate
-              : NavigationDecision.prevent,
-        ),
-      )
-      ..loadHtmlString(html, baseUrl: 'https://www.youtube.com');
+  @override
+  void didUpdateWidget(covariant _ReelPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active != widget.active) {
+      if (widget.active && _appResumed) {
+        _start();
+      } else {
+        _stop();
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appResumed = state == AppLifecycleState.resumed;
+    if (!_appResumed) {
+      _stop();
+    } else if (widget.active) {
+      _start();
+    }
+  }
+
+  Future<void> _start() async {
+    if (!mounted || !widget.active || !_appResumed || _starting || _web != null) return;
+    _starting = true;
+    setState(() {
+      _ready = false;
+      _failed = false;
+    });
+    try {
+      final id = widget.reel.id;
+      final html = '''<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="referrer" content="origin">
+<style>
+html,body,#player{margin:0;width:100%;height:100%;background:#000;overflow:hidden}
+iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+</style></head><body><div id="player"></div>
+<script>
+var player;
+function notify(value){try{ReelPlayer.postMessage(value)}catch(e){}}
+function onYouTubeIframeAPIReady(){
+  player=new YT.Player('player',{
+    width:'100%',height:'100%',videoId:'$id',
+    playerVars:{autoplay:1,playsinline:1,controls:0,rel:0,modestbranding:1,
+      fs:0,iv_load_policy:3,disablekb:1,origin:'https://www.youtube.com'},
+    events:{
+      onReady:function(e){notify('ready');e.target.mute();e.target.playVideo();},
+      onStateChange:function(e){if(e.data===1)notify('playing');},
+      onError:function(e){notify('error:'+e.data);}
+    }
+  });
+}
+function stopReel(){try{if(player&&player.pauseVideo)player.pauseVideo()}catch(e){}}
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body></html>''';
+      final controller = WebViewController();
+      await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+      await controller.setBackgroundColor(Colors.black);
+      await controller.addJavaScriptChannel('ReelPlayer', onMessageReceived: (message) {
+        if (!mounted) return;
+        final value = message.message;
+        if (value == 'ready' || value == 'playing') {
+          setState(() { _ready = true; _failed = false; });
+        } else if (value.startsWith('error:')) {
+          setState(() { _failed = true; _ready = false; });
+        }
+      });
+      await controller.setNavigationDelegate(NavigationDelegate(
+        onPageFinished: (_) {
+          if (mounted && widget.active && !_failed) {
+            // The iframe API reports readiness separately; this only confirms
+            // that the HTML shell has loaded.
+          }
+        },
+        onWebResourceError: (error) {
+          if (mounted && widget.active && error.isForMainFrame == true) {
+            setState(() => _failed = true);
+          }
+        },
+        onNavigationRequest: (request) {
+          final uri = Uri.tryParse(request.url);
+          if (uri == null) return NavigationDecision.prevent;
+          if (uri.scheme == 'about' || uri.host == 'www.youtube.com' ||
+              uri.host == 'youtube.com' || uri.host == 'www.youtube-nocookie.com' ||
+              uri.host == 'youtube-nocookie.com' || uri.host.endsWith('googlevideo.com') ||
+              uri.host.endsWith('ytimg.com') || uri.host.endsWith('youtube.com')) {
+            return NavigationDecision.navigate;
+          }
+          return NavigationDecision.prevent;
+        },
+      ));
+      final platform = controller.platform;
+      if (platform is AndroidWebViewController) {
+        await platform.setMediaPlaybackRequiresUserGesture(false);
+        final cookies = WebViewCookieManager().platform;
+        if (cookies is AndroidWebViewCookieManager) {
+          await cookies.setAcceptThirdPartyCookies(platform, true);
+        }
+      }
+      if (!mounted || !widget.active || !_appResumed) {
+        _starting = false;
+        return;
+      }
+      _web = controller;
+      await controller.loadHtmlString(html, baseUrl: 'https://www.youtube.com/');
+      if (mounted) setState(() {});
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+    } finally {
+      _starting = false;
+    }
+  }
+
+  Future<void> _stop() async {
+    final controller = _web;
+    _web = null;
+    if (mounted) setState(() { _ready = false; });
+    if (controller != null) {
+      try {
+        await controller.runJavaScript('stopReel();');
+        await controller.loadRequest(Uri.parse('about:blank'));
+      } catch (_) {}
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    final controller = _web;
+    if (controller != null) {
+      controller.runJavaScript('stopReel();').catchError((_) {});
+    }
+    super.dispose();
   }
 
   @override
@@ -187,74 +302,66 @@ iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style></head>
       fit: StackFit.expand,
       children: [
         const ColoredBox(color: Colors.black),
-        CachedNetworkImage(
-          imageUrl: r.thumb,
-          fit: BoxFit.cover,
-          errorWidget: (_, _, _) => const SizedBox.shrink(),
-        ),
-        if (_web != null)
-          AnimatedOpacity(
-            duration: const Duration(milliseconds: 250),
-            opacity: _ready ? 1 : 0,
-            child: WebViewWidget(controller: _web!),
+        if (_web != null && !_failed)
+          WebViewWidget(controller: _web!),
+        if (!_ready && !_failed)
+          const Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+        if (_failed)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.play_circle_outline, color: Colors.white70, size: 52),
+                  const SizedBox(height: 12),
+                  const Text('This video cannot play inside the app.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => openInApp(context, r.watchUrl, title: r.channel),
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('Watch on YouTube'),
+                    style: OutlinedButton.styleFrom(foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white54)),
+                  ),
+                  TextButton(onPressed: () { _web = null; _start(); },
+                    child: const Text('Retry', style: TextStyle(color: Colors.white70))),
+                ],
+              ),
+            ),
           ),
-        // Title strip at the bottom; touches elsewhere go to the player.
         Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
+          left: 0, right: 0, bottom: 0,
           child: Container(
             padding: const EdgeInsets.fromLTRB(16, 28, 8, 14),
             decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
+              gradient: LinearGradient(begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Color(0xCC000000)],
-              ),
+                colors: [Colors.transparent, Color(0xCC000000)]),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        r.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        r.channel,
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Open on YouTube',
-                  icon: const Icon(Icons.open_in_new, color: Colors.white),
-                  onPressed: () =>
-                      openInApp(context, r.watchUrl, title: r.channel),
-                ),
-                IconButton(
-                  tooltip: 'Share',
-                  icon: const Icon(Icons.ios_share, color: Colors.white),
-                  onPressed: () async {
-                    try {
-                      await Share.share('${r.title}\n${r.watchUrl}');
-                    } catch (_) {}
-                  },
-                ),
-              ],
-            ),
+            child: Row(children: [
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(r.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 15,
+                      fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Text(r.channel, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                ],
+              )),
+              IconButton(tooltip: 'Open on YouTube',
+                icon: const Icon(Icons.open_in_new, color: Colors.white),
+                onPressed: () => openInApp(context, r.watchUrl, title: r.channel)),
+              IconButton(tooltip: 'Share',
+                icon: const Icon(Icons.ios_share, color: Colors.white),
+                onPressed: () async {
+                  try { await Share.share('${r.title}\n${r.watchUrl}'); } catch (_) {}
+                }),
+            ]),
           ),
         ),
       ],
