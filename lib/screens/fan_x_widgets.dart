@@ -36,8 +36,9 @@ class XTabBar extends StatelessWidget {
                   children: [
                     Text(
                       labels[i],
+                      maxLines: 1,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: labels.length > 4 ? 13.5 : 15,
                         fontWeight: i == index
                             ? FontWeight.w900
                             : FontWeight.w600,
