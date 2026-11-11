@@ -3085,23 +3085,42 @@ async function fanAiFinish(env,id,promptFixture,home,away,extra={}) {
       } catch(e) {console.error('AI provider failed',p.id,e?.message);parsed=null;}
       if(parsed){model=String(p.label || p.id || 'AI').slice(0,40);break;}
     }
+    // Every AI path can fail (quota, timeout, bad JSON). That must never end in
+    // "AI is unavailable": the verified results are already in hand, so a
+    // statistical preview built from them is returned instead.
+    let aiFailed='';
     if(!parsed) {
-      if(!useCloudflare)return fail('All configured AI providers are unavailable or have reached their quota. Check the provider keys, model settings and usage limits, then retry.',503);
-      if(!env.AI?.run)return fail('No AI provider completed this request. Check the Workers AI binding and configured provider keys/quotas, then retry.',503);
-      let result;
-      try {result=await ask({response_format:{type:'json_schema',json_schema:FAN_AI_SCHEMA}});}
-      catch(e) {clearTimeout(timeout);result=await ask({});}
-      parsed=result?.response;
+      if(!useCloudflare)aiFailed='providers';
+      else if(!env.AI?.run)aiFailed='no_binding';
+      else {
+        let result=null;
+        try {result=await ask({response_format:{type:'json_schema',json_schema:FAN_AI_SCHEMA}});}
+        catch(e) {
+          clearTimeout(timeout);console.error('Workers AI (schema) failed',e?.message);
+          try {result=await ask({});}
+          catch(e2) {clearTimeout(timeout);console.error('Workers AI failed',e2?.message);aiFailed='workers_ai';}
+        }
+        parsed=result?.response;
+      }
     }
     if(typeof parsed==='string') {
       const text=parsed.trim(),start=text.indexOf('{'),end=text.lastIndexOf('}');
       try{parsed=JSON.parse(start>=0 && end>start?text.slice(start,end+1):text);}catch{parsed={read:text,picks:[]};}
     }
-    const read=typeof parsed?.read==='string'?parsed.read.replace(/[*#]/g,'').trim():'';
-    if(!read)return fail('AI returned no analysis. Please retry.',502);
+    let read=typeof parsed?.read==='string'?parsed.read.replace(/[*#]/g,'').trim():'';
+    let usedFallback=false;
+    if(!read) {
+      read=fanAiFallbackRead(promptFixture,home,away,stats,context);
+      usedFallback=true;model='Statistical model';aiFailed=aiFailed || 'no_analysis';
+      console.error('AI analysis fell back to statistics:',aiFailed);
+    }
     const homeCount=home.matches.length,awayCount=away.matches.length,limited=homeCount<3 || awayCount<3;
     const sampleQuality={homeMatches:homeCount,awayMatches:awayCount,level:limited?'limited':'standard',warning:limited?`Preliminary analysis: only ${homeCount} verified recent match(es) for ${promptFixture.home} and ${awayCount} for ${promptFixture.away}. Confidence is reduced.`:null};
-    return json({gender:promptFixture.gender==='women'?'women':'men',analysis:read.slice(0,12000),picks:fanAiPicks(parsed.picks,hasCorners,hasCards).map(p=>limited?{...p,confidence:'low'}:p),sampleQuality,aiModel:model,generatedAt:Date.now(),dataSource:[...new Set([home.source || 'API-Football',away.source || 'API-Football',...(context?.sources || [])])].join(' / '),home,away,...extra});
+    const ctx={home,away,homeName:promptFixture.home,awayName:promptFixture.away,stats};
+    let picks=fanAiPicks(parsed?.picks,hasCorners,hasCards);
+    if(usedFallback || picks.length<3)picks=fanAiAddRulePicks(picks,ctx,hasCorners,hasCards);
+    picks=fanAiCalibrate(picks,ctx);
+    return json({gender:promptFixture.gender==='women'?'women':'men',analysis:read.slice(0,12000),picks,sampleQuality,confidenceMethod:'evidence',...(usedFallback?{aiNotice:'The AI writer was busy, so this preview is built directly from the verified results and stats.'}:{}),aiModel:model,generatedAt:Date.now(),dataSource:[...new Set([home.source || 'API-Football',away.source || 'API-Football',...(context?.sources || [])])].join(' / '),home,away,...extra});
   } finally {clearTimeout(timeout);}
 }
 
@@ -3346,6 +3365,145 @@ function fanAiStats(home,away,extras) {
     return {home:Math.round(1/w.home/t*100),draw:Math.round(1/w.draw/t*100),away:Math.round(1/w.away/t*100)};
   };
   return {home:side(home,extras?.home),away:side(away,extras?.away),bookmakerImpliedPercent:implied(o?.winner),odds:o || null};
+}
+// ---- Evidence-based confidence + statistical fallback --------------------
+// The language model only writes the reading. How sure a pick is comes from the
+// verified results: how often it hit, how many matches back it, and whether both
+// teams point the same way. This stops every pick from being labelled "low".
+function fanAiEvidence(home,away) {
+  const hm=home?.matches || [],am=away?.matches || [],all=[...hm,...am];
+  const rate=(a,f)=>a.length?a.filter(f).length/a.length:0;
+  const avg=(a,f)=>a.length?a.reduce((t,r)=>t+f(r),0)/a.length:0;
+  const pts=r=>r.result==='W'?3:r.result==='D'?1:0;
+  return {
+    hn:hm.length,an:am.length,n:all.length,
+    hPts:avg(hm,pts),aPts:avg(am,pts),
+    hGd:avg(hm,r=>r.goalsFor-r.goalsAgainst),aGd:avg(am,r=>r.goalsFor-r.goalsAgainst),
+    hGf:avg(hm,r=>r.goalsFor),hGa:avg(hm,r=>r.goalsAgainst),aGf:avg(am,r=>r.goalsFor),aGa:avg(am,r=>r.goalsAgainst),
+    over:rate(all,r=>r.goalsFor+r.goalsAgainst>2.5),hOver:rate(hm,r=>r.goalsFor+r.goalsAgainst>2.5),aOver:rate(am,r=>r.goalsFor+r.goalsAgainst>2.5),
+    btts:rate(all,r=>r.goalsFor>0 && r.goalsAgainst>0),hBtts:rate(hm,r=>r.goalsFor>0 && r.goalsAgainst>0),aBtts:rate(am,r=>r.goalsFor>0 && r.goalsAgainst>0),
+    hNoLoss:rate(hm,r=>r.result!=='L'),aNoLoss:rate(am,r=>r.result!=='L'),
+    hLoss:rate(hm,r=>r.result==='L'),aLoss:rate(am,r=>r.result==='L'),
+    hWin:rate(hm,r=>r.result==='W'),aWin:rate(am,r=>r.result==='W'),
+    draw:rate(all,r=>r.result==='D')
+  };
+}
+const FAN_AI_LEVELS=['low','medium','high'];
+function fanAiNorm(v) {return String(v || '').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();}
+function fanAiMentions(pickText,name) {
+  const t=fanAiNorm(pickText),n=fanAiNorm(name);
+  if(!t || !n)return false;
+  return t.includes(n) || n.split(' ').some(w=>w.length>3 && t.includes(w));
+}
+// Returns {level, basis} for one pick from the evidence, or null when there is no rule for it.
+function fanAiPickEvidence(pick,ev,ctx) {
+  const pc=(x)=>Math.round(x*100);
+  const band=(support,n,agree,hi,med)=>support>=hi && n>=8 && agree?'high':support>=med && n>=6?'medium':'low';
+  const text=fanAiNorm(pick.pick);
+  const implied=ctx.stats?.bookmakerImpliedPercent;
+  if(pick.market==='Over/Under 2.5 goals') {
+    const over=/\bover\b/.test(text),under=/\bunder\b/.test(text);
+    if(!over && !under)return null;
+    const support=over?ev.over:1-ev.over,h=over?ev.hOver:1-ev.hOver,a=over?ev.aOver:1-ev.aOver;
+    const hits=Math.round(support*ev.n);
+    return {level:band(support,ev.n,h>=.55 && a>=.55,.75,.6),basis:`${over?'Over':'Under'} 2.5 landed in ${hits} of ${ev.n} recent matches (${pc(support)}%).`};
+  }
+  if(pick.market==='Both teams to score') {
+    const yes=/\byes\b|\bboth\b/.test(text) && !/\bno\b/.test(text),no=/\bno\b/.test(text);
+    if(!yes && !no)return null;
+    const support=yes?ev.btts:1-ev.btts,h=yes?ev.hBtts:1-ev.hBtts,a=yes?ev.aBtts:1-ev.aBtts;
+    const hits=Math.round(support*ev.n);
+    return {level:band(support,ev.n,h>=.55 && a>=.55,.75,.6),basis:yes?`Both teams scored in ${hits} of ${ev.n} recent matches (${pc(support)}%).`:`At least one team failed to score in ${hits} of ${ev.n} recent matches (${pc(support)}%).`};
+  }
+  if(pick.market==='Match result' || pick.market==='Double chance') {
+    const homeSide=fanAiMentions(pick.pick,ctx.homeName),awaySide=fanAiMentions(pick.pick,ctx.awayName);
+    const gap=ev.hPts-ev.aPts,gd=ev.hGd-ev.aGd,minN=Math.min(ev.hn,ev.an);
+    const dc=pick.market==='Double chance' || /\bor draw\b|\bdraw or\b|\b1x\b|\bx2\b/.test(text);
+    const homePick=homeSide && !awaySide,awayPick=awaySide && !homeSide;
+    if(!homePick && !awayPick)return null;
+    const edge=homePick?gap:-gap,gdEdge=homePick?gd:-gd;
+    let level='low';
+    if(dc) {
+      const support=homePick?(ev.hNoLoss+(1-ev.aWin))/2:(ev.aNoLoss+(1-ev.hWin))/2;
+      level=support>=.85 && minN>=5 && edge>=0?'high':support>=.7 && minN>=4?'medium':'low';
+      return {level,basis:`${homePick?ctx.homeName:ctx.awayName} avoided defeat in ${pc(homePick?ev.hNoLoss:ev.aNoLoss)}% of their recent matches.`};
+    }
+    level=edge>=1.2 && gdEdge>=1 && minN>=5?'high':edge>=.6 && gdEdge>=.4 && minN>=4?'medium':'low';
+    // Bookmaker prices, when supplied, can confirm or doubt the pick.
+    const price=implied?(homePick?implied.home:implied.away):null;
+    if(price!=null) {
+      const i=FAN_AI_LEVELS.indexOf(level);
+      if(price>=55 && i<2)level=FAN_AI_LEVELS[i+1];
+      else if(price<=35 && i>0)level=FAN_AI_LEVELS[i-1];
+    }
+    return {level,basis:`${homePick?ctx.homeName:ctx.awayName} average ${(homePick?ev.hPts:ev.aPts).toFixed(1)} points per match against ${(homePick?ev.aPts:ev.hPts).toFixed(1)} for the other side, goal difference ${gdEdge>=0?'+':''}${gdEdge.toFixed(1)} better.`};
+  }
+  if(pick.market==='Correct score')return {level:'low',basis:'An exact score is rarely predictable, so this stays low whatever the form.'};
+  if(pick.market==='Corners' || pick.market==='Cards') {
+    const counted=Math.min(ctx.stats?.home?.cardMatchesCounted || 0,ctx.stats?.away?.cardMatchesCounted || 0);
+    return {level:counted>=6?'medium':'low',basis:`Based on ${counted} recent matches with corner and card data.`};
+  }
+  return null;
+}
+// Overrides the model's own labels with the evidence, then applies the sample-size caps.
+function fanAiCalibrate(picks,ctx) {
+  const ev=fanAiEvidence(ctx.home,ctx.away);
+  const minN=Math.min(ev.hn,ev.an);
+  return picks.map(p=>{
+    const e=fanAiPickEvidence(p,ev,ctx);
+    let level=e?e.level:p.confidence;
+    if(minN<3)level='low';
+    else if(minN<5 && level==='high')level='medium';
+    return {...p,confidence:level,...(e?{basis:e.basis}:{})};
+  });
+}
+// Rule-based picks, used when the model returned too few picks or was unavailable.
+function fanAiAddRulePicks(picks,ctx,hasCorners,hasCards) {
+  const ev=fanAiEvidence(ctx.home,ctx.away),out=[...picks],has=m=>out.some(x=>x.market===m);
+  const h=ctx.homeName,a=ctx.awayName,gap=ev.hPts-ev.aPts;
+  const f1=x=>(Math.round(x*10)/10).toFixed(1);
+  if(!has('Match result')) {
+    const home=gap>=.4,away=gap<=-.4;
+    out.push({market:'Match result',pick:home?`${h} to win`:away?`${a} to win`:'Draw',confidence:'low',reason:`Recent form: ${h} ${f1(ev.hPts)} points per match, ${a} ${f1(ev.aPts)}.`});
+  }
+  if(!has('Double chance')) {
+    const homeSide=(ev.hNoLoss+(1-ev.aWin))/2>=(ev.aNoLoss+(1-ev.hWin))/2;
+    out.push({market:'Double chance',pick:homeSide?`${h} to win or draw`:`${a} to win or draw`,confidence:'low',reason:`${homeSide?h:a} avoided defeat in ${Math.round((homeSide?ev.hNoLoss:ev.aNoLoss)*100)}% of recent matches.`});
+  }
+  if(!has('Over/Under 2.5 goals')) {
+    const over=ev.over>=.5;
+    out.push({market:'Over/Under 2.5 goals',pick:over?'Over 2.5 goals':'Under 2.5 goals',confidence:'low',reason:`${Math.round(ev.over*ev.n)} of ${ev.n} recent matches had over 2.5 goals.`});
+  }
+  if(!has('Both teams to score')) {
+    const yes=ev.btts>=.5;
+    out.push({market:'Both teams to score',pick:yes?'Yes':'No',confidence:'low',reason:`Both teams scored in ${Math.round(ev.btts*ev.n)} of ${ev.n} recent matches.`});
+  }
+  if(!has('Correct score')) {
+    const eh=Math.max(0,Math.round((ev.hGf+ev.aGa)/2)),ea=Math.max(0,Math.round((ev.aGf+ev.hGa)/2));
+    out.push({market:'Correct score',pick:`${h} ${eh}-${ea} ${a}`,confidence:'low',reason:`Expected goals from recent scoring and conceding: ${f1((ev.hGf+ev.aGa)/2)} for ${h}, ${f1((ev.aGf+ev.hGa)/2)} for ${a}.`});
+  }
+  return out.slice(0,6);
+}
+// Plain, number-only reading used when no AI model could answer.
+function fanAiFallbackRead(fx,home,away,stats,context) {
+  const ev=fanAiEvidence(home,away),f1=x=>(Math.round(x*10)/10).toFixed(1);
+  const rec=m=>{const w=m.filter(r=>r.result==='W').length,d=m.filter(r=>r.result==='D').length;return `${w}W ${d}D ${m.length-w-d}L`;};
+  const lines=[
+    'MATCH OVERVIEW',
+    `${fx.home} vs ${fx.away}${fx.league?` (${fx.league})`:''}. This preview is built directly from verified recent results; the AI writer was not available.`,
+    '',
+    'RECENT FORM',
+    `${fx.home}: ${rec(home.matches)} in the last ${ev.hn}, scoring ${f1(ev.hGf)} and conceding ${f1(ev.hGa)} per match.`,
+    `${fx.away}: ${rec(away.matches)} in the last ${ev.an}, scoring ${f1(ev.aGf)} and conceding ${f1(ev.aGa)} per match.`,
+    '',
+    'ATTACK VS DEFENCE',
+    `Over 2.5 goals in ${Math.round(ev.over*ev.n)} of ${ev.n} recent matches; both teams scored in ${Math.round(ev.btts*ev.n)} of ${ev.n}.`
+  ];
+  const o=stats?.bookmakerImpliedPercent;
+  if(o)lines.push('','ODDS & MARKET VIEW',`Bookmaker implied chances: ${fx.home} ${o.home}%, draw ${o.draw}%, ${fx.away} ${o.away}%.`);
+  if(context?.h2h?.summary)lines.push('',String(context.h2h.summary).slice(0,300));
+  lines.push('','AI VERDICT',ev.hPts-ev.aPts>=.4?`${fx.home} have the stronger recent form.`:ev.hPts-ev.aPts<=-.4?`${fx.away} have the stronger recent form.`:'Recent form is closely matched.','These are opinions based on a small sample, not guarantees.');
+  return lines.join('\n');
 }
 const FAN_AI_MARKETS=[
   [/double chance|\b(?:1x|x2|12)\b/i,'Double chance'],
