@@ -4964,10 +4964,8 @@ async function fanNationalFormLive(env,name,kickoff,espnId=null) {
   const chunks=[{from:ymd(limit-150*86400000),to:ymd(limit),keep:false},{from:ymd(limit-300*86400000),to:ymd(limit-151*86400000),keep:limit-151*86400000<now-2*86400000}];
   const found=new Map();let reached=0,lastWhy='';
   let seen=0;const stat={};
-  const scan=async (slugs,chs=chunks)=>{
-    const jobs=[];
-    for(const slug of slugs)for(const ch of chs)jobs.push(fanNationalSlug(env,slug,ch.from,ch.to,ch.keep,stat).then(g=>{reached++;return g;}).catch(e=>{lastWhy=String(e?.message || '');return null;}));
-    for(const games of await Promise.all(jobs))for(const g of games || []) {
+  const absorb=games=>{
+    for(const g of games || []) {
       seen++;
       if(g.at>=limit || g.at<limit-300*86400000)continue;
       const isH=(id && g.h.i===id) || g.h.n.some(n=>fanNationalKey(n)===want);
@@ -4977,8 +4975,19 @@ async function fanNationalFormLive(env,name,kickoff,espnId=null) {
       found.set(g.id,{date:new Date(g.at).toISOString(),opponent:String(other.n[0] || 'Opponent').slice(0,100),venue:isH?'home':'away',goalsFor:own.s,goalsAgainst:other.s,result:own.s>other.s?'W':own.s<other.s?'L':'D'});
     }
   };
+  const scan=async (slugs,chs=chunks)=>{
+    const jobs=[];
+    for(const slug of slugs)for(const ch of chs)jobs.push(fanNationalSlug(env,slug,ch.from,ch.to,ch.keep,stat).then(g=>{reached++;return g;}).catch(e=>{lastWhy=String(e?.message || '');return null;}));
+    for(const games of await Promise.all(jobs))absorb(games);
+  };
   await scan(FAN_NATIONAL_CORE);
   // Other confederations' competitions are only asked when Europe plus friendlies did not give enough games.
+  if(!found.size) {
+    const weeks=[];
+    for(let i=0;i<17;i++){const hi=limit-86400000-i*7*86400000;weeks.push({from:ymd(hi-6*86400000),to:ymd(hi),keep:hi<now-2*86400000});}
+    const loaded=await Promise.all(weeks.map(w=>fanEspnScanWindow(env,w.from,w.to,w.keep).then(g=>{reached++;return g;}).catch(e=>{lastWhy=String(e?.message || '');return null;})));
+    for(const games of loaded)absorb(games);
+  }
   if(found.size<5)await scan(FAN_NATIONAL_OTHER);
   // A very wide date range can come back truncated; when nothing at all was found ask again in 50-day slices.
   if(!found.size) {
