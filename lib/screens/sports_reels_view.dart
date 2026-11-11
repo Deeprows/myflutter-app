@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -19,29 +20,49 @@ import 'browser_screen.dart';
 /// than YouTube's restricted embed player. Other sources play in their own
 /// embed player. Only the visible reel is allowed to play.
 class SportsReelsView extends StatefulWidget {
-  const SportsReelsView({super.key});
+  /// False while another tab or section is on top: every reel stops.
+  final bool active;
+  const SportsReelsView({super.key, this.active = true});
 
   @override
   State<SportsReelsView> createState() => _SportsReelsViewState();
 }
 
-class _SportsReelsViewState extends State<SportsReelsView> {
+class _SportsReelsViewState extends State<SportsReelsView>
+    with WidgetsBindingObserver {
   final _page = PageController();
   SportsReelsFeed? _feed;
+  // A newer download waiting for the person to tap "New reels".
+  SportsReelsFeed? _pending;
   String _tab = 'all';
   bool _loading = false, _failed = false;
+  // True while a reel shows a YouTube sign-in (or any non-Shorts) page: the
+  // reel list is frozen so scrolling the page never changes the reel.
+  bool _locked = false;
   int _index = 0;
+  Timer? _refresh;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+    // Keep the reels moving: look for new videos every few minutes while this
+    // tab is on screen. The feed itself is cached for 5 minutes.
+    _refresh = Timer.periodic(const Duration(minutes: 3), (_) => _checkFresh());
   }
 
   @override
   void dispose() {
+    _refresh?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _page.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkFresh();
   }
 
   Future<void> _load({bool force = false}) async {
@@ -56,6 +77,8 @@ class _SportsReelsViewState extends State<SportsReelsView> {
       if (!mounted) return;
       setState(() {
         _feed = feed;
+        _pending = null;
+        _locked = false;
         if (!feed.tabs.contains(_tab)) _tab = 'all';
         _index = 0;
       });
@@ -67,13 +90,52 @@ class _SportsReelsViewState extends State<SportsReelsView> {
     }
   }
 
+  /// Quietly looks for newer reels. Never swaps the list under a playing
+  /// reel: a "New reels" chip is shown instead.
+  Future<void> _checkFresh() async {
+    if (!mounted || _loading || _feed == null) return;
+    if (!widget.active ||
+        !TickerMode.getValue(context) ||
+        !SportsReelsService.isStale) {
+      return;
+    }
+    try {
+      final feed = await SportsReelsService.load();
+      if (!mounted || identical(feed, _feed)) return;
+      if (feed.signature(_tab) != _feed!.signature(_tab)) {
+        setState(() => _pending = feed);
+      } else {
+        _feed = feed;
+      }
+    } catch (_) {}
+  }
+
+  void _applyPending() {
+    final feed = _pending;
+    if (feed == null) return;
+    setState(() {
+      _feed = feed;
+      _pending = null;
+      _locked = false;
+      if (!feed.tabs.contains(_tab)) _tab = 'all';
+      _index = 0;
+    });
+    if (_page.hasClients) _page.jumpToPage(0);
+  }
+
   void _pick(String tab) {
     if (tab == _tab) return;
     setState(() {
       _tab = tab;
       _index = 0;
+      _locked = false;
     });
     if (_page.hasClients) _page.jumpToPage(0);
+  }
+
+  void _setLocked(bool v) {
+    if (!mounted || _locked == v) return;
+    setState(() => _locked = v);
   }
 
   @override
@@ -83,7 +145,7 @@ class _SportsReelsViewState extends State<SportsReelsView> {
     final tabs = feed?.tabs ?? const <String>[];
     return Column(
       children: [
-        if (feed != null && feed.enabled && tabs.length > 2)
+        if (!_locked && feed != null && feed.enabled && tabs.length > 2)
           SizedBox(
             height: 46,
             child: Row(
@@ -116,18 +178,41 @@ class _SportsReelsViewState extends State<SportsReelsView> {
           ),
         Expanded(
           child: items.isNotEmpty
-              ? PageView.builder(
-                  controller: _page,
-                  scrollDirection: Axis.vertical,
-                  itemCount: items.length,
-                  onPageChanged: (i) => setState(() => _index = i),
-                  itemBuilder: (_, i) => _ReelPage(
-                    // Keep the state tied to the reel, not its active flag.
-                    // This lets it pause/resume without rebuilding its WebView.
-                    key: ValueKey(items[i].id),
-                    reel: items[i],
-                    active: i == _index,
-                  ),
+              ? Stack(
+                  children: [
+                    PageView.builder(
+                      controller: _page,
+                      scrollDirection: Axis.vertical,
+                      // Frozen while a sign-in page is open.
+                      physics: _locked
+                          ? const NeverScrollableScrollPhysics()
+                          : const PageScrollPhysics(),
+                      itemCount: items.length,
+                      onPageChanged: (i) => setState(() => _index = i),
+                      itemBuilder: (_, i) => _ReelPage(
+                        // Keep the state tied to the reel, not its active flag.
+                        key: ValueKey(items[i].id),
+                        reel: items[i],
+                        active: i == _index,
+                        viewActive: widget.active,
+                        onInteractive: _setLocked,
+                      ),
+                    ),
+                    if (_pending != null && !_locked)
+                      Positioned(
+                        top: 10,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: ActionChip(
+                            avatar: const Icon(Icons.arrow_upward_rounded,
+                                size: 16),
+                            label: const Text('New reels'),
+                            onPressed: _applyPending,
+                          ),
+                        ),
+                      ),
+                  ],
                 )
               : Center(
                   child: _loading
@@ -167,36 +252,88 @@ class _ReelPage extends StatefulWidget {
   final SportsReel reel;
   final bool active;
 
-  const _ReelPage({super.key, required this.reel, required this.active});
+  /// The whole Reels view is on screen (not covered by another tab).
+  final bool viewActive;
+
+  /// Tells the list when this reel is showing a page that must be scrolled
+  /// (YouTube sign-in, consent...), so the list stops reacting to swipes.
+  final ValueChanged<bool>? onInteractive;
+
+  const _ReelPage({
+    super.key,
+    required this.reel,
+    required this.active,
+    this.viewActive = true,
+    this.onInteractive,
+  });
 
   @override
   State<_ReelPage> createState() => _ReelPageState();
 }
 
 class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
+  // The WebView exists only while this reel may play. When it must stop it is
+  // blanked and thrown away (so nothing can keep playing in the background)
+  // and a fresh one is made when the reel comes back.
   WebViewController? _web;
   bool _ready = false;
   bool _error = false;
   bool _appVisible = true;
-  // Hidden when the reels tab is covered (another tab/page is on top).
-  bool _tabVisible = true;
-  // Embed players cannot be paused from outside, so a reel that scrolls away
-  // is blanked (stops sound) and reloaded when it comes back.
-  bool _stopped = false;
+  // Unknown (null) until the first dependency pass: a reel built while its
+  // tab is hidden must not start.
+  bool? _tabVisible;
+  // Showing a sign-in / non-Shorts page instead of the Shorts player.
+  bool _interactive = false;
   ValueListenable<bool>? _tickerMode;
   final _timers = <Timer>[];
 
-  bool get _canPlay => widget.active && _appVisible && _tabVisible;
+  bool get _canPlay =>
+      widget.active &&
+      widget.viewActive &&
+      _appVisible &&
+      (_tabVisible ?? false);
+
+  /// True for the Shorts player page itself.
+  static bool _isReelUrl(String url) {
+    final u = Uri.tryParse(url);
+    if (u == null) return true;
+    if (u.scheme != 'http' && u.scheme != 'https') return true;
+    final host = u.host.toLowerCase();
+    if (!(host == 'youtube.com' || host.endsWith('.youtube.com'))) return false;
+    return u.path.startsWith('/shorts') || u.path.startsWith('/watch');
+  }
+
+  void _setInteractive(bool v) {
+    if (_interactive == v) return;
+    if (mounted) setState(() => _interactive = v);
+    if (widget.active) widget.onInteractive?.call(v);
+  }
+
+  void _onUrl(String url) {
+    if (!widget.reel.isYouTube || _web == null) return;
+    _setInteractive(!_isReelUrl(url));
+  }
 
   void _onTickerMode() {
     final visible = _tickerMode?.value ?? true;
     if (visible == _tabVisible) return;
     _tabVisible = visible;
+    // Never rebuild in the middle of the framework's own build.
+    scheduleMicrotask(() {
+      if (mounted) _sync();
+    });
+  }
+
+  /// Plays when the reel is the visible one, otherwise stops it for good.
+  void _sync() {
     if (_canPlay) {
-      _start();
-      _resume();
+      if (_web == null) {
+        _start();
+      } else {
+        unawaited(_playWithSound());
+      }
     } else {
-      _pause();
+      _stop();
     }
   }
 
@@ -208,37 +345,52 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
       _tickerMode?.removeListener(_onTickerMode);
       _tickerMode = notifier..addListener(_onTickerMode);
     }
-    _onTickerMode();
+    final visible = notifier.value;
+    if (visible != _tabVisible) {
+      _tabVisible = visible;
+      // First pass (or a change): decide now, before anything can play.
+      if (_canPlay) {
+        if (_web == null) _start();
+      } else {
+        _stop(rebuild: false);
+      }
+    }
   }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (widget.active) _start();
+    // Playback is decided in didChangeDependencies, once it is known whether
+    // this reel's tab is actually on screen.
   }
 
   @override
   void didUpdateWidget(covariant _ReelPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.active != widget.active) {
-      if (_canPlay) {
-        _start();
-        _resume();
-      } else {
-        _pause();
+    if (oldWidget.active != widget.active ||
+        oldWidget.viewActive != widget.viewActive) {
+      if (!widget.active && _interactive) {
+        _interactive = false;
       }
+      _sync();
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final visible = state == AppLifecycleState.resumed;
-    _appVisible = visible;
-    if (!visible) {
-      _pause();
-    } else if (_canPlay) {
-      _resume();
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _appVisible = true;
+        _sync();
+      case AppLifecycleState.inactive:
+        // Notification shade, permission dialog...: just pause.
+        _softPause();
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _appVisible = false;
+        _sync();
     }
   }
 
@@ -248,21 +400,34 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
       ..setUserAgent(AppConfig.userAgent)
+      ..enableZoom(false)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (_) {
+          onPageStarted: (url) {
             if (!mounted) return;
+            _onUrl(url);
             setState(() {
               _ready = false;
               _error = false;
             });
           },
-          onPageFinished: (_) async {
-            if (!mounted) return;
+          onUrlChange: (change) {
+            final url = change.url;
+            if (url != null) _onUrl(url);
+          },
+          onPageFinished: (url) async {
+            if (!mounted || _web == null) return;
             setState(() => _ready = true);
             // Embed players (Dailymotion, PeerTube, own videos) run inside
             // their own frame: nothing to trim, they start themselves.
             if (!widget.reel.isYouTube) return;
+            _onUrl(url);
+            if (_interactive) {
+              // Sign-in / consent page: make it fit the screen and leave it
+              // alone (no trimming, no autoplay).
+              await _fitPage();
+              return;
+            }
             // YouTube's own Shorts page is shown as-is (its like, comment,
             // share and subscribe buttons work with the user's YouTube
             // login). We only trim the page chrome and start playback with
@@ -307,6 +472,7 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
     _web = controller;
     _ready = false;
     _error = false;
+    if (mounted) setState(() {});
     // Load the same Shorts URL used by the working in-app browser. Do not use
     // /embed/: embedded videos can be rejected by the channel (error 152-4).
     _open(controller);
@@ -378,11 +544,45 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
+  /// Makes a sign-in / consent page fit the screen: the right viewport, no
+  /// sideways overflow, and room under the last button so "Continue" can be
+  /// scrolled clear of the phone's navigation bar.
+  Future<void> _fitPage() async {
+    final controller = _web;
+    if (controller == null) return;
+    try {
+      await controller.runJavaScript('''
+        (function () {
+          let m = document.querySelector('meta[name=viewport]');
+          if (!m) {
+            m = document.createElement('meta');
+            m.name = 'viewport';
+            document.head.appendChild(m);
+          }
+          m.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
+          if (document.getElementById('dp-fit')) return;
+          const s = document.createElement('style');
+          s.id = 'dp-fit';
+          s.textContent = `
+            html, body { max-width: 100vw !important; overflow-x: hidden !important; }
+            body { padding-bottom: 120px !important; box-sizing: border-box; }
+          `;
+          document.head.appendChild(s);
+        })();
+      ''');
+    } catch (_) {}
+  }
+
   /// Plays the reel with sound. Falls back to muted playback only if the
   /// WebView refuses sound autoplay, so the video never sits frozen.
   Future<void> _playWithSound() async {
     final controller = _web;
-    if (controller == null || !_canPlay || !widget.reel.isYouTube) return;
+    if (controller == null ||
+        !_canPlay ||
+        _interactive ||
+        !widget.reel.isYouTube) {
+      return;
+    }
     try {
       await controller.runJavaScript('''
         (function () {
@@ -404,22 +604,18 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
-  Future<void> _pause({bool disposing = false}) async {
+  void _cancelTimers() {
     for (final t in _timers) {
       t.cancel();
     }
     _timers.clear();
+  }
+
+  /// Pauses without tearing the page down (short interruptions).
+  Future<void> _softPause() async {
+    _cancelTimers();
     final controller = _web;
     if (controller == null) return;
-    if (!widget.reel.isYouTube) {
-      if (!disposing && !_stopped) {
-        _stopped = true;
-        try {
-          await controller.loadRequest(Uri.parse('about:blank'));
-        } catch (_) {}
-      }
-      return;
-    }
     try {
       await controller.runJavaScript('''
         document.querySelectorAll('video').forEach((video) => video.pause());
@@ -427,42 +623,112 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
-  Future<void> _resume() async {
+  /// Stops the reel completely: pauses it, blanks the page (so no sound can
+  /// leak out of a hidden tab) and lets go of the WebView.
+  void _stop({bool rebuild = true}) {
+    _cancelTimers();
+    final controller = _web;
+    final wasInteractive = _interactive;
+    _web = null;
+    _ready = false;
+    _interactive = false;
+    if (controller != null) {
+      unawaited(() async {
+        try {
+          await controller.runJavaScript(
+              "document.querySelectorAll('video,audio').forEach((m) => m.pause());");
+        } catch (_) {}
+        try {
+          await controller.loadRequest(Uri.parse('about:blank'));
+        } catch (_) {}
+      }());
+    }
+    if (wasInteractive) {
+      // Never tell the list while the framework is building or disposing.
+      final notify = widget.onInteractive;
+      scheduleMicrotask(() => notify?.call(false));
+    }
+    if (rebuild && mounted) setState(() {});
+  }
+
+  /// Leaves the sign-in page and goes back to the reel.
+  void _backToReel() {
     final controller = _web;
     if (controller == null) return;
-    if (!widget.reel.isYouTube) {
-      if (_stopped) {
-        _stopped = false;
-        if (mounted) setState(() => _ready = false);
-        _open(controller);
-      }
-      return;
-    }
-    await _playWithSound();
+    _setInteractive(false);
+    setState(() {
+      _ready = false;
+      _error = false;
+    });
+    controller.loadRequest(Uri.parse(widget.reel.watchUrl));
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tickerMode?.removeListener(_onTickerMode);
-    _pause(disposing: true);
+    _stop(rebuild: false);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final r = widget.reel;
+    final showWeb = _web != null && widget.active && _canPlay;
+    final bottom = MediaQuery.paddingOf(context).bottom;
     return Stack(
       fit: StackFit.expand,
       children: [
         const ColoredBox(color: Colors.black),
-        if (_web != null && widget.active)
-          WebViewWidget(controller: _web!)
+        if (showWeb)
+          // One WebView, always in the same place in the tree. On a sign-in
+          // page it is moved below a small bar and kept clear of the phone's
+          // navigation bar, and it takes every touch itself so scrolling the
+          // page never scrolls the reels.
+          Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: _interactive ? 48 : 0,
+                bottom: _interactive ? bottom + 8 : 0,
+              ),
+              child: WebViewWidget(
+                controller: _web!,
+                gestureRecognizers: _interactive
+                    ? <Factory<OneSequenceGestureRecognizer>>{
+                        Factory<OneSequenceGestureRecognizer>(
+                          () => EagerGestureRecognizer(),
+                        ),
+                      }
+                    : const <Factory<OneSequenceGestureRecognizer>>{},
+              ),
+            ),
+          )
         else
           CachedNetworkImage(
             imageUrl: r.thumb,
             fit: BoxFit.cover,
             errorWidget: (_, _, _) => const SizedBox.shrink(),
+          ),
+        if (showWeb && _interactive)
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: 48,
+            child: Material(
+              color: Colors.black,
+              child: Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: _backToReel,
+                    icon: const Icon(Icons.arrow_back_rounded,
+                        color: Colors.white),
+                    label: const Text('Back to reels',
+                        style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
+            ),
           ),
         if (!r.isYouTube)
           Positioned(
@@ -508,14 +774,14 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
               ),
             ),
           ),
-        if (widget.active && !_ready && !_error)
+        if (showWeb && !_ready && !_error)
           const Center(
             child: CircularProgressIndicator(
               strokeWidth: 2.5,
               color: Colors.white,
             ),
           ),
-        if (widget.active && _error)
+        if (showWeb && _error)
           Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
