@@ -24,7 +24,9 @@ import 'sports_news_screen.dart';
 /// Search tab: live football matches, movies and series, people and posts,
 /// plus a tray of trending hashtags when the search box is empty.
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  /// False while another tab is shown (reels must stay silent then).
+  final bool active;
+  const SearchScreen({super.key, this.active = true});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -303,6 +305,7 @@ class _SearchScreenState extends State<SearchScreen> {
           // movies, people and posts above them.
           child: SportsNewsScreen(
             embedded: true,
+            active: widget.active,
             query: searching ? _query : '',
             leading: searching ? _resultWidgets() : _trendingWidgets(),
           ),
