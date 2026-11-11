@@ -23,6 +23,7 @@ class BetSlipCard extends StatelessWidget {
   static const _box = Color(0xFF363B47);
   static const _muted = Color(0xFF9AA0AD);
   static const _green = Color(0xFF2DD36F);
+  static const _ash = Color(0xFF8E939F); // tick marks
 
   static String _when(DateTime? d) {
     if (d == null) return '';
@@ -117,7 +118,7 @@ class BetSlipCard extends StatelessWidget {
             width: 30,
             height: 30,
             margin: const EdgeInsets.only(top: 22, right: 12),
-            decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
+            decoration: const BoxDecoration(color: _ash, shape: BoxShape.circle),
             child: const Icon(Icons.check_rounded, color: Colors.white, size: 20),
           ),
           Expanded(
@@ -185,7 +186,7 @@ class BetSlipCard extends StatelessWidget {
                     alignment: PlaceholderAlignment.middle,
                     child: Padding(
                       padding: EdgeInsets.only(left: 8),
-                      child: Icon(Icons.check_rounded, color: _green, size: 18),
+                      child: Icon(Icons.check_rounded, color: _ash, size: 18),
                     ),
                   ),
               ])),
