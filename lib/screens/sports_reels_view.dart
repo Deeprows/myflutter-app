@@ -1,14 +1,12 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../config.dart';
-import '../services/auth_service.dart';
 import '../services/sports_reels_service.dart';
 import '../theme/app_theme.dart';
 import 'browser_screen.dart';
@@ -162,68 +160,39 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
   bool _ready = false;
   bool _error = false;
   bool _appVisible = true;
-  bool _liked = false, _likeBusy = false;
-  static const _likedKey = 'liked_reel_ids_v1';
+  // Hidden when the reels tab is covered (another tab/page is on top).
+  bool _tabVisible = true;
+  ValueListenable<bool>? _tickerMode;
+  final _timers = <Timer>[];
 
-  Future<void> _loadLiked() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final mine = prefs.getStringList(_likedKey) ?? const <String>[];
-      if (mounted && mine.contains(widget.reel.id)) setState(() => _liked = true);
-    } catch (_) {}
-  }
+  bool get _canPlay => widget.active && _appVisible && _tabVisible;
 
-  Future<void> _toggleLike() async {
-    if (_likeBusy) return;
-    final msg = ScaffoldMessenger.of(context);
-    final want = !_liked;
-    setState(() {
-      _liked = want; // instant feedback
-      _likeBusy = true;
-    });
-    final error = await SportsReelsService.setLike(widget.reel.id, want);
-    if (!mounted) return;
-    if (error != null) {
-      setState(() => _liked = !want);
-      msg.showSnackBar(SnackBar(content: Text(error)));
+  void _onTickerMode() {
+    final visible = _tickerMode?.value ?? true;
+    if (visible == _tabVisible) return;
+    _tabVisible = visible;
+    if (_canPlay) {
+      _start();
+      _resume();
     } else {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final ids = (prefs.getStringList(_likedKey) ?? <String>[]).toList();
-        want ? ids.add(widget.reel.id) : ids.remove(widget.reel.id);
-        await prefs.setStringList(_likedKey, ids.toSet().toList());
-      } catch (_) {}
+      _pause();
     }
-    if (mounted) setState(() => _likeBusy = false);
   }
 
-  Widget _action(IconData icon, String label, VoidCallback onTap,
-      {Color color = Colors.white}) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: color, size: 32, shadows: const [
-            Shadow(blurRadius: 8, color: Colors.black87)
-          ]),
-          const SizedBox(height: 2),
-          Text(label,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  shadows: [Shadow(blurRadius: 6, color: Colors.black87)])),
-        ]),
-      ),
-    );
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final notifier = TickerMode.getNotifier(context);
+    if (!identical(notifier, _tickerMode)) {
+      _tickerMode?.removeListener(_onTickerMode);
+      _tickerMode = notifier..addListener(_onTickerMode);
+    }
+    _onTickerMode();
   }
 
   @override
   void initState() {
     super.initState();
-    _loadLiked();
     WidgetsBinding.instance.addObserver(this);
     if (widget.active) _start();
   }
@@ -232,8 +201,9 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
   void didUpdateWidget(covariant _ReelPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.active != widget.active) {
-      if (widget.active && _appVisible) {
+      if (_canPlay) {
         _start();
+        _resume();
       } else {
         _pause();
       }
@@ -246,13 +216,13 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
     _appVisible = visible;
     if (!visible) {
       _pause();
-    } else if (widget.active) {
+    } else if (_canPlay) {
       _resume();
     }
   }
 
   void _start() {
-    if (_web != null || !widget.active || !_appVisible) return;
+    if (_web != null || !_canPlay) return;
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
@@ -269,10 +239,18 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
           onPageFinished: (_) async {
             if (!mounted) return;
             setState(() => _ready = true);
-            // YouTube's mobile Shorts page owns its player UI. Nudge its video
-            // element to begin muted playback when autoplay is permitted.
+            // YouTube's own Shorts page is shown as-is (its like, comment,
+            // share and subscribe buttons work with the user's YouTube
+            // login). We only trim the page chrome and start playback with
+            // sound.
             await _hideYoutubeUi();
-            await _playMuted();
+            await _playWithSound();
+            _timers
+              ..forEach((t) => t.cancel())
+              ..clear();
+            for (final ms in const [700, 1800, 3500]) {
+              _timers.add(Timer(Duration(milliseconds: ms), _playWithSound));
+            }
           },
           onWebResourceError: (e) {
             if (e.isForMainFrame == true && mounted) {
@@ -287,14 +265,7 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
                 uri.scheme == 'blob') {
               return NavigationDecision.navigate;
             }
-            // Liking is done by the app with the user's Gmail, so never let
-            // the page open YouTube/Google sign-in screens.
-            if (uri.host == 'accounts.google.com' ||
-                uri.path.contains('/signin') ||
-                uri.path.contains('ServiceLogin')) {
-              return NavigationDecision.prevent;
-            }
-            // Keep YouTube's own navigation and media/CDN requests in this
+            // Keep YouTube/Google sign-in, comments and media requests in this
             // WebView. Never launch an external app from a reel.
             if (uri.scheme == 'http' || uri.scheme == 'https') {
               return NavigationDecision.navigate;
@@ -317,8 +288,9 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
     controller.loadRequest(Uri.parse(widget.reel.watchUrl));
   }
 
-  /// Hides YouTube's own title, channel, buttons and sign-in prompts; the app
-  /// draws one clean overlay on top instead (no repeated text).
+  /// Trims only the page chrome around the Short (YouTube logo/search bar,
+  /// bottom tab bar, "open in app" banners) and removes the unmute button.
+  /// The Short's like / comment / share / subscribe buttons stay untouched.
   Future<void> _hideYoutubeUi() async {
     final controller = _web;
     if (controller == null) return;
@@ -329,16 +301,11 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
           const s = document.createElement('style');
           s.id = 'dp-clean';
           s.textContent = `
-            ytm-reel-player-overlay-renderer,
-            ytm-reel-player-header-renderer,
-            ytm-shorts-lockup-view-model,
-            ytm-shorts-lockup-view-model-v2,
-            shorts-video-metadata, .reel-player-overlay-actions,
-            .reel-player-header-container, ytm-mobile-topbar-renderer,
-            ytm-pivot-bar-renderer, ytm-bottom-sheet-renderer,
-            .mobile-topbar-header, c3-overlay, tp-yt-paper-dialog,
-            ytm-promoted-sparkles-web-renderer,
-            [class*="player-controls-bottom"], [class*="mealbar"]
+            ytm-mobile-topbar-renderer, ytm-pivot-bar-renderer,
+            ytm-reel-player-header-renderer, .reel-player-header-container,
+            ytm-upsell-dialog-renderer, ytm-mealbar-promo-renderer,
+            .ytp-unmute, .ytp-unmute-inner, .ytp-unmute-text,
+            [class*="unmute"], button[aria-label*="mute" i]
             { display: none !important; }
             body, html { background: #000 !important; }
           `;
@@ -348,28 +315,37 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
-  Future<void> _playMuted() async {
+  /// Plays the reel with sound. Falls back to muted playback only if the
+  /// WebView refuses sound autoplay, so the video never sits frozen.
+  Future<void> _playWithSound() async {
     final controller = _web;
-    if (controller == null || !widget.active || !_appVisible) return;
+    if (controller == null || !_canPlay) return;
     try {
       await controller.runJavaScript('''
         (function () {
-          const videos = document.querySelectorAll('video');
-          videos.forEach((video) => {
-            video.muted = true;
+          document.querySelectorAll('video').forEach((video) => {
             video.playsInline = true;
-            const result = video.play();
-            if (result && result.catch) result.catch(() => {});
+            video.muted = false;
+            video.volume = 1;
+            const r = video.play();
+            if (r && r.catch) {
+              r.catch(() => {
+                video.muted = true;
+                const m = video.play();
+                if (m && m.catch) m.catch(() => {});
+              });
+            }
           });
         })();
       ''');
-    } catch (_) {
-      // YouTube may still be initializing its player; its own autoplay logic
-      // will retry when the Shorts page is ready.
-    }
+    } catch (_) {}
   }
 
   Future<void> _pause() async {
+    for (final t in _timers) {
+      t.cancel();
+    }
+    _timers.clear();
     final controller = _web;
     if (controller == null) return;
     try {
@@ -381,12 +357,13 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
 
   Future<void> _resume() async {
     if (_web == null) return;
-    await _playMuted();
+    await _playWithSound();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _tickerMode?.removeListener(_onTickerMode);
     _pause();
     super.dispose();
   }
@@ -433,77 +410,6 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
               ],
             ),
           ),
-        // One clean overlay (YouTube's own title/buttons are hidden).
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: IgnorePointer(
-            child: Container(
-              height: 150,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Color(0xCC000000)],
-                ),
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          left: 16,
-          right: 76,
-          bottom: 14,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                r.channel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                r.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    shadows: [Shadow(blurRadius: 6, color: Colors.black87)]),
-              ),
-            ],
-          ),
-        ),
-        Positioned(
-          right: 8,
-          bottom: 10,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _action(
-                _liked ? Icons.favorite : Icons.favorite_border,
-                _liked ? 'Liked' : 'Like',
-                _toggleLike,
-                color: _liked ? const Color(0xFFFF3B5C) : Colors.white,
-              ),
-              _action(Icons.ios_share, 'Share', () async {
-                try {
-                  await Share.share('${r.title}\n${r.watchUrl}');
-                } catch (_) {}
-              }),
-              _action(Icons.open_in_new, 'Open',
-                  () => openInApp(context, r.watchUrl, title: r.channel)),
-            ],
-          ),
-        ),
       ],
     );
   }
