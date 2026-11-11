@@ -11,9 +11,13 @@ import '../services/sports_reels_service.dart';
 import '../theme/app_theme.dart';
 import 'browser_screen.dart';
 
-/// Full-height vertical sports reels. Each reel uses the same mobile YouTube
-/// Shorts page as the in-app browser, rather than YouTube's restricted embed
-/// player. Only the visible reel is allowed to play.
+/// Full-height vertical sports reels, built from the same config-driven setup
+/// as the Deeprowss browser's Reels (YouTube Shorts, Dailymotion, PeerTube,
+/// RSS and your own videos, with tabs per category and a "Near You" tab).
+///
+/// YouTube reels use the same mobile Shorts page as the in-app browser, rather
+/// than YouTube's restricted embed player. Other sources play in their own
+/// embed player. Only the visible reel is allowed to play.
 class SportsReelsView extends StatefulWidget {
   const SportsReelsView({super.key});
 
@@ -22,17 +26,9 @@ class SportsReelsView extends StatefulWidget {
 }
 
 class _SportsReelsViewState extends State<SportsReelsView> {
-  static const _chips = [
-    ('all', 'Trending'),
-    ('football', 'Football'),
-    ('cricket', 'Cricket'),
-    ('f1', 'F1'),
-    ('other', 'More sports'),
-  ];
-
   final _page = PageController();
-  final _feeds = <String, SportsReelsFeed>{};
-  String _cat = 'all';
+  SportsReelsFeed? _feed;
+  String _tab = 'all';
   bool _loading = false, _failed = false;
   int _index = 0;
 
@@ -49,55 +45,75 @@ class _SportsReelsViewState extends State<SportsReelsView> {
   }
 
   Future<void> _load({bool force = false}) async {
-    if (_loading || (!force && _feeds.containsKey(_cat))) return;
-    final cat = _cat;
+    if (_loading) return;
+    if (!force && _feed != null) return;
     setState(() {
       _loading = true;
       _failed = false;
     });
     try {
-      final feed = await SportsReelsService.load(cat);
-      if (mounted) setState(() => _feeds[cat] = feed);
+      final feed = await SportsReelsService.load(force: force);
+      if (!mounted) return;
+      setState(() {
+        _feed = feed;
+        if (!feed.tabs.contains(_tab)) _tab = 'all';
+        _index = 0;
+      });
+      if (_page.hasClients) _page.jumpToPage(0);
     } catch (_) {
-      if (mounted && _cat == cat) setState(() => _failed = true);
+      if (mounted) setState(() => _failed = true);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  void _pick(String cat) {
-    if (cat == _cat) return;
+  void _pick(String tab) {
+    if (tab == _tab) return;
     setState(() {
-      _cat = cat;
+      _tab = tab;
       _index = 0;
     });
     if (_page.hasClients) _page.jumpToPage(0);
-    _load();
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = _feeds[_cat]?.items ?? const <SportsReel>[];
+    final feed = _feed;
+    final items = feed?.forTab(_tab) ?? const <SportsReel>[];
+    final tabs = feed?.tabs ?? const <String>[];
     return Column(
       children: [
-        SizedBox(
-          height: 46,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            children: [
-              for (final c in _chips)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(c.$2),
-                    selected: _cat == c.$1,
-                    onSelected: (_) => _pick(c.$1),
+        if (feed != null && feed.enabled && tabs.length > 2)
+          SizedBox(
+            height: 46,
+            child: Row(
+              children: [
+                Expanded(
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    children: [
+                      for (final t in tabs)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(feed.label(t)),
+                            selected: _tab == t,
+                            onSelected: (_) => _pick(t),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-            ],
+                IconButton(
+                  tooltip: 'Refresh reels',
+                  icon: Icon(Icons.refresh, color: Ui.muted),
+                  onPressed: _loading ? null : () => _load(force: true),
+                ),
+              ],
+            ),
           ),
-        ),
         Expanded(
           child: items.isNotEmpty
               ? PageView.builder(
@@ -125,9 +141,11 @@ class _SportsReelsViewState extends State<SportsReelsView> {
                                   size: 48, color: Ui.dim),
                               const SizedBox(height: 12),
                               Text(
-                                _failed
-                                    ? 'Could not load reels. Check your connection.'
-                                    : 'No trending reels right now.',
+                                feed != null && !feed.enabled
+                                    ? 'Reels are switched off right now.'
+                                    : _failed
+                                        ? 'Could not load reels. Check your connection.'
+                                        : 'No trending reels right now.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(color: Ui.muted),
                               ),
@@ -162,6 +180,9 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
   bool _appVisible = true;
   // Hidden when the reels tab is covered (another tab/page is on top).
   bool _tabVisible = true;
+  // Embed players cannot be paused from outside, so a reel that scrolls away
+  // is blanked (stops sound) and reloaded when it comes back.
+  bool _stopped = false;
   ValueListenable<bool>? _tickerMode;
   final _timers = <Timer>[];
 
@@ -239,6 +260,9 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
           onPageFinished: (_) async {
             if (!mounted) return;
             setState(() => _ready = true);
+            // Embed players (Dailymotion, PeerTube, own videos) run inside
+            // their own frame: nothing to trim, they start themselves.
+            if (!widget.reel.isYouTube) return;
             // YouTube's own Shorts page is shown as-is (its like, comment,
             // share and subscribe buttons work with the user's YouTube
             // login). We only trim the page chrome and start playback with
@@ -285,7 +309,46 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
     _error = false;
     // Load the same Shorts URL used by the working in-app browser. Do not use
     // /embed/: embedded videos can be rejected by the channel (error 152-4).
-    controller.loadRequest(Uri.parse(widget.reel.watchUrl));
+    _open(controller);
+  }
+
+  void _open(WebViewController controller) {
+    final r = widget.reel;
+    if (r.isYouTube) {
+      controller.loadRequest(Uri.parse(r.watchUrl));
+    } else {
+      // The base address tells Dailymotion & co. which site is embedding.
+      controller.loadHtmlString(_embedPage(r.embedUrl!),
+          baseUrl: 'https://deeprows.github.io/');
+    }
+  }
+
+  static bool _isFile(String url) {
+    final path = url.split('?').first.toLowerCase();
+    return path.endsWith('.mp4') ||
+        path.endsWith('.webm') ||
+        path.endsWith('.m3u8') ||
+        path.endsWith('.ogg');
+  }
+
+  /// Full-screen page holding the video: a <video> for direct files, an
+  /// iframe for player pages (same page the Deeprowss browser builds).
+  static String _embedPage(String raw) {
+    final url = raw.replaceAll('"', '%22');
+    final referrer = url.contains('dailymotion.com')
+        ? 'no-referrer-when-downgrade'
+        : 'strict-origin-when-cross-origin';
+    final inner = _isFile(url)
+        ? '<video src="$url" controls autoplay playsinline></video>'
+        : '<iframe src="$url" allow="autoplay; encrypted-media; '
+            'picture-in-picture; fullscreen" allowfullscreen '
+            'referrerpolicy="$referrer"></iframe>';
+    return '<!DOCTYPE html><html><head>'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<style>html,body{margin:0;padding:0;width:100%;height:100%;'
+        'background:#000;overflow:hidden}iframe,video{position:absolute;'
+        'top:0;left:0;width:100%;height:100%;border:0;background:#000}'
+        '</style></head><body>$inner</body></html>';
   }
 
   /// Trims only the page chrome around the Short (YouTube logo/search bar,
@@ -319,7 +382,7 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
   /// WebView refuses sound autoplay, so the video never sits frozen.
   Future<void> _playWithSound() async {
     final controller = _web;
-    if (controller == null || !_canPlay) return;
+    if (controller == null || !_canPlay || !widget.reel.isYouTube) return;
     try {
       await controller.runJavaScript('''
         (function () {
@@ -341,13 +404,22 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
-  Future<void> _pause() async {
+  Future<void> _pause({bool disposing = false}) async {
     for (final t in _timers) {
       t.cancel();
     }
     _timers.clear();
     final controller = _web;
     if (controller == null) return;
+    if (!widget.reel.isYouTube) {
+      if (!disposing && !_stopped) {
+        _stopped = true;
+        try {
+          await controller.loadRequest(Uri.parse('about:blank'));
+        } catch (_) {}
+      }
+      return;
+    }
     try {
       await controller.runJavaScript('''
         document.querySelectorAll('video').forEach((video) => video.pause());
@@ -356,7 +428,16 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
   }
 
   Future<void> _resume() async {
-    if (_web == null) return;
+    final controller = _web;
+    if (controller == null) return;
+    if (!widget.reel.isYouTube) {
+      if (_stopped) {
+        _stopped = false;
+        if (mounted) setState(() => _ready = false);
+        _open(controller);
+      }
+      return;
+    }
     await _playWithSound();
   }
 
@@ -364,7 +445,7 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tickerMode?.removeListener(_onTickerMode);
-    _pause();
+    _pause(disposing: true);
     super.dispose();
   }
 
@@ -382,6 +463,50 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
             imageUrl: r.thumb,
             fit: BoxFit.cover,
             errorWidget: (_, _, _) => const SizedBox.shrink(),
+          ),
+        if (!r.isYouTube)
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: IgnorePointer(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 22),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xB3000000), Color(0x00000000)],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      r.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      r.ago.isEmpty ? r.channel : '${r.channel} \u00B7 ${r.ago}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         if (widget.active && !_ready && !_error)
           const Center(
