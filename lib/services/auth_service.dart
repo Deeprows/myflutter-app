@@ -259,6 +259,31 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  static const youtubeScope = 'https://www.googleapis.com/auth/youtube.force-ssl';
+
+  /// OAuth access token for the signed-in Gmail with YouTube permission.
+  /// Asks Google for the extra scope once (a consent sheet); null when the
+  /// user is signed out or declines.
+  Future<String?> youtubeAccessToken() async {
+    final user = _user;
+    if (user == null) return null;
+    try {
+      var account = _google.currentUser ??
+          await _google.signInSilently().timeout(const Duration(seconds: 10));
+      if (account == null || account.email.toLowerCase() != user.email.toLowerCase()) {
+        return null;
+      }
+      if (!await _google.canAccessScopes([youtubeScope])) {
+        if (!await _google.requestScopes([youtubeScope])) return null;
+      }
+      account = _google.currentUser ?? account;
+      final token = (await account.authentication).accessToken;
+      return (token == null || token.isEmpty) ? null : token;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> signOut() async {
     // Stop this phone receiving the fan's notifications (needs the sign-in
     // that is about to end, so it goes first and never blocks sign-out).
