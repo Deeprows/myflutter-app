@@ -105,7 +105,7 @@ assert.equal((await call('ai-predict',{body:{ext:{x:1}},bearer:alice})).status,4
 // --- typed matchups ---
 r=await call('ai-predict',{body:{custom:{home:'man city',away:'  Chelsea FC '}},bearer:alice});assert.equal(r.status,200);
 out=await r.json();assert.equal(out.fixture.home,'Manchester City');assert.equal(out.fixture.away,'Chelsea');assert.equal(out.fixture.kickoff,null);
-assert.equal(out.home.teamId,'espn:382');assert.equal(lastPrompt.fixture.league,'Your matchup');
+assert.equal(out.home.teamId,'espn:382');assert.equal(lastPrompt.fixture.league,'Premier League','typed clubs from one league name that league');
 // cross-league matchup: each club's form is read from its own league
 r=await call('ai-predict',{body:{custom:{home:'Real Madrid',away:'Arsenal'}},bearer:alice});assert.equal(r.status,200);
 // abbreviations / short names
