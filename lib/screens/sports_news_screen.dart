@@ -19,11 +19,15 @@ class SportsNewsScreen extends StatefulWidget {
   /// Embedded in the Search tab: no Scaffold, app bar or search box. The
   /// Search tab's own box drives [query]; [leading] is shown above the news.
   final bool embedded;
+
+  /// False while the screen is covered by another tab (reels stop playing).
+  final bool active;
   final String query;
   final List<Widget> leading;
   const SportsNewsScreen({
     super.key,
     this.embedded = false,
+    this.active = true,
     this.query = '',
     this.leading = const [],
   });
@@ -414,7 +418,7 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
             },
           ),
           if (_tab == _reelsTab)
-            const Expanded(child: SportsReelsView())
+            Expanded(child: SportsReelsView(active: widget.active))
           else ...[
           if (_loading.contains(_category))
             const LinearProgressIndicator(minHeight: 2),
