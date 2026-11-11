@@ -21,12 +21,45 @@ class PremiumGate {
       !SubscriptionService.instance.isPremium &&
       !AdUnlock.instance.isUnlocked;
 
+  /// True when Download must send this person to upgrade. Downloads are
+  /// Premium only: unlike Play, the "watch an ad" unlock does NOT open them.
+  /// (Never locks when subscriptions are not set up, so nobody gets stuck.)
+  static bool get downloadLocked =>
+      AppConfig.moviesPremiumOnly &&
+      SubscriptionService.instance.enabled &&
+      !SubscriptionService.instance.isPremium;
+
+  /// Download button: true only for Premium members (or right after they
+  /// upgrade). Everyone else sees the upgrade sheet, with no ad option.
+  static Future<bool> allowDownload(BuildContext context) => _gate(
+        context,
+        isLocked: () => downloadLocked,
+        title: 'Downloads are for Premium members',
+        body: 'Upgrade to Premium to download movies and series.',
+        allowAd: false,
+      );
+
   /// Returns true when the person may go ahead (already Premium, or just
   /// upgraded). Otherwise explains, opens the upgrade page and returns false
   /// if they did not upgrade.
-  static Future<bool> allowMovies(BuildContext context) async {
+  static Future<bool> allowMovies(BuildContext context) => _gate(
+        context,
+        isLocked: () => locked,
+        title: 'Movies are for Premium members',
+        body: 'You can browse every movie and series for free. Upgrade to '
+            'Premium to play and download them.',
+        allowAd: true,
+      );
+
+  static Future<bool> _gate(
+    BuildContext context, {
+    required bool Function() isLocked,
+    required String title,
+    required String body,
+    required bool allowAd,
+  }) async {
     await AdUnlock.instance.load();
-    if (!locked) return true;
+    if (!isLocked()) return true;
     final go = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -38,15 +71,14 @@ class PremiumGate {
             children: [
               Icon(Icons.workspace_premium_rounded, size: 46, color: Ui.red),
               const SizedBox(height: 12),
-              const Text(
-                'Movies are for Premium members',
+              Text(
+                title,
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'You can browse every movie and series for free. Upgrade to '
-                'Premium to play and download them.',
+              Text(
+                body,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 18),
@@ -65,7 +97,7 @@ class PremiumGate {
                   ),
                 ),
               ),
-              if (AdUnlock.instance.available) ...[
+              if (allowAd && AdUnlock.instance.available) ...[
                 const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
@@ -96,7 +128,7 @@ class PremiumGate {
       ),
     );
     if (!context.mounted) return false;
-    if (go == 'ad') return AdUnlock.instance.watchAd(context);
+    if (go == 'ad' && allowAd) return AdUnlock.instance.watchAd(context);
     if (go != 'premium') return false;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -107,6 +139,6 @@ class PremiumGate {
     );
     // They may have just paid: ask the Worker before deciding.
     await SubscriptionService.instance.refresh(force: true);
-    return SubscriptionService.instance.isPremium;
+    return !isLocked();
   }
 }
