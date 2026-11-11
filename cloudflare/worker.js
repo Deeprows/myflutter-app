@@ -2795,9 +2795,9 @@ async function fanAccountAuth(request,env) {
 // AI Predict limits are per user and reset on UTC boundaries. Keep the attempt
 // ceiling higher than the completed-analysis ceiling so transient provider/data
 // failures do not consume the user's successful analysis allowance.
-const FAN_AI_ATTEMPT_LIMIT_PER_HOUR = 100;
-const FAN_AI_ANALYSIS_LIMIT_PER_HOUR = 30;
-const FAN_AI_ANALYSIS_LIMIT_PER_DAY = 100;
+const FAN_AI_ATTEMPT_LIMIT_PER_HOUR = 105;
+const FAN_AI_ANALYSIS_LIMIT_PER_HOUR = 35;
+const FAN_AI_ANALYSIS_LIMIT_PER_DAY = 105;
 
 // Automatic, server-sourced form analysis. Clients submit only a fixture key, an
 // id taken from the server's own upcoming-match list, or two typed team names
