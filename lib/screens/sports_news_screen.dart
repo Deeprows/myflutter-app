@@ -12,6 +12,7 @@ import 'browser_screen.dart';
 import 'fan_widgets.dart';
 import 'fan_x_widgets.dart';
 import 'player_screen.dart';
+import 'sports_reels_view.dart';
 
 /// Explore-style sports news, with publisher attribution and actual timestamps.
 class SportsNewsScreen extends StatefulWidget {
@@ -32,7 +33,8 @@ class SportsNewsScreen extends StatefulWidget {
 
 class _SportsNewsScreenState extends State<SportsNewsScreen>
     with WidgetsBindingObserver {
-  static const _categories = ['all', 'football', 'cricket', 'f1'];
+  static const _categories = ['all', 'reels', 'football', 'cricket', 'f1'];
+  static const _reelsTab = 1;
   final _search = TextEditingController();
   final _feeds = <String, SportsNewsFeed>{}, _errors = <String, String>{};
   final _loading = <String>{};
@@ -40,7 +42,7 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
   int _tab = 0;
   bool _foreground = true, _loadingMatches = false;
   Timer? _timer;
-  String get _category => _categories[_tab];
+  String get _category => _tab == _reelsTab ? 'all' : _categories[_tab];
   @override
   void initState() {
     super.initState();
@@ -48,7 +50,7 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
     _load();
     unawaited(_matches());
     _timer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (_foreground && TickerMode.of(context)) {
+      if (_foreground && _tab != _reelsTab && TickerMode.of(context)) {
         _load();
         unawaited(_matches());
       }
@@ -404,13 +406,16 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
     return Column(
         children: [
           XTabBar(
-            labels: const ['All sports', 'Football', 'Cricket', 'F1'],
+            labels: const ['All sports', 'Reels', 'Football', 'Cricket', 'F1'],
             index: _tab,
             onTap: (i) {
               setState(() => _tab = i);
-              _load();
+              if (i != _reelsTab) _load();
             },
           ),
+          if (_tab == _reelsTab)
+            const Expanded(child: SportsReelsView())
+          else ...[
           if (_loading.contains(_category))
             const LinearProgressIndicator(minHeight: 2),
           Expanded(
@@ -425,7 +430,7 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
                 children: [
                   ...widget.leading,
                   if (query.isEmpty &&
-                      (_tab == 0 || _tab == 1) &&
+                      (_tab == 0 || _tab == 2) &&
                       _fixtures.isNotEmpty) ...[
                     _heading('Sports'),
                     _matchesStrip(),
@@ -497,6 +502,7 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
               ),
             ),
           ),
+          ],
         ],
     );
   }
