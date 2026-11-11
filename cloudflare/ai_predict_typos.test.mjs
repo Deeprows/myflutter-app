@@ -169,6 +169,28 @@ tsdbDown=false;
 // Women's matches keep to women's teams
 x=await ask('Chelsea','Leeds',{gender:'women'});assert.equal(x.status,200);assert.equal(x.body.gender,'women');
 
+
+// 6. League names: the all-soccer feed lists competitions once ("leagues") and tags events by uid --------------
+{
+  const FUT=new Date(Date.now()+3*86400000).toISOString();
+  const ev=(id,uid,h,a)=>({id,uid,date:FUT,competitions:[{status:{type:{state:'pre',name:'STATUS_SCHEDULED'}},competitors:[{homeAway:'home',team:{id:String(id)+'1',displayName:h}},{homeAway:'away',team:{id:String(id)+'2',displayName:a}}]}]});
+  const prev=globalThis.fetch;
+  globalThis.fetch=async(u,o)=>{
+    if(String(u).includes('/soccer/all/scoreboard'))return new Response(JSON.stringify({leagues:[{id:'700',uid:'s:600~l:700',name:'Danish Superliga'},{id:'701',uid:'s:600~l:701',name:'AFC Challenge'}],events:[ev('5001','s:600~l:700~e:5001','Brondby IF','Aalborg BK'),ev('5002','s:600~l:701~e:5002','Alpha','Beta'),ev('5003','s:600~l:999~e:5003','Gamma','Delta'),Object.assign(ev('5004','x','Eps','Zeta'),{leagueName:'Direct League'})]}));
+    return prev(u,o);
+  };
+  sql.exec("DELETE FROM fan_espn_form_cache WHERE cache_key LIKE 'ai-%'");
+  const r=await call('ai-predict/matches?fresh=1',{bearer:alice});const list=(await r.json()).matches;
+  const by=h=>list.find(m=>m.home===h);
+  assert.equal(by('Brondby IF').league,'Danish Superliga');assert.equal(by('Alpha').league,'AFC Challenge');
+  assert.equal(by('Eps').league,'Direct League');assert.equal(by('Gamma').league,'Other leagues','unknown stays generic, never wrong');
+  globalThis.fetch=prev;
+  // Typed matchups name their league when both clubs share one.
+  x=await ask('Arsenal','Chelsea');assert.equal(x.status,200);assert.equal(x.body.fixture.league,'Premier League');
+  x=await ask('Real Madrid','Arsenal');assert.equal(x.status,200);assert.equal(x.body.fixture.league,'Your matchup');
+}
+console.log('AI league names: ESPN all-soccer events get their competition name; typed matches show a shared league.');
+
 // 5. Name normalisation -------------------------------------------------------------
 const mod=await import('./worker.js');
 console.log('AI typo tolerance: Brondby, SK Brann, Feberbache, Czarni Sosnowiec, reserve sides, Lecco/Lecce safety, request budget and caching passed.');
