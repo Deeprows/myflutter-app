@@ -24,11 +24,14 @@ jobs:
       # Java
       # ---------------------------------------------------------------
 
-      - name: Set up Java 17
+      - name: Set up Java 21 (required by current Android lint tooling)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
+
+      - name: Verify Java runtime
+        run: java -version
 
       # ---------------------------------------------------------------
       # Flutter
