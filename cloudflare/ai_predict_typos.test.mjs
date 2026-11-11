@@ -133,10 +133,10 @@ x=await ask('Feberbache','Real Sociedad');
 assert.equal(x.status,200,JSON.stringify(x.body));assert.equal(x.body.fixture.home,'Fenerbahçe');assert.equal(x.body.home.teamId,'espn:432');assert.equal(x.body.fixture.away,'Real Sociedad');
 // "Preußen Münster II" and "SC Wiedenbrück 2000": a reserve side with too little history says so plainly; an unknown club is not guessed.
 x=await ask('SC Wiedenbrück 2000','Preußen Münster II');
-assert.equal(x.status,422);assert.match(x.body.error,/(?:No team found|fewer than 3)/);
+assert.equal(x.status,422);assert.match(x.body.error,/(?:No team found|Could not verify completed recent results)/i);
 assert.doesNotMatch(x.body.error,/AI is temporarily unavailable/);
 x=await ask('Thin FC','Rosenborg');
-assert.equal(x.status,422);assert.match(x.body.error,/Found "Thin FC" but fewer than 3/);
+assert.equal(x.status,200,JSON.stringify(x.body));assert.equal(x.body.home.played,1);assert.equal(x.body.sampleQuality.level,'limited');assert.match(lastPrompt.sampleNotice,/1 match/,'one-match form is clearly labelled as preliminary');
 
 // 2. Safety: close spellings must not turn one real club into another -----------
 x=await ask('Lecco','Rosenborg');
@@ -147,7 +147,7 @@ x=await ask('Bayerm Munich','Arsenal');
 assert.equal(x.status,200,'single nearest club is corrected');assert.equal(x.body.fixture.home,'Bayern Munich');
 // Short names have to be exact
 x=await ask('Lecca','Arsenal');
-assert.equal(x.status,422);assert.match(x.body.error,/No team found/);
+assert.equal(x.status,422);assert.match(x.body.error,/No team found|Could not verify completed recent results/i);
 // A different club with an ambiguous name is not guessed
 x=await ask('Ambig','Arsenal');
 assert.equal(x.status,422);
@@ -164,7 +164,7 @@ const n=tsdbCalls.length;await ask('Rosenborg','Arsenal');assert.equal(tsdbCalls
 // 4. When TheSportsDB is down the old ESPN scan still runs and reports clearly ---------
 tsdbDown=true;sql.exec("DELETE FROM fan_espn_form_cache WHERE cache_key LIKE 'tsdb:%'");
 x=await ask('Rosenborg','Arsenal');
-assert.equal(x.status,422);assert.match(x.body.error,/No team found|unavailable|fewer/);
+assert.equal(x.status,422);assert.match(x.body.error,/No team found|unavailable|fewer|Could not verify completed recent results/i);
 tsdbDown=false;
 // Women's matches keep to women's teams
 x=await ask('Chelsea','Leeds',{gender:'women'});assert.equal(x.status,200);assert.equal(x.body.gender,'women');
