@@ -53,6 +53,10 @@ const alice=await token();assert.equal((await call('auth',{body:{mode:'signup',i
 let r=await call('ai-predict',{body:{custom:{home:'Turkey',away:'Belgium'}},bearer:alice});
 const out=await r.json();assert.equal(r.status,200,JSON.stringify(out));
 assert.ok(out.home.played>=3&&out.away.played>=3,'both national sides have form');
+// Literal local spelling must also bypass the domestic-club lookup path.
+r=await call('ai-predict',{body:{custom:{home:'Türkiye',away:'Belgium'}},bearer:alice});
+const outTr=await r.json();assert.equal(r.status,200,JSON.stringify(outTr));
+assert.ok(outTr.home.played>=3&&outTr.away.played>=3,'Türkiye spelling uses national-team form');
 // Strict names: Albania must not pick up Northern Ireland-style partial matches or other teams' games
 r=await call('ai-predict',{body:{custom:{home:'Albania',away:'Finland'}},bearer:alice});
 const o2=await r.json();assert.equal(r.status,200,JSON.stringify(o2));
