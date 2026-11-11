@@ -1,5 +1,5 @@
 {
-  "_readme": "Switch the APIs used by the AI Predict analysis without an app update or Worker redeploy (the Worker re-reads this file every ~5 minutes). 'ai.providers' = who writes the analysis: tried top to bottom, first to answer wins. 'data.form.sources' = where each club's recent results come from: tried top to bottom (apifootball, espn, espn_scan); set enabled false to switch one off. 'data.extras.apifootball' = injuries/cards/lineups (needs API-Football). NEVER put API keys in this file: add each key as a Worker secret (Settings > Variables and Secrets) with the name in 'keyEnv'. Free-tier model names change over time: check each provider's model list before enabling.",
+  "_readme": "Switch the APIs used by the AI Predict analysis without an app update or Worker redeploy (the Worker re-reads this file every ~5 minutes). 'ai.providers' = who writes the analysis: tried top to bottom, first to answer wins. 'data.form.sources' = where each club's recent results come from: tried top to bottom (apifootball, espn, footballdata, espn_scan); set enabled false to switch one off. 'data.extras.apifootball' = injuries/cards/lineups (needs API-Football). NEVER put API keys in this file: add each key as a Worker secret (Settings > Variables and Secrets) with the name in 'keyEnv'. Free-tier model names change over time: check each provider's model list before enabling. 'data.context' adds the league table position and head-to-head (ESPN, no key) to the AI prompt: set standings / headToHead to false to switch one off. 'footballdata' needs the FOOTBALL_DATA_KEY Worker secret and is skipped without it.",
   "ai": {
     "providers": [
       {
@@ -77,6 +77,11 @@
           "enabled": true
         },
         {
+          "id": "footballdata",
+          "label": "football-data.org (needs FOOTBALL_DATA_KEY)",
+          "enabled": true
+        },
+        {
           "id": "espn_scan",
           "label": "ESPN (name scan, any club)",
           "enabled": true
@@ -85,6 +90,10 @@
     },
     "extras": {
       "apifootball": true
+    },
+    "context": {
+      "standings": true,
+      "headToHead": true
     }
   }
 }
