@@ -1922,6 +1922,17 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       if (cur != null) picks.add(cur.trim());
     }
 
+    // No PICKS block in the text: show the match's picks anyway.
+    if (picks.isEmpty && data != null) {
+      final ps = _sortedPicks(data);
+      for (var i = 0; i < ps.length; i++) {
+        final p = ps[i];
+        final reason = '${p['reason'] ?? ''}'.trim();
+        picks.add('${i + 1}. ${p['market']}: ${p['pick']} (${'${p['confidence']}'.toUpperCase()})'
+            '${reason.isEmpty ? '' : '\nReason: $reason'}');
+      }
+    }
+
     // Parse sections.
     final sections = <({String title, String sub, List<String> lines})>[];
     String? title;
@@ -2871,7 +2882,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               try {
                 if (action == 'slip') {
                   final picks = <BetSlipPick>[
-                    for (final p in (data['picks'] is List ? data['picks'] as List : const []))
+                    for (final p in _sortedPicks(data))
                       if (p is Map && '${p['pick'] ?? ''}'.trim().isNotEmpty)
                         BetSlipPick(
                           market: '${p['market'] ?? ''}',
@@ -2985,6 +2996,9 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     if (market == 'Both teams to score') {
       return pick.startsWith('no') ? 'No BTTS' : 'BTTS';
     }
+    if (market == 'Over/Under 1.5 goals' && !pick.contains('under')) {
+      return 'Over 1.5';
+    }
     return null;
   }
 
@@ -2997,7 +3011,53 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       final c = _confRank('${b.$2['confidence']}').compareTo(_confRank('${a.$2['confidence']}'));
       return c != 0 ? c : a.$1.compareTo(b.$1);
     });
-    return [for (final e in indexed) e.$2];
+    return _withFormPicks(data, [for (final e in indexed) e.$2]);
+  }
+
+  /// Every match gets AI picks. When the server sends fewer than three (or
+  /// none), the list is topped up with the goals markets that landed most
+  /// often in the verified recent matches of both teams. Server picks always
+  /// stay first and a market the server already picked is never contradicted.
+  List<Map<String, dynamic>> _withFormPicks(
+    Map data,
+    List<Map<String, dynamic>> picks,
+  ) {
+    const want = 3;
+    if (picks.length >= want) return picks;
+    final candidates = <({String market, String pick, String key})>[
+      (market: 'Over/Under 1.5 goals', pick: 'Over 1.5', key: 'Over 1.5'),
+      (market: 'Over/Under 2.5 goals', pick: 'Over 2.5', key: 'Over 2.5'),
+      (market: 'Over/Under 2.5 goals', pick: 'Under 2.5', key: 'Under 2.5'),
+      (market: 'Both teams to score', pick: 'Yes', key: 'BTTS'),
+      (market: 'Both teams to score', pick: 'No', key: 'No BTTS'),
+    ];
+    final taken = {for (final p in picks) '${p['market']}'};
+    final scored = <({String market, String pick, ({int hits, int total, int pct}) r})>[];
+    for (final c in candidates) {
+      if (taken.contains(c.market)) continue;
+      ({int hits, int total, int pct})? r;
+      try {
+        r = _rate(data, c.key);
+      } catch (_) {
+        r = null;
+      }
+      if (r == null || r.total == 0 || r.pct < 50) continue;
+      scored.add((market: c.market, pick: c.pick, r: r));
+    }
+    scored.sort((a, b) => b.r.pct.compareTo(a.r.pct));
+    final out = [...picks];
+    for (final c in scored) {
+      if (out.length >= want) break;
+      // One pick per market: never both Over and Under (or Yes and No).
+      if (out.any((p) => '${p['market']}' == c.market)) continue;
+      out.add({
+        'market': c.market,
+        'pick': c.pick,
+        'confidence': c.r.pct >= 70 ? 'high' : (c.r.pct >= 55 ? 'medium' : 'low'),
+        'reason': 'Hit in ${c.r.hits} of ${c.r.total} recent matches of both teams.',
+      });
+    }
+    return out;
   }
 
   Color _ringColor(double v) => v >= .65
