@@ -824,8 +824,8 @@ class _MovieSheet extends StatelessWidget {
     required this.trailerFuture, required this.similarFuture, required this.onMovieTap});
 
   Future<void> _download(BuildContext context) async {
-    // Premium only: everyone else is sent to upgrade.
-    if (!await PremiumGate.allowMovies(context)) return;
+    // Premium only (no ad unlock): everyone else is sent to upgrade.
+    if (!await PremiumGate.allowDownload(context)) return;
     if (!context.mounted) return;
     // Deeprows Browser offer; otherwise the phone's own browser.
     await PartnerBrowser.instance.download(context, movie.downloadUrl);
@@ -960,7 +960,7 @@ class _MovieSheet extends StatelessWidget {
                         side: BorderSide(color: Ui.line),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
-                      icon: Icon(PremiumGate.locked ? Icons.lock_rounded : Icons.download_rounded),
+                      icon: Icon(PremiumGate.downloadLocked ? Icons.lock_rounded : Icons.download_rounded),
                       label: Text('Download'.tr, style: const TextStyle(fontWeight: FontWeight.w800)),
                     ),
                   ),
