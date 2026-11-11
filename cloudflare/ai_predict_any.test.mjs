@@ -10,7 +10,7 @@ const DB={prepare(query){let args=[];const st={bind(...a){args=a;return st;},
   async batch(list){sql.exec('BEGIN');try{const result=[];for(const s of list)result.push(await s.run());sql.exec('COMMIT');return result;}catch(e){sql.exec('ROLLBACK');throw e;}}};
 const keys=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
 const jwk=await crypto.subtle.exportKey('jwk',keys.publicKey);jwk.kid='test-google-key';
-let keyFetches=0,providerCalls=0,providerFailure=false,smallSample=false,providerError=null,espnEnabled=false,espnCalls=0,espnLimited=false;
+let keyFetches=0,providerCalls=0,providerFailure=false,smallSample=0,providerError=null,espnEnabled=false,espnCalls=0,espnLimited=false;
 const fixture={id:'auto',home:'Home FC',away:'Away FC',homeLogo:'66',awayLogo:'50',league:'Serie A',kickoff:new Date(Date.now()+3600000).toISOString()};
 function history(id) {
   return Array.from({length:smallSample?2:5},(_,i)=>({fixture:{id:Number(id)*100+i,date:new Date(Date.now()-(i+1)*86400000).toISOString(),status:{short:i===0?'AET':'FT'}},teams:{home:{id:Number(id),name:'Team '+id},away:{id:777,name:'Opponent'}},goals:{home:3,away:1},score:{fulltime:{home:i===0?1:2,away:1}}}));
@@ -65,7 +65,7 @@ globalThis.fetch=async(url)=>{
     const m=/\/teams\/(\d+)\/schedule/.exec(u);
     if(m) {
       scheduleCalls++;
-      return new Response(JSON.stringify({events:Array.from({length:5},(_,i)=>({id:m[1]+'-'+i,date:new Date(Date.now()-(i+1)*86400000).toISOString(),status:{period:2,type:{name:'STATUS_FULL_TIME',state:'post',completed:true}},competitions:[{competitors:[{homeAway:'home',team:{id:m[1],displayName:'Club'},score:{value:2}},{homeAway:'away',team:{id:'999',displayName:'Opponent'},score:{value:1}}]}]}))}));
+      return new Response(JSON.stringify({events:Array.from({length:smallSample || 5},(_,i)=>({id:m[1]+'-'+i,date:new Date(Date.now()-(i+1)*86400000).toISOString(),status:{period:2,type:{name:'STATUS_FULL_TIME',state:'post',completed:true}},competitions:[{competitors:[{homeAway:'home',team:{id:m[1],displayName:'Club'},score:{value:2}},{homeAway:'away',team:{id:'999',displayName:'Opponent'},score:{value:1}}]}]}))}));
     }
   }
   return new Response(JSON.stringify([]));
@@ -125,7 +125,7 @@ assert.ok(ml.some(m=>m.gender==='men'),'men matches tagged');
 before=runs;
 r=await call('ai-predict',{body:{custom:{home:'Real',away:'Arsenal'}},bearer:alice});assert.equal(r.status,422);
 let bad=await r.json();assert.deepEqual(bad.candidates.sort(),['Real Madrid','Real Sociedad']);assert.match(bad.error,/Be more specific/);
-r=await call('ai-predict',{body:{custom:{home:'Arsenal',away:'Nonexistent Rovers'}},bearer:alice});assert.equal(r.status,422);assert.match((await r.json()).error,/No team found/);
+r=await call('ai-predict',{body:{custom:{home:'Arsenal',away:'Nonexistent Rovers'}},bearer:alice});assert.equal(r.status,422);assert.match((await r.json()).error,/Could not verify completed recent results|No team found/i);
 r=await call('ai-predict',{body:{custom:{home:'Arsenal',away:'arsenal fc'}},bearer:alice});assert.equal(r.status,400);
 r=await call('ai-predict',{body:{custom:{home:'A',away:'Chelsea'}},bearer:alice});assert.equal(r.status,400);
 r=await call('ai-predict',{body:{custom:{home:'x'.repeat(61),away:'Chelsea'}},bearer:alice});assert.equal(r.status,400);
@@ -145,3 +145,18 @@ failing=false;globalThis.fetch=okFetch;
 r=await call('ai-predict',{body:{custom:{home:'Real Madrid',away:'Arsenal'}},bearer:alice});assert.equal(r.status,200,'full index rebuilt on next request');
 assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM fan_espn_form_cache WHERE cache_key='ai-teams:v3'").get().n,1);
 console.log('AI any-match: cup ties use domestic form; partial rebuilds are not cached.');
+
+// Sparse recent form: one or two verified matches must still generate a clearly caveated analysis.
+for (const count of [2,1]) {
+  smallSample=count;
+  sql.exec("DELETE FROM fan_espn_form_cache WHERE cache_key LIKE 'schedule:eng.1:%'");
+  r=await call('ai-predict',{body:{custom:{home:'Chelsea',away:'Arsenal'}},bearer:alice});
+  assert.equal(r.status,200,`analysis should run with ${count} verified match(es)`);
+  out=await r.json();
+  assert.equal(out.home.played,count);assert.equal(out.away.played,count);
+  assert.equal(out.sampleQuality.level,'limited');assert.equal(out.sampleQuality.homeMatches,count);assert.match(out.sampleQuality.warning,/Preliminary analysis/);
+  assert.match(lastPrompt.sampleNotice,new RegExp(`${count} match`));
+  assert.match(out.analysis,/Lean based/);
+}
+smallSample=0;
+console.log('AI sparse form: one- and two-match samples generate preliminary analysis instead of being rejected.');
