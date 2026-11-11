@@ -443,7 +443,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                 // Slot 7 (Movies) is no longer a tab.
                 const SizedBox.shrink(),
                 _visited.contains(_searchTab)
-                    ? const SearchScreen()
+                    ? SearchScreen(active: _index == _searchTab)
                     : const SizedBox.shrink(),
                 _visited.contains(_profileTab)
                     ? _profilePage()
