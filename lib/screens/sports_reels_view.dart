@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../config.dart';
+import '../services/auth_service.dart';
 import '../services/sports_reels_service.dart';
 import '../theme/app_theme.dart';
 import 'browser_screen.dart';
@@ -160,10 +162,68 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
   bool _ready = false;
   bool _error = false;
   bool _appVisible = true;
+  bool _liked = false, _likeBusy = false;
+  static const _likedKey = 'liked_reel_ids_v1';
+
+  Future<void> _loadLiked() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final mine = prefs.getStringList(_likedKey) ?? const <String>[];
+      if (mounted && mine.contains(widget.reel.id)) setState(() => _liked = true);
+    } catch (_) {}
+  }
+
+  Future<void> _toggleLike() async {
+    if (_likeBusy) return;
+    final msg = ScaffoldMessenger.of(context);
+    final want = !_liked;
+    setState(() {
+      _liked = want; // instant feedback
+      _likeBusy = true;
+    });
+    final error = await SportsReelsService.setLike(widget.reel.id, want);
+    if (!mounted) return;
+    if (error != null) {
+      setState(() => _liked = !want);
+      msg.showSnackBar(SnackBar(content: Text(error)));
+    } else {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final ids = (prefs.getStringList(_likedKey) ?? <String>[]).toList();
+        want ? ids.add(widget.reel.id) : ids.remove(widget.reel.id);
+        await prefs.setStringList(_likedKey, ids.toSet().toList());
+      } catch (_) {}
+    }
+    if (mounted) setState(() => _likeBusy = false);
+  }
+
+  Widget _action(IconData icon, String label, VoidCallback onTap,
+      {Color color = Colors.white}) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, color: color, size: 32, shadows: const [
+            Shadow(blurRadius: 8, color: Colors.black87)
+          ]),
+          const SizedBox(height: 2),
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  shadows: [Shadow(blurRadius: 6, color: Colors.black87)])),
+        ]),
+      ),
+    );
+  }
 
   @override
   void initState() {
     super.initState();
+    _loadLiked();
     WidgetsBinding.instance.addObserver(this);
     if (widget.active) _start();
   }
@@ -211,6 +271,7 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
             setState(() => _ready = true);
             // YouTube's mobile Shorts page owns its player UI. Nudge its video
             // element to begin muted playback when autoplay is permitted.
+            await _hideYoutubeUi();
             await _playMuted();
           },
           onWebResourceError: (e) {
@@ -225,6 +286,13 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
                 uri.scheme == 'data' ||
                 uri.scheme == 'blob') {
               return NavigationDecision.navigate;
+            }
+            // Liking is done by the app with the user's Gmail, so never let
+            // the page open YouTube/Google sign-in screens.
+            if (uri.host == 'accounts.google.com' ||
+                uri.path.contains('/signin') ||
+                uri.path.contains('ServiceLogin')) {
+              return NavigationDecision.prevent;
             }
             // Keep YouTube's own navigation and media/CDN requests in this
             // WebView. Never launch an external app from a reel.
@@ -247,6 +315,37 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
     // Load the same Shorts URL used by the working in-app browser. Do not use
     // /embed/: embedded videos can be rejected by the channel (error 152-4).
     controller.loadRequest(Uri.parse(widget.reel.watchUrl));
+  }
+
+  /// Hides YouTube's own title, channel, buttons and sign-in prompts; the app
+  /// draws one clean overlay on top instead (no repeated text).
+  Future<void> _hideYoutubeUi() async {
+    final controller = _web;
+    if (controller == null) return;
+    try {
+      await controller.runJavaScript('''
+        (function () {
+          if (document.getElementById('dp-clean')) return;
+          const s = document.createElement('style');
+          s.id = 'dp-clean';
+          s.textContent = `
+            ytm-reel-player-overlay-renderer,
+            ytm-reel-player-header-renderer,
+            ytm-shorts-lockup-view-model,
+            ytm-shorts-lockup-view-model-v2,
+            shorts-video-metadata, .reel-player-overlay-actions,
+            .reel-player-header-container, ytm-mobile-topbar-renderer,
+            ytm-pivot-bar-renderer, ytm-bottom-sheet-renderer,
+            .mobile-topbar-header, c3-overlay, tp-yt-paper-dialog,
+            ytm-promoted-sparkles-web-renderer,
+            [class*="player-controls-bottom"], [class*="mealbar"]
+            { display: none !important; }
+            body, html { background: #000 !important; }
+          `;
+          document.head.appendChild(s);
+        })();
+      ''');
+    } catch (_) {}
   }
 
   Future<void> _playMuted() async {
@@ -334,63 +433,75 @@ class _ReelPageState extends State<_ReelPage> with WidgetsBindingObserver {
               ],
             ),
           ),
-        // A subtle gradient keeps the reel title legible over the web page.
+        // One clean overlay (YouTube's own title/buttons are hidden).
         Positioned(
           left: 0,
           right: 0,
           bottom: 0,
-          child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 34, 8, 12),
+          child: IgnorePointer(
+            child: Container(
+              height: 150,
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Color(0xB8000000)],
+                  colors: [Colors.transparent, Color(0xCC000000)],
                 ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          r.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          r.channel,
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Open in video browser',
-                    icon: const Icon(Icons.open_in_new, color: Colors.white),
-                    onPressed: () =>
-                        openInApp(context, r.watchUrl, title: r.channel),
-                  ),
-                  IconButton(
-                    tooltip: 'Share',
-                    icon: const Icon(Icons.ios_share, color: Colors.white),
-                    onPressed: () async {
-                      try {
-                        await Share.share('${r.title}\n${r.watchUrl}');
-                      } catch (_) {}
-                    },
-                  ),
-                ],
+            ),
+          ),
+        ),
+        Positioned(
+          left: 16,
+          right: 76,
+          bottom: 14,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                r.channel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700),
               ),
+              const SizedBox(height: 4),
+              Text(
+                r.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    shadows: [Shadow(blurRadius: 6, color: Colors.black87)]),
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          right: 8,
+          bottom: 10,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _action(
+                _liked ? Icons.favorite : Icons.favorite_border,
+                _liked ? 'Liked' : 'Like',
+                _toggleLike,
+                color: _liked ? const Color(0xFFFF3B5C) : Colors.white,
+              ),
+              _action(Icons.ios_share, 'Share', () async {
+                try {
+                  await Share.share('${r.title}\n${r.watchUrl}');
+                } catch (_) {}
+              }),
+              _action(Icons.open_in_new, 'Open',
+                  () => openInApp(context, r.watchUrl, title: r.channel)),
+            ],
           ),
         ),
       ],
