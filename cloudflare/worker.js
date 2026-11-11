@@ -4888,9 +4888,12 @@ async function fanNationalSlug(env,slug,from,to,keep) {
   if(pending.has(key))return pending.get(key);
   const task=(async()=>{
     const row=await env.DB.prepare('SELECT data,fetched_at FROM fan_espn_form_cache WHERE cache_key=?').bind(key).first();
-    if(row && (keep || row.fetched_at>Date.now()-6*3600000)){try{return JSON.parse(row.data);}catch{}}
+    // An empty copy (competition unknown/blocked at that moment) is never kept for good: it expires with the 6h cache.
+    if(row && ((keep && row.data!=='[]') || row.fetched_at>Date.now()-6*3600000)){try{return JSON.parse(row.data);}catch{}}
     let data=null,why='';
-    for(const host of ['https://site.api.espn.com','https://site.web.api.espn.com']) {
+    // The first host is tried twice (short pause) so one throttled or dropped request does not hide a whole competition.
+    for(const host of ['https://site.api.espn.com','https://site.web.api.espn.com','https://site.api.espn.com']) {
+      if(why)await new Promise(r=>setTimeout(r,300));
       let response;
       try{response=await fetch(`${host}/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${from}-${to}&limit=1000`,{headers:FAN_HTTP,signal:AbortSignal.timeout(8000)});}catch(e){why=String(e?.message || 'no connection');continue;}
       // An unknown competition slug is remembered as empty so it is not asked for again all day.
@@ -4923,7 +4926,28 @@ async function fanNationalSlug(env,slug,from,to,keep) {
   })();
   pending.set(key,task);try{return await task;}finally{pending.delete(key);}
 }
+// A national side's last good result list is remembered for 30 days. When every live source is down or throttled
+// the analysis keeps working from that copy instead of claiming the team has no results.
 async function fanNationalForm(env,name,kickoff,espnId=null) {
+  const ck=('natform:v1:'+fanNationalKey(name)).slice(0,120);
+  try {
+    const form=await fanNationalFormLive(env,name,kickoff,espnId);
+    try{await env.DB.prepare('INSERT INTO fan_espn_form_cache(cache_key,data,fetched_at) VALUES(?,?,?) ON CONFLICT(cache_key) DO UPDATE SET data=excluded.data,fetched_at=excluded.fetched_at').bind(ck,JSON.stringify(form),Date.now()).run();}catch{}
+    return form;
+  } catch(e) {
+    if(!(e instanceof FanFormError) || e.code==='team_unavailable')throw e;
+    try {
+      const row=await env.DB.prepare('SELECT data,fetched_at FROM fan_espn_form_cache WHERE cache_key=?').bind(ck).first();
+      if(row && row.fetched_at>Date.now()-30*86400000) {
+        const f=JSON.parse(row.data),limit=Math.min(Date.now(),kickoff);
+        const rows=(Array.isArray(f?.matches)?f.matches:[]).filter(m=>Date.parse(m?.date)<limit);
+        if(rows.length)return {...f,matches:rows,played:rows.length,wins:rows.filter(r=>r.result==='W').length,draws:rows.filter(r=>r.result==='D').length,losses:rows.filter(r=>r.result==='L').length,goalsFor:rows.reduce((n,r)=>n+r.goalsFor,0),goalsAgainst:rows.reduce((n,r)=>n+r.goalsAgainst,0)};
+      }
+    } catch{}
+    throw e;
+  }
+}
+async function fanNationalFormLive(env,name,kickoff,espnId=null) {
   if(!fanResultName(name))throw new FanFormError('No team found for "'+String(name).slice(0,40)+'". Check the spelling or use the full team name.','team_unavailable');
   const now=Date.now(),limit=Math.min(now,kickoff),ymd=t=>new Date(t).toISOString().slice(0,10).replace(/-/g,'');
   const want=fanNationalKey(name),id=espnId && /^\d{1,9}$/.test(String(espnId))?String(espnId):null;
@@ -5071,7 +5095,7 @@ async function fanTsdbTeamForm(env,name,kickoff,women=false) {
 async function fanAnalysisForm(env,fixture,teamId,name,kickoff) {
   // Which sources are tried, and in what order, comes from api_providers.json (data.form.sources).
   const order=(await fanAiConfig(env)).form;
-  let original=null,lastErr=null,nationalTried=false;
+  let original=null,lastErr=null,nationalTried=false,natErr=null;
   // International fixtures (Nations League, qualifiers, friendlies...) read the national-team competitions first,
   // even when the feed carries a team id. They never fall back to the club-name scan below: a national side's name
   // is also part of club names (England -> New England Revolution), and club results are wrong data for a country.
@@ -5079,7 +5103,7 @@ async function fanAnalysisForm(env,fixture,teamId,name,kickoff) {
   // With a team id API-Football (exact by id) still goes first; the national results follow it, never the club scan.
   if(international && !teamId) {
     nationalTried=true;
-    try{return await fanNationalForm(env,name,kickoff);}catch(e){lastErr=e;}
+    try{return await fanNationalForm(env,name,kickoff);}catch(e){lastErr=e;natErr=e;}
   }
   for(const src of order) {
     try {
@@ -5103,7 +5127,13 @@ async function fanAnalysisForm(env,fixture,teamId,name,kickoff) {
   }
   // Last resort for a side nothing else could find (e.g. a national team in a competition we did not recognise).
   if(!nationalTried) {
-    try{return await fanNationalForm(env,name,kickoff);}catch(e){if(e instanceof FanFormError && e.code==='insufficient_results')lastErr=e;}
+    try{return await fanNationalForm(env,name,kickoff);}catch(e){natErr=e;if(e instanceof FanFormError && e.code==='insufficient_results')lastErr=e;}
+  }
+  // National sides get one more independent source (TheSportsDB) before giving up.
+  if(international || fanIsNationalTeam(name)) {
+    try{return await fanTsdbTeamForm(env,name,kickoff,false);}catch(e){if(!natErr)natErr=e;}
+    // The live lookups were unreachable (not "reached and empty"): say so, never "no verified results".
+    if(natErr instanceof FanFormError && natErr.code!=='insufficient_results' && natErr.code!=='team_unavailable')throw natErr;
   }
   if(original?.code==='insufficient_results' || lastErr instanceof FanFormError && lastErr.code==='insufficient_results')return {source:'API-Football',teamId,fetchedAt:Date.now(),matches:[],played:0,wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0};
   // API-Football refused (plan, quota, key, outage) or has no ID: ESPN's free results are always the safety net,
