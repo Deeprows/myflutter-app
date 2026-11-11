@@ -3484,8 +3484,11 @@ async function fanAiAnyMatch(env,id,b) {
     // A lookup that resolved the club under its proper name remembers it, so the app can show the real name and crest.
     const mark=(form,r)=>{if(form && r?.name)Object.defineProperty(form,'resolved',{value:{name:String(r.name).slice(0,60),logo:typeof r.logo==='string'?r.logo:'',league:typeof r.leagueName==='string'?r.leagueName:''},enumerable:false,configurable:true});return form;};
     const formOf=async t=>{
-      // National teams (Nations League, qualifiers, friendlies) have their own results source: ask it first.
-      if(FAN_NATIONAL_LEAGUE_RE.test(String(info.league || ''))){try{return await fanNationalForm(env,t.name,kickoff,t.id);}catch(e){throw e;}}
+      // National teams (including manually typed matchups with no league label) have
+      // their own international-results source. Never route them through club feeds.
+      if(FAN_NATIONAL_LEAGUE_RE.test(String(info.league || '')) || fanIsNationalTeam(t.name)){
+        return await fanNationalForm(env,t.name,kickoff,t.id);
+      }
       if(t.id && t.league && t.league!=='all') {
         try{return await fanEspnScheduleForm(env,t.league,t.id,kickoff);}
         catch(e){
@@ -4871,7 +4874,12 @@ const FAN_NATIONAL_CORE=['fifa.friendly','uefa.nations','fifa.worldq.uefa','uefa
 const FAN_NATIONAL_OTHER=['fifa.worldq.conmebol','fifa.worldq.caf','fifa.worldq.afc','fifa.worldq.concacaf','fifa.worldq.ofc','conmebol.america','concacaf.gold','concacaf.nations.league','caf.nations','afc.asian.cup'];
 const FAN_NATIONAL_LEAGUE_RE=/nations league|world cup|euro(?:pean)? champ|euro 20|qualif|friendl|international|africa cup|afcon|copa am[eé]rica|gold cup|asian cup/i;
 const FAN_NATIONAL_ALIASES={'turkiye':'turkey','czech republic':'czechia','ivory coast':'cote d ivoire','korea republic':'south korea','united states':'usa','united states of america':'usa','us':'usa','bosnia herzegovina':'bosnia and herzegovina','macedonia':'north macedonia','republic of ireland':'ireland','cabo verde':'cape verde','ir iran':'iran','holland':'netherlands','congo dr':'dr congo','democratic republic of congo':'dr congo','swaziland':'eswatini'};
+// Typed matchups do not carry a competition label. Recognise national sides by name
+// before attempting club/team lookup, otherwise ESPN's domestic team index can route
+// a country through a club-results feed and return an empty recent-form sample.
+const FAN_NATIONAL_TEAM_KEYS=new Set(('afghanistan|albania|algeria|andorra|angola|antigua and barbuda|argentina|armenia|aruba|australia|austria|azerbaijan|bahamas|bahrain|bangladesh|barbados|belarus|belgium|belize|benin|bermuda|bhutan|bolivia|botswana|brazil|brunei|bulgaria|burkina faso|burundi|cambodia|cameroon|canada|central african republic|chad|chile|china|colombia|comoros|congo|costa rica|croatia|cuba|curacao|cyprus|czechia|denmark|djibouti|dominica|dominican republic|dr congo|ecuador|egypt|el salvador|england|equatorial guinea|eritrea|estonia|eswatini|ethiopia|faroe islands|fiji|finland|france|gabon|gambia|georgia|germany|ghana|gibraltar|greece|grenada|guatemala|guinea|guinea bissau|guyana|haiti|honduras|hong kong|hungary|iceland|india|indonesia|iran|iraq|ireland|israel|italy|jamaica|japan|jordan|kazakhstan|kenya|kosovo|kuwait|kyrgyzstan|laos|latvia|lebanon|lesotho|liberia|libya|liechtenstein|lithuania|luxembourg|madagascar|malawi|malaysia|maldives|mali|malta|mauritania|mauritius|mexico|moldova|monaco|mongolia|montenegro|morocco|mozambique|myanmar|namibia|nepal|netherlands|new caledonia|new zealand|nicaragua|niger|nigeria|north korea|north macedonia|northern ireland|norway|oman|pakistan|palestine|panama|papua new guinea|paraguay|peru|philippines|poland|portugal|puerto rico|qatar|romania|russia|rwanda|san marino|saudi arabia|scotland|senegal|serbia|seychelles|sierra leone|singapore|slovakia|slovenia|somalia|south africa|south korea|south sudan|spain|sri lanka|sudan|suriname|sweden|switzerland|syria|tahiti|taiwan|tajikistan|tanzania|thailand|togo|trinidad and tobago|tunisia|turkey|turkmenistan|uganda|ukraine|united arab emirates|usa|uruguay|uzbekistan|venezuela|vietnam|wales|yemen|zambia|zimbabwe').split('|'));;
 function fanNationalKey(raw){const n=fanResultName(raw);return FAN_NATIONAL_ALIASES[n] || n;}
+function fanIsNationalTeam(raw){return FAN_NATIONAL_TEAM_KEYS.has(fanNationalKey(raw));}
 async function fanNationalSlug(env,slug,from,to,keep) {
   const key=`nat:v1:${slug}:${from}-${to}`;
   let pending=fanEspnRequests.get(env);if(!pending){pending=new Map();fanEspnRequests.set(env,pending);}
