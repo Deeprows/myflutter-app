@@ -4882,7 +4882,7 @@ const FAN_NATIONAL_ALIASES={'turkiye':'turkey','czech republic':'czechia','ivory
 const FAN_NATIONAL_TEAM_KEYS=new Set(('afghanistan|albania|algeria|andorra|angola|antigua and barbuda|argentina|armenia|aruba|australia|austria|azerbaijan|bahamas|bahrain|bangladesh|barbados|belarus|belgium|belize|benin|bermuda|bhutan|bolivia|botswana|brazil|brunei|bulgaria|burkina faso|burundi|cambodia|cameroon|canada|central african republic|chad|chile|china|colombia|comoros|congo|costa rica|croatia|cuba|curacao|cyprus|czechia|denmark|djibouti|dominica|dominican republic|dr congo|ecuador|egypt|el salvador|england|equatorial guinea|eritrea|estonia|eswatini|ethiopia|faroe islands|fiji|finland|france|gabon|gambia|georgia|germany|ghana|gibraltar|greece|grenada|guatemala|guinea|guinea bissau|guyana|haiti|honduras|hong kong|hungary|iceland|india|indonesia|iran|iraq|ireland|israel|italy|jamaica|japan|jordan|kazakhstan|kenya|kosovo|kuwait|kyrgyzstan|laos|latvia|lebanon|lesotho|liberia|libya|liechtenstein|lithuania|luxembourg|madagascar|malawi|malaysia|maldives|mali|malta|mauritania|mauritius|mexico|moldova|monaco|mongolia|montenegro|morocco|mozambique|myanmar|namibia|nepal|netherlands|new caledonia|new zealand|nicaragua|niger|nigeria|north korea|north macedonia|northern ireland|norway|oman|pakistan|palestine|panama|papua new guinea|paraguay|peru|philippines|poland|portugal|puerto rico|qatar|romania|russia|rwanda|san marino|saudi arabia|scotland|senegal|serbia|seychelles|sierra leone|singapore|slovakia|slovenia|somalia|south africa|south korea|south sudan|spain|sri lanka|sudan|suriname|sweden|switzerland|syria|tahiti|taiwan|tajikistan|tanzania|thailand|togo|trinidad and tobago|tunisia|turkey|turkmenistan|uganda|ukraine|united arab emirates|usa|uruguay|uzbekistan|venezuela|vietnam|wales|yemen|zambia|zimbabwe').split('|'));;
 function fanNationalKey(raw){const n=fanResultName(raw);return FAN_NATIONAL_ALIASES[n] || n;}
 function fanIsNationalTeam(raw){return FAN_NATIONAL_TEAM_KEYS.has(fanNationalKey(raw));}
-async function fanNationalSlug(env,slug,from,to,keep) {
+async function fanNationalSlug(env,slug,from,to,keep,stat={}) {
   const key=`nat:v1:${slug}:${from}-${to}`;
   let pending=fanEspnRequests.get(env);if(!pending){pending=new Map();fanEspnRequests.set(env,pending);}
   if(pending.has(key))return pending.get(key);
@@ -4892,19 +4892,28 @@ async function fanNationalSlug(env,slug,from,to,keep) {
     if(row && ((keep && row.data!=='[]') || row.fetched_at>Date.now()-6*3600000)){try{return JSON.parse(row.data);}catch{}}
     let data=null,why='';
     // The first host is tried twice (short pause) so one throttled or dropped request does not hide a whole competition.
+    const tally=c=>{stat.codes=stat.codes || {};stat.codes[c]=(stat.codes[c] || 0)+1;};
+    let refused=0,tries=0;
+    // ESPN sometimes rejects one query shape (a big limit or a long range) with 400: try gentler shapes before concluding the competition is empty.
     for(const host of ['https://site.api.espn.com','https://site.web.api.espn.com','https://site.api.espn.com']) {
-      if(why)await new Promise(r=>setTimeout(r,300));
-      let response;
-      try{response=await fetch(`${host}/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${from}-${to}&limit=1000`,{headers:FAN_HTTP,signal:AbortSignal.timeout(8000)});}catch(e){why=String(e?.message || 'no connection');continue;}
-      // An unknown competition slug is remembered as empty so it is not asked for again all day.
-      if(response.status===400 || response.status===404) {
-        await env.DB.prepare('INSERT INTO fan_espn_form_cache(cache_key,data,fetched_at) VALUES(?,?,?) ON CONFLICT(cache_key) DO UPDATE SET data=excluded.data,fetched_at=excluded.fetched_at').bind(key,'[]',Date.now()).run();
-        return [];
+      for(const shape of ['&limit=1000','&limit=300','']) {
+        if(why)await new Promise(r=>setTimeout(r,300));
+        let response;tries++;
+        try{response=await fetch(`${host}/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${from}-${to}${shape}`,{headers:FAN_HTTP,signal:AbortSignal.timeout(8000)});}catch(e){why=String(e?.message || 'no connection');tally('net');break;}
+        tally(response.status);
+        if(response.status===404){refused+=3;break;}
+        if(response.status===400){refused++;continue;}
+        if(!response.ok){why='ESPN HTTP '+response.status;break;}
+        const d=await response.json().catch(()=>null);
+        if(Array.isArray(d?.events)){data=d;stat.raw=(stat.raw || 0)+d.events.length;break;}
+        why='ESPN invalid data';break;
       }
-      if(!response.ok){why='ESPN HTTP '+response.status;continue;}
-      const d=await response.json().catch(()=>null);
-      if(Array.isArray(d?.events)){data=d;break;}
-      why='ESPN invalid data';
+      if(data || refused>0)break;
+    }
+    // Every query shape was refused: remember the competition as empty (for 6h only).
+    if(!data && refused>=3 && !why) {
+      await env.DB.prepare('INSERT INTO fan_espn_form_cache(cache_key,data,fetched_at) VALUES(?,?,?) ON CONFLICT(cache_key) DO UPDATE SET data=excluded.data,fetched_at=excluded.fetched_at').bind(key,'[]',Date.now()).run();
+      return [];
     }
     if(!data) {
       // Both hosts failed: an older copy of this window is better than nothing.
@@ -4954,10 +4963,10 @@ async function fanNationalFormLive(env,name,kickoff,espnId=null) {
   // Two 150-day windows, newest first. A window that ended over two days ago never changes, so it is kept for good.
   const chunks=[{from:ymd(limit-150*86400000),to:ymd(limit),keep:false},{from:ymd(limit-300*86400000),to:ymd(limit-151*86400000),keep:limit-151*86400000<now-2*86400000}];
   const found=new Map();let reached=0,lastWhy='';
-  let seen=0;
+  let seen=0;const stat={};
   const scan=async (slugs,chs=chunks)=>{
     const jobs=[];
-    for(const slug of slugs)for(const ch of chs)jobs.push(fanNationalSlug(env,slug,ch.from,ch.to,ch.keep).then(g=>{reached++;return g;}).catch(e=>{lastWhy=String(e?.message || '');return null;}));
+    for(const slug of slugs)for(const ch of chs)jobs.push(fanNationalSlug(env,slug,ch.from,ch.to,ch.keep,stat).then(g=>{reached++;return g;}).catch(e=>{lastWhy=String(e?.message || '');return null;}));
     for(const games of await Promise.all(jobs))for(const g of games || []) {
       seen++;
       if(g.at>=limit || g.at<limit-300*86400000)continue;
@@ -4978,7 +4987,7 @@ async function fanNationalFormLive(env,name,kickoff,espnId=null) {
   }
   if(!reached)throw fanUnavailable(lastWhy);
   const rows=[...found.values()].sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)).slice(0,5);
-  if(rows.length<1)throw new FanFormError('No verified completed recent results were found for "'+String(name).slice(0,40)+'" (international sources checked: '+seen+' finished games'+(lastWhy?'; last error: '+String(lastWhy).replace(/[^\w .:\/-]/g,'').slice(0,40):'')+').','insufficient_results');
+  if(rows.length<1)throw new FanFormError('No verified completed recent results were found for "'+String(name).slice(0,40)+'" (international sources checked: '+seen+' finished games, '+(stat.raw || 0)+' events, ESPN replies '+JSON.stringify(stat.codes || {}).replace(/[^\w:,]/g,'').slice(0,60)+(lastWhy?'; last error: '+String(lastWhy).replace(/[^\w .:\/-]/g,'').slice(0,40):'')+').','insufficient_results');
   return {source:'ESPN',teamId:'espn:national',fetchedAt:now,matches:rows,played:rows.length,wins:rows.filter(r=>r.result==='W').length,draws:rows.filter(r=>r.result==='D').length,losses:rows.filter(r=>r.result==='L').length,goalsFor:rows.reduce((n,r)=>n+r.goalsFor,0),goalsAgainst:rows.reduce((n,r)=>n+r.goalsAgainst,0)};
 }
 // ---- Typo tolerance and a precise name lookup for clubs ESPN does not list ----
