@@ -79,6 +79,9 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   bool _loading = false, _busy = false;
   String? _error;
   int _done = 0, _total = 0;
+  // Bumped to cancel the analysis that is running: its loop and any answer
+  // still on the way are then ignored.
+  int _run = 0;
   @override
   void initState() {
     super.initState();
@@ -782,15 +785,19 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     final premium = SubscriptionService.instance.isPremium ||
         _weeklyPremium || await FanZoneService.hasWeeklyPremium();
     if (premium && !_weeklyPremium && mounted) setState(() => _weeklyPremium = true);
-    if (!premium && !_dailyFreePicks.contains(key) &&
-        _dailyFreePicks.length >= _maxPicks) {
-      _snack('You have used your 3 free AI match selections for today. Upgrade to Premium for more selections.');
-      await _showPremiumUpgrade();
-      if (!mounted || !SubscriptionService.instance.isPremium) return false;
-    }
-
-    if (!SubscriptionService.instance.isPremium) {
-      await _saveDailyFreePick(key);
+    // A free pick is used when a match is analysed, not when it is selected.
+    // Matches already analysed today can be analysed again for free; the
+    // rest (analysed + currently selected) may not go over the daily limit.
+    if (!premium && !_dailyFreePicks.contains(key)) {
+      final waiting = _selected.where((k) => !_dailyFreePicks.contains(k)).length;
+      if (_dailyFreePicks.length >= _maxPicks) {
+        _snack('You have used your 3 free AI analyses for today. Upgrade to Premium for more.');
+        await _showPremiumUpgrade();
+        if (!mounted || !SubscriptionService.instance.isPremium) return false;
+      } else if (_dailyFreePicks.length + waiting >= _maxPicks) {
+        _snack('Free users can analyse $_maxPicks matches a day. Unselect a match to pick another, or upgrade to Premium.');
+        return false;
+      }
     }
     if (!mounted) return false;
     setState(() => _selected.add(key));
@@ -1101,6 +1108,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     final queue = _all
         .where((f) => _selected.contains(FanZoneService.matchKey(f)))
         .toList();
+    final run = ++_run;
     setState(() {
       _busy = true;
       _done = 0;
@@ -1115,7 +1123,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     }
     for (final f in queue) {
       final key = FanZoneService.matchKey(f);
-      if (!mounted) return;
+      if (!mounted || run != _run) return;
       setState(() {
         _results.remove(key);
         _failures.remove(key);
@@ -1126,7 +1134,12 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           body: _bodyFor(f),
           timeout: const Duration(seconds: 120),
         );
-        if (!mounted) return;
+        // Stopped while waiting: drop this answer.
+        if (!mounted || run != _run) return;
+        // The free daily pick is used now, by a finished analysis.
+        if (!(SubscriptionService.instance.isPremium || _weeklyPremium)) {
+          unawaited(_saveDailyFreePick(key));
+        }
         setState(() {
           _results[key] = data;
           // Show the real clubs (and crests) the server resolved for a typed matchup.
@@ -1155,12 +1168,38 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
         });
         unawaited(_remember(f, key, data));
       } catch (e) {
-        if (!mounted) return;
+        if (!mounted || run != _run) return;
         setState(() => _failures[key] = _failText(f, e));
       }
-      if (mounted) setState(() => _done++);
+      if (mounted && run == _run) setState(() => _done++);
     }
-    if (mounted) setState(() => _busy = false);
+    if (mounted && run == _run) setState(() => _busy = false);
+  }
+
+  /// Stops the analysis that is running. Matches already analysed keep their
+  /// result; the one in progress and the ones still waiting stay selected and
+  /// use no free pick (a pick is used only by a finished analysis).
+  void _stopAnalysis() {
+    if (!_busy) return;
+    _run++;
+    setState(() {
+      _busy = false;
+      _done = 0;
+      _total = 0;
+    });
+    _snack('Analysis stopped.');
+  }
+
+  /// Clears every picked match so others can be chosen.
+  void _unselectAll() {
+    if (_busy || _selected.isEmpty) return;
+    setState(() {
+      for (final k in _selected) {
+        _results.remove(k);
+        _failures.remove(k);
+      }
+      _selected.clear();
+    });
   }
 
   final Set<String> _refreshing = <String>{};
@@ -4144,12 +4183,76 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _AnalyseButton(
-            busy: _busy,
-            done: _done,
-            total: _total,
-            count: n,
-            onPressed: _analyse,
+          if (n > 0 && !_busy)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: _unselectAll,
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  minimumSize: const Size(0, 30),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: Icon(Icons.deselect_rounded, size: 16, color: Ui.muted),
+                label: Text(
+                  'Unselect all',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Ui.muted,
+                  ),
+                ),
+              ),
+            ),
+          Row(
+            children: [
+              Expanded(
+                child: _AnalyseButton(
+                  busy: _busy,
+                  done: _done,
+                  total: _total,
+                  count: n,
+                  onPressed: _analyse,
+                ),
+              ),
+              if (_busy) ...[
+                const SizedBox(width: 10),
+                Semantics(
+                  button: true,
+                  label: 'Stop analysis',
+                  child: SizedBox(
+                    height: 50,
+                    child: Material(
+                      color: const Color(0xFFE5484D).withValues(alpha: .16),
+                      borderRadius: BorderRadius.circular(16),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: _stopAnalysis,
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.stop_rounded,
+                                  color: Color(0xFFFF6B6B), size: 22),
+                              SizedBox(width: 4),
+                              Text(
+                                'Stop',
+                                style: TextStyle(
+                                  color: Color(0xFFFF6B6B),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),
