@@ -1,0 +1,181 @@
+{
+  "version": 1,
+  "_help": "Remote list of YouTube channels for the Reels tab. category: football | cricket | f1 | other. id is the channel's UC... ID. Host this file and set the Worker variable REELS_CONFIG_URL to its raw https link; edits go live within about 15 minutes, no app update needed.",
+  "channels": [
+    {
+      "name": "ESPN",
+      "id": "UCiWLfSweyRNmLpgEHekhoAg",
+      "category": "other"
+    },
+    {
+      "name": "NBA",
+      "id": "UCWJ2lWNubArHWmf3FIHbfcQ",
+      "category": "other"
+    },
+    {
+      "name": "Sky Sports Football",
+      "id": "UCNAf1k0yIjyGu3k9BwAg3lg",
+      "category": "football"
+    },
+    {
+      "name": "Red Bull",
+      "id": "UCblfuW_4rakIf2h6aqANefA",
+      "category": "other"
+    },
+    {
+      "name": "NFL",
+      "id": "UCDVYQ4Zhbm3S2dlz7P1GBDg",
+      "category": "other"
+    },
+    {
+      "name": "NHL",
+      "id": "UCqFMzb-4AUf6WAIbl132QKA",
+      "category": "other"
+    },
+    {
+      "name": "UFC",
+      "id": "UCvgfXK4nTYKudb0rFR6noLA",
+      "category": "other"
+    },
+    {
+      "name": "WWE",
+      "id": "UCJ5v_MCY6GNUBTO8-D3XoAg",
+      "category": "other"
+    },
+    {
+      "name": "Premier League",
+      "id": "UCG5qGWdu8nIRZqJ_GgDwQ-w",
+      "category": "football"
+    },
+    {
+      "name": "FIFA",
+      "id": "UCpcTrCXblq78GZrTUTLWeBw",
+      "category": "football"
+    },
+    {
+      "name": "UEFA",
+      "id": "UCyGa1YEx9ST66rYrJTGIKOw",
+      "category": "football"
+    },
+    {
+      "name": "LaLiga",
+      "id": "UCTv-XvfzLX3i4IGWAm4sbmA",
+      "category": "football"
+    },
+    {
+      "name": "Bundesliga",
+      "id": "UC6UL29enLNe4mqwTfAyeNuw",
+      "category": "football"
+    },
+    {
+      "name": "Serie A",
+      "id": "UCBJeMCIeLQos7wacox4hmLQ",
+      "category": "football"
+    },
+    {
+      "name": "Ligue 1",
+      "id": "UC58LMAlfwtGRNR6Xpd4DlSA",
+      "category": "football"
+    },
+    {
+      "name": "Eredivisie",
+      "id": "UCxyoiD-bwrmapdivXCFvmaw",
+      "category": "football"
+    },
+    {
+      "name": "Major League Soccer",
+      "id": "UCSZbXT5TLLW_i-5W8FZpFsg",
+      "category": "football"
+    },
+    {
+      "name": "NWSL",
+      "id": "UCL4xu08EDu0ZFZsBJUB0chw",
+      "category": "football"
+    },
+    {
+      "name": "ICC",
+      "id": "UCt2JXOLNxqry7B_4rRZME3Q",
+      "category": "cricket"
+    },
+    {
+      "name": "FIBA",
+      "id": "UCtInrnU3QbWqFGsdKT1GZtg",
+      "category": "other"
+    },
+    {
+      "name": "EuroLeague Basketball",
+      "id": "UCGr3nR_XH9r6E5b09ZJAT9w",
+      "category": "other"
+    },
+    {
+      "name": "ATP Tour",
+      "id": "UCY_5h5zaSwN7Or4kIJDYNXA",
+      "category": "other"
+    },
+    {
+      "name": "WTA",
+      "id": "UCaBIVVpHjq6j3tSyxwTE-8Q",
+      "category": "other"
+    },
+    {
+      "name": "Formula 1",
+      "id": "UCB_qr75-ydFVKSF9Dmo6izg",
+      "category": "f1"
+    },
+    {
+      "name": "MotoGP",
+      "id": "UC8pYaQzbBBXg9GIOHRvTmDQ",
+      "category": "other"
+    },
+    {
+      "name": "Formula E",
+      "id": "UC-DuRqsBQOEk_5o1q4Ze-Fg",
+      "category": "other"
+    },
+    {
+      "name": "NASCAR",
+      "id": "UCuN9hYw2RpoAW8rZ3VK3isA",
+      "category": "other"
+    },
+    {
+      "name": "Tour de France",
+      "id": "UCSpycUnuU0IVF7gGIhGojhg",
+      "category": "other"
+    },
+    {
+      "name": "World Athletics",
+      "id": "UCQk7fWv15ChjMJLCRVmtApw",
+      "category": "other"
+    },
+    {
+      "name": "World Surf League",
+      "id": "UChuLeaTGRcfzo0UjL-2qSbQ",
+      "category": "other"
+    },
+    {
+      "name": "World Rugby",
+      "id": "UCE28rwYoaV7jvU6GVzdu_GQ",
+      "category": "other"
+    },
+    {
+      "name": "World Aquatics",
+      "id": "UCZko_COpTM4_d2kPrxZfzFg",
+      "category": "other"
+    },
+    {
+      "name": "World Triathlon",
+      "id": "UCXRVKD6l-LrX5TmGJqQFFoQ",
+      "category": "other"
+    },
+    {
+      "name": "UCI",
+      "id": "UCloqTh1nPpW13LCntQglS-Q",
+      "category": "other"
+    },
+    {
+      "name": "Olympics",
+      "id": "UCTl3QQTvqHFjurroKxexy2Q",
+      "category": "other"
+    }
+  ]
+}
