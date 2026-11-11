@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' show Random;
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -71,6 +72,10 @@ class SportsReelsFeed {
   final bool enabled;
   final String country;
   final bool unavailable;
+
+  /// Changes with every download, so "For You" does not always open with the
+  /// same category.
+  final int seed;
   const SportsReelsFeed(
     this.items, {
     this.categories = const [],
@@ -78,17 +83,22 @@ class SportsReelsFeed {
     this.enabled = true,
     this.country = '',
     this.unavailable = false,
+    this.seed = 0,
   });
 
-  /// Videos of one tab. `all` = "For You": categories mixed one by one, and
-  /// your own "deeprows" videos left out (they keep their own tab).
+  /// Ids of the first reels of a tab, used to tell whether a download brought
+  /// anything new.
+  String signature(String tab) =>
+      forTab(tab).take(12).map((r) => r.id).join(',');
+
+  /// Videos of one tab. `all` = "For You": categories mixed one by one.
   List<SportsReel> forTab(String tab) {
     if (tab != 'all') return items.where((r) => r.category == tab).toList();
     final groups = categories
-        .where((c) => c != 'deeprows')
         .map((c) => items.where((r) => r.category == c).toList())
         .where((g) => g.isNotEmpty)
         .toList();
+    if (seed != 0) groups.shuffle(Random(seed));
     final out = <SportsReel>[];
     for (var i = 0; groups.any((g) => g.length > i); i++) {
       for (final g in groups) {
@@ -145,9 +155,9 @@ class _Config {
 class SportsReelsService {
   static const _asset = 'assets/data/reels_channels.json';
   static const _referer = 'https://deeprows.github.io/';
-  static const _perSource = 4;
+  static const _perSource = 6;
   static const _limit = 120;
-  static const _keep = Duration(minutes: 10);
+  static const _keep = Duration(minutes: 5);
 
   static SportsReelsFeed? _cached;
   static DateTime _cachedAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -155,6 +165,10 @@ class SportsReelsService {
 
   /// Forget the cached feed so the next [load] downloads fresh videos.
   static void invalidate() => _cached = null;
+
+  /// True when the saved feed is older than the cache time (or missing).
+  static bool get isStale =>
+      _cached == null || DateTime.now().difference(_cachedAt) >= _keep;
 
   static Future<SportsReelsFeed> load({bool force = false}) {
     final saved = _cached;
@@ -298,14 +312,17 @@ class SportsReelsService {
     final title = '${v['title'] ?? ''}'.trim();
     if (!url.startsWith('https://') || title.isEmpty) return null;
     final yt = youtubeId(url);
-    final cat = '${v['category'] ?? 'deeprows'}'.trim().toLowerCase();
+    var cat = '${v['category'] ?? 'other'}'.trim().toLowerCase();
+    // There is no separate "Deeprows" tab any more: these videos mix into
+    // the normal reels.
+    if (cat.isEmpty || cat == 'deeprows') cat = 'other';
     final chan = '${v['channel'] ?? ''}'.trim();
     final thumb = '${v['thumbnail'] ?? ''}'.trim();
     return SportsReel(
       id: yt ?? 'custom-${url.hashCode}',
       title: title,
-      channel: chan.isEmpty ? 'Deeprows' : chan,
-      category: cat.isEmpty ? 'deeprows' : cat,
+      channel: chan.isEmpty ? 'Sports' : chan,
+      category: cat,
       thumb: thumb.isNotEmpty
           ? thumb
           : (yt != null ? 'https://i.ytimg.com/vi/$yt/hqdefault.jpg' : ''),
@@ -345,8 +362,6 @@ class SportsReelsService {
         ]);
         final name = countryName(code);
         return name == code ? '$flag Near You' : '$flag $name';
-      case 'deeprows':
-        return '\u2B50 Deeprows';
       case 'football':
         return '\u26BD Football';
       case 'cricket':
@@ -416,6 +431,7 @@ class SportsReelsService {
       title: cfg.title,
       country: country,
       unavailable: items.isEmpty,
+      seed: DateTime.now().millisecondsSinceEpoch % 100000 + 1,
     );
     if (items.isNotEmpty) {
       _cached = feed;
