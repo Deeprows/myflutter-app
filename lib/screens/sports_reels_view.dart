@@ -95,7 +95,7 @@ class _SportsReelsViewState extends State<SportsReelsView>
   Future<void> _checkFresh() async {
     if (!mounted || _loading || _feed == null) return;
     if (!widget.active ||
-        !TickerMode.getValue(context) ||
+        !TickerMode.of(context) ||
         !SportsReelsService.isStale) {
       return;
     }
