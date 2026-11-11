@@ -18,6 +18,27 @@ class BetSlipPick {
     this.league = '',
     this.kickoff,
   });
+
+  /// Splits an AI pick such as "Yes (high confidence, 70% implied
+  /// probability)" into the plain pick ("Yes") and its confidence ("HIGH").
+  /// Also handles the short "(high)" form. Confidence is null when the text
+  /// does not carry one.
+  static ({String pick, String? confidence}) splitConfidence(String raw) {
+    String? confidence;
+    final pick = raw.replaceAllMapped(RegExp(r'\s*\(([^)]*)\)'), (m) {
+      final inner = m.group(1) ?? '';
+      final word = RegExp(r'\b(high|medium|low)\b', caseSensitive: false)
+          .firstMatch(inner);
+      final onlyWord = RegExp(r'^\s*(high|medium|low)\s*$', caseSensitive: false)
+          .hasMatch(inner);
+      if (word != null && (onlyWord || inner.toLowerCase().contains('confidence'))) {
+        confidence ??= word.group(1)!.toUpperCase();
+        return '';
+      }
+      return m.group(0)!;
+    }).trim();
+    return (pick: pick, confidence: confidence);
+  }
 }
 
 /// Builds a printable bet slip (A5 PDF) from an AI analysis and opens the
