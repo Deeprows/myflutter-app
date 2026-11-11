@@ -400,6 +400,24 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           if (r.statusCode != 200) continue;
           final data = jsonDecode(utf8.decode(r.bodyBytes));
           if (data is Map && data['events'] is List) {
+            // The feed names each competition once in "leagues"; every event carries its id inside "uid".
+            final names = <String, String>{};
+            if (data['leagues'] is List) {
+              for (final l in data['leagues'] as List) {
+                if (l is! Map) continue;
+                final name = '${l['name'] ?? l['midsizeName'] ?? l['abbreviation'] ?? ''}'.trim();
+                if (name.isEmpty) continue;
+                if (l['id'] != null) names['${l['id']}'] = name;
+                final m = RegExp(r'(?:^|~)l:(\d+)').firstMatch('${l['uid'] ?? ''}');
+                if (m != null) names[m.group(1)!] = name;
+              }
+            }
+            for (final ev in data['events'] as List) {
+              if (ev is! Map || '${ev['leagueName'] ?? ''}'.isNotEmpty) continue;
+              final m = RegExp(r'(?:^|~)l:(\d+)').firstMatch('${ev['uid'] ?? ''}');
+              final name = m == null ? null : names[m.group(1)!];
+              if (name != null) ev['leagueName'] = name;
+            }
             return data['events'] as List;
           }
         } catch (_) {}
@@ -973,7 +991,11 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                 away: a,
                 homeLogo: '${info['homeLogo'] ?? ''}',
                 awayLogo: '${info['awayLogo'] ?? ''}',
-                league: f.league,
+                // The server names the competition when both clubs share one.
+                league: '${info['league'] ?? ''}'.isNotEmpty &&
+                        '${info['league']}' != 'Your matchup'
+                    ? '${info['league']}'
+                    : f.league,
                 kickoff: f.kickoff,
                 gender: f.gender,
               );
