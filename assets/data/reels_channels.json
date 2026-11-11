@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "_help": "Reels setup (same shape as the Deeprowss browser's remote/config.json). reels: on/off, tab title, shortsOnly. channels: YouTube channels (id = UC... ID), category football | cricket | f1 | other (any new name becomes a new tab). videoSources: dailymotion {channel or id}, peertube {host, id}, rss {url}, youtube {id}. customVideos: your own embed links (category 'deeprows' = own tab). regionalVideos: per country code, shown in the 'Near You' tab. Host this file and set AppConfig.reelsConfigUrl to change Reels without an app update.",
+  "_help": "Reels setup (same shape as the Deeprowss browser's remote/config.json). reels: on/off, tab title, shortsOnly. channels: YouTube channels (id = UC... ID), category football | cricket | f1 | other (any new name becomes a new tab). videoSources: dailymotion {channel or id}, peertube {host, id}, rss {url}, youtube {id}. customVideos: optional hand-picked embed links (they mix into the normal reels). regionalVideos: per country code, shown in the 'Near You' tab. Host this file and set AppConfig.reelsConfigUrl to change Reels without an app update.",
   "reels": {
     "enabled": true,
     "title": "Reels",
@@ -191,15 +191,7 @@
       "category": "other"
     }
   ],
-  "customVideos": [
-    {
-      "title": "Atletico Madrid vs Real Madrid Highlights",
-      "url": "https://filemoon.org/en/k0embMk9GVb4/embed",
-      "category": "deeprows",
-      "type": "sport",
-      "channel": "Deeprows"
-    }
-  ],
+  "customVideos": [],
   "regionalVideos": {
     "GB": [
       {
