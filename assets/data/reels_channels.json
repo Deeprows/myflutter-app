@@ -1,6 +1,11 @@
 {
-  "version": 1,
-  "_help": "Remote list of YouTube channels for the Reels tab. category: football | cricket | f1 | other. id is the channel's UC... ID. Host this file and set the Worker variable REELS_CONFIG_URL to its raw https link; edits go live within about 15 minutes, no app update needed.",
+  "version": 2,
+  "_help": "Reels setup (same shape as the Deeprowss browser's remote/config.json). reels: on/off, tab title, shortsOnly. channels: YouTube channels (id = UC... ID), category football | cricket | f1 | other (any new name becomes a new tab). videoSources: dailymotion {channel or id}, peertube {host, id}, rss {url}, youtube {id}. customVideos: your own embed links (category 'deeprows' = own tab). regionalVideos: per country code, shown in the 'Near You' tab. Host this file and set AppConfig.reelsConfigUrl to change Reels without an app update.",
+  "reels": {
+    "enabled": true,
+    "title": "Reels",
+    "shortsOnly": true
+  },
   "channels": [
     {
       "name": "ESPN",
@@ -177,5 +182,81 @@
       "id": "UCTl3QQTvqHFjurroKxexy2Q",
       "category": "other"
     }
-  ]
+  ],
+  "videoSources": [
+    {
+      "kind": "dailymotion",
+      "name": "Dailymotion Sport",
+      "channel": "sport",
+      "category": "other"
+    }
+  ],
+  "customVideos": [
+    {
+      "title": "Atletico Madrid vs Real Madrid Highlights",
+      "url": "https://filemoon.org/en/k0embMk9GVb4/embed",
+      "category": "deeprows",
+      "type": "sport",
+      "channel": "Deeprows"
+    }
+  ],
+  "regionalVideos": {
+    "GB": [
+      {
+        "kind": "youtube",
+        "name": "Sky Sports Football",
+        "id": "UCNAf1k0yIjyGu3k9BwAg3lg"
+      },
+      {
+        "kind": "youtube",
+        "name": "Premier League",
+        "id": "UCG5qGWdu8nIRZqJ_GgDwQ-w"
+      }
+    ],
+    "US": [
+      {
+        "kind": "youtube",
+        "name": "NBA",
+        "id": "UCWJ2lWNubArHWmf3FIHbfcQ"
+      },
+      {
+        "kind": "youtube",
+        "name": "NFL",
+        "id": "UCDVYQ4Zhbm3S2dlz7P1GBDg"
+      },
+      {
+        "kind": "youtube",
+        "name": "ESPN",
+        "id": "UCiWLfSweyRNmLpgEHekhoAg"
+      }
+    ],
+    "ES": [
+      {
+        "kind": "youtube",
+        "name": "LaLiga",
+        "id": "UCTv-XvfzLX3i4IGWAm4sbmA"
+      }
+    ],
+    "DE": [
+      {
+        "kind": "youtube",
+        "name": "Bundesliga",
+        "id": "UC6UL29enLNe4mqwTfAyeNuw"
+      }
+    ],
+    "IT": [
+      {
+        "kind": "youtube",
+        "name": "Serie A",
+        "id": "UCBJeMCIeLQos7wacox4hmLQ"
+      }
+    ],
+    "FR": [
+      {
+        "kind": "youtube",
+        "name": "Ligue 1",
+        "id": "UC58LMAlfwtGRNR6Xpd4DlSA"
+      }
+    ]
+  }
 }
