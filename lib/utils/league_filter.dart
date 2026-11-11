@@ -88,6 +88,40 @@ class LeagueFilter {
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
 
+  /// Best-effort competition name from free text (slug, headline, title) when
+  /// ESPN gives no league name. Returns 'Other leagues' if nothing matches.
+  static String guessLeague(String text) {
+    final p = _plain(text.replaceAll(RegExp(r'[-_]'), ' '));
+    const hints = <String, String>{
+      'english premier league': 'Premier League',
+      'premier league': 'Premier League',
+      'laliga': 'LaLiga',
+      'la liga': 'LaLiga',
+      'serie a': 'Serie A',
+      'bundesliga': 'Bundesliga',
+      'ligue 1': 'Ligue 1',
+      'champions league': 'UEFA Champions League',
+      'europa league': 'UEFA Europa League',
+      'conference league': 'UEFA Conference League',
+      'nations league': 'UEFA Nations League',
+      'world cup qualif': 'World Cup Qualifying',
+      'friendly': 'International Friendly',
+      'friendlies': 'International Friendly',
+      'eredivisie': 'Eredivisie',
+      'primeira liga': 'Primeira Liga',
+      'super lig': 'Super Lig',
+      'major league soccer': 'MLS',
+      'liga mx': 'Liga MX',
+      'libertadores': 'Copa Libertadores',
+      'fa cup': 'FA Cup',
+      'copa del rey': 'Copa del Rey',
+    };
+    for (final e in hints.entries) {
+      if (p.contains(e.key)) return e.value;
+    }
+    return 'Other leagues';
+  }
+
   /// One display name per competition.
   static String canonical(String league) {
     var name = league.trim();
@@ -122,6 +156,17 @@ class LeagueFilter {
 
   static bool isNational(Fixture f) => isNationalLeague(f.league);
 
+  /// Chip name for a fixture: its competition, with "(Women)" added for the
+  /// women's games of a competition so e.g. UEFA Champions League and
+  /// UEFA Champions League (Women) get separate tabs.
+  static String chipFor(Fixture f) {
+    final c = canonical(f.league);
+    if (f.isWomen && !RegExp(r'women', caseSensitive: false).hasMatch(c)) {
+      return c == 'Other leagues' ? c : '$c (Women)';
+    }
+    return c;
+  }
+
   /// Does [f] belong under the [filter] chip?
   static bool matches(Fixture f, String filter) {
     switch (filter) {
@@ -132,7 +177,7 @@ class LeagueFilter {
       case women:
         return f.isWomen;
       default:
-        return canonical(f.league) == filter;
+        return chipFor(f) == filter;
     }
   }
 
@@ -142,12 +187,14 @@ class LeagueFilter {
   static List<MapEntry<String, int>> leaguesOf(Iterable<Fixture> fixtures) {
     final counts = <String, int>{};
     for (final f in fixtures) {
-      final c = canonical(f.league);
+      final c = chipFor(f);
       counts[c] = (counts[c] ?? 0) + 1;
     }
     int rank(String name) {
       final i = top.indexOf(name);
-      if (i >= 0) return i;
+      if (i >= 0) return i * 2;
+      final w = top.indexOf(name.replaceFirst(' (Women)', ''));
+      if (w >= 0) return w * 2 + 1;
       if (isNationalLeague(name)) return 1000;
       return 2000;
     }
