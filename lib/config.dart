@@ -12,6 +12,11 @@ class AppConfig {
   /// Drawer menu links. Leave a value empty to make its menu item show a
   /// "not set up yet" message instead of opening anything.
   static const websiteUrl = 'https://deeprowss.com';
+
+  /// Address the match chat presents itself as (the chat database key may be
+  /// limited to your website). Change it WITHOUT an app update: add
+  /// `"chat": {"origin": "https://your-new-site.com"}` to app_config.json.
+  static const defaultChatOrigin = 'https://deeprowss.com';
   static const joinUrl =
       'https://t.me/deeprows'; // Telegram / WhatsApp / Discord invite link
   static const updateUrl = ''; // direct APK link (app_config.json "update.apkUrl" wins)
