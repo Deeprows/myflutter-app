@@ -285,7 +285,21 @@ class _FanPostVideoState extends State<FanPostVideo>
     super.dispose();
   }
 
-  bool _ownOrigin = false;
+  /// 0 = app player origin, 1 = same origin but no Referer, 2 = stream's own
+  /// origin (see the match player page).
+  int _attempt = 0;
+
+  /// Embed pages: 0 = iframe on a page presenting as the player origin,
+  /// 1 = direct with that origin as Referer, 2 = direct, no Referer.
+  /// Tapping "Retry video" after a failure tries the next one.
+  int _embedMode = 0;
+
+  void _playTap() {
+    if (_failed) _embedMode = (_embedMode + 1) % 3;
+    _play();
+  }
+
+  bool get _ownOrigin => _attempt >= 2;
 
   String _streamOrigin(String url) {
     final u = Uri.tryParse(url);
@@ -293,14 +307,14 @@ class _FanPostVideoState extends State<FanPostVideo>
     return '${u.scheme}://${u.host}${u.hasPort ? ':${u.port}' : ''}/';
   }
 
-  Future<void> _play({bool ownOrigin = false}) async {
-    _ownOrigin = ownOrigin;
+  Future<void> _play({int attempt = 0}) async {
+    _attempt = attempt;
     setState(() {
       _loading = true;
       _failed = false;
       _dmBlocked = false;
     });
-    final stream = StreamResolver.resolve(_url);
+    var stream = StreamResolver.resolve(_url);
     final initialUri = Uri.tryParse(_url);
     _startedAt = DateTime.now();
     _settled = false;
@@ -314,7 +328,9 @@ class _FanPostVideoState extends State<FanPostVideo>
       ..setBackgroundColor(Colors.black)
       ..addJavaScriptChannel('FanSize', onMessageReceived: (m) => _onMeasured(m.message))
       ..addJavaScriptChannel('DwPlayer', onMessageReceived: (m) {
-        if (m.message == 'fail' && !_ownOrigin && mounted) _play(ownOrigin: true);
+        if (m.message == 'fail' && _attempt < 2 && mounted) {
+          _play(attempt: _attempt + 1);
+        }
       })
       ..setNavigationDelegate(
         NavigationDelegate(
@@ -405,6 +421,15 @@ class _FanPostVideoState extends State<FanPostVideo>
         );
         return;
       }
+      if (_attempt == 0 &&
+          stream.kind == StreamKind.embed &&
+          _youtubeId(initialUri) == null &&
+          _info.kind == EmbedKind.generic) {
+        // Direct link without a file extension: ask the server what it is.
+        final k = await StreamResolver.sniff(stream.url);
+        if (!mounted || _controller != c) return;
+        if (k != null) stream = ResolvedStream(stream.url, k);
+      }
       final youtubeId = _youtubeId(initialUri);
       if (youtubeId != null) {
         await _loadHtml(c, 
@@ -414,7 +439,7 @@ class _FanPostVideoState extends State<FanPostVideo>
       } else if (stream.usesHtmlPlayer) {
         await c.setUserAgent(AppConfig.userAgent);
         await _loadHtml(c,
-          buildPlayerHtml(stream, lowQuality: false),
+          buildPlayerHtml(stream, lowQuality: false, noReferrer: _attempt == 1),
           baseUrl: _ownOrigin ? _streamOrigin(stream.url) : _streamBase(stream.url),
         );
       } else if (Uri.parse(_url).host == 'www.youtube.com' &&
@@ -427,8 +452,22 @@ class _FanPostVideoState extends State<FanPostVideo>
       } else {
         // Embed page: same desktop-like agent as the match page's player.
         await c.setUserAgent(AppConfig.userAgent);
-        _htmlMode = false;
-        await c.loadRequest(Uri.parse(stream.kind == StreamKind.invalid ? _url : stream.url));
+        final target = stream.kind == StreamKind.invalid ? _url : stream.url;
+        if (_embedMode == 0 && stream.kind == StreamKind.embed) {
+          final src = const HtmlEscape(HtmlEscapeMode.attribute).convert(target);
+          await _loadHtml(c,
+            '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head><body style="margin:0;background:#000"><iframe src="$src" style="position:fixed;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
+            baseUrl: _streamBase(target),
+          );
+        } else {
+          _htmlMode = false;
+          if (_embedMode == 1 && stream.kind == StreamKind.embed) {
+            await c.loadRequest(Uri.parse(target),
+                headers: {'Referer': _streamBase(target)});
+          } else {
+            await c.loadRequest(Uri.parse(target));
+          }
+        }
       }
     } catch (_) {
       if (mounted)
@@ -517,7 +556,7 @@ class _FanPostVideoState extends State<FanPostVideo>
     if (_dmBlocked) return _blockedCard();
     final thumb = _youtubeThumbnail ?? _tiktokThumb;
     return InkWell(
-      onTap: widget.onTapPreview ?? _play,
+      onTap: widget.onTapPreview ?? _playTap,
       child: Stack(
         fit: StackFit.expand,
         alignment: Alignment.center,
