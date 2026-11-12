@@ -244,9 +244,9 @@ class AppLock with WidgetsBindingObserver {
 
   // ------------------------------------------------------------ playback
 
-  /// When the lock engages, everything that is playing stops: music, video
-  /// sound handed to the background service, and the video / web player page
-  /// that is open.
+  /// When the lock engages, video stops: the video / web player page that is
+  /// open and video sound handed to the background service. Player music is
+  /// left alone.
   void _onLockedChanged() {
     BackgroundPlayback.locked = locked.value;
     if (!locked.value) {
@@ -256,8 +256,12 @@ class AppLock with WidgetsBindingObserver {
     try {
       BackgroundPlayback.pauseForLock();
     } catch (_) {}
+    // Music from the Player keeps playing (with its notification) so the
+    // person can pause it from the lock screen. Only the sound of a video
+    // is stopped.
     try {
-      AudioBridge.current?.pause();
+      final h = AudioBridge.current;
+      if (h != null && h.videoMode) h.pause();
     } catch (_) {}
   }
 
