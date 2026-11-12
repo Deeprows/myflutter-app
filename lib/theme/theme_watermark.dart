@@ -33,7 +33,21 @@ class ThemeDecor {
 ///  * a big faint diagonal name ("MESSI 10", "CR7").
 /// Draws nothing for the other themes.
 class ThemeWatermark extends StatelessWidget {
-  const ThemeWatermark({super.key});
+  const ThemeWatermark({
+    super.key,
+    this.palette,
+    this.strength = 1,
+    this.ignoreHolds = false,
+  });
+
+  /// Palette to draw (null = the app's current theme).
+  final Palette? palette;
+
+  /// Multiplies the opacities above (the lock screen shows it stronger).
+  final double strength;
+
+  /// Draw even while a video player asks for the decoration to be hidden.
+  final bool ignoreHolds;
 
   /// How strong each decoration is (0 = invisible). Kept very low because it is
   /// drawn over the whole app and must never hide text, cards or buttons.
@@ -44,6 +58,7 @@ class ThemeWatermark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (ignoreHolds) return _decor();
     return ValueListenableBuilder<int>(
       valueListenable: ThemeDecor._holds,
       builder: (_, holds, __) =>
@@ -52,7 +67,7 @@ class ThemeWatermark extends StatelessWidget {
   }
 
   Widget _decor() {
-    final p = Ui.palette;
+    final p = palette ?? Ui.palette;
     final text = p.watermark;
     final asset = p.backdropAsset;
     final hasText = text != null && text.isNotEmpty;
@@ -65,14 +80,19 @@ class ThemeWatermark extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               if (p.stripes)
-                const CustomPaint(painter: _StripesPainter()),
+                CustomPaint(
+                  painter: _StripesPainter(
+                    p.stripeColor,
+                    (stripesOpacity * strength).clamp(0.0, 1.0),
+                  ),
+                ),
               if (asset != null)
                 Align(
                   alignment: Alignment.bottomRight,
                   child: FractionallySizedBox(
                     heightFactor: .52,
                     child: Opacity(
-                      opacity: pictureOpacity,
+                      opacity: (pictureOpacity * strength).clamp(0.0, 1.0),
                       child: Image.asset(
                         asset,
                         fit: BoxFit.contain,
@@ -99,7 +119,8 @@ class ThemeWatermark extends StatelessWidget {
                             fontWeight: FontWeight.w900,
                             letterSpacing: 6,
                             decoration: TextDecoration.none,
-                            color: Ui.red.withValues(alpha: nameOpacity),
+                            color: p.accent.withValues(
+                                alpha: (nameOpacity * strength).clamp(0.0, 1.0)),
                           ),
                         ),
                       ),
@@ -116,20 +137,21 @@ class ThemeWatermark extends StatelessWidget {
 
 /// Vertical bands, like the stripes of a football jersey.
 class _StripesPainter extends CustomPainter {
-  const _StripesPainter();
+  const _StripesPainter(this.color, this.opacity);
+  final Color color;
+  final double opacity;
 
   static const _band = 26.0;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Ui.palette.stripeColor
-          .withValues(alpha: ThemeWatermark.stripesOpacity);
+    final paint = Paint()..color = color.withValues(alpha: opacity);
     for (var x = 0.0; x < size.width; x += _band * 2) {
       canvas.drawRect(Rect.fromLTWH(x, 0, _band, size.height), paint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _StripesPainter old) => false;
+  bool shouldRepaint(covariant _StripesPainter old) =>
+      old.color != color || old.opacity != opacity;
 }
