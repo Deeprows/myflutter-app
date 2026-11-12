@@ -1,1 +1,73 @@
+[
+  {
+    "id": "1",
+    "home": "Türkiye",
+    "away": "Belgium",
+    "league": "UEFA Nations League - League A: Group 1",
+    "kickoff": "2026-11-12T18:00:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2442822",
+    "altUrl": "https://e.biboguv.cyou/hls/1432172/index.m3u8?t=MTQzMjE3MnwxNzk0NDY2NTUyfHx8fDk4NmE1OTAx.fFGhcBWzQ3cgHI0rMylnlzsjapowdKBYno61z1tf1So",
+    "altUrl2": "",
+    "altUrl3": "",
+    "homeLogo": "777",
+    "awayLogo": "1"
+  },
+  {
+    "id": "2",
+    "home": "Italy",
+    "away": "France",
+    "league": "UEFA Nations League - League A: Group 1",
+    "kickoff": "2026-11-12T20:45:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2442824",
+    "altUrl": "https://e.biboguv.cyou/hls/1660394/index.m3u8?t=MTY2MDM5NHwxNzk0NDY2NzU4fHx8fDk4NmE1OTAx.wKD2BuVPE5UNR1eTj4tNMH4SRbEudkx64kDBBctpYFM",
+    "altUrl2": "",
+    "altUrl3": "",
+    "homeLogo": "768",
+    "awayLogo": "2"
+  },
+  {
+    "id": "3",
+    "home": "Czechia",
+    "away": "Spain",
+    "league": "UEFA Nations League - League A: Group 3",
+    "kickoff": "2026-11-12T20:45:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2442825",
+    "altUrl": "https://e.biboguv.cyou/hls/1968452/index.m3u8?t=MTk2ODQ1MnwxNzk0NDY2OTA3fHx8fDk4NmE1OTAx.kQjn_P0-LvzEZTByIsFlZ2MHaQNn2s2TFtfp2qbY7vI",
+    "altUrl2": "",
+    "altUrl3": "",
+    "homeLogo": "770",
+    "awayLogo": "9"
+  },
+  {
+    "id": "4",
+    "home": "England",
+    "away": "Croatia",
+    "league": "UEFA Nations League - League A: Group 3",
+    "kickoff": "2026-11-12T20:45:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2442826",
+    "altUrl": "https://e.biboguv.cyou/hls/646975/index.m3u8?t=NjQ2OTc1fDE3OTQ0NjY5ODV8fHx8OTg2YTU5MDE.N5gT4B7bWb_DXxxjc29uQz0M0eIm7XkO-h5SOt6ki-s",
+    "altUrl2": "",
+    "altUrl3": "",
+    "homeLogo": "10",
+    "awayLogo": "3"
+  },
+  {
+    "id": "5",
+    "home": "Albania",
+    "away": "Finland",
+    "league": "UEFA Nations League - League C: Group 1",
+    "kickoff": "2026-11-12T20:45:00+01:00",
+    "duration": 130,
+    "url": "https://matchora.to/embed/match/2442827",
+    "altUrl": "https://e.biboguv.cyou/hls/1806551/index.m3u8?t=MTgwNjU1MXwxNzk0NDY3MDY1fHx8fDk4NmE1OTAx.yB_NkKtwrnb4RXXSElepSaYzqAX5N8Ltzakz8HUjGXo",
+    "altUrl2": "",
+    "altUrl3": "",
+    "homeLogo": "778",
+    "awayLogo": ""
+  }
+]
 
