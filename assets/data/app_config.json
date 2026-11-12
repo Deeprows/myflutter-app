@@ -43,7 +43,7 @@
     "url": "https://deeprowss.com"
   },
   "streamHint": {
-    "enabled": true,
+    "enabled": false,
     "text": "Double tap the screen to play.\nNot working? Try another stream number."
   }
 }
