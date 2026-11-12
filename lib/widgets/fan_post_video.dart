@@ -285,7 +285,16 @@ class _FanPostVideoState extends State<FanPostVideo>
     super.dispose();
   }
 
-  Future<void> _play() async {
+  bool _ownOrigin = false;
+
+  String _streamOrigin(String url) {
+    final u = Uri.tryParse(url);
+    if (u == null || u.host.isEmpty) return AppConfig.playerOrigin;
+    return '${u.scheme}://${u.host}${u.hasPort ? ':${u.port}' : ''}/';
+  }
+
+  Future<void> _play({bool ownOrigin = false}) async {
+    _ownOrigin = ownOrigin;
     setState(() {
       _loading = true;
       _failed = false;
@@ -304,6 +313,9 @@ class _FanPostVideoState extends State<FanPostVideo>
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
       ..addJavaScriptChannel('FanSize', onMessageReceived: (m) => _onMeasured(m.message))
+      ..addJavaScriptChannel('DwPlayer', onMessageReceived: (m) {
+        if (m.message == 'fail' && !_ownOrigin && mounted) _play(ownOrigin: true);
+      })
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (_) {
@@ -403,7 +415,7 @@ class _FanPostVideoState extends State<FanPostVideo>
         await c.setUserAgent(AppConfig.userAgent);
         await _loadHtml(c,
           buildPlayerHtml(stream, lowQuality: false),
-          baseUrl: _streamBase(stream.url),
+          baseUrl: _ownOrigin ? _streamOrigin(stream.url) : _streamBase(stream.url),
         );
       } else if (Uri.parse(_url).host == 'www.youtube.com' &&
           Uri.parse(_url).path.startsWith('/embed/')) {
