@@ -11,6 +11,7 @@ import '../config.dart';
 import '../models/fan_post_link.dart';
 import '../services/embed_info.dart';
 import '../services/player_html.dart';
+import '../services/remote_config.dart';
 import '../services/stream_resolver.dart';
 import '../screens/browser_screen.dart' show openExternally;
 import '../theme/app_theme.dart';
@@ -294,8 +295,12 @@ class _FanPostVideoState extends State<FanPostVideo>
   /// Tapping "Retry video" after a failure tries the next one.
   int _embedMode = 0;
 
+  String _embedBase(String url, String origin) => url.toLowerCase().startsWith('http://')
+      ? origin.replaceFirst('https://', 'http://')
+      : origin;
+
   void _playTap() {
-    if (_failed) _embedMode = (_embedMode + 1) % 3;
+    if (_failed) _embedMode = (_embedMode + 1) % 4;
     _play();
   }
 
@@ -453,17 +458,22 @@ class _FanPostVideoState extends State<FanPostVideo>
         // Embed page: same desktop-like agent as the match page's player.
         await c.setUserAgent(AppConfig.userAgent);
         final target = stream.kind == StreamKind.invalid ? _url : stream.url;
-        if (_embedMode == 0 && stream.kind == StreamKind.embed) {
+        if (_embedMode <= 1 && stream.kind == StreamKind.embed) {
           final src = const HtmlEscape(HtmlEscapeMode.attribute).convert(target);
           await _loadHtml(c,
             '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head><body style="margin:0;background:#000"><iframe src="$src" style="position:fixed;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
-            baseUrl: _streamBase(target),
+            baseUrl: _embedBase(
+                target,
+                _embedMode == 0
+                    ? RemoteConfig.instance.embedPageOrigin
+                    : RemoteConfig.instance.altEmbedPageOrigin),
           );
         } else {
           _htmlMode = false;
-          if (_embedMode == 1 && stream.kind == StreamKind.embed) {
-            await c.loadRequest(Uri.parse(target),
-                headers: {'Referer': _streamBase(target)});
+          if (_embedMode == 2 && stream.kind == StreamKind.embed) {
+            await c.loadRequest(Uri.parse(target), headers: {
+              'Referer': _embedBase(target, RemoteConfig.instance.embedPageOrigin)
+            });
           } else {
             await c.loadRequest(Uri.parse(target));
           }
