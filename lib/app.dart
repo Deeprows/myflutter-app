@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'config.dart';
+import 'screens/app_lock_screen.dart';
 import 'screens/auth_gate.dart';
 import 'services/app_nav.dart';
 import 'services/locale_service.dart';
@@ -33,12 +34,14 @@ class FootboliveApp extends StatelessWidget {
           navigatorKey: AppNav.key,
           scaffoldMessengerKey: PushService.messengerKey,
           theme: buildTheme(),
-          builder: (context, child) => Stack(
-            fit: StackFit.expand,
-            children: [
-              child ?? const SizedBox.shrink(),
-              const ThemeWatermark(),
-            ],
+          builder: (context, child) => AppLockOverlay(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                child ?? const SizedBox.shrink(),
+                const ThemeWatermark(),
+              ],
+            ),
           ),
           home: const AuthGate(),
         ),
