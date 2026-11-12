@@ -12,6 +12,7 @@ import '../widgets/fan_club_picker.dart';
 import '../theme/app_theme.dart';
 import 'fan_posts_feed.dart';
 import 'guide_screen.dart';
+import 'support_us_screen.dart';
 import 'fan_widgets.dart';
 import 'fan_x_widgets.dart';
 
@@ -547,6 +548,7 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
         ],
       ),
       actions: [
+        SupportUsScreen.action(context),
         IconButton(
           tooltip: 'Instructions',
           onPressed: () => GuideScreen.open(context),
