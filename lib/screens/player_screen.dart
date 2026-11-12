@@ -109,7 +109,32 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// loaded as if it came from the stream's own site. That needs no CORS
   /// permission and sends the site's own Referer (what hotlink protection
   /// expects), so links that only fail under the app domain still play.
-  bool _ownOrigin = false;
+  /// Attempt chain for the built-in player: 0 = app player origin,
+  /// 1 = same origin but no Referer sent, 2 = the stream's own origin.
+  int _attempt = 0;
+
+  /// How an embed page (iframe / .php player page) is opened:
+  /// 0 = inside an iframe on a page that presents itself as the player
+  /// origin (your site, so hosts that only allow your domain accept it),
+  /// 1 = opened directly with the player origin as Referer,
+  /// 2 = opened directly with no Referer. The Reload button tries the next one.
+  int _embedMode = 0;
+
+  void _reload() {
+    if (_stream.kind == StreamKind.embed) {
+      _embedMode = (_embedMode + 1) % 3;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+        duration: const Duration(seconds: 2),
+        content: Text('Reloading (method ${_embedMode + 1}/3)'),
+      ));
+    }
+    _start();
+  }
+
+  bool get _ownOrigin => _attempt >= 2;
+
+  /// Kinds found by [StreamResolver.sniff] for links without a file extension.
+  final Map<String, StreamKind?> _sniffed = {};
 
   String _streamOrigin(String url) {
     final u = Uri.tryParse(url);
@@ -148,7 +173,11 @@ class _PlayerScreenState extends State<PlayerScreen>
   Widget? _fullscreenWidget;
   VoidCallback? _fullscreenHidden;
 
-  ResolvedStream get _stream => StreamResolver.resolve(_sources[_srcIdx]);
+  ResolvedStream get _stream {
+    final r = StreamResolver.resolve(_sources[_srcIdx]);
+    final k = _sniffed[r.url];
+    return k == null ? r : ResolvedStream(r.url, k);
+  }
 
   @override
   void initState() {
@@ -177,8 +206,11 @@ class _PlayerScreenState extends State<PlayerScreen>
       ..setBackgroundColor(Colors.black)
       ..setUserAgent(AppConfig.userAgent)
       ..addJavaScriptChannel('DwPlayer', onMessageReceived: (m) {
-        if (m.message == 'fail' && !_ownOrigin && mounted && _stream.usesHtmlPlayer) {
-          _start(ownOrigin: true);
+        if (m.message == 'fail' &&
+            _attempt < 2 &&
+            mounted &&
+            _stream.usesHtmlPlayer) {
+          _start(attempt: _attempt + 1);
         }
       })
       ..setNavigationDelegate(NavigationDelegate(
@@ -288,9 +320,19 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   // ---------------------------------------------------------------- loading
 
-  Future<void> _start({bool ownOrigin = false}) async {
+  Future<void> _start({int attempt = 0}) async {
+    _attempt = attempt;
+    if (attempt == 0 &&
+        StreamResolver.resolve(_sources[_srcIdx]).kind == StreamKind.embed &&
+        !_sniffed.containsKey(StreamResolver.resolve(_sources[_srcIdx]).url)) {
+      final idx = _srcIdx;
+      final u = StreamResolver.resolve(_sources[idx]).url;
+      final k = await StreamResolver.sniff(u,
+          referer: _referers[idx], userAgent: _agents[idx]);
+      if (!mounted || idx != _srcIdx) return;
+      _sniffed[u] = k;
+    }
     final s = _stream;
-    _ownOrigin = ownOrigin;
     setState(() {
       _error = false;
       _settled = false;
@@ -309,7 +351,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       if (s.usesHtmlPlayer) {
         final low = await Settings.forceLowQuality();
         await _wc.loadHtmlString(
-          buildPlayerHtml(s, lowQuality: low),
+          buildPlayerHtml(s, lowQuality: low, noReferrer: _attempt == 1),
           baseUrl: _ownOrigin ? _streamOrigin(s.url) : _playerBase(s.url),
         );
       } else if (s.dailymotionId != null) {
@@ -323,6 +365,17 @@ class _PlayerScreenState extends State<PlayerScreen>
           'allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
           baseUrl: AppConfig.embedOrigin,
         );
+      } else if (_embedMode == 0) {
+        final src = const HtmlEscape(HtmlEscapeMode.attribute).convert(s.url);
+        await _wc.loadHtmlString(
+          '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head>'
+          '<body style="margin:0;background:#000"><iframe src="$src" style="position:fixed;inset:0;width:100%;height:100%;border:0" '
+          'allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
+          baseUrl: _playerBase(s.url),
+        );
+      } else if (_embedMode == 1) {
+        await _wc.loadRequest(Uri.parse(s.url),
+            headers: {'Referer': _playerBase(s.url)});
       } else {
         await _wc.loadRequest(Uri.parse(s.url));
       }
@@ -422,12 +475,14 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   void _switchSource() {
     setState(() => _srcIdx = (_srcIdx + 1) % _sources.length);
+    _embedMode = 0;
     _start();
   }
 
   void _pickSource(int i) {
     if (i == _srcIdx || i < 0 || i >= _sources.length) return;
     setState(() => _srcIdx = i);
+    _embedMode = 0;
     _start();
   }
 
@@ -631,7 +686,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         ),
         const SizedBox(width: 8),
         _IconAction(
-            icon: Icons.refresh_rounded, tooltip: 'Reload', onTap: _start),
+            icon: Icons.refresh_rounded, tooltip: 'Reload', onTap: _reload),
         const SizedBox(width: 8),
         _IconAction(
             icon: Icons.screen_rotation_rounded,
@@ -894,7 +949,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                       child: _Action(
                           icon: Icons.refresh_rounded,
                           label: 'Reload',
-                          onTap: _start),
+                          onTap: _reload),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
