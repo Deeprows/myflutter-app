@@ -1,11 +1,13 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
+import '../services/app_nav.dart';
 import '../theme/app_theme.dart';
 import 'lyrics_view.dart';
 import 'media_entry.dart';
 import 'playlist_screens.dart';
 import 'watermark.dart';
 import 'music_player.dart';
+import '../widgets/tr_text.dart';
 
 /// Square artwork: gradient + note icon (tinted from the title).
 class MusicArt extends StatelessWidget {
@@ -35,17 +37,51 @@ class MusicArt extends StatelessWidget {
 }
 
 /// Floating "now playing" bar shown above the bottom navigation.
-class MiniPlayer extends StatelessWidget {
+///
+/// The user can minimise it (down-arrow). It then turns into a small round,
+/// animated, draggable 🎵 button that floats above the whole app (see
+/// [MiniPlayerBubble]); tapping that button brings the card back. The X on
+/// the card stops the music and removes the player completely.
+class MiniPlayer extends StatefulWidget {
   const MiniPlayer({super.key});
+
+  /// True while the card is minimised into the floating button. Shared by
+  /// every screen that shows a mini player.
+  static final ValueNotifier<bool> minimized = ValueNotifier<bool>(false);
+
+  /// How many MiniPlayer cards are currently on screen (so the floating
+  /// button knows whether there is a card to bring back).
+  static int _mounted = 0;
+
+  @override
+  State<MiniPlayer> createState() => _MiniPlayerState();
+}
+
+class _MiniPlayerState extends State<MiniPlayer> {
+  @override
+  void initState() {
+    super.initState();
+    MiniPlayer._mounted++;
+    MiniPlayerBubble.ensureInit();
+  }
+
+  @override
+  void dispose() {
+    MiniPlayer._mounted--;
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final mp = MusicPlayer.instance;
     return ListenableBuilder(
-      listenable: mp,
+      listenable: Listenable.merge([mp, MiniPlayer.minimized]),
       builder: (context, _) {
         final e = mp.current;
-        if (e == null) return const SizedBox.shrink();
+        // Minimised: the floating button (an overlay) stands in for the card.
+        if (e == null || MiniPlayer.minimized.value) {
+          return const SizedBox.shrink();
+        }
         return GestureDetector(
           onTap: () => showNowPlaying(context),
           child: Container(
@@ -103,8 +139,17 @@ class MiniPlayer extends StatelessWidget {
                         onPressed: mp.next,
                       ),
                       IconButton(
+                        tooltip: 'Minimise',
+                        icon: Icon(Icons.keyboard_arrow_down_rounded,
+                            color: Ui.dim),
+                        iconSize: 24,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => MiniPlayer.minimized.value = true,
+                      ),
+                      IconButton(
                         icon: Icon(Icons.close_rounded, color: Ui.dim),
                         iconSize: 20,
+                        visualDensity: VisualDensity.compact,
                         onPressed: mp.stop,
                       ),
                     ],
@@ -133,6 +178,170 @@ class MiniPlayer extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Owns the floating 🎵 button: shows it (in the app's root overlay, above
+/// every screen) while music is loaded and the card is minimised.
+class MiniPlayerBubble {
+  static OverlayEntry? _entry;
+  static bool _ready = false;
+
+  /// Where the user last left the button (kept while the app runs).
+  static Offset? lastPos;
+
+  static void ensureInit() {
+    if (_ready) return;
+    _ready = true;
+    MusicPlayer.instance.addListener(_sync);
+    MiniPlayer.minimized.addListener(_sync);
+  }
+
+  static void _sync() {
+    final mp = MusicPlayer.instance;
+    // Music was closed: next song should open as the full card again.
+    if (mp.current == null && MiniPlayer.minimized.value) {
+      MiniPlayer.minimized.value = false; // re-enters _sync
+      return;
+    }
+    final show = mp.current != null && MiniPlayer.minimized.value;
+    if (show && _entry == null) {
+      final overlay = AppNav.key.currentState?.overlay;
+      if (overlay == null) return;
+      _entry = OverlayEntry(builder: (_) => const _FloatingMusicButton());
+      overlay.insert(_entry!);
+    } else if (!show && _entry != null) {
+      _entry!.remove();
+      _entry = null;
+    }
+  }
+}
+
+class _FloatingMusicButton extends StatefulWidget {
+  const _FloatingMusicButton();
+
+  @override
+  State<_FloatingMusicButton> createState() => _FloatingMusicButtonState();
+}
+
+class _FloatingMusicButtonState extends State<_FloatingMusicButton>
+    with SingleTickerProviderStateMixin {
+  static const double _d = 60;
+  final MusicPlayer _mp = MusicPlayer.instance;
+  late final AnimationController _pulse = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1300));
+  bool _dragging = false;
+  Offset? _pos;
+
+  @override
+  void initState() {
+    super.initState();
+    _mp.addListener(_syncPulse);
+    _syncPulse();
+  }
+
+  @override
+  void dispose() {
+    _mp.removeListener(_syncPulse);
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  // Pulses while the music is playing, rests when paused.
+  void _syncPulse() {
+    if (_mp.playing) {
+      if (!_pulse.isAnimating) _pulse.repeat(reverse: true);
+    } else {
+      _pulse.stop();
+    }
+    if (mounted) setState(() {});
+  }
+
+  Offset _clamp(Offset o, Size size, EdgeInsets pad) => Offset(
+        o.dx.clamp(4.0, size.width - _d - 4).toDouble(),
+        o.dy.clamp(pad.top + 4, size.height - pad.bottom - _d - 4).toDouble(),
+      );
+
+  void _open() {
+    MiniPlayer.minimized.value = false;
+    // No card on this screen to bring back: open the full player instead.
+    if (MiniPlayer._mounted == 0) {
+      final c = AppNav.overlayContext;
+      if (c != null) showNowPlaying(c);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final pad = MediaQuery.paddingOf(context);
+    final start = MiniPlayerBubble.lastPos ??
+        Offset(size.width - _d - 12, size.height - pad.bottom - 190);
+    final pos = _clamp(_pos ?? start, size, pad);
+    final tint = _mp.current?.tint ?? [Ui.red, Ui.red];
+
+    return AnimatedPositioned(
+      duration: _dragging ? Duration.zero : const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      left: pos.dx,
+      top: pos.dy,
+      child: GestureDetector(
+        onTap: _open,
+        onPanStart: (_) => setState(() => _dragging = true),
+        onPanUpdate: (d) =>
+            setState(() => _pos = _clamp(pos + d.delta, size, pad)),
+        onPanEnd: (_) {
+          // Settle against the nearest side edge.
+          final snapX = (pos.dx + _d / 2) < size.width / 2
+              ? 8.0
+              : size.width - _d - 8;
+          setState(() {
+            _dragging = false;
+            _pos = _clamp(Offset(snapX, pos.dy), size, pad);
+            MiniPlayerBubble.lastPos = _pos;
+          });
+        },
+        child: Material(
+          type: MaterialType.transparency,
+          child: AnimatedBuilder(
+            animation: _pulse,
+            builder: (_, child) {
+              final t = Curves.easeInOut.transform(_pulse.value);
+              return Transform.scale(
+                scale: _dragging ? 1.12 : 1 + .07 * t,
+                child: Container(
+                  width: _d,
+                  height: _d,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: tint,
+                    ),
+                    border: Border.all(
+                        color: Colors.white.withValues(alpha: .85), width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: tint.first.withValues(alpha: .35 + .35 * t),
+                        blurRadius: 12 + 14 * t,
+                        spreadRadius: 1 + 3 * t,
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: child,
+                ),
+              );
+            },
+            child: Transform.rotate(
+              angle: _mp.playing ? 0 : -.2,
+              child: const Text('🎵', style: TextStyle(fontSize: 28)),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
