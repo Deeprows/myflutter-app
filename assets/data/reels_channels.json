@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "_help": "Reels setup (same shape as the Deeprowss browser's remote/config.json). reels: on/off, tab title, shortsOnly. channels: YouTube channels (id = UC... ID), category football | cricket | f1 | other (any new name becomes a new tab). videoSources: dailymotion {channel or id}, peertube {host, id}, rss {url}, youtube {id}. customVideos: optional hand-picked embed links (they mix into the normal reels). regionalVideos: per country code, shown in the 'Near You' tab. Host this file and set AppConfig.reelsConfigUrl to change Reels without an app update.",
+  "_help": "Reels setup (same shape as the Deeprowss browser's remote/config.json). reels: on/off, tab title, shortsOnly. channels: YouTube channels (id = UC... ID), category football | cricket | f1 | other (any new name becomes a new tab). videoSources: peertube {host, id}, rss {url}, youtube {id}. (Dailymotion is not supported: its embeds are blocked.) customVideos: optional hand-picked embed links (they mix into the normal reels). regionalVideos: per country code, shown in the 'Near You' tab. Host this file and set AppConfig.reelsConfigUrl to change Reels without an app update.",
   "reels": {
     "enabled": true,
     "title": "Reels",
@@ -183,14 +183,7 @@
       "category": "other"
     }
   ],
-  "videoSources": [
-    {
-      "kind": "dailymotion",
-      "name": "Dailymotion Sport",
-      "channel": "sport",
-      "category": "other"
-    }
-  ],
+  "videoSources": [],
   "customVideos": [],
   "regionalVideos": {
     "GB": [
