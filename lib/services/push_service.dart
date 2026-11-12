@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/push_target.dart';
 import '../screens/fan_profile_screen.dart';
 import '../screens/fan_thread_screen.dart';
+import 'app_lock.dart';
 import 'app_nav.dart';
 import 'auth_service.dart';
 import 'content_sync.dart';
@@ -406,6 +407,8 @@ class PushService {
   }
 
   void _banner(String title, String body, PushTarget? t) {
+    // The PIN lock covers the whole app, so show the notification on it.
+    if (AppLock.instance.showBanner(title, body)) return;
     messengerKey.currentState
       ?..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
