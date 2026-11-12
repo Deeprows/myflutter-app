@@ -586,7 +586,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           _mergedControlRow(),
-          if (tip) ...[
+          if (tip && RemoteConfig.instance.streamHintVisible) ...[
             const SizedBox(height: 8),
             _tipBoard(),
           ],
@@ -640,8 +640,7 @@ class _PlayerScreenState extends State<PlayerScreen>
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Double tap the screen to play.\n'
-              'Not working? Reload or try another stream number.',
+              RemoteConfig.instance.streamHintText,
               style: TextStyle(
                 fontSize: 11.5,
                 height: 1.3,
