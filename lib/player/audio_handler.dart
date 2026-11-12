@@ -121,7 +121,11 @@ class AppAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> play() => player.play();
+  Future<void> play() async {
+    // Behind App Lock, the notification may resume music but never a video.
+    if (BackgroundPlayback.locked && videoMode) return;
+    await player.play();
+  }
 
   @override
   Future<void> pause() => player.pause();
