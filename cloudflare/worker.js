@@ -4400,13 +4400,19 @@ async function fanSocial(request,env,url,user,id,ctx) {
   }
   return fail('Not found',404);
 }
+// Website link shown on shared post pages. Set the SITE_URL variable in the
+// Worker (https only) to change it without editing the code.
+function fanSiteUrl(env) {
+  const v=String(env?.SITE_URL || '').trim();
+  return /^https:\/\/[^\s"'<>]+$/.test(v)?v:'https://deeprowss.com';
+}
 async function fanSharePost(env,url) {
   const id=url.pathname.slice('/fan/share/'.length),escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   if(!/^[a-f0-9-]{36}$/.test(id))return html('Post not found',404);
   const post=await env.DB.prepare(`SELECT p.id,p.text,p.image_key,u.name FROM fan_posts p JOIN fan_users u ON u.id=p.user_id WHERE p.id=? AND p.hidden=0`).bind(id).first();
   if(!post)return html('Post not found',404);
   const image=`${url.origin}/fan/image/${id}`;
-  const response=html(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(post.name)} on Deeprowss</title><meta property="og:title" content="${escape(post.name)} on Deeprowss"><meta property="og:description" content="${escape(post.text.slice(0,200))}">${post.image_key?`<meta property="og:image" content="${escape(image)}">`:''}<style>body{background:#090d12;color:#eee;font:17px system-ui;max-width:640px;margin:40px auto;padding:20px}article{border:1px solid #333;border-radius:20px;padding:24px}p{white-space:pre-wrap;overflow-wrap:anywhere}img{max-width:100%;border-radius:12px}a{color:#ff315f}</style></head><body><h2>Deeprowss · Banter</h2><article><h3>${escape(post.name)}</h3><p>${escape(post.text)}</p>${post.image_key?`<img src="${escape(image)}" alt="Post image">`:''}</article><p>Join the conversation in the Deeprowss app.</p><a href="https://deeprowss.com">Visit Deeprowss</a></body></html>`);
+  const response=html(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(post.name)} on Deeprowss</title><meta property="og:title" content="${escape(post.name)} on Deeprowss"><meta property="og:description" content="${escape(post.text.slice(0,200))}">${post.image_key?`<meta property="og:image" content="${escape(image)}">`:''}<style>body{background:#090d12;color:#eee;font:17px system-ui;max-width:640px;margin:40px auto;padding:20px}article{border:1px solid #333;border-radius:20px;padding:24px}p{white-space:pre-wrap;overflow-wrap:anywhere}img{max-width:100%;border-radius:12px}a{color:#ff315f}</style></head><body><h2>Deeprowss · Banter</h2><article><h3>${escape(post.name)}</h3><p>${escape(post.text)}</p>${post.image_key?`<img src="${escape(image)}" alt="Post image">`:''}</article><p>Join the conversation in the Deeprowss app.</p><a href="${escape(fanSiteUrl(env))}">Visit Deeprowss</a></body></html>`);
   response.headers.set('cache-control','no-store');response.headers.set('x-content-type-options','nosniff');
   response.headers.set('content-security-policy',"default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
   return response;
