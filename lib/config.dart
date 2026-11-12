@@ -16,7 +16,7 @@ class AppConfig {
   /// Address the match chat presents itself as (the chat database key may be
   /// limited to your website). Change it WITHOUT an app update: add
   /// `"chat": {"origin": "https://your-new-site.com"}` to app_config.json.
-  static const defaultChatOrigin = 'https://deeprowss.com';
+  static const defaultChatOrigin = 'https://footbolive.online/';
   static const joinUrl =
       'https://t.me/deeprows'; // Telegram / WhatsApp / Discord invite link
   static const updateUrl = ''; // direct APK link (app_config.json "update.apkUrl" wins)
@@ -51,7 +51,7 @@ class AppConfig {
   ///
   /// You can change it WITHOUT an app update: add `"player": {"origin":
   /// "https://your-new-site.com/"}` to app_config.json (see REMOTE_CONFIG.md).
-  static const defaultPlayerOrigin = 'https://deeprowss.com/';
+  static const defaultPlayerOrigin = 'https://footbolive.online/';
   static String get playerOrigin => RemoteConfig.instance.playerOrigin;
 
   /// [playerOrigin] without the trailing slash (embeds, YouTube origin).
