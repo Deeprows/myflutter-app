@@ -6,7 +6,7 @@
     "intervalMinutes": 10,
     "skipAfterSeconds": 6,
     "unlockEnabled": true,
-    "unlockSeconds": 40,
+    "unlockSeconds": 20,
     "unlockMinutes": 10
   },
   "movies": {
@@ -43,7 +43,7 @@
     "url": "https://deeprowss.com"
   },
   "streamHint": {
-    "enabled": false,
+    "enabled": true,
     "text": "Double tap the screen to play.\nNot working? Try another stream number."
   }
 }
