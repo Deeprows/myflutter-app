@@ -23,5 +23,5 @@
     }
   ],
   "receipt_whatsapp": "https://wa.me/2347041629630",
-  "instructions": "Edit account fields and rebuild the app to update bundled payment details."
+  "instructions": "Edit this file in your GitHub repo to change the payment details without rebuilding the app (AppConfig.paymentAccountsUrl). opay: account_number must be digits only (6-20). wallet: wallet_address must be letters and digits only, no spaces. A file that breaks these rules is ignored and the last good details stay."
 }
