@@ -1,5 +1,5 @@
 {
-  "enabled": true,
+  "enabled": false,
   "id": "App Update",
   "title": "App Update",
   "message": "🚨 New App Update! Kindly download latest Deeprowss App. If your current app is version 1.0.1863, Ignore.",
