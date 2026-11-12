@@ -118,14 +118,18 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// origin (your site, so hosts that only allow your domain accept it),
   /// 1 = opened directly with the player origin as Referer,
   /// 2 = opened directly with no Referer. The Reload button tries the next one.
-  int _embedMode = 0;
+  int _embedMode = 0; // 0 iframe@embed origin, 1 iframe@main site, 2 direct+Referer, 3 direct
+
+  String _embedBase(String url, String origin) => url.toLowerCase().startsWith('http://')
+      ? origin.replaceFirst('https://', 'http://')
+      : origin;
 
   void _reload() {
     if (_stream.kind == StreamKind.embed) {
-      _embedMode = (_embedMode + 1) % 3;
+      _embedMode = (_embedMode + 1) % 4;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
         duration: const Duration(seconds: 2),
-        content: Text('Reloading (method ${_embedMode + 1}/3)'),
+        content: Text('Reloading (method ${_embedMode + 1}/4)'),
       ));
     }
     _start();
@@ -365,17 +369,22 @@ class _PlayerScreenState extends State<PlayerScreen>
           'allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
           baseUrl: AppConfig.embedOrigin,
         );
-      } else if (_embedMode == 0) {
+      } else if (_embedMode <= 1) {
         final src = const HtmlEscape(HtmlEscapeMode.attribute).convert(s.url);
         await _wc.loadHtmlString(
           '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head>'
           '<body style="margin:0;background:#000"><iframe src="$src" style="position:fixed;inset:0;width:100%;height:100%;border:0" '
           'allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
-          baseUrl: _playerBase(s.url),
+          baseUrl: _embedBase(
+              s.url,
+              _embedMode == 0
+                  ? RemoteConfig.instance.embedPageOrigin
+                  : RemoteConfig.instance.altEmbedPageOrigin),
         );
-      } else if (_embedMode == 1) {
-        await _wc.loadRequest(Uri.parse(s.url),
-            headers: {'Referer': _playerBase(s.url)});
+      } else if (_embedMode == 2) {
+        await _wc.loadRequest(Uri.parse(s.url), headers: {
+          'Referer': _embedBase(s.url, RemoteConfig.instance.embedPageOrigin)
+        });
       } else {
         await _wc.loadRequest(Uri.parse(s.url));
       }
