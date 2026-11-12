@@ -41,5 +41,9 @@
   },
   "site": {
     "url": "https://deeprowss.com"
+  },
+  "streamHint": {
+    "enabled": true,
+    "text": "Double tap the screen to play.\nNot working? Try another stream number."
   }
 }
