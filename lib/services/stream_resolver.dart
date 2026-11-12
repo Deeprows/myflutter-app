@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:http/http.dart' as http;
+
 import 'dailymotion_check.dart';
 
 /// Works out how a link should be played inside the WebView.
@@ -67,6 +71,44 @@ class StreamResolver {
       return ResolvedStream(candidate, StreamKind.invalid);
     }
     return ResolvedStream(candidate, _kindOf(candidate));
+  }
+
+  /// Direct links without a file extension (`/live/abc`, `get.php?id=1`) look
+  /// like web pages, so they used to be opened as pages and showed a black
+  /// screen. This asks the server what the link really is (looking only at
+  /// the response headers) and returns hls / dash / video, or null when it is
+  /// a normal web page or cannot be checked.
+  static Future<StreamKind?> sniff(String url,
+      {String? referer, String? userAgent}) async {
+    final client = http.Client();
+    try {
+      final req = http.Request('GET', Uri.parse(url))
+        ..followRedirects = true
+        ..headers.addAll({
+          'Range': 'bytes=0-1023',
+          if ((userAgent ?? '').trim().isNotEmpty) 'User-Agent': userAgent!,
+          if ((referer ?? '').trim().isNotEmpty) 'Referer': referer!,
+        });
+      final res = await client.send(req).timeout(const Duration(seconds: 6));
+      final type = (res.headers['content-type'] ?? '').toLowerCase();
+      final finalUrl = res.request?.url.toString().toLowerCase() ?? '';
+      if (res.statusCode >= 400) return null;
+      if (type.contains('mpegurl')) return StreamKind.hls;
+      if (type.contains('dash+xml')) return StreamKind.dash;
+      if (type.startsWith('video/') || type.startsWith('audio/')) {
+        return StreamKind.video;
+      }
+      if (finalUrl.contains('.m3u8')) return StreamKind.hls;
+      if (_mediaExt.hasMatch(finalUrl)) return StreamKind.video;
+      if (type.contains('octet-stream') || type.contains('mp2t')) {
+        return StreamKind.video;
+      }
+      return null; // text/html etc. = a normal embed page
+    } catch (_) {
+      return null;
+    } finally {
+      client.close();
+    }
   }
 
   static StreamKind _kindOf(String url) {
