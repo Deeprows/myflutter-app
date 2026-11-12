@@ -1,6 +1,5 @@
 {
   "_help": "Edit this file on GitHub (pencil icon > Commit). Phones pick it up next time the app opens or comes back to the screen. A missing key = the app's built-in default. Keep it valid JSON (check commas and quotes).",
-
   "ads": {
     "enabled": true,
     "supportUrl": "https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60",
@@ -10,36 +9,37 @@
     "unlockSeconds": 40,
     "unlockMinutes": 10
   },
-
   "movies": {
     "embedBase": "https://vsembed.su/embed",
     "altEmbedBase": "https://web.nxsha.app/embed",
     "downloadBase": "https://web.nxsha.app/dl",
-    "replaceHosts": ["vsembed.ru", "vsembed.su"]
+    "replaceHosts": [
+      "vsembed.ru",
+      "vsembed.su"
+    ]
   },
-
   "update": {
     "apkUrl": "https://files.catbox.moe/shr2zj.apk",
     "version": "v1.0.685",
     "notes": "Latest Update!"
   },
-
   "chat": {
-    "enabled": false
+    "enabled": false,
+    "origin": "https://deeprowss.com"
   },
-
   "scores": {
     "enabled": true,
     "pollSeconds": 45,
     "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
   },
-
   "player": {
     "origin": "https://deeprowss.com/"
   },
-
   "share": {
     "message": "Get Deeprowss - live football, highlights, TV and movies",
     "link": "https://deeprowss.com/download.html"
+  },
+  "site": {
+    "url": "https://deeprowss.com"
   }
 }
