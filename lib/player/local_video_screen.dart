@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../services/app_lock.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_watermark.dart';
 import 'audio_handler.dart';
@@ -55,7 +56,13 @@ class _LocalVideoScreenState extends State<LocalVideoScreen>
     MusicPlayer.instance.stop();
     WakelockPlus.enable();
     WidgetsBinding.instance.addObserver(this);
+    AppLock.instance.locked.addListener(_onLockChanged);
     _open();
+  }
+
+  /// App Lock engaged: stop the picture and the sound.
+  void _onLockChanged() {
+    if (AppLock.instance.locked.value) _c?.pause();
   }
 
   /// "Stop" tapped on the background-playback notification.
@@ -114,6 +121,7 @@ class _LocalVideoScreenState extends State<LocalVideoScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    AppLock.instance.locked.removeListener(_onLockChanged);
     if (_handedOff) {
       _handedOff = false;
       AudioBridge.endVideoAudio();
