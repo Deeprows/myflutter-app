@@ -11,6 +11,13 @@ class BackgroundPlayback {
   static final List<VoidCallback> _stopHandlers = [];
   static bool _hooked = false;
 
+  /// True while the in-app PIN lock covers the app. Play buttons on the
+  /// notification / lock screen are ignored meanwhile.
+  static bool locked = false;
+
+  /// Pauses the player page that is on screen (used when App Lock engages).
+  static void pauseForLock() => _onPause?.call();
+
   // Handlers of the player page that is on screen (the latest one wins).
   static VoidCallback? _onPlay;
   static VoidCallback? _onPause;
@@ -24,7 +31,7 @@ class BackgroundPlayback {
         case 'action':
           switch (call.arguments) {
             case 'play':
-              _onPlay?.call();
+              if (!locked) _onPlay?.call();
             case 'pause':
               _onPause?.call();
             case 'rewind':
