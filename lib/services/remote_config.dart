@@ -264,6 +264,24 @@ class RemoteConfig with WidgetsBindingObserver {
     return v.replaceFirst(RegExp(r'/+$'), '');
   }
 
+  // --------------------------------------------------------- stream hint
+
+  static const defaultStreamHint =
+      'Double tap the screen to play.\n'
+      'Not working? Try another stream number.';
+
+  /// The blue instruction board under the stream buttons on match pages.
+  /// `streamHint.enabled: false`, or an empty `streamHint.text`, hides it.
+  bool get streamHintVisible =>
+      _bool('streamHint', 'enabled', true) && streamHintText.isNotEmpty;
+
+  /// Text of the board. Use \n in the JSON for a new line. Missing = the
+  /// built-in text; an empty text hides the board.
+  String get streamHintText {
+    final v = _str('streamHint', 'text', defaultStreamHint).trim();
+    return v.length > 300 ? v.substring(0, 300) : v;
+  }
+
   // ---------------------------------------------------------------- site
 
   /// Your website address (used where the app needs a website link and no
