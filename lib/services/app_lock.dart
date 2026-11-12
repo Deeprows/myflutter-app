@@ -96,7 +96,7 @@ class AppLock with WidgetsBindingObserver {
   // ------------------------------------------------------------- hashing
 
   String _hash(String value) {
-    var bytes = utf8.encode('$_salt:$value');
+    List<int> bytes = utf8.encode('$_salt:$value');
     for (var i = 0; i < 300; i++) {
       bytes = sha256.convert(bytes).bytes;
     }
