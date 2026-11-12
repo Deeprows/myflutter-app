@@ -106,7 +106,15 @@ class AppConfig {
   /// in the app is used.
   ///
   /// Example: `https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/reels_channels.json`
-  static const reelsConfigUrl = '';
+  static const reelsConfigUrl = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/reels_channels.json';
+
+  /// Hosted copy of `assets/data/payment_accounts.json` (the OPay and USDT
+  /// details on the Remove Ads screen). Edit that file on GitHub and the
+  /// details change without a new APK. Only a valid file is accepted; if it
+  /// is unreachable or invalid, the last good copy, then the bundled one, is
+  /// used. Empty = only the bundled copy.
+  static const paymentAccountsUrl =
+      'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/payment_accounts.json';
 
   /// Scrolling ticker on the home screen (same shape as
   /// `assets/data/ticker.json`).
