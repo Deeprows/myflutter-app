@@ -641,7 +641,7 @@ class _PlayerScreenState extends State<PlayerScreen>
           Expanded(
             child: Text(
               'Double tap the screen to play.\n'
-              'Not working? Try another stream number.',
+              'Not working? Reload or try another stream number.',
               style: TextStyle(
                 fontSize: 11.5,
                 height: 1.3,
