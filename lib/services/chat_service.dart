@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'remote_config.dart';
+
 /// One comment in a match chat.
 class ChatMessage {
   final String id;
@@ -26,7 +28,9 @@ enum NameClaim { ok, taken, unchecked }
 class ChatService {
   static const _project = 'deeprows-4d37c';
   static const _apiKey = 'AIzaSyBs9eSquNu2drJjM3vqFGDX1QU-VE1_F7U';
-  static const _origin = 'https://deeprowss.com';
+  /// Comes from app_config.json (`chat.origin`), so a new domain needs no
+  /// app update.
+  static String get _origin => RemoteConfig.instance.chatOrigin;
   static const _base =
       'https://firestore.googleapis.com/v1/projects/$_project/databases/(default)/documents';
 
@@ -39,12 +43,12 @@ class ChatService {
       .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
       .replaceAll(RegExp(r'(^-|-$)'), '');
 
-  static const _headers = {
-    'Content-Type': 'application/json',
-    // The website key may be limited to the website's address.
-    'Referer': '$_origin/',
-    'Origin': _origin,
-  };
+  static Map<String, String> get _headers => {
+        'Content-Type': 'application/json',
+        // The website key may be limited to the website's address.
+        'Referer': '$_origin/',
+        'Origin': _origin,
+      };
 
   /// Latest [limit] comments, oldest first. Throws on network / permission
   /// errors so the UI can show a message.
