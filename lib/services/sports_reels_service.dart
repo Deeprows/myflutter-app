@@ -9,7 +9,7 @@ import '../config.dart';
 import '../utils/currency_map.dart';
 
 /// One reel. YouTube reels have no [embedUrl] and play on the Shorts page;
-/// Dailymotion / PeerTube / own videos play in their [embedUrl] player.
+/// PeerTube / RSS / own videos play in their [embedUrl] player.
 class SportsReel {
   final String id, title, channel, category, thumb;
   final DateTime publishedAt;
@@ -149,7 +149,7 @@ class _Config {
 
 /// Builds the Reels feed on the phone from the public feeds of the sources
 /// listed in `assets/data/reels_channels.json` (or [AppConfig.reelsConfigUrl]):
-/// YouTube channels (Shorts), Dailymotion, PeerTube and RSS video feeds, your
+/// YouTube channels (Shorts), PeerTube and RSS video feeds, your
 /// own videos, and per-country "Near You" videos. No API key, no Worker.
 /// This is the same setup the Deeprowss browser uses for its Reels.
 class SportsReelsService {
@@ -214,8 +214,6 @@ class SportsReelsService {
     switch (s.kind) {
       case 'youtube':
         return s.id.startsWith('UC') && s.id.length == 24;
-      case 'dailymotion':
-        return s.id.isNotEmpty || s.channel.isNotEmpty;
       case 'peertube':
         return s.host.isNotEmpty;
       case 'rss':
@@ -381,6 +379,12 @@ class SportsReelsService {
   // Build the feed
   // ---------------------------------------------------------------------
 
+  /// Dailymotion is not used for Reels any more (its embeds answer
+  /// "Forbidden"), whichever source or hand-picked link it comes from.
+  static bool _isDailymotion(SportsReel r) =>
+      '${r.embedUrl ?? ''} ${r.pageUrl ?? ''}'.toLowerCase().contains('dailymotion.') ||
+      '${r.embedUrl ?? ''} ${r.pageUrl ?? ''}'.toLowerCase().contains('dai.ly/');
+
   static Future<SportsReelsFeed> _build() async {
     final cfg = await _config();
     final country = PlatformDispatcher.instance.locale.countryCode ?? '';
@@ -408,7 +412,18 @@ class SportsReelsService {
       for (final s in [...cfg.channels, ...cfg.sources, ...local])
         _safe(() => _fetch(s, cfg.shortsOnly)),
     ];
-    final fetched = (await Future.wait(jobs)).expand((x) => x).toList()
+    var fetched = (await Future.wait(jobs)).expand((x) => x).toList();
+    // The Shorts-only YouTube feeds can come back empty (blocked, changed or
+    // slow). When that happens, fall back to the channels' latest uploads so
+    // Reels is never empty.
+    if (cfg.shortsOnly && fetched.where((r) => r.isYouTube).length < 8) {
+      final more = await Future.wait([
+        for (final s in [...cfg.channels, ...cfg.sources, ...local])
+          if (s.kind == 'youtube') _safe(() => _fetch(s, false)),
+      ]);
+      fetched = [...fetched, ...more.expand((x) => x)];
+    }
+    fetched = fetched.where((r) => !_isDailymotion(r)).toList()
       // Near You wins when the same video is also in a general channel.
       ..sort((a, b) =>
           (b.category == 'local' ? 1 : 0) - (a.category == 'local' ? 1 : 0));
@@ -419,7 +434,8 @@ class SportsReelsService {
     ]..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
 
     // Your own videos always come first, even if YouTube cannot be reached.
-    final custom = await Future.wait(cfg.custom.map(_withThumb));
+    final custom = await Future.wait(
+        cfg.custom.where((r) => !_isDailymotion(r)).map(_withThumb));
     final items = [
       ...custom,
       ...videos.where((r) => !custom.any((c) => c.id == r.id)).take(_limit),
@@ -453,8 +469,6 @@ class SportsReelsService {
     switch (s.kind) {
       case 'youtube':
         return _youtube(s, shortsOnly);
-      case 'dailymotion':
-        return _dailymotion(s);
       case 'peertube':
         return _peertube(s);
       case 'rss':
@@ -567,62 +581,6 @@ class SportsReelsService {
     return out;
   }
 
-  // ---- Dailymotion -----------------------------------------------------
-
-  /// Dailymotion plays inside the app only when the owner allows embedding on
-  /// our domain. Asks its player endpoint first; if the check cannot be read,
-  /// the video is kept.
-  static Future<bool> _dmPlayable(String id) async {
-    try {
-      final body = await _get(
-          'https://www.dailymotion.com/player/metadata/video/$id?embedder=${Uri.encodeComponent(_referer)}');
-      if (body == null) return true;
-      final j = jsonDecode(body);
-      return !(j is Map && j.containsKey('error'));
-    } catch (_) {
-      return true;
-    }
-  }
-
-  static Future<List<SportsReel>> _dailymotion(_Source s) async {
-    final base = s.id.isNotEmpty
-        ? 'https://api.dailymotion.com/user/${s.id}/videos'
-        : 'https://api.dailymotion.com/channel/${s.channel}/videos';
-    // Ask for extra, because some will be dropped as not embeddable.
-    final body = await _get(
-        '$base?limit=${_perSource * 3}&sort=recent&fields=id,title,thumbnail_480_url,created_time,owner.screenname,allow_embed');
-    if (body == null) return const [];
-    final list = (jsonDecode(body) as Map)['list'];
-    if (list is! List) return const [];
-    final candidates = <SportsReel>[];
-    for (final v in list) {
-      if (v is! Map) continue;
-      final id = '${v['id'] ?? ''}';
-      final title = '${v['title'] ?? ''}'.trim();
-      if (id.isEmpty || title.isEmpty || v['allow_embed'] == false) continue;
-      final owner = '${v['owner.screenname'] ?? ''}'.trim();
-      final created = v['created_time'];
-      candidates.add(SportsReel(
-        id: 'dm-$id',
-        title: title,
-        channel: owner.isEmpty ? s.name : owner,
-        category: s.category,
-        thumb: '${v['thumbnail_480_url'] ?? ''}',
-        publishedAt: created is num
-            ? DateTime.fromMillisecondsSinceEpoch(created.toInt() * 1000)
-            : DateTime.fromMillisecondsSinceEpoch(0),
-        embedUrl: 'https://geo.dailymotion.com/player.html?video=$id',
-        pageUrl: 'https://www.dailymotion.com/video/$id',
-      ));
-    }
-    final ok = await Future.wait(
-        candidates.map((c) => _dmPlayable(c.id.substring(3))));
-    return [
-      for (var i = 0; i < candidates.length; i++)
-        if (ok[i]) candidates[i],
-    ].take(_perSource).toList();
-  }
-
   // ---- PeerTube --------------------------------------------------------
 
   static Future<List<SportsReel>> _peertube(_Source s) async {
@@ -680,11 +638,6 @@ class SportsReelsService {
     final vimeo = RegExp(r'vimeo\.com/(?:.*/)?(\d{6,})').firstMatch(link);
     if (vimeo != null) {
       return 'https://player.vimeo.com/video/${vimeo.group(1)}';
-    }
-    final dm =
-        RegExp(r'dailymotion\.com/video/([A-Za-z0-9]+)').firstMatch(link);
-    if (dm != null) {
-      return 'https://geo.dailymotion.com/player.html?video=${dm.group(1)}';
     }
     return null;
   }
