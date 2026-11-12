@@ -4,10 +4,17 @@ import 'stream_resolver.dart';
 
 /// Self-contained HTML5 player page for m3u8 (hls.js), mpd (dash.js) and
 /// plain video files. Loaded into the WebView via loadHtmlString.
-String buildPlayerHtml(ResolvedStream s, {bool lowQuality = false}) {
+///
+/// [noReferrer] asks the page not to send any Referer with the stream
+/// requests. Many hosts block foreign referers but accept an empty one, so it
+/// is the second attempt after the normal player origin.
+String buildPlayerHtml(ResolvedStream s,
+    {bool lowQuality = false, bool noReferrer = false}) {
   final url = jsonEncode(s.url).replaceAll('</', r'<\/');
   final kind = jsonEncode(s.kind.name);
   return _template
+      .replaceAll('__META__',
+          noReferrer ? '<meta name="referrer" content="no-referrer">' : '')
       .replaceAll('__URL__', url)
       .replaceAll('__KIND__', kind)
       .replaceAll('__LOW__', lowQuality ? 'true' : 'false');
@@ -15,6 +22,7 @@ String buildPlayerHtml(ResolvedStream s, {bool lowQuality = false}) {
 
 const _template = r'''<!DOCTYPE html>
 <html><head><meta charset="utf-8">
+__META__
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>
 html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:Roboto,Arial,sans-serif}
@@ -37,7 +45,25 @@ function hideSpin(){spin.style.display='none'}
 var LAST='';
 function fail(t){hideSpin(); if(!t&&LAST)t=LAST; if(t) why.textContent=t; msg.style.display='flex';
   try{DwPlayer.postMessage('fail')}catch(e){}}
+var started=false, WD=null, recoveries=0;
+function markStarted(){started=true; if(WD){clearTimeout(WD);WD=null}}
+['loadedmetadata','loadeddata','canplay','playing'].forEach(function(n){v.addEventListener(n,markStarted)});
+// Nothing arrived at all (silent block / dead link): report it so the app
+// can retry with another origin instead of leaving a black screen.
+WD=setTimeout(function(){ if(!started) fail('No data received - the host may be blocking this app or is offline.') },16000);
 v.addEventListener('playing',function(){hideSpin();msg.style.display='none'});
+// Direct files that freeze mid-way: reload at the same position.
+var lastT=-1, still=0;
+setInterval(function(){
+  if(KIND==='hls'||KIND==='dash'||!started||v.paused||v.ended){still=0;return}
+  if(Math.abs(v.currentTime-lastT)<0.05){ still++ } else { still=0 }
+  lastT=v.currentTime;
+  if(still>=3 && recoveries<4 && isFinite(v.duration)){
+    recoveries++; still=0; var t=v.currentTime;
+    v.addEventListener('loadedmetadata',function(){try{v.currentTime=t}catch(e){} tryPlay()},{once:true});
+    v.src=URL_; v.load();
+  }
+},3000);
 v.addEventListener('waiting',function(){spin.style.display='block'});
 v.addEventListener('canplay',hideSpin);
 function tryPlay(){var p=v.play(); if(p&&p.catch)p.catch(function(){hideSpin()})}
