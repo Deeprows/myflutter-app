@@ -701,7 +701,7 @@ class _AppLockSetupScreenState extends State<AppLockSetupScreen> {
         backgroundColor: Ui.bg,
         title: Text(widget.changeOnly ? 'Change PIN'.tr : 'Set up App Lock'.tr),
       ),
-      body: SafeArea(child: _stepView()),
+      body: SafeArea(\n        child: Padding(\n          padding: EdgeInsets.only(bottom: MediaQuery.viewPaddingOf(context).bottom),\n          child: _stepView(),\n        ),\n      ),
     );
   }
 
