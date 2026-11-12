@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../player/audio_handler.dart';
+import '../player/music_player.dart';
 import '../services/app_lock.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_watermark.dart';
@@ -229,7 +231,12 @@ class _LockBodyState extends State<_LockBody> {
   Widget build(BuildContext context) {
     final lock = AppLock.instance;
     return SafeArea(
-      child: _forgot ? _forgotView(lock) : _pinView(),
+      child: Column(
+        children: [
+          Expanded(child: _forgot ? _forgotView(lock) : _pinView()),
+          const _LockMiniPlayer(),
+        ],
+      ),
     );
   }
 
@@ -328,6 +335,75 @@ class _LockBodyState extends State<_LockBody> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Music from the Player keeps playing behind the lock, with its
+/// notification. This card lets the person pause / resume or skip without
+/// unlocking. Videos are never controlled from here.
+class _LockMiniPlayer extends StatelessWidget {
+  const _LockMiniPlayer();
+
+  @override
+  Widget build(BuildContext context) {
+    final mp = MusicPlayer.instance;
+    return ListenableBuilder(
+      listenable: mp,
+      builder: (_, _) {
+        final h = AudioBridge.current;
+        final entry = mp.current;
+        if (entry == null || (h?.videoMode ?? false)) {
+          return const SizedBox.shrink();
+        }
+        final p = AppLock.instance.palette;
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+          padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
+          decoration: BoxDecoration(
+            color: p.card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: p.line),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.music_note_rounded, color: p.accent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(entry.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w800)),
+                    Text(mp.playing ? 'Playing'.tr : 'Paused'.tr,
+                        style: TextStyle(color: p.muted, fontSize: 12)),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: mp.previous,
+                icon: const Icon(Icons.skip_previous_rounded),
+              ),
+              IconButton(
+                onPressed: mp.loading ? null : mp.toggle,
+                iconSize: 34,
+                color: p.accent,
+                icon: Icon(mp.playing
+                    ? Icons.pause_circle_filled_rounded
+                    : Icons.play_circle_fill_rounded),
+              ),
+              IconButton(
+                onPressed: mp.next,
+                icon: const Icon(Icons.skip_next_rounded),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -433,6 +509,18 @@ class _PinEntryViewState extends State<PinEntryView> {
   @override
   Widget build(BuildContext context) {
     final disabled = _wait > 0;
+    // Scrolls on small screens (the mini player takes some height).
+    return LayoutBuilder(
+      builder: (context, box) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: box.maxHeight),
+          child: IntrinsicHeight(child: _pinColumn(disabled)),
+        ),
+      ),
+    );
+  }
+
+  Widget _pinColumn(bool disabled) {
     return Column(
       children: [
         const Spacer(flex: 2),
