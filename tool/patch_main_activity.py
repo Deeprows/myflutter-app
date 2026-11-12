@@ -21,6 +21,7 @@ pkg = re.search(r"^package\s+([\w.]+)", open(path, encoding="utf8").read(), re.M
 
 code = f'''package {pkg}
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PictureInPictureParams
@@ -41,21 +42,34 @@ class MainActivity : FlutterActivity() {{
     private fun createPushChannels() {{
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = getSystemService(NotificationManager::class.java) ?: return
+        // Android cannot change a channel after it exists, so once per
+        // install remove the old ones; they are recreated just below with
+        // "show on the lock screen" turned on.
+        val prefs = getSharedPreferences("push_channels", MODE_PRIVATE)
+        if (!prefs.getBoolean("lockscreen_public_v1", false)) {{
+            nm.deleteNotificationChannel("kickoff")
+            nm.deleteNotificationChannel("content")
+            nm.deleteNotificationChannel("social")
+            prefs.edit().putBoolean("lockscreen_public_v1", true).apply()
+        }}
         val kickoff = NotificationChannel(
             "kickoff", "Live match alerts", NotificationManager.IMPORTANCE_HIGH
         ).apply {{
             description = "Kick-off reminders and match start alerts"
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             enableVibration(true)
         }}
         val content = NotificationChannel(
             "content", "New highlights and movies", NotificationManager.IMPORTANCE_DEFAULT
         ).apply {{
             description = "New highlights and movies added to Deeprowss"
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }}
         val social = NotificationChannel(
             "social", "Follows, likes and comments", NotificationManager.IMPORTANCE_HIGH
         ).apply {{
             description = "When someone follows you, likes your post or comments on it"
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             enableVibration(true)
         }}
         nm.createNotificationChannel(kickoff)
