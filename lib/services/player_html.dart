@@ -34,7 +34,9 @@ var URL_=__URL__, KIND=__KIND__, LOW=__LOW__;
 var v=document.getElementById('v'), spin=document.getElementById('spin'),
     msg=document.getElementById('msg'), why=document.getElementById('why');
 function hideSpin(){spin.style.display='none'}
-function fail(t){hideSpin(); if(t) why.textContent=t; msg.style.display='flex'}
+var LAST='';
+function fail(t){hideSpin(); if(!t&&LAST)t=LAST; if(t) why.textContent=t; msg.style.display='flex';
+  try{DwPlayer.postMessage('fail')}catch(e){}}
 v.addEventListener('playing',function(){hideSpin();msg.style.display='none'});
 v.addEventListener('waiting',function(){spin.style.display='block'});
 v.addEventListener('canplay',hideSpin);
@@ -59,6 +61,7 @@ function startHls(){
   h.on(Hls.Events.MANIFEST_PARSED,function(){if(LOW){h.autoLevelCapping=0;h.currentLevel=0}tryPlay()});
   h.on(Hls.Events.ERROR,function(e,d){
     if(!d.fatal)return;
+    LAST='Stream error: '+(d.details||'unknown')+(d.response&&d.response.code?' (HTTP '+d.response.code+')':(d.type===Hls.ErrorTypes.NETWORK_ERROR?' (blocked, offline or CORS)':''));
     if(d.type===Hls.ErrorTypes.NETWORK_ERROR&&net++<3){h.startLoad();return}
     if(d.type===Hls.ErrorTypes.MEDIA_ERROR&&med++<2){h.recoverMediaError();return}
     h.destroy(); native();
