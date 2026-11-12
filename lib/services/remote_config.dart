@@ -232,6 +232,30 @@ class RemoteConfig with WidgetsBindingObserver {
     return v.endsWith('/') ? v : '$v/';
   }
 
+  /// Site address that EMBED pages (iframe / .php player pages) are shown
+  /// under. Defaults to [playerOrigin]; set `player.embedOrigin` in
+  /// app_config.json when your stream hosts whitelist a different domain than
+  /// the one the m3u8 player uses.
+  String get embedPageOrigin {
+    final v = _str('player', 'embedOrigin', '').trim();
+    if (!v.startsWith('https://') && !v.startsWith('http://')) {
+      return playerOrigin;
+    }
+    return v.endsWith('/') ? v : '$v/';
+  }
+
+  /// Second site address tried for embed pages (Reload button): your main
+  /// website, or `player.altEmbedOrigin` when set.
+  String get altEmbedPageOrigin {
+    final v = _str('player', 'altEmbedOrigin', '').trim();
+    if (v.startsWith('https://') || v.startsWith('http://')) {
+      return v.endsWith('/') ? v : '$v/';
+    }
+    final w = AppConfig.websiteUrl.trim();
+    if (w.isEmpty) return playerOrigin;
+    return w.endsWith('/') ? w : '$w/';
+  }
+
   // --------------------------------------------------------------- share
 
   /// Text sent with the APK when someone taps Share App.
