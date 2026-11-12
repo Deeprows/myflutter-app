@@ -1,16 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../config.dart';
 import '../services/install_id.dart';
+import '../services/subscription_service.dart' show SubscriptionService;
 import '../theme/app_theme.dart';
+import '../utils/currency_map.dart';
 import '../utils/l10n.dart';
 import 'browser_screen.dart' show openExternally;
 import 'plans_screen.dart' show buildWhatsappUri;
+import '../widgets/tr_text.dart';
 
 /// "Support Us": a voluntary donation page. Uses the same payment details as
 /// the Remove ads page (assets/data/payment_accounts.json, with the
@@ -38,7 +41,12 @@ class _SupportUsScreenState extends State<SupportUsScreen>
     with SingleTickerProviderStateMixin {
   static const _gold = Color(0xFFFFC857);
   static const _rose = Color(0xFFFF5C7A);
+  /// Support levels, in naira (the account that receives the money is a
+  /// naira account). They are shown in the person's own currency.
   static const _amounts = [500, 1000, 2000, 5000, 10000];
+
+  /// Exchange rates (1 naira in other currencies), kept while the app runs.
+  static Map<String, double>? _rates;
 
   late final AnimationController _beat;
   final _custom = TextEditingController();
@@ -46,8 +54,12 @@ class _SupportUsScreenState extends State<SupportUsScreen>
   Map<String, dynamic> _config = {};
   String _installId = '';
   String _method = 'bank';
-  int _amount = 2000;
+  int _amount = 2000; // chosen preset, in naira
   bool _useCustom = false;
+
+  /// 'auto' = this phone's region, otherwise a country code from the picker.
+  String _country = 'auto';
+  bool _ratesLoading = false;
 
   @override
   void initState() {
@@ -57,6 +69,7 @@ class _SupportUsScreenState extends State<SupportUsScreen>
       duration: const Duration(milliseconds: 1300),
     )..repeat(reverse: true);
     unawaited(_loadAccounts());
+    unawaited(_loadRates());
     InstallId.get().then((v) {
       if (mounted) setState(() => _installId = v);
     });
@@ -135,12 +148,125 @@ class _SupportUsScreenState extends State<SupportUsScreen>
   String get _receiptUrl =>
       (_config['receipt_whatsapp'] as String?) ?? AppConfig.receiptWhatsappUrl;
 
-  // --------------------------------------------------------------- actions
+  // ------------------------------------------------------------- currency
 
-  int get _chosen {
-    if (_useCustom) return int.tryParse(_custom.text.trim()) ?? 0;
-    return _amount;
+  Future<void> _loadRates() async {
+    if (_rates != null) return;
+    if (mounted) setState(() => _ratesLoading = true);
+    try {
+      final r = await http
+          .get(Uri.parse('https://open.er-api.com/v6/latest/NGN'))
+          .timeout(const Duration(seconds: 10));
+      if (r.statusCode == 200) {
+        final d = jsonDecode(r.body);
+        final raw = d is Map ? d['rates'] : null;
+        if (raw is Map) {
+          final out = <String, double>{};
+          raw.forEach((k, v) {
+            if (k is String && v is num && v > 0) out[k] = v.toDouble();
+          });
+          if (out.isNotEmpty) _rates = out;
+        }
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _ratesLoading = false);
   }
+
+  String get _effectiveCountry => _country == 'auto'
+      ? (SubscriptionService.instance.deviceCountry ?? '')
+      : _country;
+
+  String get _currency => currencyForCountry(_effectiveCountry);
+
+  /// How much of [_currency] one naira is worth (null = not known, so
+  /// naira is shown).
+  double? get _rate {
+    if (_currency == 'NGN') return 1.0;
+    final r = _rates?[_currency];
+    return (r != null && r > 0) ? r : null;
+  }
+
+  bool get _local => _currency != 'NGN' && _rate != null;
+
+  /// Rounds up to 2 significant digits so chips read like 50 or 1.5.
+  double _nice(double v) {
+    if (v <= 0) return 0;
+    var mag = 1.0;
+    while (v / mag >= 100) {
+      mag *= 10;
+    }
+    while (v / mag < 10) {
+      mag /= 10;
+    }
+    return (v / mag).ceil() * mag;
+  }
+
+  /// Amount shown on a preset chip, in the person's currency.
+  double _localFor(int ngn) => _local ? _nice(ngn * _rate!) : ngn.toDouble();
+
+  /// Naira that has to be sent for [localAmount] of the person's currency.
+  int _ngnFor(double localAmount) {
+    if (localAmount <= 0) return 0;
+    return _local ? (localAmount / _rate!).ceil() : localAmount.ceil();
+  }
+
+  double get _customLocal => double.tryParse(_custom.text.trim()) ?? 0;
+
+  /// What the person chose, in their currency.
+  double get _chosenLocal => _useCustom ? _customLocal : _localFor(_amount);
+
+  /// What is actually transferred, in naira.
+  int get _chosenNgn =>
+      _useCustom ? _ngnFor(_customLocal) : _ngnFor(_localFor(_amount));
+
+  static const _symbols = {
+    'NGN': '\u20A6',
+    'USD': 'US\$',
+    'GBP': '\u00A3',
+    'EUR': '\u20AC',
+    'EGP': 'E\u00A3',
+    'GHS': 'GH\u20B5',
+    'KES': 'KSh ',
+    'ZAR': 'R ',
+    'INR': '\u20B9',
+    'JPY': '\u00A5',
+    'CNY': 'CN\u00A5',
+    'CAD': 'CA\$',
+    'AUD': 'A\$',
+  };
+
+  String _fmt(double v) {
+    final whole = v >= 100 || v == v.roundToDouble();
+    final t = whole ? v.round().toString() : v.toStringAsFixed(2);
+    final dot = t.indexOf('.');
+    final intPart = dot < 0 ? t : t.substring(0, dot);
+    final frac = dot < 0 ? '' : t.substring(dot);
+    final b = StringBuffer();
+    for (var i = 0; i < intPart.length; i++) {
+      if (i > 0 && (intPart.length - i) % 3 == 0) b.write(',');
+      b.write(intPart[i]);
+    }
+    return '$b$frac';
+  }
+
+  String _money(String code, double v) {
+    final sym = _symbols[code] ?? '$code ';
+    return '$sym${_fmt(v)}';
+  }
+
+  /// The chosen amount in the person's currency ("E\u00A350").
+  String get _chosenLocalText =>
+      _money(_local ? _currency : 'NGN', _chosenLocal);
+
+  /// USDT worth of the chosen naira amount (null if no rate).
+  String? get _usdtText {
+    final usd = _rates?['USD'];
+    if (usd == null || _chosenNgn <= 0) return null;
+    final v = _chosenNgn * usd;
+    return v >= 100 ? v.round().toString() : v.toStringAsFixed(2);
+  }
+
+  // --------------------------------------------------------------- actions
 
   String _naira(int n) {
     final s = n.toString();
@@ -167,7 +293,10 @@ class _SupportUsScreenState extends State<SupportUsScreen>
     final how = bank
         ? '${_bank['provider'] ?? 'Bank'} bank transfer'
         : '${_wallet['provider'] ?? 'Crypto'} (${_wallet['network'] ?? ''})';
-    final amt = _chosen > 0 ? '\nAmount: ${_naira(_chosen)}' : '';
+    final ngn = _chosenNgn;
+    final amt = ngn > 0
+        ? '\nAmount: ${_naira(ngn)}${_local ? ' (about $_chosenLocalText)' : ''}'
+        : '';
     final uri = buildWhatsappUri(
       _receiptUrl,
       'Hello, I just supported the Deeprowss app. Thank you!\n'
@@ -387,13 +516,44 @@ class _SupportUsScreenState extends State<SupportUsScreen>
     });
   }
 
+  Widget _currencyPicker() {
+    return DropdownButtonFormField<String>(
+      key: ValueKey('country-$_country'),
+      initialValue: _country,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Pricing country / currency'.tr,
+        prefixIcon: const Icon(Icons.public_rounded),
+      ),
+      items: [
+        DropdownMenuItem(
+          value: 'auto',
+          child: Text('Automatic (device region)'.tr),
+        ),
+        for (final c in kPricingCountries)
+          DropdownMenuItem(
+            value: c[0],
+            child: Text('${c[1]} (${currencyForCountry(c[0])})'),
+          ),
+      ],
+      onChanged: (v) {
+        if (v == null || v == _country) return;
+        setState(() => _country = v);
+        _loadRates();
+      },
+    );
+  }
+
   Widget _amountPicker() {
+    final code = _local ? _currency : 'NGN';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: _cardDeco(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _currencyPicker(),
+          const SizedBox(height: 14),
           Text(
             'Any amount helps. Pick one or enter your own.'.tr,
             style: TextStyle(color: Ui.muted, fontSize: 13.5, height: 1.35),
@@ -404,13 +564,18 @@ class _SupportUsScreenState extends State<SupportUsScreen>
             runSpacing: 8,
             children: [
               for (final a in _amounts)
-                _chip(_naira(a), !_useCustom && _amount == a, () {
-                  FocusScope.of(context).unfocus();
-                  setState(() {
-                    _useCustom = false;
-                    _amount = a;
-                  });
-                }),
+                _chip(
+                  _money(code, _localFor(a)),
+                  !_useCustom && _amount == a,
+                  () {
+                    FocusScope.of(context).unfocus();
+                    setState(() {
+                      _useCustom = false;
+                      _amount = a;
+                    });
+                  },
+                  sub: _local ? '\u2248 ${_naira(_ngnFor(_localFor(a)))}' : null,
+                ),
               _chip('Other'.tr, _useCustom,
                   () => setState(() => _useCustom = true)),
             ],
@@ -419,12 +584,14 @@ class _SupportUsScreenState extends State<SupportUsScreen>
             const SizedBox(height: 12),
             TextField(
               controller: _custom,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d{0,9}\.?\d{0,2}')),
+              ],
               onChanged: (_) => setState(() {}),
               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
               decoration: InputDecoration(
-                prefixText: '\u20A6 ',
+                prefixText: '${_symbols[code] ?? '$code '} ',
                 hintText: 'Enter amount'.tr,
                 filled: true,
                 fillColor: Ui.cardDeep,
@@ -435,35 +602,70 @@ class _SupportUsScreenState extends State<SupportUsScreen>
               ),
             ),
           ],
+          const SizedBox(height: 12),
+          if (_ratesLoading && _currency != 'NGN')
+            Row(children: [
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Getting today\u2019s exchange rate...'.tr,
+                    style: TextStyle(color: Ui.muted, fontSize: 12.5)),
+              ),
+            ])
+          else if (_currency != 'NGN' && !_local)
+            Text(
+              'Could not get the exchange rate, so amounts are shown in naira (\u20A6).'
+                  .tr,
+              style: TextStyle(color: Ui.muted, fontSize: 12.5, height: 1.3),
+            )
+          else if (_local)
+            Text(
+              'Bank transfers are received in naira (\u20A6). Your amount is converted at today\u2019s rate, so it is an estimate in your currency.'
+                  .tr,
+              style: TextStyle(color: Ui.muted, fontSize: 12.5, height: 1.3),
+            ),
         ],
       ),
     );
   }
 
-  Widget _chip(String label, bool on, VoidCallback tap) => InkWell(
-        borderRadius: BorderRadius.circular(30),
+  Widget _chip(String label, bool on, VoidCallback tap, {String? sub}) =>
+      InkWell(
+        borderRadius: BorderRadius.circular(sub == null ? 30 : 18),
         onTap: tap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: EdgeInsets.symmetric(
+              horizontal: 16, vertical: sub == null ? 10 : 8),
           decoration: BoxDecoration(
             color: on ? _rose.withValues(alpha: .18) : Ui.cardDeep,
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(sub == null ? 30 : 18),
             border: Border.all(color: on ? _rose : Ui.line, width: on ? 1.6 : 1),
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontWeight: on ? FontWeight.w900 : FontWeight.w700,
-              color: on ? Ui.text : Ui.muted,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: on ? FontWeight.w900 : FontWeight.w700,
+                  color: on ? Ui.text : Ui.muted,
+                ),
+              ),
+              if (sub != null)
+                Text(sub, style: TextStyle(fontSize: 11, color: Ui.dim)),
+            ],
           ),
         ),
       );
 
   Widget _payCard() {
     final bank = _method == 'bank';
-    final amt = _chosen;
+    final ngn = _chosenNgn;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: _cardDeco(),
@@ -500,9 +702,15 @@ class _SupportUsScreenState extends State<SupportUsScreen>
                       '${_bank['account_number'] ?? ''}', 'Account number'.tr),
                   const SizedBox(height: 10),
                   Text(
-                    amt > 0
-                        ? 'Transfer {amt} to this account.'
-                            .trArgs({'amt': _naira(amt)})
+                    ngn > 0
+                        ? (_local
+                            ? 'Transfer {amt} (about {local}) to this account.'
+                                .trArgs({
+                                'amt': _naira(ngn),
+                                'local': _chosenLocalText,
+                              })
+                            : 'Transfer {amt} to this account.'
+                                .trArgs({'amt': _naira(ngn)}))
                         : 'Transfer any amount to this account.'.tr,
                     style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3),
                   ),
@@ -520,8 +728,15 @@ class _SupportUsScreenState extends State<SupportUsScreen>
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Send any USDT amount. Only use the {net} network, or the funds are lost.'
-                        .trArgs({'net': '${_wallet['network'] ?? ''}'}),
+                    (_usdtText != null
+                            ? 'Send about {usdt} USDT ({amt}). Only use the {net} network, or the funds are lost.'
+                                .trArgs({
+                                'usdt': _usdtText,
+                                'amt': _naira(ngn),
+                                'net': '${_wallet['network'] ?? ''}',
+                              })
+                            : 'Send any USDT amount. Only use the {net} network, or the funds are lost.'
+                                .trArgs({'net': '${_wallet['network'] ?? ''}'})),
                     style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3),
                   ),
                 ],
