@@ -148,7 +148,12 @@ class _PlayerScreenState extends State<PlayerScreen>
       widget.title,
       _onStopTapped,
       onPlay: () => _wc.runJavaScript(_videosJs('v.play()')).catchError((_) {}),
-      onPause: () => _wc.runJavaScript(_videosJs('v.pause()')).catchError((_) {}),
+      onPause: () {
+        // Forget which videos were playing so the "resume after minimise"
+        // logic cannot restart them (matters when App Lock pauses playback).
+        _wc.runJavaScript('window.__dwWas=[];').catchError((_) {});
+        _wc.runJavaScript(_videosJs('v.pause()')).catchError((_) {});
+      },
       onSeekBy: (sec) => _wc
           .runJavaScript(_videosJs(
               'v.currentTime=Math.max(0,v.currentTime+($sec))'))
