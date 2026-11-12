@@ -13,6 +13,7 @@ import 'services/locale_service.dart';
 import 'services/push_service.dart';
 import 'services/remote_config.dart';
 import 'services/ad_unlock.dart';
+import 'services/app_lock.dart';
 import 'services/subscription_service.dart';
 import 'theme/app_theme.dart';
 
@@ -37,6 +38,9 @@ Future<void> main() async {
   // Ad / movie / update / chat settings: saved copy now, fresh copy in the
   // background (never blocks start-up).
   await RemoteConfig.instance.init();
+
+  // In-app PIN lock (child lock): starts the app locked when it is on.
+  await AppLock.instance.init();
 
   // Free / Premium: reads the saved copy only; the Worker is asked later.
   await SubscriptionService.instance.init();
