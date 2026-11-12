@@ -239,7 +239,7 @@ class RemoteConfig with WidgetsBindingObserver {
       'Get ${AppConfig.appName} - live football, highlights, TV and movies');
 
   /// Your download page / website, added after the message. Empty = no link.
-  String get shareLink => _str('share', 'link', AppConfig.websiteUrl);
+  String get shareLink => _str('share', 'link', websiteUrl);
 
   /// The full text: "message: link" (or just the message when no link).
   String get shareText {
@@ -252,4 +252,27 @@ class RemoteConfig with WidgetsBindingObserver {
   // ---------------------------------------------------------------- chat
 
   bool get chatEnabled => _bool('chat', 'enabled', true);
+
+  /// Website address the match chat presents itself as (Origin / Referer),
+  /// for a chat database key limited to the website. Change it in
+  /// app_config.json (`chat.origin`) if the domain changes. No trailing slash.
+  String get chatOrigin {
+    final v = _str('chat', 'origin', AppConfig.defaultChatOrigin).trim();
+    if (!v.startsWith('https://') && !v.startsWith('http://')) {
+      return AppConfig.defaultChatOrigin;
+    }
+    return v.replaceFirst(RegExp(r'/+$'), '');
+  }
+
+  // ---------------------------------------------------------------- site
+
+  /// Your website address (used where the app needs a website link and no
+  /// more specific one is set). Change it in app_config.json (`site.url`).
+  String get websiteUrl {
+    final v = _str('site', 'url', AppConfig.websiteUrl).trim();
+    if (!v.startsWith('https://') && !v.startsWith('http://')) {
+      return AppConfig.websiteUrl;
+    }
+    return v;
+  }
 }
