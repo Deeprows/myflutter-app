@@ -105,6 +105,18 @@ class _PlayerScreenState extends State<PlayerScreen>
   late final List<String?> _agents = [for (final e in _entries) e.ua];
   int _srcIdx = 0;
 
+  /// Second attempt for a stream the page could not play: the player page is
+  /// loaded as if it came from the stream's own site. That needs no CORS
+  /// permission and sends the site's own Referer (what hotlink protection
+  /// expects), so links that only fail under the app domain still play.
+  bool _ownOrigin = false;
+
+  String _streamOrigin(String url) {
+    final u = Uri.tryParse(url);
+    if (u == null || u.host.isEmpty) return AppConfig.playerOrigin;
+    return '${u.scheme}://${u.host}${u.hasPort ? ':${u.port}' : ''}/';
+  }
+
   /// Page origin for the built-in player. Uses the stream's own referer when
   /// it has one. Plain http:// streams get an http:// origin, because a
   /// WebView blocks http requests made from an https page (mixed content).
@@ -164,6 +176,11 @@ class _PlayerScreenState extends State<PlayerScreen>
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
       ..setUserAgent(AppConfig.userAgent)
+      ..addJavaScriptChannel('DwPlayer', onMessageReceived: (m) {
+        if (m.message == 'fail' && !_ownOrigin && mounted && _stream.usesHtmlPlayer) {
+          _start(ownOrigin: true);
+        }
+      })
       ..setNavigationDelegate(NavigationDelegate(
         onPageStarted: (_) {
           _keepVisible();
@@ -271,8 +288,9 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   // ---------------------------------------------------------------- loading
 
-  Future<void> _start() async {
+  Future<void> _start({bool ownOrigin = false}) async {
     final s = _stream;
+    _ownOrigin = ownOrigin;
     setState(() {
       _error = false;
       _settled = false;
@@ -292,7 +310,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         final low = await Settings.forceLowQuality();
         await _wc.loadHtmlString(
           buildPlayerHtml(s, lowQuality: low),
-          baseUrl: _playerBase(s.url),
+          baseUrl: _ownOrigin ? _streamOrigin(s.url) : _playerBase(s.url),
         );
       } else if (s.dailymotionId != null) {
         // Dailymotion refuses to play when its embed page is opened as a bare
