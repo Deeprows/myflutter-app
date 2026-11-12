@@ -268,6 +268,8 @@ const Map<String, Map<String, String>> kTranslations = {
     'What is the name of your first pet?': 'Quel est le nom de votre premier animal ?',
     'In which town were you born?': 'Dans quelle ville êtes-vous né(e) ?',
     'Lock screen theme': 'Thème de l’écran de verrouillage',
+    'Playing': 'Lecture en cours',
+    'Paused': 'En pause',
   },
   'es': {
     'Live': 'En vivo',
@@ -536,6 +538,8 @@ const Map<String, Map<String, String>> kTranslations = {
     'What is the name of your first pet?': '¿Cómo se llamaba tu primera mascota?',
     'In which town were you born?': '¿En qué ciudad naciste?',
     'Lock screen theme': 'Tema de la pantalla de bloqueo',
+    'Playing': 'Reproduciendo',
+    'Paused': 'En pausa',
   },
   'pt': {
     'Live': 'Ao vivo',
@@ -804,6 +808,8 @@ const Map<String, Map<String, String>> kTranslations = {
     'What is the name of your first pet?': 'Qual era o nome do seu primeiro animal de estimação?',
     'In which town were you born?': 'Em que cidade você nasceu?',
     'Lock screen theme': 'Tema da tela de bloqueio',
+    'Playing': 'Reproduzindo',
+    'Paused': 'Pausado',
   },
   'ar': {
     'Live': 'مباشر',
@@ -1072,6 +1078,8 @@ const Map<String, Map<String, String>> kTranslations = {
     'What is the name of your first pet?': 'ما اسم أول حيوان أليف لديك؟',
     'In which town were you born?': 'في أي مدينة وُلدت؟',
     'Lock screen theme': 'سمة شاشة القفل',
+    'Playing': 'قيد التشغيل',
+    'Paused': 'متوقف مؤقتًا',
   },
   'sw': {
     'Live': 'Moja kwa moja',
@@ -1340,5 +1348,7 @@ const Map<String, Map<String, String>> kTranslations = {
     'What is the name of your first pet?': 'Mnyama wako wa kwanza kipenzi aliitwa nani?',
     'In which town were you born?': 'Ulizaliwa katika mji gani?',
     'Lock screen theme': 'Mandhari ya skrini ya kufuli',
+    'Playing': 'Inacheza',
+    'Paused': 'Imesitishwa',
   },
 };
