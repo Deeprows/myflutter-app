@@ -20,6 +20,7 @@ import '../screens/network_stream_screen.dart';
 import '../screens/playlists_screen.dart';
 import '../screens/plans_screen.dart';
 import '../screens/remove_ads_screen.dart';
+import '../screens/support_us_screen.dart';
 import '../services/auth_service.dart';
 import '../services/fan_zone_service.dart';
 import '../services/notice_service.dart';
@@ -535,6 +536,11 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
                       (c) => _push(c, const PlaylistsScreen()),
                     ),
                     _heading('Support'.tr),
+                    _row(
+                      Icons.favorite_rounded,
+                      'Support Us'.tr,
+                      (c) => _push(c, const SupportUsScreen()),
+                    ),
                     _row(
                       Icons.menu_book_rounded,
                       'Instructions'.tr,
