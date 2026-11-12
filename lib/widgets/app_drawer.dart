@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../config.dart';
+import '../screens/app_lock_screen.dart';
 import '../screens/auth_screen.dart';
 import '../screens/bookmarks_screen.dart';
 import '../screens/browser_screen.dart';
@@ -673,6 +674,12 @@ Future<void> showSettingsSheet(BuildContext context) {
                 Icons.tune_rounded,
                 'Video Quality Setting'.tr,
                 showLowQualityDialog,
+              ),
+              item(
+                Icons.lock_outline_rounded,
+                'App Lock'.tr,
+                showAppLockSettings,
+                hint: 'Lock the app with a PIN for children'.tr,
               ),
               Divider(height: 18, color: Ui.line),
               item(Icons.campaign_outlined, 'Notice'.tr, showNoticeDialog),
