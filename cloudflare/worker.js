@@ -1367,6 +1367,9 @@ async function moveTime(env, fromId, who, source) {
 // ---- entitlement -----------------------------------------------------------
 
 async function expiryOf(env, installId) {
+  // The subs table is created lazily; callers such as AI Predict can reach this
+  // before any /sub request has run, so make sure it exists first.
+  await ensureSchema(env);
   const row = await env.DB.prepare(
     "SELECT expires_at FROM subs WHERE install_id = ?"
   )
@@ -3848,6 +3851,40 @@ async function fanUpApiNinjas(env,leagues,now) {
   if(!success)throw new Error(String(settled.find(p=>p.status==='rejected')?.reason?.message || 'API Ninjas unavailable'));
   return rows;
 }
+// BBC Sport fixtures feed: one request per league covering the horizon; keeps pre-match events only.
+async function fanUpBbc(leagues,now) {
+  const tops=FAN_UP_TOP.filter(t=>leagues.includes(t[0]));
+  const from=fanUpDay(now),to=fanUpDay(now+(FAN_AI_UPCOMING_DAYS-1)*86400000);
+  const parts=await Promise.allSettled(tops.map(async t=>[t,await fanUpGet(`https://web-cdn.api.bbci.co.uk/wc-poll-data/container/sport-data-scores-fixtures?selectedStartDate=${from}&selectedEndDate=${to}&todayDate=${from}&urn=${encodeURIComponent('urn:bbc:sportsdata:football:tournament:'+t[5])}&useSdApi=false`,{accept:'application/json'},7000)]));
+  if(!parts.some(p=>p.status==='fulfilled'))throw new Error('BBC Sport unavailable: '+String(parts[0]?.reason?.message || '').slice(0,60));
+  const rows=[];
+  for(const p of parts) {
+    if(p.status!=='fulfilled')continue;
+    const [top,d]=p.value,groups=Array.isArray(d?.data?.eventGroups)?d.data.eventGroups:[];
+    const events=groups.flatMap(g=>[...(Array.isArray(g?.events)?g.events:[]),...(Array.isArray(g?.secondaryGroups)?g.secondaryGroups.flatMap(sg=>Array.isArray(sg?.events)?sg.events:[]):[])]);
+    for(const e of events) {
+      if(e?.status!=='PRE_MATCH')continue;
+      const r=fanUpRow('bbc',e.id,top,e.home?.fullName || e.home?.name,e.away?.fullName || e.away?.name,Date.parse(e?.date?.iso));
+      if(r)rows.push(r);
+    }
+  }
+  return rows;
+}
+// Flashscore feed: "~"-separated records of "KEY÷value" fields joined by "¬". ZA starts a league section (name in ZA),
+// AA starts a match (AD kickoff seconds, AB status 1 = not started, AE home, AF away).
+function fanUpFlashRows(text,tops,now) {
+  const rows=[];let top=null;
+  for(const rec of String(text || '').split('~')) {
+    const f={};
+    for(const part of rec.split('¬')) {const i=part.indexOf('÷');if(i>0)f[part.slice(0,i)]=part.slice(i+1);}
+    if(f.ZA!==undefined) {top=tops.find(t=>t[6].test(f.ZA.trim())) || null;continue;}
+    if(!top || f.AA===undefined || String(f.AB)!=='1')continue;
+    const at=Number(f.AD)*1000;
+    if(!Number.isFinite(at) || at<=now || at>now+FAN_AI_UPCOMING_DAYS*86400000)continue;
+    const r=fanUpRow('fs',f.AA,top,f.AE,f.AF,at);if(r)rows.push(r);
+  }
+  return rows;
+}
 async function fanUpFlashscore(leagues,now) {
   const tops=FAN_UP_TOP.filter(t=>leagues.includes(t[0]));
   const parts=await Promise.allSettled(Array.from({length:8},(_,i)=>fanUpGet(`https://d.flashscore.com/x/feed/f_1_${i}_1_en_1`,{'x-fsign':'SW9D1eZo',accept:'*/*',referer:'https://www.flashscore.com/'},7000,true)));
@@ -3863,7 +3900,7 @@ async function fanUpExtRows(env,up,now) {
   };
   const ids=Array.from(new Set([...up.sources,...(env.API_NINJAS_KEY?['apininjas']:[])])).filter(id=>jobs[id]);
   if(!ids.length)return [];
-  const settled=await Promise.allSettled(ids.map(id=>jobs[id]()));
+  const settled=await Promise.allSettled(ids.map(async id=>jobs[id]()));
   const rows=[];
   settled.forEach((s,i)=>{
     if(s.status==='fulfilled') {
