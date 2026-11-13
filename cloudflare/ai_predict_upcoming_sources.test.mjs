@@ -1,5 +1,5 @@
 // Node 22+: node cloudflare/ai_predict_upcoming_sources.test.mjs
-// Extra upcoming-match networks (football-data.org, API-Football, SofaScore, BBC Sport, Flashscore): top leagues only, deduplicated, mapped to ESPN clubs.
+// Extra upcoming-match networks (football-data.org, API-Football, BBC Sport, Flashscore): top leagues only, deduplicated, mapped to ESPN clubs.
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import worker from './worker.js';
@@ -20,7 +20,7 @@ const call=(path,{body,bearer}={})=>worker.fetch(new Request('https://feed.test/
 const DAY=86400000,at=d=>new Date(Date.now()+d*DAY).toISOString();
 const CONFIG={data:{upcoming:{topLeaguesOnly:false,leagues:['eng.1','sco.1','esp.1','ita.1','ger.1'],sources:[
   {id:'espn',enabled:true},{id:'espn_all',enabled:true},{id:'footballdata',enabled:true},{id:'apifootball',enabled:true},
-  {id:'sofascore',enabled:true},{id:'bbc',enabled:true},{id:'flashscore',enabled:true},{id:'tsdb',enabled:false},{id:'nonsense',enabled:true}]}}};
+  {id:'bbc',enabled:true},{id:'flashscore',enabled:true},{id:'tsdb',enabled:false},{id:'nonsense',enabled:true}]}}};
 const TEAMS={'eng.1':[['359','Arsenal','Arsenal'],['382','Manchester City','Man City'],['363','Chelsea','Chelsea']],'sco.1':[['256','Celtic','Celtic'],['257','Rangers','Rangers']]};
 const seen=new Set();let tsdbCalls=0;
 globalThis.fetch=async(url)=>{const u=String(url);
@@ -40,13 +40,6 @@ globalThis.fetch=async(url)=>{const u=String(url);
       {id:502,utcDate:at(2),status:'TIMED',homeTeam:{name:'Paris Saint-Germain FC'},awayTeam:{name:'Olympique Lyonnais'},competition:{code:'FL1'}},
       {id:503,utcDate:at(1),status:'FINISHED',homeTeam:{name:'Chelsea FC'},awayTeam:{name:'Arsenal FC'},competition:{code:'PL'}}]}));}
   if(u.startsWith('https://v3.football.api-sports.io/')){seen.add('af');return new Response(JSON.stringify({errors:{plan:'Free plans do not have access to this season'},response:[]}));}
-  if(u.startsWith('https://api.sofascore.com/')){seen.add('sofa');
-    const d=u.split('/').pop(),events=d===at(2).slice(0,10)?[
-      {id:9001,startTimestamp:Date.parse(at(2))/1000,status:{type:'notstarted'},homeTeam:{name:'Arsenal'},awayTeam:{name:'Man City'},tournament:{uniqueTournament:{id:17}}},
-      {id:9002,startTimestamp:Date.parse(at(2))/1000,status:{type:'notstarted'},homeTeam:{name:'Celtic'},awayTeam:{name:'Rangers'},tournament:{uniqueTournament:{id:36}}},
-      {id:9003,startTimestamp:Date.parse(at(2))/1000,status:{type:'notstarted'},homeTeam:{name:'PSG'},awayTeam:{name:'Lyon'},tournament:{uniqueTournament:{id:34}}},
-      {id:9004,startTimestamp:Date.parse(at(2))/1000,status:{type:'finished'},homeTeam:{name:'Chelsea'},awayTeam:{name:'Arsenal'},tournament:{uniqueTournament:{id:17}}}]:[];
-    return new Response(JSON.stringify({events}));}
   if(u.startsWith('https://web-cdn.api.bbci.co.uk/')){seen.add('bbc');
     const premier=u.includes('premier-league');
     return new Response(JSON.stringify(premier?{data:{eventGroups:[{secondaryGroups:[{events:[
@@ -58,20 +51,23 @@ globalThis.fetch=async(url)=>{const u=String(url);
   return new Response('[]');};
 env.AI={async run(){return {response:'ok'};}};env.FOOTBALL_DATA_KEY='fd-test';env.API_FOOTBALL_KEY='af-test';
 const alice=await token();assert.equal((await call('auth',{body:{mode:'signup',idToken:alice}})).status,200);
+// Free users get 3 analyses a day; these tests run many, so make the test user premium.
+sql.exec("CREATE TABLE IF NOT EXISTS subs (install_id TEXT PRIMARY KEY, email TEXT, expires_at INTEGER NOT NULL DEFAULT 0, source TEXT, updated_at INTEGER NOT NULL DEFAULT 0)");
+for(const u of sql.prepare('SELECT id FROM fan_users').all())sql.prepare("INSERT OR REPLACE INTO subs(install_id,email,expires_at,source,updated_at) VALUES(?,?,?,?,?)").run(u.id,'alice@gmail.com',Date.now()+30*86400000,'test',Date.now());
 let r=await call('ai-predict/top-matches',{bearer:alice});
 const out=await r.json();assert.equal(r.status,200,JSON.stringify(out));
 const names=out.matches.map(m=>`${m.home} v ${m.away} [${m.league}]`).sort();
 assert.deepEqual(names,[
-  'Arsenal v Manchester City [Premier League]','Celtic v Rangers [Scottish Premiership]','Chelsea v Arsenal [Premier League]','Hearts v Hibernian [Scottish Premiership]'
+  'Arsenal v Manchester City [Premier League]','Chelsea v Arsenal [Premier League]','Hearts v Hibernian [Scottish Premiership]'
 ],JSON.stringify(names));
-for(const k of ['fd','af','sofa','bbc','fs'])assert.ok(seen.has(k),'source called: '+k);
+for(const k of ['fd','af','bbc','fs'])assert.ok(seen.has(k),'source called: '+k);
 assert.equal(tsdbCalls,0,'TheSportsDB is switched off in the JSON');
 const arsenal=out.matches.find(m=>m.home==='Arsenal');
 assert.ok(/espncdn\.com/.test(arsenal.homeLogo),'club crest comes from the ESPN team list');
 assert.ok(out.matches.every(m=>!('source' in m) && !('homeId' in m)),'internal fields are not sent to the app');
-assert.deepEqual(out.sources,{fd:1,sofa:1,bbc:1,fs:1},JSON.stringify(out.sources));
+assert.deepEqual(out.sources,{fd:1,bbc:1,fs:1},JSON.stringify(out.sources));
 // A match from these networks can be found again when it is picked or analysed (looked up in the top-league list).
-const celtic=out.matches.find(m=>m.home==='Celtic');
-r=await call('ai-predict',{body:{ext:celtic.id},bearer:alice});
+const hearts=out.matches.find(m=>m.home==='Hearts');
+r=await call('ai-predict',{body:{ext:hearts.id},bearer:alice});
 assert.notEqual(r.status,404,'listed match is found again: '+JSON.stringify(await r.clone().json().catch(()=>null)));
 console.log('ai_predict_upcoming_sources ok:',names.length,'matches');
