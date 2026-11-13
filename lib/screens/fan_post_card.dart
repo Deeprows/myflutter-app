@@ -81,13 +81,7 @@ class _FanPostCardState extends State<FanPostCard> {
             tooltip: 'More',
             padding: EdgeInsets.zero,
             icon: const Icon(Icons.more_vert_rounded, size: 21),
-            onSelected: (v) {
-              if (v == 'open') {
-                openExternally(link);
-              } else {
-                _action(v);
-              }
-            },
+            onSelected: _action,
             itemBuilder: (_) => [
               const PopupMenuItem(value: 'share', child: Text('Share post')),
               PopupMenuItem(
@@ -98,7 +92,6 @@ class _FanPostCardState extends State<FanPostCard> {
                       : 'Bookmark post',
                 ),
               ),
-              const PopupMenuItem(value: 'open', child: Text('Open original link')),
               if (!mine)
                 const PopupMenuItem(value: 'report', child: Text('Report post')),
             ],
