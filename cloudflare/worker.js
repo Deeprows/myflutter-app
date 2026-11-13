@@ -1991,6 +1991,7 @@ export function fanPoints(h, a, rh, ra) {
   return h === rh && a === ra ? 3 : Math.sign(h - a) === Math.sign(rh - ra) ? 1 : 0;
 }
 const FAN_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS fan_ai_quota_requests (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, user_name TEXT NOT NULL DEFAULT '', amount INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', granted INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS fan_result_reports (match_key TEXT NOT NULL, user_id TEXT NOT NULL, home INTEGER NOT NULL, away INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(match_key,user_id))`,
   `CREATE TABLE IF NOT EXISTS fan_espn_form_cache (cache_key TEXT PRIMARY KEY, data TEXT NOT NULL, fetched_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_result_jobs (match_key TEXT PRIMARY KEY, fixture_json TEXT NOT NULL DEFAULT '', checked_at INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '')`,
@@ -2090,6 +2091,47 @@ async function fanZone(request, env, url, ctx) {
   try {
     await fanInit(env.DB);
     const db = env.DB;
+    // AI extra quota request workflow. Admin routes require ADMIN_TOKEN (or STATS_TOKEN).
+    if(url.pathname==='/fan/ai-quota/request' && request.method==='POST') {
+      const body=await request.json().catch(()=>({}));
+      const userId=String(body.userId||'').trim().slice(0,128);
+      const userName=String(body.userName||'').trim().slice(0,80);
+      const amount=Number(body.amount);
+      const note=String(body.note||'').trim().slice(0,500);
+      if(!userId || ![10,20,50].includes(amount))return fail('User ID and request amount (10, 20, or 50) are required.');
+      const pending=await db.prepare("SELECT id FROM fan_ai_quota_requests WHERE user_id=? AND status='pending'").bind(userId).first();
+      if(pending)return fail('You already have a pending extra predictions request.',409);
+      const id=crypto.randomUUID(), now=Math.floor(Date.now()/1000);
+      await db.prepare("INSERT INTO fan_ai_quota_requests(id,user_id,user_name,amount,note,status,created_at,updated_at) VALUES(?,?,?,?,?,'pending',?,?)").bind(id,userId,userName,amount,note,now,now).run();
+      return json({ok:true,id,status:'pending'});
+    }
+    if(url.pathname==='/fan/admin/ai-quota' && request.method==='GET') {
+      const token=String(request.headers.get('authorization')||'').replace(/^Bearer\\s+/i,'');
+      if(!((env.ADMIN_TOKEN||env.STATS_TOKEN) && token===(env.ADMIN_TOKEN||env.STATS_TOKEN)))return fail('Unauthorized',401);
+      const status=String(url.searchParams.get('status')||'pending');
+      const rows=await db.prepare('SELECT * FROM fan_ai_quota_requests WHERE status=? ORDER BY created_at DESC LIMIT 300').bind(status).all();
+      return json({ok:true,requests:rows.results||[]});
+    }
+    if(url.pathname==='/fan/admin/ai-quota' && request.method==='POST') {
+      const token=String(request.headers.get('authorization')||'').replace(/^Bearer\\s+/i,'');
+      if(!((env.ADMIN_TOKEN||env.STATS_TOKEN) && token===(env.ADMIN_TOKEN||env.STATS_TOKEN)))return fail('Unauthorized',401);
+      const body=await request.json().catch(()=>({}));
+      const id=String(body.id||'').trim(), action=String(body.action||'');
+      const row=await db.prepare("SELECT * FROM fan_ai_quota_requests WHERE id=? AND status='pending'").bind(id).first();
+      if(!row)return fail('Pending request not found',404);
+      if(action==='reject') {
+        await db.prepare("UPDATE fan_ai_quota_requests SET status='rejected',updated_at=? WHERE id=?").bind(Math.floor(Date.now()/1000),id).run();
+        return json({ok:true,status:'rejected'});
+      }
+      if(action==='approve') {
+        const granted=Number(body.granted||row.amount);
+        if(!Number.isInteger(granted)||granted<1||granted>500)return fail('Grant must be between 1 and 500.');
+        await db.prepare("UPDATE fan_ai_quota_requests SET status='approved',granted=?,updated_at=? WHERE id=?").bind(granted,Math.floor(Date.now()/1000),id).run();
+        return json({ok:true,status:'approved',granted});
+      }
+      return fail('Action must be approve or reject.');
+    }
+
     if(url.pathname==='/fan/auth')return await fanAccountAuth(request,env);
     if(request.method==='GET' && url.pathname.startsWith('/fan/share/'))return await fanSharePost(env,url);
     if(request.method==='GET' && url.pathname.startsWith('/fan/image/')) {
