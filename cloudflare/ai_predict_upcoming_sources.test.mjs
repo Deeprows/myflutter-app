@@ -58,7 +58,7 @@ globalThis.fetch=async(url)=>{const u=String(url);
   return new Response('[]');};
 env.AI={async run(){return {response:'ok'};}};env.FOOTBALL_DATA_KEY='fd-test';env.API_FOOTBALL_KEY='af-test';
 const alice=await token();assert.equal((await call('auth',{body:{mode:'signup',idToken:alice}})).status,200);
-let r=await call('ai-predict/matches',{bearer:alice});
+let r=await call('ai-predict/top-matches',{bearer:alice});
 const out=await r.json();assert.equal(r.status,200,JSON.stringify(out));
 const names=out.matches.map(m=>`${m.home} v ${m.away} [${m.league}]`).sort();
 assert.deepEqual(names,[
@@ -69,4 +69,9 @@ assert.equal(tsdbCalls,0,'TheSportsDB is switched off in the JSON');
 const arsenal=out.matches.find(m=>m.home==='Arsenal');
 assert.ok(/espncdn\.com/.test(arsenal.homeLogo),'club crest comes from the ESPN team list');
 assert.ok(out.matches.every(m=>!('source' in m) && !('homeId' in m)),'internal fields are not sent to the app');
+assert.deepEqual(out.sources,{fd:1,sofa:1,bbc:1,fs:1},JSON.stringify(out.sources));
+// A match from these networks can be found again when it is picked or analysed (looked up in the top-league list).
+const celtic=out.matches.find(m=>m.home==='Celtic');
+r=await call('ai-predict',{body:{ext:celtic.id},bearer:alice});
+assert.notEqual(r.status,404,'listed match is found again: '+JSON.stringify(await r.clone().json().catch(()=>null)));
 console.log('ai_predict_upcoming_sources ok:',names.length,'matches');
