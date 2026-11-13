@@ -1957,11 +1957,15 @@ ${r.days ? `<div style="font-size:13.5px;margin-bottom:6px;color:#22e07a">Wants 
   let quotaReqs = [];
   try {
     await fanInit(env.DB);
+    const hasContact = await fanQuotaHasContact(env.DB);
     quotaReqs = (
       await env.DB.prepare(
-        "SELECT id, user_name, amount, contact, created_at FROM fan_ai_quota_requests WHERE status = 'pending' ORDER BY created_at DESC LIMIT 50"
+        `SELECT id, user_name, amount, ${hasContact ? "contact" : "note"}, created_at FROM fan_ai_quota_requests WHERE status = 'pending' ORDER BY created_at DESC LIMIT 50`
       ).all()
     ).results || [];
+    if (!hasContact) {
+      quotaReqs = quotaReqs.map((r) => ({ ...r, contact: (String(r.note || "").match(/^WhatsApp:\s*([^|]+)/) || [, ""])[1].trim() }));
+    }
   } catch (e) {
     console.error("quota list", e && e.message);
   }
@@ -1983,11 +1987,12 @@ ${r.days ? `<div style="font-size:13.5px;margin-bottom:6px;color:#22e07a">Wants 
   // Users who still hold unused extra predictions (so you can stop them).
   let creditRows = [];
   try {
+    const hasContactC = await fanQuotaHasContact(env.DB);
     creditRows = (
       await env.DB.prepare(
         "SELECT c.user_id, c.granted_total, c.consumed_total, " +
           "(SELECT user_name FROM fan_ai_quota_requests r WHERE r.user_id = c.user_id ORDER BY r.created_at DESC LIMIT 1) AS user_name, " +
-          "(SELECT contact FROM fan_ai_quota_requests r WHERE r.user_id = c.user_id ORDER BY r.created_at DESC LIMIT 1) AS contact " +
+          `(SELECT ${hasContactC ? "contact" : "''"} FROM fan_ai_quota_requests r WHERE r.user_id = c.user_id ORDER BY r.created_at DESC LIMIT 1) AS contact ` +
           "FROM fan_ai_extra_credits c WHERE c.granted_total > c.consumed_total ORDER BY c.updated_at DESC LIMIT 50"
       ).all()
     ).results || [];
@@ -2103,7 +2108,7 @@ export function fanPoints(h, a, rh, ra) {
   return h === rh && a === ra ? 3 : Math.sign(h - a) === Math.sign(rh - ra) ? 1 : 0;
 }
 const FAN_SCHEMA = [
-  `CREATE TABLE IF NOT EXISTS fan_ai_quota_requests (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, user_name TEXT NOT NULL DEFAULT '', amount INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', granted INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS fan_ai_quota_requests (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, user_name TEXT NOT NULL DEFAULT '', amount INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', contact TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', granted INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS fan_ai_extra_credits (user_id TEXT PRIMARY KEY, granted_total INTEGER NOT NULL DEFAULT 0, consumed_total INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS fan_result_reports (match_key TEXT NOT NULL, user_id TEXT NOT NULL, home INTEGER NOT NULL, away INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(match_key,user_id))`,
   `CREATE TABLE IF NOT EXISTS fan_espn_form_cache (cache_key TEXT PRIMARY KEY, data TEXT NOT NULL, fetched_at INTEGER NOT NULL)`,
@@ -2177,11 +2182,40 @@ async function fanInit(db) {
           catch(e) {if(!(await db.prepare(`PRAGMA table_info(${table})`).all()).results.some(c=>c.name===name))throw e;}
         }
       }
+      await fanQuotaHasContact(db);
       await db.prepare('CREATE INDEX IF NOT EXISTS fan_comments_root ON fan_comments(post_id,root_id,hidden,at)').run();
       await db.prepare('CREATE INDEX IF NOT EXISTS fan_posts_quote ON fan_posts(quote_of,hidden)').run();
     })().catch(e=>{fanReady.delete(db);throw e;}));
   }
   await fanReady.get(db);
+}
+// The quota-request table may have been created by an older version with a different layout (missing user_name,
+// contact, ...). Bring it to the current layout: add a lone missing "contact" column, or move the old table aside,
+// create the current one and copy over the rows whose columns still match. True when the table is ready.
+const FAN_QUOTA_COLS=['id','user_id','user_name','amount','note','contact','status','granted','created_at','updated_at'];
+const fanQuotaContactOk=new WeakSet();
+async function fanQuotaHasContact(db) {
+  if(fanQuotaContactOk.has(db))return true;
+  try {
+    const columns=async()=>(await db.prepare('PRAGMA table_info(fan_ai_quota_requests)').all()).results.map(c=>c.name);
+    let cols=await columns();
+    const missing=FAN_QUOTA_COLS.filter(c=>!cols.includes(c));
+    if(missing.length===1 && missing[0]==='contact') {
+      await db.prepare("ALTER TABLE fan_ai_quota_requests ADD COLUMN contact TEXT NOT NULL DEFAULT ''").run();
+    } else if(missing.length) {
+      const legacy='fan_ai_quota_requests_old_'+Date.now();
+      await db.prepare(`ALTER TABLE fan_ai_quota_requests RENAME TO ${legacy}`).run();
+      await db.prepare(FAN_SCHEMA[0]).run();
+      const common=FAN_QUOTA_COLS.filter(c=>cols.includes(c));
+      if(['id','user_id','amount','created_at'].every(c=>common.includes(c))) {
+        try {await db.prepare(`INSERT OR IGNORE INTO fan_ai_quota_requests(${common.join(',')}) SELECT ${common.join(',')} FROM ${legacy}`).run();}
+        catch(e) {console.error('quota table copy',String(e&&e.message||e));}
+      }
+    }
+    const finalCols=await columns();
+    if(FAN_QUOTA_COLS.every(c=>finalCols.includes(c))) {fanQuotaContactOk.add(db);return true;}
+  } catch(e) {console.error('quota table check',String(e&&e.message||e));}
+  return false;
 }
 async function fanHash(s) {
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -2222,19 +2256,26 @@ async function fanZone(request, env, url, ctx) {
         // How many analyses this account has run today (UTC), read without counting a new one.
         const usedRow=await db.prepare('SELECT count FROM fan_ai_limits WHERE bucket=? AND expires>?').bind(`day:${userId}:${Math.floor(Date.now()/86400000)}`,Date.now()).first();
         const usedToday=Number(usedRow?.count||0);
-        return json({ok:true,used_today:usedToday,daily_limit:FAN_AI_PREMIUM_ANALYSIS_LIMIT_PER_DAY,exhausted:usedToday>=FAN_AI_PREMIUM_ANALYSIS_LIMIT_PER_DAY,granted:Number(credit?.granted_total||0),consumed:Number(credit?.consumed_total||0),remaining:Math.max(0,Number(credit?.granted_total||0)-Number(credit?.consumed_total||0)),pending:pending||null});
+        const lim=(await fanAiConfig(env)).limits;
+        return json({ok:true,used_today:usedToday,daily_limit:lim.premiumDay,amounts:lim.amounts,exhausted:usedToday>=lim.premiumDay,granted:Number(credit?.granted_total||0),consumed:Number(credit?.consumed_total||0),remaining:Math.max(0,Number(credit?.granted_total||0)-Number(credit?.consumed_total||0)),pending:pending||null});
       }
       const body=await request.json().catch(()=>({}));
       const amount=Number(body.amount), note=String(body.note||'').trim().slice(0,500);
       const contact=String(body.contact||'').trim().slice(0,30), contactDigits=contact.replace(/\D/g,'');
       const usedNow=await db.prepare('SELECT count FROM fan_ai_limits WHERE bucket=? AND expires>?').bind(`day:${userId}:${Math.floor(Date.now()/86400000)}`,Date.now()).first();
-      if(Number(usedNow?.count||0)<FAN_AI_PREMIUM_ANALYSIS_LIMIT_PER_DAY)return fail('Extra predictions can be requested once you have used all 35 daily analyses.',403);
-      if(![10,20,50].includes(amount))return fail('Request amount must be 10, 20, or 50.');
+      const reqLim=(await fanAiConfig(env)).limits;
+      if(Number(usedNow?.count||0)<reqLim.premiumDay)return fail(`Extra predictions can be requested once you have used all ${reqLim.premiumDay} daily analyses.`,403);
+      if(!reqLim.amounts.includes(amount))return fail(`Request amount must be one of: ${reqLim.amounts.join(', ')}.`);
       if(contactDigits.length<7||contactDigits.length>15)return fail('Enter your WhatsApp number with country code, e.g. +234 801 234 5678');
       const pending=await db.prepare("SELECT id FROM fan_ai_quota_requests WHERE user_id=? AND status='pending'").bind(userId).first();
       if(pending)return fail('You already have a pending extra predictions request.',409);
       const id=crypto.randomUUID(),now=Math.floor(Date.now()/1000),userName=String(identity.name||'').trim().slice(0,80);
-      await db.prepare("INSERT INTO fan_ai_quota_requests(id,user_id,user_name,amount,note,contact,status,created_at,updated_at) VALUES(?,?,?,?,?,?,'pending',?,?)").bind(id,userId,userName,amount,note,contact,now,now).run();
+      if(await fanQuotaHasContact(db)) {
+        await db.prepare("INSERT INTO fan_ai_quota_requests(id,user_id,user_name,amount,note,contact,status,created_at,updated_at) VALUES(?,?,?,?,?,?,'pending',?,?)").bind(id,userId,userName,amount,note,contact,now,now).run();
+      } else {
+        // Could not add the column: keep the number in the note so the request still reaches the admin page.
+        await db.prepare("INSERT INTO fan_ai_quota_requests(id,user_id,user_name,amount,note,status,created_at,updated_at) VALUES(?,?,?,?,?,'pending',?,?)").bind(id,userId,userName,amount,('WhatsApp: '+contact+(note?' | '+note:'')).slice(0,500),now,now).run();
+      }
       // Notify the configured admin account on every newly submitted request.
       // Push is best-effort: a missing Firebase secret/device never blocks the request.
       const adminEmail=String(env.AI_QUOTA_ADMIN_EMAIL || '').trim().toLowerCase();
@@ -2523,7 +2564,7 @@ async function fanZone(request, env, url, ctx) {
     }
     return fail('Not found',404);
   } catch (e) {
-    console.error('Fan Zone request failed', e);
+    console.error('Fan Zone request failed:', String(e && e.message || e), e);
     return fail('Fan Zone database/setup error. Confirm the Worker has the D1 binding named DB, then redeploy the latest worker.js. Check Worker logs for the underlying error.',503);
   }
 }
@@ -3204,11 +3245,24 @@ const FAN_DATA_FORM_IDS=['apifootball','espn','espn_scan','footballdata'];
 async function fanAiConfig(env) {
   const now=Date.now();
   if(fanAiConfigCache.cfg && now-fanAiConfigCache.at<300000)return fanAiConfigCache.cfg;
-  let cfg={providers:[{id:'gemini',type:'gemini',label:'Gemini'}],form:[...FAN_DATA_FORM_IDS],extras:true,players:true,context:{standings:true,headToHead:true},upcoming:{sources:['espn','espn_all','tsdb'],leagues:FAN_UP_TOP.map(l=>l[0]),topOnly:false,sig:'d'}};
+  let cfg={providers:[{id:'gemini',type:'gemini',label:'Gemini'}],form:[...FAN_DATA_FORM_IDS],extras:true,players:true,context:{standings:true,headToHead:true},limits:{freeHour:FAN_AI_FREE_ANALYSIS_LIMIT_PER_HOUR,freeDay:FAN_AI_FREE_ANALYSIS_LIMIT_PER_DAY,premiumHour:FAN_AI_PREMIUM_ANALYSIS_LIMIT_PER_HOUR,premiumDay:FAN_AI_PREMIUM_ANALYSIS_LIMIT_PER_DAY,amounts:[10,20,50]},upcoming:{sources:['espn','espn_all','tsdb'],leagues:FAN_UP_TOP.map(l=>l[0]),topOnly:false,sig:'d'}};
   try {
     const r=await fetch(env.API_CONFIG_URL || FAN_AI_CONFIG_URL,{signal:AbortSignal.timeout(4000),cf:{cacheTtl:300,cacheEverything:true}});
     const d=r.ok?await r.json().catch(()=>null):null;
     if(Array.isArray(d?.ai?.providers))cfg.providers=d.ai.providers.filter(p=>p && typeof p==='object' && p.enabled!==false);
+    // Daily / hourly analysis limits and the "Request more" amounts (ai.limits). Bad values keep the defaults.
+    const lim=d?.ai?.limits;
+    if(lim && typeof lim==='object') {
+      const n=(v,fallback)=>Number.isInteger(v) && v>=1 && v<=100000?v:fallback;
+      cfg.limits.freeHour=n(lim.free?.perHour,cfg.limits.freeHour);
+      cfg.limits.freeDay=n(lim.free?.perDay,cfg.limits.freeDay);
+      cfg.limits.premiumHour=n(lim.premium?.perHour,cfg.limits.premiumHour);
+      cfg.limits.premiumDay=n(lim.premium?.perDay,cfg.limits.premiumDay);
+      if(Array.isArray(lim.extraRequestAmounts)) {
+        const a=[...new Set(lim.extraRequestAmounts.filter(x=>Number.isInteger(x) && x>=1 && x<=500))].slice(0,6);
+        if(a.length)cfg.limits.amounts=a;
+      }
+    }
     // Data sources for the recent-results step, tried in the order listed. Unknown ids are ignored.
     if(Array.isArray(d?.data?.form?.sources)) {
       const ids=d.data.form.sources.filter(x=>x && typeof x==='object' && x.enabled!==false && FAN_DATA_FORM_IDS.includes(x.id)).map(x=>x.id);
@@ -3272,8 +3326,9 @@ async function fanAiFinish(env,id,promptFixture,home,away,extra={}) {
     // by Fan Zone), not to an install/device id or any client-supplied flag.
     const premiumUntil=await expiryOf(env,id);
     const premium=premiumUntil>now;
-    const hourlyLimit=premium?FAN_AI_PREMIUM_ANALYSIS_LIMIT_PER_HOUR:FAN_AI_FREE_ANALYSIS_LIMIT_PER_HOUR;
-    const dailyLimit=premium?FAN_AI_PREMIUM_ANALYSIS_LIMIT_PER_DAY:FAN_AI_FREE_ANALYSIS_LIMIT_PER_DAY;
+    const L=(await fanAiConfig(env)).limits;
+    const hourlyLimit=premium?L.premiumHour:L.freeHour;
+    const dailyLimit=premium?L.premiumDay:L.freeDay;
     const limits=await env.DB.batch([
       env.DB.prepare(`INSERT INTO fan_ai_limits(bucket,count,expires) VALUES(?,1,?) ON CONFLICT(bucket) DO UPDATE SET count=count+1 RETURNING count`).bind(`hour:${id}:${hour}`,(hour+1)*3600000),
       env.DB.prepare(`INSERT INTO fan_ai_limits(bucket,count,expires) VALUES(?,1,?) ON CONFLICT(bucket) DO UPDATE SET count=count+1 RETURNING count`).bind(`day:${id}:${day}`,(day+1)*86400000)
@@ -3281,11 +3336,11 @@ async function fanAiFinish(env,id,promptFixture,home,away,extra={}) {
     const overHour=limits[0].results[0].count>hourlyLimit;
     const overDay=limits[1].results[0].count>dailyLimit;
     let extraCreditUsed=false;
-    if(overHour) return fail(premium ? 'Premium AI Predict hourly limit reached (35 analyses per hour). Try again later.' : 'Free AI Predict limit reached (3 matches per UTC day). Upgrade to Premium for up to 35 matches per day.',429);
+    if(overHour) return fail(premium ? `Premium AI Predict hourly limit reached (${L.premiumHour} analyses per hour). Try again later.` : `Free AI Predict limit reached (${L.freeDay} matches per UTC day). Upgrade to Premium for up to ${L.premiumDay} matches per day.`,429);
     if(overDay) {
-      if(!premium) return fail('Free AI Predict limit reached (3 matches per UTC day). Upgrade to Premium for up to 35 matches per day.',429);
+      if(!premium) return fail(`Free AI Predict limit reached (${L.freeDay} matches per UTC day). Upgrade to Premium for up to ${L.premiumDay} matches per day.`,429);
       const credit=await env.DB.prepare('UPDATE fan_ai_extra_credits SET consumed_total=consumed_total+1,updated_at=? WHERE user_id=? AND consumed_total<granted_total RETURNING consumed_total,granted_total').bind(now,id).first();
-      if(!credit) return fail('Premium AI Predict limit reached (35 matches per UTC day). You have no extra predictions available. Request more from the AI Predict screen.',429);
+      if(!credit) return fail(`Premium AI Predict limit reached (${L.premiumDay} matches per UTC day). You have no extra predictions available. Request more from the AI Predict screen.`,429);
       extraCreditUsed=true;
     }
     await env.DB.prepare('DELETE FROM fan_ai_limits WHERE expires<?').bind(now).run();
