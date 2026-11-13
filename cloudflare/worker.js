@@ -2797,8 +2797,10 @@ async function fanAccountAuth(request,env) {
 // ceiling higher than the completed-analysis ceiling so transient provider/data
 // failures do not consume the user's successful analysis allowance.
 const FAN_AI_ATTEMPT_LIMIT_PER_HOUR = 105;
-const FAN_AI_ANALYSIS_LIMIT_PER_HOUR = 35;
-const FAN_AI_ANALYSIS_LIMIT_PER_DAY = 35;
+const FAN_AI_FREE_ANALYSIS_LIMIT_PER_HOUR = 3;
+const FAN_AI_FREE_ANALYSIS_LIMIT_PER_DAY = 3;
+const FAN_AI_PREMIUM_ANALYSIS_LIMIT_PER_HOUR = 35;
+const FAN_AI_PREMIUM_ANALYSIS_LIMIT_PER_DAY = 35;
 
 // Automatic, server-sourced form analysis. Clients submit only a fixture key, an
 // id taken from the server's own upcoming-match list, or two typed team names
@@ -3081,11 +3083,22 @@ async function fanAiFinish(env,id,promptFixture,home,away,extra={}) {
   try {
     if(!Array.isArray(home?.matches) || !home.matches.length || !Array.isArray(away?.matches) || !away.matches.length)return fail('At least one verified completed match is required for each team. No verified results were found for one or both teams.',422);
     const now=Date.now(),hour=Math.floor(now/3600000),day=Math.floor(now/86400000);
+    // Premium is attached to the verified Google account id (the same id used
+    // by Fan Zone), not to an install/device id or any client-supplied flag.
+    const premiumUntil=await expiryOf(env,id);
+    const premium=premiumUntil>now;
+    const hourlyLimit=premium?FAN_AI_PREMIUM_ANALYSIS_LIMIT_PER_HOUR:FAN_AI_FREE_ANALYSIS_LIMIT_PER_HOUR;
+    const dailyLimit=premium?FAN_AI_PREMIUM_ANALYSIS_LIMIT_PER_DAY:FAN_AI_FREE_ANALYSIS_LIMIT_PER_DAY;
     const limits=await env.DB.batch([
       env.DB.prepare(`INSERT INTO fan_ai_limits(bucket,count,expires) VALUES(?,1,?) ON CONFLICT(bucket) DO UPDATE SET count=count+1 RETURNING count`).bind(`hour:${id}:${hour}`,(hour+1)*3600000),
       env.DB.prepare(`INSERT INTO fan_ai_limits(bucket,count,expires) VALUES(?,1,?) ON CONFLICT(bucket) DO UPDATE SET count=count+1 RETURNING count`).bind(`day:${id}:${day}`,(day+1)*86400000)
     ]);
-    if(limits[0].results[0].count>FAN_AI_ANALYSIS_LIMIT_PER_HOUR || limits[1].results[0].count>FAN_AI_ANALYSIS_LIMIT_PER_DAY)return fail('Analysis limit reached. Try again after the next UTC hour or day.',429);
+    if(limits[0].results[0].count>hourlyLimit || limits[1].results[0].count>dailyLimit) {
+      const message=premium
+        ? 'Premium AI Predict limit reached (35 matches per UTC day). Try again after the next UTC day.'
+        : 'Free AI Predict limit reached (3 matches per UTC day). Upgrade to Premium for up to 35 matches per day.';
+      return fail(message,429);
+    }
     await env.DB.prepare('DELETE FROM fan_ai_limits WHERE expires<?').bind(now).run();
 
     const stats=fanAiStats(home,away,extra.extras);
