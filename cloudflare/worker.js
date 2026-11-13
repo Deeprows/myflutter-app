@@ -3671,7 +3671,7 @@ async function fanAiTsdbUpcoming(now,day) {
 // Each network lists ONLY the top leagues below, in the same row shape as the ESPN list. Names are matched to ESPN clubs
 // (id, crest, display name) so the analysis uses the same recent-results path as an ESPN-listed match.
 // Rows from these networks carry source:'ext' (their ids are not ESPN event ids).
-const FAN_UP_IDS=['espn','espn_all','tsdb','footballdata','apifootball','sofascore','bbc','flashscore'];
+const FAN_UP_IDS=['espn','espn_all','tsdb','footballdata','apifootball','bbc','flashscore','apininjas'];
 // [ESPN slug, name, football-data.org code, API-Football league id, SofaScore tournament id, BBC slug, Flashscore header]
 const FAN_UP_TOP=[
   ['eng.1','Premier League','PL',39,17,'premier-league',/^ENGLAND:\s*Premier League/i],
@@ -3742,75 +3742,39 @@ async function fanUpApiFootball(env,leagues,now) {
   });
   return rows;
 }
-// SofaScore: unofficial public JSON (one request per day, filtered to the tournaments above). It may refuse datacenter traffic.
-async function fanUpSofaScore(leagues,now) {
+// API Ninjas soccer matches: current season, 50 records/page (offset pagination).
+// Configure API_NINJAS_KEY as a Cloudflare Worker secret; the free tier includes current-season fixtures.
+async function fanUpApiNinjas(env,leagues,now) {
+  const key=String(env.API_NINJAS_KEY || '').trim();
+  if(!key)throw new Error('API Ninjas: API_NINJAS_KEY missing');
   const tops=FAN_UP_TOP.filter(t=>leagues.includes(t[0]));
-  const days=Array.from({length:FAN_AI_UPCOMING_DAYS},(_,i)=>fanUpDay(now+i*86400000));
-  const parts=await Promise.allSettled(days.map(d=>fanUpGet(`https://api.sofascore.com/api/v1/sport/football/scheduled-events/${d}`,{referer:'https://www.sofascore.com/'})));
-  if(!parts.some(p=>p.status==='fulfilled'))throw new Error('SofaScore unavailable: '+String(parts[0]?.reason?.message || '').slice(0,60));
-  const rows=[];
-  for(const p of parts) {
-    if(p.status!=='fulfilled')continue;
-    for(const e of Array.isArray(p.value?.events)?p.value.events:[]) {
-      const top=tops.find(t=>t[4]===e?.tournament?.uniqueTournament?.id);
-      if(!top || String(e?.status?.type || '')!=='notstarted')continue;
-      const r=fanUpRow('sofa',e.id,top,e.homeTeam?.name,e.awayTeam?.name,Number(e.startTimestamp)*1000);
-      if(r)rows.push(r);
+  const dt=new Date(now),season=dt.getUTCMonth()>=6?dt.getUTCFullYear():dt.getUTCFullYear()-1;
+  // Current European season has fewer than 50 matches per league, so one
+  // season request per league is enough on API Ninjas' 50-row free page.
+  const settled=await Promise.allSettled(tops.map(async top=>{
+    const league=top[0]==='eng.1'?'epl':top[0]==='esp.1'?'laliga':top[0]==='ita.1'?'seriea':top[0]==='ger.1'?'bundesliga':'scottishpremiership';
+    const url=`https://api.api-ninjas.com/v1/soccermatches?league=${league}&season=${season}&offset=0`;
+    const r=await fetch(url,{headers:{...FAN_HTTP,'X-Api-Key':key},signal:AbortSignal.timeout(9000)});
+    if(!r.ok)throw new Error(`API Ninjas HTTP ${r.status} (${league})`);
+    const matches=await r.json();if(!Array.isArray(matches))throw new Error(`API Ninjas invalid response (${league})`);
+    return [top,league,matches];
+  }));
+  const rows=[];let success=0;
+  for(const p of settled)if(p.status==='fulfilled') {
+    success++;
+    const [top,league,matches]=p.value;
+    let added=0;
+    for(const m of matches) {
+      if(!/^(?:scheduled|delayed|tbd)$/i.test(String(m.status || '')))continue;
+      const at=Date.parse(m.start_time || `${m.date}T00:00:00Z`);
+      if(!Number.isFinite(at) || at<=now || at>now+FAN_AI_UPCOMING_DAYS*86400000)continue;
+      const home=typeof m.home_team==='string'?m.home_team:m.home_team?.name;
+      const away=typeof m.away_team==='string'?m.away_team:m.away_team?.name;
+      const r=fanUpRow('nin',m.game_id,top,home,away,at);if(r){rows.push(r);added++;}
     }
-  }
-  return rows;
-}
-// BBC Sport: its public fixtures data (JSON behind the scores-fixtures pages). The structure is read loosely: any object with a
-// home and an away side that has a name and an ISO kick-off time is accepted, so small layout changes do not break it.
-function fanUpWalkEvents(node,out,depth=0) {
-  if(!node || typeof node!=='object' || depth>10)return out;
-  if(Array.isArray(node)){for(const x of node)fanUpWalkEvents(x,out,depth+1);return out;}
-  const nm=t=>t && typeof t==='object'?String(t.fullName || t.name || t.longName || t.displayName || t.shortName || ''):'';
-  if(node.home && node.away && nm(node.home) && nm(node.away))out.push(node);
-  for(const v of Object.values(node))if(v && typeof v==='object')fanUpWalkEvents(v,out,depth+1);
-  return out;
-}
-function fanUpIso(node,depth=0) {
-  if(!node || typeof node!=='object' || depth>2)return null;
-  for(const v of Object.values(node)) {
-    if(typeof v==='string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(v))return v;
-    if(v && typeof v==='object' && !Array.isArray(v) && !('home' in v)) {const x=fanUpIso(v,depth+1);if(x)return x;}
-  }
-  return null;
-}
-function fanUpBbcRows(data,top,now) {
-  const rows=[];
-  for(const e of fanUpWalkEvents(data,[])) {
-    const st=JSON.stringify([e.status,e.eventStatus,e.eventProgress?.status,e.eventOutcomeType]).toLowerCase();
-    if(/full|live|progress|postpon|cancel|abandon|suspend|result|halftime/.test(st))continue;
-    const iso=fanUpIso(e),at=Date.parse(iso && !/[zZ]|[+-]\d\d:?\d\d$/.test(iso)?iso+'Z':iso);
-    const nm=t=>String(t.fullName || t.name || t.longName || t.displayName || t.shortName);
-    if(!Number.isFinite(at) || at<=now)continue;
-    const r=fanUpRow('bbc',e.id,top,nm(e.home),nm(e.away),at);
-    if(r)rows.push(r);
-  }
-  return rows;
-}
-async function fanUpBbc(leagues,now) {
-  const tops=FAN_UP_TOP.filter(t=>leagues.includes(t[0]));
-  const parts=await Promise.allSettled(tops.map(async t=>[t,await fanUpGet(`https://web-cdn.api.bbci.co.uk/wc-poll-data/container/sport-data-scores-fixtures?selectedStartDate=${fanUpDay(now)}&selectedEndDate=${fanUpDay(now+(FAN_AI_UPCOMING_DAYS-1)*86400000)}&urn=${encodeURIComponent('urn:bbc:sportsdata:football:tournament:'+t[5])}&useSdApi=false`)]));
-  if(!parts.some(p=>p.status==='fulfilled'))throw new Error('BBC Sport unavailable: '+String(parts[0]?.reason?.message || '').slice(0,60));
-  return parts.flatMap(p=>p.status==='fulfilled'?fanUpBbcRows(p.value[1],p.value[0],now):[]);
-}
-// Flashscore: its web feed is a private text format (not a public API) and needs the x-fsign header the website uses. Off by default.
-function fanUpFlashRows(text,tops,now) {
-  const rows=[];let top=null;
-  for(const rec of String(text || '').split('~')) {
-    const f={};
-    for(const part of rec.split('¬')){const i=part.indexOf('÷');if(i>0)f[part.slice(0,i)]=part.slice(i+1);}
-    if(f.ZA!==undefined){top=tops.find(t=>t[6].test(String(f.ZA).trim())) || null;continue;}
-    if(!top || !f.AA || !f.AE || !f.AF)continue;
-    if(String(f.AB || '1')!=='1')continue;
-    const at=Number(f.AD)*1000;
-    if(!Number.isFinite(at) || at<=now)continue;
-    const r=fanUpRow('fs',null,top,f.AE,f.AF,at);
-    if(r)rows.push(r);
-  }
+    console.log(`Upcoming API Ninjas ${league}: ${matches.length} season rows, ${added} within 30 days`);
+  } else console.error('Upcoming API Ninjas league failed',p.reason?.message || p.reason);
+  if(!success)throw new Error(String(settled.find(p=>p.status==='rejected')?.reason?.message || 'API Ninjas unavailable'));
   return rows;
 }
 async function fanUpFlashscore(leagues,now) {
@@ -3824,15 +3788,17 @@ async function fanUpFlashscore(leagues,now) {
 async function fanUpExtRows(env,up,now) {
   const jobs={
     footballdata:()=>fanUpFootballData(env,up.leagues,now),apifootball:()=>fanUpApiFootball(env,up.leagues,now),
-    sofascore:()=>fanUpSofaScore(up.leagues,now),bbc:()=>fanUpBbc(up.leagues,now),flashscore:()=>fanUpFlashscore(up.leagues,now)
+    apininjas:()=>fanUpApiNinjas(env,up.leagues,now),bbc:()=>fanUpBbc(up.leagues,now),flashscore:()=>fanUpFlashscore(up.leagues,now)
   };
-  const ids=up.sources.filter(id=>jobs[id]);
+  const ids=Array.from(new Set([...up.sources,...(env.API_NINJAS_KEY?['apininjas']:[])])).filter(id=>jobs[id]);
   if(!ids.length)return [];
   const settled=await Promise.allSettled(ids.map(id=>jobs[id]()));
   const rows=[];
   settled.forEach((s,i)=>{
-    if(s.status==='fulfilled')rows.push(...s.value.filter(r=>r && up.leagues.includes(r.leagueCode) && Date.parse(r.kickoff)>now));
-    else console.error('Upcoming source failed',ids[i],String(s.reason?.message || s.reason).slice(0,120));
+    if(s.status==='fulfilled') {
+      const got=s.value.filter(r=>r && up.leagues.includes(r.leagueCode) && Date.parse(r.kickoff)>now);
+      rows.push(...got);console.log(`Upcoming source ${ids[i]}: ${got.length} rows`);
+    } else console.error('Upcoming source failed',ids[i],String(s.reason?.message || s.reason).slice(0,160));
   });
   if(!rows.length)return rows;
   let index=[];try{index=await fanUpTeams(env,up.leagues);}catch(e){console.error('ESPN team index unavailable for upcoming sources',e?.message);}
@@ -3864,12 +3830,35 @@ function fanUpTeams(env,leagues) {
     return {rows:[...seen.values()],complete:settled.filter(i=>i.status==='fulfilled').length>=Math.ceil(settled.length*.8)};
   });
 }
-// The top-league tabs: matches from the extra networks only, in their own request and cache (so the ESPN list above keeps its own
-// Worker request budget). Matches seen by several networks are listed once.
+// ESPN's Scottish Premiership feed is a reliable direct fallback when third-party sources
+// (API-Football free season access, SofaScore datacenter blocks, or BBC changes) return no fixtures.
+async function fanUpEspnScottish(now) {
+  // ESPN's Scottish scoreboard only accepts a single date per request. Keep this
+  // supplemental fallback to the next 7 days to avoid 31 outbound subrequests;
+  // Sportmonks/API Ninjas supply the configured 30-day horizon.
+  const ESPN_SCO_FALLBACK_DAYS=7;
+  const days=Array.from({length:ESPN_SCO_FALLBACK_DAYS+1},(_,i)=>fanUpDay(now+i*86400000).replace(/-/g,''));
+  const feeds=await Promise.allSettled(days.map(d=>fanAiEspn(`sco.1/scoreboard?dates=${d}&limit=300`)));
+  if(!feeds.some(p=>p.status==='fulfilled'))throw new Error('ESPN '+String(feeds[0]?.reason?.message || 'unavailable'));
+  const rows=[];
+  for(const feed of feeds)for(const e of (feed.status==='fulfilled' && Array.isArray(feed.value?.events)?feed.value.events:[])) {
+    const comp=e?.competitions?.[0],status=comp?.status || e?.status,type=status?.type;
+    if(type?.state!=='pre' || /POSTPONED|CANCEL|SUSPEND|ABANDON/i.test(String(type?.name || '')))continue;
+    const at=Date.parse(e.date || comp?.date);
+    if(!Number.isFinite(at) || at<=now || !Array.isArray(comp?.competitors))continue;
+    const h=comp.competitors.find(c=>c?.homeAway==='home')?.team,a=comp.competitors.find(c=>c?.homeAway==='away')?.team;
+    if(!h?.displayName || !a?.displayName)continue;
+    const r=fanUpRow('espn',e.id,FAN_UP_TOP[4],h.displayName,a.displayName,at);
+    if(r)rows.push({...r,homeId:String(h.id || ''),awayId:String(a.id || ''),homeLogo:fanAiLogo(h.logo),awayLogo:fanAiLogo(a.logo),source:'espn'});
+  }
+  return rows;
+}
+// The top-league tabs merge a direct ESPN Scotland feed with extra networks; duplicates are removed.
 async function fanAiTopUpcoming(env,fresh=false) {
   const up=(await fanAiConfig(env)).upcoming;
   return fanAiCached(env,'ai-top-upcoming:v1:'+up.sig,1800000,async()=>{
     const now=Date.now(),seen=new Set(),rows=[];
+    if(up.leagues.includes('sco.1')) {try{for(const r of await fanUpEspnScottish(now)){const k=`${fanResultName(r.home)}|${fanResultName(r.away)}|${r.kickoff.slice(0,10)}`;if(!seen.has(k)){seen.add(k);rows.push({...r,gender:'men'});}}}catch(e){console.error('ESPN Scottish upcoming failed',e?.message);}}
     for(const r of await fanUpExtRows(env,up,now)) {
       const k=`${fanResultName(r.home)}|${fanResultName(r.away)}|${r.kickoff.slice(0,10)}`;
       if(seen.has(k))continue;
