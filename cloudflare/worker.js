@@ -113,6 +113,9 @@ export default {
           env.STATS_TOKEN && env.CF_ACCOUNT_ID && env.CF_API_TOKEN
         ),
         subscriptions: Boolean(env.DB && env.PAYSTACK_SECRET_KEY),
+        fan_zone: Boolean(env.DB && env.GOOGLE_WEB_CLIENT_ID),
+        ai_quota_admin: Boolean(env.DB && (env.ADMIN_TOKEN || env.STATS_TOKEN)),
+        ai_quota_push: Boolean(env.DB && env.FIREBASE_SERVICE_ACCOUNT && env.AI_QUOTA_ADMIN_EMAIL),
         // Ad-free tokens only need the D1 binding + an admin password.
         tokens: Boolean(env.DB && (env.ADMIN_TOKEN || env.STATS_TOKEN)),
       });
@@ -2117,6 +2120,16 @@ async function fanZone(request, env, url, ctx) {
       if(pending)return fail('You already have a pending extra predictions request.',409);
       const id=crypto.randomUUID(),now=Math.floor(Date.now()/1000),userName=String(identity.name||'').trim().slice(0,80);
       await db.prepare("INSERT INTO fan_ai_quota_requests(id,user_id,user_name,amount,note,status,created_at,updated_at) VALUES(?,?,?,?,?,'pending',?,?)").bind(id,userId,userName,amount,note,now,now).run();
+      // Notify the configured admin account on every newly submitted request.
+      // Push is best-effort: a missing Firebase secret/device never blocks the request.
+      const adminEmail=String(env.AI_QUOTA_ADMIN_EMAIL || '').trim().toLowerCase();
+      if(adminEmail) {
+        const admin=await db.prepare('SELECT id FROM fan_accounts WHERE lower(email)=? LIMIT 1').bind(adminEmail).first();
+        if(admin) {
+          const push=fanPush(env,admin.id,{title:'AI prediction quota request',body:`${userName || 'A Premium user'} requested +${amount} predictions`,kind:'ai_quota_request',postId:'',actorId:userId,nid:id});
+          if(ctx && typeof ctx.waitUntil==='function')ctx.waitUntil(push);else await push;
+        }
+      }
       return json({ok:true,id,status:'pending'});
     }
     if(url.pathname==='/fan/admin/ai-quota' && request.method==='GET') {
@@ -2396,7 +2409,7 @@ async function fanZone(request, env, url, ctx) {
     return fail('Not found',404);
   } catch (e) {
     console.error('Fan Zone request failed', e);
-    return fail('Fan Zone is unavailable. Check the Worker setup and try again.',503);
+    return fail('Fan Zone database/setup error. Confirm the Worker has the D1 binding named DB, then redeploy the latest worker.js. Check Worker logs for the underlying error.',503);
   }
 }
 
