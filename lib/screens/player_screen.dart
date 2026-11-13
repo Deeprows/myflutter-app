@@ -109,17 +109,16 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// loaded as if it came from the stream's own site. That needs no CORS
   /// permission and sends the site's own Referer (what hotlink protection
   /// expects), so links that only fail under the app domain still play.
-  /// Two ways for the built-in player (m3u8 / video files):
-  /// 0 = with the player origin, 1 = without it (the stream's own site as
-  /// origin). When 0 fails, 1 takes over automatically.
+  /// Attempt chain for the built-in player: 0 = app player origin,
+  /// 1 = same origin but no Referer sent, 2 = the stream's own origin.
   int _attempt = 0;
 
-  /// Two ways for embed pages (iframe / .php player pages):
-  /// 0 = inside a page that presents itself as the player origin,
-  /// 1 = opened directly with no player origin (the on-page ad blocker
-  /// works here). When 0 is refused by the host, 1 takes over automatically;
-  /// the Reload button switches between them by hand.
-  int _embedMode = 0;
+  /// How an embed page (iframe / .php player page) is opened:
+  /// 0 = inside an iframe on a page that presents itself as the player
+  /// origin (your site, so hosts that only allow your domain accept it),
+  /// 1 = opened directly with the player origin as Referer,
+  /// 2 = opened directly with no Referer. The Reload button tries the next one.
+  int _embedMode = 0; // 0 iframe@embed origin, 1 iframe@main site, 2 direct+Referer, 3 direct
 
   String _embedBase(String url, String origin) => url.toLowerCase().startsWith('http://')
       ? origin.replaceFirst('https://', 'http://')
@@ -127,38 +126,16 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   void _reload() {
     if (_stream.kind == StreamKind.embed) {
-      _embedMode = (_embedMode + 1) % 2;
+      _embedMode = (_embedMode + 1) % 4;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
         duration: const Duration(seconds: 2),
-        content: Text(_embedMode == 0
-            ? 'Reloading with player origin (1/2)'
-            : 'Reloading direct, no origin (2/2)'),
+        content: Text('Reloading (method ${_embedMode + 1}/4)'),
       ));
     }
     _start();
   }
 
-  /// The host refused the embed page that was opened with the player origin:
-  /// switch to the direct way once.
-  void _embedRefused(HttpResponseError e) {
-    final code = e.response?.statusCode ?? 0;
-    final uri = e.request?.uri ?? e.response?.uri;
-    if (code < 400 || uri == null || !mounted) return;
-    final s = _stream;
-    if (_embedMode != 0 || s.kind != StreamKind.embed || s.usesHtmlPlayer) return;
-    final target = Uri.tryParse(s.url);
-    if (target == null || uri.host != target.host || uri.path != target.path) {
-      return;
-    }
-    _embedMode = 1;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
-      duration: Duration(seconds: 2),
-      content: Text('Host refused the player origin, trying direct (2/2)'),
-    ));
-    _start();
-  }
-
-  bool get _ownOrigin => _attempt >= 1;
+  bool get _ownOrigin => _attempt >= 2;
 
   /// Kinds found by [StreamResolver.sniff] for links without a file extension.
   final Map<String, StreamKind?> _sniffed = {};
@@ -234,7 +211,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       ..setUserAgent(AppConfig.userAgent)
       ..addJavaScriptChannel('DwPlayer', onMessageReceived: (m) {
         if (m.message == 'fail' &&
-            _attempt < 1 &&
+            _attempt < 2 &&
             mounted &&
             _stream.usesHtmlPlayer) {
           _start(attempt: _attempt + 1);
@@ -256,7 +233,6 @@ class _PlayerScreenState extends State<PlayerScreen>
             setState(() => _error = true);
           }
         },
-        onHttpError: _embedRefused,
         onNavigationRequest: _onNavigation,
       ));
 
@@ -276,7 +252,6 @@ class _PlayerScreenState extends State<PlayerScreen>
     Settings.floatingPlayer().then((v) {
       if (mounted) setState(() => _pipEnabled = v);
     });
-    _embedMode = RemoteConfig.instance.embedMethodFor(_stream.url);
     _start();
 
     final movie = widget.movie;
@@ -380,7 +355,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       if (s.usesHtmlPlayer) {
         final low = await Settings.forceLowQuality();
         await _wc.loadHtmlString(
-          buildPlayerHtml(s, lowQuality: low),
+          buildPlayerHtml(s, lowQuality: low, noReferrer: _attempt == 1),
           baseUrl: _ownOrigin ? _streamOrigin(s.url) : _playerBase(s.url),
         );
       } else if (s.dailymotionId != null) {
@@ -394,14 +369,22 @@ class _PlayerScreenState extends State<PlayerScreen>
           'allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
           baseUrl: AppConfig.embedOrigin,
         );
-      } else if (_embedMode == 0) {
+      } else if (_embedMode <= 1) {
         final src = const HtmlEscape(HtmlEscapeMode.attribute).convert(s.url);
         await _wc.loadHtmlString(
-          '<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,maximum-scale=1\"></head>'
-          '<body style=\"margin:0;background:#000\"><iframe src=\"$src\" style=\"position:fixed;inset:0;width:100%;height:100%;border:0\" '
-          'allow=\"autoplay; encrypted-media; fullscreen; picture-in-picture\" allowfullscreen></iframe></body></html>',
-          baseUrl: _playerBase(s.url),
+          '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head>'
+          '<body style="margin:0;background:#000"><iframe src="$src" style="position:fixed;inset:0;width:100%;height:100%;border:0" '
+          'allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
+          baseUrl: _embedBase(
+              s.url,
+              _embedMode == 0
+                  ? RemoteConfig.instance.embedPageOrigin
+                  : RemoteConfig.instance.altEmbedPageOrigin),
         );
+      } else if (_embedMode == 2) {
+        await _wc.loadRequest(Uri.parse(s.url), headers: {
+          'Referer': _embedBase(s.url, RemoteConfig.instance.embedPageOrigin)
+        });
       } else {
         await _wc.loadRequest(Uri.parse(s.url));
       }
@@ -501,14 +484,14 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   void _switchSource() {
     setState(() => _srcIdx = (_srcIdx + 1) % _sources.length);
-    _embedMode = RemoteConfig.instance.embedMethodFor(_stream.url);
+    _embedMode = 0;
     _start();
   }
 
   void _pickSource(int i) {
     if (i == _srcIdx || i < 0 || i >= _sources.length) return;
     setState(() => _srcIdx = i);
-    _embedMode = RemoteConfig.instance.embedMethodFor(_stream.url);
+    _embedMode = 0;
     _start();
   }
 
