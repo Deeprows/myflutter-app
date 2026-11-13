@@ -4635,6 +4635,18 @@ async function fanSocial(request,env,url,user,id,ctx) {
     const handleRow=await db.prepare('SELECT handle,changed_at FROM fan_handles WHERE user_id=?').bind(target).first();
     return json({profile:{...profile,handle:handleRow?.handle || `fan_${target.slice(0,12)}`,handle_next_change_at:target===id && handleRow && Number(handleRow.changed_at)>0?Number(handleRow.changed_at)+FAN_HANDLE_CHANGE_MS:0,is_me:target===id,stats,achievements},viewer_id:id});
   }
+  // Public prediction history of one fan. ONLY predictions whose match has a
+  // verified final score are returned (JOIN fan_results), so nobody can read
+  // another fan's pending picks before kick-off and copy them.
+  if(request.method==='GET' && path==='/fan/social/predictions') {
+    const target=url.searchParams.get('id') || id;
+    if(!/^[a-f0-9]{64}$/.test(target))return fail('Invalid fan');
+    const fan=await db.prepare('SELECT u.id,u.name FROM fan_users u WHERE u.id=? AND NOT EXISTS(SELECT 1 FROM fan_bans b WHERE b.user_id=u.id)').bind(target).first();
+    if(!fan)return fail('Fan not found',404);
+    await fanSyncResults(env);
+    const rows=await db.prepare(`SELECT p.match_key,p.title,p.kickoff,p.home,p.away,p.market,p.selection,r.home AS result_home,r.away AS result_away FROM fan_picks p JOIN fan_results r ON r.match_key=p.match_key WHERE p.user_id=? ORDER BY p.kickoff DESC LIMIT 100`).bind(target).all();
+    return json({id:target,name:fan.name || '',picks:rows.results,viewer_id:id});
+  }
   if(request.method==='GET' && path==='/fan/social/people') {
     const target=url.searchParams.get('id') || id,type=url.searchParams.get('type') || 'followers';
     if(!/^[a-f0-9]{64}$/.test(target) || !['followers','following'].includes(type))return fail('Invalid fan list');
