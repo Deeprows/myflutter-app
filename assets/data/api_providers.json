@@ -138,7 +138,7 @@
         {
           "id": "flashscore",
           "label": "Flashscore (unofficial, fragile)",
-          "enabled": true
+          "enabled": false
         },
         {
           "id": "tsdb",
