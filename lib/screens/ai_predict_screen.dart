@@ -4434,7 +4434,30 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               children: [
                 _hero(),
-                const SizedBox(height: 12),
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AiPredictUsageInstructionsScreen(),
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      minimumSize: const Size(0, 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      foregroundColor: const Color(0xFFB39DFF),
+                    ),
+                    icon: const Icon(Icons.info_outline_rounded, size: 16),
+                    label: const Text(
+                      'Usage Instruction',
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 _typeBox(),
                 if (_custom.isNotEmpty) const SizedBox(height: 10),
                 for (final f in _custom) _matchTile(f),
@@ -4910,4 +4933,80 @@ class _CommunityShareSheetState extends State<_CommunityShareSheet> {
       ),
     );
   }
+}
+
+
+/// Help page opened from the slim Usage Instruction button on AI Predict.
+class AiPredictUsageInstructionsScreen extends StatelessWidget {
+  const AiPredictUsageInstructionsScreen({super.key});
+
+  static const Color _accent = Color(0xFF9B7BFF);
+
+  Widget _section(String title, String body, IconData icon) => Container(
+    margin: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: Ui.card,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: Ui.line),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: _accent.withValues(alpha: .14),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: _accent, size: 19),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+            const SizedBox(height: 5),
+            Text(body, style: TextStyle(color: Ui.muted, height: 1.45, fontSize: 12.5)),
+          ]),
+        ),
+      ],
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Ui.bg,
+    appBar: AppBar(
+      title: const Text('AI Predict · Usage Instruction', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+      titleSpacing: 4,
+    ),
+    body: ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: const LinearGradient(colors: [Color(0xFF713DDA), Color(0xFF007FAD)]),
+          ),
+          child: const Row(children: [
+            Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 28),
+            SizedBox(width: 12),
+            Expanded(child: Text('Your guide to AI match analysis', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17))),
+          ]),
+        ),
+        const SizedBox(height: 14),
+        _section('1. Choose matches', 'Select a fixture from Upcoming Matches, or enter the two team names in the search field and tap + to add your matchup. You can select up to 3 matches in one analysis run.', Icons.check_circle_outline_rounded),
+        _section('2. What AI analyses', 'The analysis reviews each team’s recent results (up to the last 5 available matches), form and goals, then presents likely outcomes and insights. Predictions are estimates—not guarantees.', Icons.analytics_outlined),
+        _section('3. Premium daily allowance', 'Premium accounts can analyse up to 35 matches per day per account. Your allowance is shared across devices using the same account and resets at the UTC day boundary. Please use analyses responsibly.', Icons.workspace_premium_rounded),
+        _section('4. Retry when an error appears', 'If Fan Zone is unavailable, you see “No connection”, “Check your internet and try again”, “AI is temporarily unavailable”, or another temporary error: check your internet connection, wait briefly, refresh the page if needed, then retry the match analysis. Temporary provider/server issues can resolve on a later attempt.', Icons.refresh_rounded),
+        _section('5. Team not found?', 'If search says no team name was found, check spelling and use the team’s official or commonly used name. Remove extra words, try the shorter club name, then search again. For example, try “Man City” or “Manchester City” rather than a long nickname.', Icons.search_rounded),
+        _section('6. Match list looks outdated?', 'Tap the refresh icon at the top of AI Predict or pull down on the match list to refresh upcoming fixtures. Make sure the match has not started and select the correct fixture before analysing.', Icons.event_available_rounded),
+        _section('7. Analysis fails or looks incomplete', 'A missing recent-results sample, unavailable statistics source, or provider timeout may reduce the detail or confidence of an analysis. Retry later if the message says the service is unavailable. Always verify important information independently.', Icons.info_outline_rounded),
+        const SizedBox(height: 4),
+        Center(child: Text('AI Predict is an informational tool. Outcomes are uncertain.', textAlign: TextAlign.center, style: TextStyle(color: Ui.muted, fontSize: 11.5))),
+      ],
+    ),
+  );
 }
