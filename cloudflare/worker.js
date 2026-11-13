@@ -2301,7 +2301,7 @@ async function fanZone(request, env, url, ctx) {
         if (!m) return fail('Match is no longer available. Refresh the fixtures.');
         f={id:`ext:${m.id}`,home:m.home,away:m.away,league:m.league,kickoff:m.kickoff,homeLogo:m.homeLogo,awayLogo:m.awayLogo};
         // ESPN-sourced matches are verified against that exact ESPN game; others by team names and time.
-        if(m.source!=='tsdb'){f.scoreLeague=m.leagueCode;f.espnEventId=String(m.id).split(':')[1];}
+        if(!m.source){f.scoreLeague=m.leagueCode;f.espnEventId=String(m.id).split(':')[1];}
       } else {
         const fixtures = await fanFixtures(env);
         f = fixtures.find(f => fanKey(f)===b.key);
@@ -3017,7 +3017,7 @@ const FAN_DATA_FORM_IDS=['apifootball','espn','espn_scan','footballdata'];
 async function fanAiConfig(env) {
   const now=Date.now();
   if(fanAiConfigCache.cfg && now-fanAiConfigCache.at<300000)return fanAiConfigCache.cfg;
-  let cfg={providers:[{id:'gemini',type:'gemini',label:'Gemini'}],form:[...FAN_DATA_FORM_IDS],extras:true,players:true,context:{standings:true,headToHead:true}};
+  let cfg={providers:[{id:'gemini',type:'gemini',label:'Gemini'}],form:[...FAN_DATA_FORM_IDS],extras:true,players:true,context:{standings:true,headToHead:true},upcoming:{sources:['espn','espn_all','tsdb'],leagues:FAN_UP_TOP.map(l=>l[0]),topOnly:false,sig:'d'}};
   try {
     const r=await fetch(env.API_CONFIG_URL || FAN_AI_CONFIG_URL,{signal:AbortSignal.timeout(4000),cf:{cacheTtl:300,cacheEverything:true}});
     const d=r.ok?await r.json().catch(()=>null):null;
@@ -3026,6 +3026,20 @@ async function fanAiConfig(env) {
     if(Array.isArray(d?.data?.form?.sources)) {
       const ids=d.data.form.sources.filter(x=>x && typeof x==='object' && x.enabled!==false && FAN_DATA_FORM_IDS.includes(x.id)).map(x=>x.id);
       cfg.form=[...new Set(ids)];
+    }
+    // Where the AI Predict match list comes from (data.upcoming). Unknown ids are ignored; an empty list keeps the defaults.
+    const up=d?.data?.upcoming;
+    if(up && typeof up==='object') {
+      if(Array.isArray(up.sources)) {
+        const ids=[...new Set(up.sources.filter(x=>x && typeof x==='object' && x.enabled!==false && FAN_UP_IDS.includes(x.id)).map(x=>x.id))];
+        if(ids.length)cfg.upcoming.sources=ids;
+      }
+      if(Array.isArray(up.leagues)) {
+        const l=up.leagues.filter(x=>typeof x==='string' && FAN_UP_TOP.some(t=>t[0]===x));
+        if(l.length)cfg.upcoming.leagues=[...new Set(l)];
+      }
+      if(typeof up.topLeaguesOnly==='boolean')cfg.upcoming.topOnly=up.topLeaguesOnly;
+      cfg.upcoming.sig=String(fanUpHash(JSON.stringify([cfg.upcoming.sources,cfg.upcoming.leagues,cfg.upcoming.topOnly])));
     }
     if(typeof d?.data?.extras?.apifootball==='boolean')cfg.extras=d.data.extras.apifootball;
     if(typeof d?.data?.extras?.players==='boolean')cfg.players=d.data.extras.players;
@@ -3653,11 +3667,178 @@ async function fanAiTsdbUpcoming(now,day) {
   }
   return rows;
 }
-function fanAiUpcoming(env,fresh=false) {
-  return fanAiCached(env,'ai-upcoming:v4',1800000,async()=>{
+// ---- Extra upcoming-match networks (api_providers.json: data.upcoming) --------------------------------------
+// Each network lists ONLY the top leagues below, in the same row shape as the ESPN list. Names are matched to ESPN clubs
+// (id, crest, display name) so the analysis uses the same recent-results path as an ESPN-listed match.
+// Rows from these networks carry source:'ext' (their ids are not ESPN event ids).
+const FAN_UP_IDS=['espn','espn_all','tsdb','footballdata','apifootball','sofascore','bbc','flashscore'];
+// [ESPN slug, name, football-data.org code, API-Football league id, SofaScore tournament id, BBC slug, Flashscore header]
+const FAN_UP_TOP=[
+  ['eng.1','Premier League','PL',39,17,'premier-league',/^ENGLAND:\s*Premier League/i],
+  ['esp.1','LaLiga','PD',140,8,'spanish-la-liga',/^SPAIN:\s*LaLiga(?!\s*2)/i],
+  ['ita.1','Serie A','SA',135,23,'italian-serie-a',/^ITALY:\s*Serie A(?!\s*[BC])/i],
+  ['ger.1','Bundesliga','BL1',78,35,'german-bundesliga',/^GERMANY:\s*Bundesliga(?!\s*2)/i],
+  ['sco.1','Scottish Premiership','',179,36,'scottish-premiership',/^SCOTLAND:\s*Premiership/i]
+];
+function fanUpHash(s){let h=2166136261;for(const c of String(s)){h^=c.charCodeAt(0);h=Math.imul(h,16777619)>>>0;}return h;}
+function fanUpDay(t){return new Date(t).toISOString().slice(0,10);}
+function fanUpRow(prefix,rawId,top,home,away,at){
+  const h=String(home || '').replace(/\s+/g,' ').trim().slice(0,80),a=String(away || '').replace(/\s+/g,' ').trim().slice(0,80);
+  if(!h || !a || !Number.isFinite(at))return null;
+  const id=/^\d{1,12}$/.test(String(rawId))?String(rawId):String(fanUpHash(`${top[0]}|${h}|${a}|${fanUpDay(at)}`));
+  return {id:`${prefix}:${id}`,home:h,away:a,homeId:null,awayId:null,homeLogo:'',awayLogo:'',league:top[1],leagueCode:top[0],kickoff:new Date(at).toISOString(),source:'ext'};
+}
+async function fanUpGet(url,headers,timeout=7000,text=false) {
+  const r=await fetch(url,{headers:{...FAN_HTTP,...headers},signal:AbortSignal.timeout(timeout)});
+  if(!r.ok)throw new Error(`HTTP ${r.status} ${new URL(url).hostname}`);
+  return text?await r.text():await r.json();
+}
+// football-data.org: one request for all its covered leagues (needs the FOOTBALL_DATA_KEY secret; no Scottish league on the free tier).
+async function fanUpFootballData(env,leagues,now) {
+  const key=String(env.FOOTBALL_DATA_KEY || '').trim();
+  if(!key)throw new Error('football-data.org: FOOTBALL_DATA_KEY missing');
+  const tops=FAN_UP_TOP.filter(t=>t[2] && leagues.includes(t[0]));
+  if(!tops.length)return [];
+  const d=await fanUpGet(`https://api.football-data.org/v4/matches?competitions=${tops.map(t=>t[2]).join(',')}&dateFrom=${fanUpDay(now)}&dateTo=${fanUpDay(now+9*86400000)}`,{'x-auth-token':key});
+  const rows=[];
+  for(const m of Array.isArray(d?.matches)?d.matches:[]) {
+    const top=tops.find(t=>t[2]===m?.competition?.code);
+    if(!top || !/^(?:SCHEDULED|TIMED)$/.test(String(m.status || '')))continue;
+    const r=fanUpRow('fd',m.id,top,m.homeTeam?.name,m.awayTeam?.name,Date.parse(m.utcDate));
+    if(r)rows.push(r);
+  }
+  return rows;
+}
+// API-Football (same API_FOOTBALL_KEY as the analysis extras). The free plan may refuse the current season; then this source is skipped.
+async function fanUpApiFootball(env,leagues,now) {
+  if(!env.API_FOOTBALL_KEY)throw new Error('API-Football: API_FOOTBALL_KEY missing');
+  const tops=FAN_UP_TOP.filter(t=>leagues.includes(t[0])),dt=new Date(now),season=dt.getUTCMonth()>=6?dt.getUTCFullYear():dt.getUTCFullYear()-1;
+  const rows=await fanAiCached(env,`ai-up-src:apifootball:v1:${tops.map(t=>t[3]).join('-')}`,6*3600000,async()=>{
+    const parts=await Promise.allSettled(tops.map(async t=>[t,await fanAiProviderJson(env,`/fixtures?league=${t[3]}&season=${season}&from=${fanUpDay(now)}&to=${fanUpDay(now+9*86400000)}`)]));
+    const out=[];let ok=0;
+    for(const p of parts) {
+      if(p.status!=='fulfilled' || !Array.isArray(p.value[1]))continue;
+      ok++;
+      for(const f of p.value[1]) {
+        if(!/^(?:NS|TBD)$/.test(String(f?.fixture?.status?.short || '')))continue;
+        const r=fanUpRow('af',f?.fixture?.id,p.value[0],f?.teams?.home?.name,f?.teams?.away?.name,Date.parse(f?.fixture?.date));
+        if(r)out.push(r);
+      }
+    }
+    return {rows:out,complete:ok>0};
+  });
+  return rows;
+}
+// SofaScore: unofficial public JSON (one request per day, filtered to the tournaments above). It may refuse datacenter traffic.
+async function fanUpSofaScore(leagues,now) {
+  const tops=FAN_UP_TOP.filter(t=>leagues.includes(t[0]));
+  const days=Array.from({length:FAN_AI_UPCOMING_DAYS},(_,i)=>fanUpDay(now+i*86400000));
+  const parts=await Promise.allSettled(days.map(d=>fanUpGet(`https://api.sofascore.com/api/v1/sport/football/scheduled-events/${d}`,{referer:'https://www.sofascore.com/'})));
+  if(!parts.some(p=>p.status==='fulfilled'))throw new Error('SofaScore unavailable: '+String(parts[0]?.reason?.message || '').slice(0,60));
+  const rows=[];
+  for(const p of parts) {
+    if(p.status!=='fulfilled')continue;
+    for(const e of Array.isArray(p.value?.events)?p.value.events:[]) {
+      const top=tops.find(t=>t[4]===e?.tournament?.uniqueTournament?.id);
+      if(!top || String(e?.status?.type || '')!=='notstarted')continue;
+      const r=fanUpRow('sofa',e.id,top,e.homeTeam?.name,e.awayTeam?.name,Number(e.startTimestamp)*1000);
+      if(r)rows.push(r);
+    }
+  }
+  return rows;
+}
+// BBC Sport: its public fixtures data (JSON behind the scores-fixtures pages). The structure is read loosely: any object with a
+// home and an away side that has a name and an ISO kick-off time is accepted, so small layout changes do not break it.
+function fanUpWalkEvents(node,out,depth=0) {
+  if(!node || typeof node!=='object' || depth>10)return out;
+  if(Array.isArray(node)){for(const x of node)fanUpWalkEvents(x,out,depth+1);return out;}
+  const nm=t=>t && typeof t==='object'?String(t.fullName || t.name || t.longName || t.displayName || t.shortName || ''):'';
+  if(node.home && node.away && nm(node.home) && nm(node.away))out.push(node);
+  for(const v of Object.values(node))if(v && typeof v==='object')fanUpWalkEvents(v,out,depth+1);
+  return out;
+}
+function fanUpIso(node,depth=0) {
+  if(!node || typeof node!=='object' || depth>2)return null;
+  for(const v of Object.values(node)) {
+    if(typeof v==='string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(v))return v;
+    if(v && typeof v==='object' && !Array.isArray(v) && !('home' in v)) {const x=fanUpIso(v,depth+1);if(x)return x;}
+  }
+  return null;
+}
+function fanUpBbcRows(data,top,now) {
+  const rows=[];
+  for(const e of fanUpWalkEvents(data,[])) {
+    const st=JSON.stringify([e.status,e.eventStatus,e.eventProgress?.status,e.eventOutcomeType]).toLowerCase();
+    if(/full|live|progress|postpon|cancel|abandon|suspend|result|halftime/.test(st))continue;
+    const iso=fanUpIso(e),at=Date.parse(iso && !/[zZ]|[+-]\d\d:?\d\d$/.test(iso)?iso+'Z':iso);
+    const nm=t=>String(t.fullName || t.name || t.longName || t.displayName || t.shortName);
+    if(!Number.isFinite(at) || at<=now)continue;
+    const r=fanUpRow('bbc',e.id,top,nm(e.home),nm(e.away),at);
+    if(r)rows.push(r);
+  }
+  return rows;
+}
+async function fanUpBbc(leagues,now) {
+  const tops=FAN_UP_TOP.filter(t=>leagues.includes(t[0]));
+  const parts=await Promise.allSettled(tops.map(async t=>[t,await fanUpGet(`https://web-cdn.api.bbci.co.uk/wc-poll-data/container/sport-data-scores-fixtures?selectedStartDate=${fanUpDay(now)}&selectedEndDate=${fanUpDay(now+9*86400000)}&urn=${encodeURIComponent('urn:bbc:sportsdata:football:tournament:'+t[5])}&useSdApi=false`)]));
+  if(!parts.some(p=>p.status==='fulfilled'))throw new Error('BBC Sport unavailable: '+String(parts[0]?.reason?.message || '').slice(0,60));
+  return parts.flatMap(p=>p.status==='fulfilled'?fanUpBbcRows(p.value[1],p.value[0],now):[]);
+}
+// Flashscore: its web feed is a private text format (not a public API) and needs the x-fsign header the website uses. Off by default.
+function fanUpFlashRows(text,tops,now) {
+  const rows=[];let top=null;
+  for(const rec of String(text || '').split('~')) {
+    const f={};
+    for(const part of rec.split('¬')){const i=part.indexOf('÷');if(i>0)f[part.slice(0,i)]=part.slice(i+1);}
+    if(f.ZA!==undefined){top=tops.find(t=>t[6].test(String(f.ZA).trim())) || null;continue;}
+    if(!top || !f.AA || !f.AE || !f.AF)continue;
+    if(String(f.AB || '1')!=='1')continue;
+    const at=Number(f.AD)*1000;
+    if(!Number.isFinite(at) || at<=now)continue;
+    const r=fanUpRow('fs',null,top,f.AE,f.AF,at);
+    if(r)rows.push(r);
+  }
+  return rows;
+}
+async function fanUpFlashscore(leagues,now) {
+  const tops=FAN_UP_TOP.filter(t=>leagues.includes(t[0]));
+  const parts=await Promise.allSettled(Array.from({length:8},(_,i)=>fanUpGet(`https://d.flashscore.com/x/feed/f_1_${i}_1_en_1`,{'x-fsign':'SW9D1eZo',accept:'*/*',referer:'https://www.flashscore.com/'},7000,true)));
+  if(!parts.some(p=>p.status==='fulfilled'))throw new Error('Flashscore unavailable: '+String(parts[0]?.reason?.message || '').slice(0,60));
+  return parts.flatMap(p=>p.status==='fulfilled'?fanUpFlashRows(p.value,tops,now):[]);
+}
+// Runs the enabled extra networks side by side (a failing one is only logged), keeps top-league matches, and maps each club to its
+// ESPN id, name and crest inside the same league so the rest of AI Predict treats it like an ESPN-listed match.
+async function fanUpExtRows(env,up,now) {
+  const jobs={
+    footballdata:()=>fanUpFootballData(env,up.leagues,now),apifootball:()=>fanUpApiFootball(env,up.leagues,now),
+    sofascore:()=>fanUpSofaScore(up.leagues,now),bbc:()=>fanUpBbc(up.leagues,now),flashscore:()=>fanUpFlashscore(up.leagues,now)
+  };
+  const ids=up.sources.filter(id=>jobs[id]);
+  if(!ids.length)return [];
+  const settled=await Promise.allSettled(ids.map(id=>jobs[id]()));
+  const rows=[];
+  settled.forEach((s,i)=>{
+    if(s.status==='fulfilled')rows.push(...s.value.filter(r=>r && up.leagues.includes(r.leagueCode) && Date.parse(r.kickoff)>now));
+    else console.error('Upcoming source failed',ids[i],String(s.reason?.message || s.reason).slice(0,120));
+  });
+  if(!rows.length)return rows;
+  let index=[];try{index=await fanAiTeams(env);}catch(e){console.error('ESPN team index unavailable for upcoming sources',e?.message);}
+  for(const r of rows) {
+    const pool=index.filter(t=>t.league===r.leagueCode && !t.women);
+    if(!pool.length)continue;
+    for(const [side,idKey,logoKey] of [['home','homeId','homeLogo'],['away','awayId','awayLogo']]) {
+      const hit=fanAiFindTeam(pool,r[side]);
+      if(hit?.team){r[idKey]=hit.team.id;r[logoKey]=hit.team.logo || '';r[side]=String(hit.team.name).slice(0,80);}
+    }
+  }
+  return rows.filter(r=>r.home!==r.away);
+}
+async function fanAiUpcoming(env,fresh=false) {
+  const up=(await fanAiConfig(env)).upcoming,useEspn=up.sources.includes('espn');
+  return fanAiCached(env,'ai-upcoming:v5:'+up.sig,1800000,async()=>{
     const now=Date.now(),day=t=>new Date(t).toISOString().slice(0,10).replace(/-/g,'');
     const range=`${day(now)}-${day(now+FAN_AI_UPCOMING_DAYS*86400000)}`;
-    const settled=await Promise.allSettled(FAN_AI_LEAGUES.map(async([slug,name])=>[slug,name,await fanAiEspn(`${slug}/scoreboard?dates=${range}&limit=300`)]));
+    const settled=await Promise.allSettled((useEspn?FAN_AI_LEAGUES:[]).map(async([slug,name])=>[slug,name,await fanAiEspn(`${slug}/scoreboard?dates=${range}&limit=300`)]));
     const out=new Map();
     for(const item of settled) {
       if(item.status!=='fulfilled')continue;
@@ -3674,7 +3855,7 @@ function fanAiUpcoming(env,fresh=false) {
     }
     let complete=settled.filter(i=>i.status==='fulfilled').length>=Math.ceil(settled.length*.8);
     // Women's competitions (optional: a failed feed only means fewer women's matches).
-    const womenSettled=await Promise.allSettled(FAN_AI_WOMEN_LEAGUES.map(async([slug,name])=>[slug,name,await fanAiEspn(`${slug}/scoreboard?dates=${range}&limit=300`)]));
+    const womenSettled=await Promise.allSettled((useEspn?FAN_AI_WOMEN_LEAGUES:[]).map(async([slug,name])=>[slug,name,await fanAiEspn(`${slug}/scoreboard?dates=${range}&limit=300`)]));
     for(const item of womenSettled) {
       if(item.status!=='fulfilled')continue;
       const [slug,name,data]=item.value;
@@ -3694,11 +3875,13 @@ function fanAiUpcoming(env,fresh=false) {
     {
       const seen=new Set([...out.values()].map(r=>`${fanResultName(r.home)}|${fanResultName(r.away)}|${r.kickoff.slice(0,10)}`));
       const add=rows=>{for(const r of rows){const k=`${fanResultName(r.home)}|${fanResultName(r.away)}|${r.kickoff.slice(0,10)}`;if(!seen.has(k)){seen.add(k);out.set(r.id,r);}}};
-      try{add(await fanAiEspnAllUpcoming(now,day));}catch(e){console.error('ESPN all upcoming failed',e?.message);}
-      if(out.size<15) {try{add(await fanAiTsdbUpcoming(now,day));}catch(e){console.error('TheSportsDB upcoming failed',e?.message);}}
+      if(up.sources.includes('espn_all')) {try{add(await fanAiEspnAllUpcoming(now,day));}catch(e){console.error('ESPN all upcoming failed',e?.message);}}
+      // Other networks (football-data.org, API-Football, SofaScore, BBC Sport, Flashscore): top leagues only.
+      try{add(await fanUpExtRows(env,up,now));}catch(e){console.error('Extra upcoming sources failed',e?.message);}
+      if(up.sources.includes('tsdb') && out.size<15) {try{add(await fanAiTsdbUpcoming(now,day));}catch(e){console.error('TheSportsDB upcoming failed',e?.message);}}
       complete=out.size>0;
     }
-    const tagged=[...out.values()].map(r=>({...r,gender:r.gender==='women' || fanAiIsWomen(r.home,r.away,r.league)?'women':'men'}));
+    const tagged=[...out.values()].filter(r=>!up.topOnly || up.leagues.includes(r.leagueCode)).map(r=>({...r,gender:r.gender==='women' || fanAiIsWomen(r.home,r.away,r.league)?'women':'men'}));
     return {rows:tagged.sort((x,y)=>Date.parse(x.kickoff)-Date.parse(y.kickoff)).slice(0,600),complete};
   },fresh);
 }
