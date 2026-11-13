@@ -2200,6 +2200,7 @@ async function fanZone(request, env, url, ctx) {
     const banned=await fanBanned(db,id);
     if(banned)return json({error:fanBanMessage(banned),banned:true},403);
     if(url.pathname==='/fan/ai-predict/matches')return await fanAiMatches(request,env,id);
+    if(url.pathname==='/fan/ai-predict/top-matches')return await fanAiTopMatches(request,env,id);
     if(url.pathname==='/fan/ai-predict')return await fanAiPredict(request,env,id);
     if(env.GOOGLE_WEB_CLIENT_ID) await fanClearLeakedPremium(env);
     let user = await db.prepare('SELECT * FROM fan_users WHERE id=?').bind(id).first();
@@ -2296,8 +2297,7 @@ async function fanZone(request, env, url, ctx) {
       if (typeof b.key==='string' && b.key.startsWith('ext:')) {
         // A match listed from ESPN (AI Predict "other matches"): remember which ESPN league and
         // event it is, so its final score is verified against that exact ESPN game.
-        const list=await fanAiUpcoming(env);
-        const m=list.find(x=>`ext:${x.id}|${Date.parse(x.kickoff)}`===b.key);
+        const m=await fanAiFindListed(env,b.key,x=>`ext:${x.id}|${Date.parse(x.kickoff)}`===b.key);
         if (!m) return fail('Match is no longer available. Refresh the fixtures.');
         f={id:`ext:${m.id}`,home:m.home,away:m.away,league:m.league,kickoff:m.kickoff,homeLogo:m.homeLogo,awayLogo:m.awayLogo};
         // ESPN-sourced matches are verified against that exact ESPN game; others by team names and time.
@@ -3822,7 +3822,7 @@ async function fanUpExtRows(env,up,now) {
     else console.error('Upcoming source failed',ids[i],String(s.reason?.message || s.reason).slice(0,120));
   });
   if(!rows.length)return rows;
-  let index=[];try{index=await fanAiTeams(env);}catch(e){console.error('ESPN team index unavailable for upcoming sources',e?.message);}
+  let index=[];try{index=await fanUpTeams(env,up.leagues);}catch(e){console.error('ESPN team index unavailable for upcoming sources',e?.message);}
   for(const r of rows) {
     const pool=index.filter(t=>t.league===r.leagueCode && !t.women);
     if(!pool.length)continue;
@@ -3832,6 +3832,51 @@ async function fanUpExtRows(env,up,now) {
     }
   }
   return rows.filter(r=>r.home!==r.away);
+}
+// ESPN club ids/crests for the top leagues only (a handful of requests, kept 6 hours), used to name the clubs the extra networks list.
+function fanUpTeams(env,leagues) {
+  return fanAiCached(env,'ai-up-teams:v1:'+leagues.join('-'),21600000,async()=>{
+    const settled=await Promise.allSettled(leagues.map(async slug=>[slug,await fanAiEspn(`${slug}/teams?limit=1000`)]));
+    const seen=new Map();
+    for(const item of settled) {
+      if(item.status!=='fulfilled')continue;
+      const [slug,data]=item.value;
+      for(const sport of data?.sports || [])for(const l of sport.leagues || [])for(const entry of l.teams || []) {
+        const t=entry?.team,key=String(t?.id);
+        if(!t || !t.displayName || !/^\d{1,9}$/.test(key) || seen.has(key))continue;
+        const keys=[...new Set(['displayName','shortDisplayName','name','location','abbreviation'].map(k=>fanAnalysisName(t[k])).filter(k=>k.length>=2))];
+        seen.set(key,{id:key,name:String(t.displayName).slice(0,80),logo:fanAiLogo(t.logos?.[0]?.href || t.logo),league:slug,keys,women:false});
+      }
+    }
+    return {rows:[...seen.values()],complete:settled.filter(i=>i.status==='fulfilled').length>=Math.ceil(settled.length*.8)};
+  });
+}
+// The top-league tabs: matches from the extra networks only, in their own request and cache (so the ESPN list above keeps its own
+// Worker request budget). Matches seen by several networks are listed once.
+async function fanAiTopUpcoming(env,fresh=false) {
+  const up=(await fanAiConfig(env)).upcoming;
+  return fanAiCached(env,'ai-top-upcoming:v1:'+up.sig,1800000,async()=>{
+    const now=Date.now(),seen=new Set(),rows=[];
+    for(const r of await fanUpExtRows(env,up,now)) {
+      const k=`${fanResultName(r.home)}|${fanResultName(r.away)}|${r.kickoff.slice(0,10)}`;
+      if(seen.has(k))continue;
+      seen.add(k);rows.push({...r,gender:'men'});
+    }
+    return {rows:rows.sort((x,y)=>Date.parse(x.kickoff)-Date.parse(y.kickoff)).slice(0,200),complete:rows.length>0};
+  },fresh);
+}
+async function fanAiTopMatches(request,env,id) {
+  if(request.method!=='GET')return json({error:'Method not allowed'},405);
+  const list=await fanAiTopUpcoming(env,new URL(request.url).searchParams.get('fresh')==='1');
+  const sources={};
+  for(const m of list){const k=String(m.id).split(':')[0];sources[k]=(sources[k] || 0)+1;}
+  return json({matches:list.map(({homeId,awayId,leagueCode,source,...m})=>m),sources});
+}
+// A listed match by test: ids of the extra networks are looked up in the top-league list first, ESPN ids in the ESPN list first.
+async function fanAiFindListed(env,hint,test) {
+  const lists=/^(?:ext:)?(?:fd|af|sofa|bbc|fs):/.test(String(hint))?[fanAiTopUpcoming,fanAiUpcoming]:[fanAiUpcoming,fanAiTopUpcoming];
+  for(const load of lists){const m=(await load(env)).find(test);if(m)return m;}
+  return undefined;
 }
 async function fanAiUpcoming(env,fresh=false) {
   const up=(await fanAiConfig(env)).upcoming,useEspn=up.sources.includes('espn');
@@ -3876,8 +3921,6 @@ async function fanAiUpcoming(env,fresh=false) {
       const seen=new Set([...out.values()].map(r=>`${fanResultName(r.home)}|${fanResultName(r.away)}|${r.kickoff.slice(0,10)}`));
       const add=rows=>{for(const r of rows){const k=`${fanResultName(r.home)}|${fanResultName(r.away)}|${r.kickoff.slice(0,10)}`;if(!seen.has(k)){seen.add(k);out.set(r.id,r);}}};
       if(up.sources.includes('espn_all')) {try{add(await fanAiEspnAllUpcoming(now,day));}catch(e){console.error('ESPN all upcoming failed',e?.message);}}
-      // Other networks (football-data.org, API-Football, SofaScore, BBC Sport, Flashscore): top leagues only.
-      try{add(await fanUpExtRows(env,up,now));}catch(e){console.error('Extra upcoming sources failed',e?.message);}
       if(up.sources.includes('tsdb') && out.size<15) {try{add(await fanAiTsdbUpcoming(now,day));}catch(e){console.error('TheSportsDB upcoming failed',e?.message);}}
       complete=out.size>0;
     }
@@ -3943,7 +3986,10 @@ async function fanAiMatches(request,env,id) {
     const [espn,tsdb]=await Promise.all([probe('https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard'),probe(`https://www.thesportsdb.com/api/v1/json/${TSDB_KEY}/eventsday.php?d=`+new Date().toISOString().slice(0,10)+'&s=Soccer')]);
     return json({error:`No upcoming matches found (ESPN: ${espn}, TheSportsDB: ${tsdb}). Please retry later.`,detail:{espn,tsdb}},503);
   }
-  return json({matches:list.map(({homeId,awayId,leagueCode,source,...m})=>m)});
+  // How many matches each source contributed (ESPN, or the id prefix of an extra network): helps to see which feed is working.
+  const sources={};
+  for(const m of list){const k=String(m.id).split(':')[0],g=/^(?:fd|af|sofa|bbc|fs|tsdb)$/.test(k)?k:'espn';sources[g]=(sources[g] || 0)+1;}
+  return json({matches:list.map(({homeId,awayId,leagueCode,source,...m})=>m),sources});
 }
 async function fanAiAnyMatch(env,id,b) {
   const fail=(error,status=400,extra={})=>json({error,...extra},status);
@@ -3951,7 +3997,7 @@ async function fanAiAnyMatch(env,id,b) {
     let home,away,info,kickoff;
     if(b.ext!==undefined) {
       if(typeof b.ext!=='string' || !/^[a-z0-9._]{1,40}:\d{1,12}$/.test(b.ext))return fail('Select a match.');
-      const m=(await fanAiUpcoming(env)).find(x=>x.id===b.ext);
+      const m=await fanAiFindListed(env,b.ext,x=>x.id===b.ext);
       if(!m)return fail('This match is no longer listed. Refresh matches.',404);
       kickoff=Date.parse(m.kickoff);
       if(!(kickoff>Date.now()))return fail('Choose a match that has not started.');
