@@ -2798,7 +2798,7 @@ async function fanAccountAuth(request,env) {
 // failures do not consume the user's successful analysis allowance.
 const FAN_AI_ATTEMPT_LIMIT_PER_HOUR = 105;
 const FAN_AI_ANALYSIS_LIMIT_PER_HOUR = 35;
-const FAN_AI_ANALYSIS_LIMIT_PER_DAY = 105;
+const FAN_AI_ANALYSIS_LIMIT_PER_DAY = 35;
 
 // Automatic, server-sourced form analysis. Clients submit only a fixture key, an
 // id taken from the server's own upcoming-match list, or two typed team names
@@ -3831,11 +3831,11 @@ function fanUpTeams(env,leagues) {
   });
 }
 // ESPN's Scottish Premiership feed is a reliable direct fallback when third-party sources
-// (API-Football free season access, SofaScore datacenter blocks, or BBC changes) return no fixtures.
+// (API-Football free season access, unofficial feed blocks, or BBC changes) return no fixtures.
 async function fanUpEspnScottish(now) {
   // ESPN's Scottish scoreboard only accepts a single date per request. Keep this
   // supplemental fallback to the next 7 days to avoid 31 outbound subrequests;
-  // Sportmonks/API Ninjas supply the configured 30-day horizon.
+  // API Ninjas supplies the configured 30-day horizon.
   const ESPN_SCO_FALLBACK_DAYS=7;
   const days=Array.from({length:ESPN_SCO_FALLBACK_DAYS+1},(_,i)=>fanUpDay(now+i*86400000).replace(/-/g,''));
   const feeds=await Promise.allSettled(days.map(d=>fanAiEspn(`sco.1/scoreboard?dates=${d}&limit=300`)));
