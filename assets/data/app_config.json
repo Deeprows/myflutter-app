@@ -24,7 +24,7 @@
     "notes": "Latest Update!"
   },
   "chat": {
-    "enabled": true,
+    "enabled": false,
     "origin": "https://deeprowss.com"
   },
   "scores": {
