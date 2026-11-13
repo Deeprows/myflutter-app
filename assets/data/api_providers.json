@@ -133,7 +133,7 @@
         {
           "id": "bbc",
           "label": "BBC Sport (unofficial)",
-          "enabled": true
+          "enabled": false
         },
         {
           "id": "flashscore",
