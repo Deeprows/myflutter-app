@@ -3831,7 +3831,14 @@ async function fanAiAnyMatch(env,id,b) {
       if(thin)throw thin;
       try{return await fanEspnScanForm(env,t.name,kickoff);}
       catch(e){
-        try{return await fanNationalForm(env,t.name,kickoff,t.id);}catch{}
+        // The national-results scan is the most CPU-hungry lookup there is: only run it for names that look like a national or youth side.
+        if(fanIsNationalTeam(t.name) || fanSideTag(t.name)) {try{return await fanNationalForm(env,t.name,kickoff,t.id);}catch{}}
+        // No free source knows this club. API-Football finds clubs by name in almost every league (only when its key is set).
+        if(env.API_FOOTBALL_KEY) {
+          try{const aid=await fanAiApiTeamId(env,t.name);if(aid){const f=await fanRecentForm(env,aid,kickoff);if(f.matches.length>=1)return f;}}
+          catch(e2){console.error('API-Football name lookup failed for',String(t.name).slice(0,40),e2?.message);}
+        }
+        console.error('No recent results for',String(t.name).slice(0,40),'- name scan said:',e?.message);
         const hint=t.fuzzy?.length>1?' Did you mean '+t.fuzzy.map(c=>c.name).join(', ')+'?':'';
         throw e instanceof FanFormError && e.code==='insufficient_results'?new FanFormError('Could not verify completed recent results for "'+String(t.name).slice(0,40)+'". The team or competition may not be covered by the available results providers; check the spelling or retry later.'+hint,'insufficient_results'):e;
       }
