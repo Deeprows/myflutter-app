@@ -75,6 +75,8 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   final Map<String, String> _failures = {};
   Map<String, dynamic>? _extraQuotaStatus;
   bool _quotaBusy = false;
+  // Set when the server says the 35 daily analyses are used up, so the Request more card shows right away.
+  bool _dailyLimitHit = false;
 
   /// Per result: the market chip chosen on the match's page. [_rev] makes the
   /// pushed match page rebuild when a chip is tapped.
@@ -101,7 +103,12 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   Future<void> _loadExtraQuotaStatus() async {
     try {
       final data = await FanZoneService.call('ai-quota/status');
-      if (mounted) setState(() => _extraQuotaStatus = data);
+      if (mounted) {
+        setState(() {
+          _extraQuotaStatus = data;
+          if (data['exhausted'] == false) _dailyLimitHit = false;
+        });
+      }
     } catch (_) {
       // Status is optional until the updated Worker has been deployed.
     }
@@ -199,9 +206,9 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     if (!SubscriptionService.instance.isPremium) return const SizedBox.shrink();
     final status = _extraQuotaStatus;
     // Only for Premium users who have used up the 35 included analyses today.
-    if (status == null || status['exhausted'] != true) return const SizedBox.shrink();
-    final remaining = status['remaining'];
-    final pending = status['pending'];
+    if (!_dailyLimitHit && status?['exhausted'] != true) return const SizedBox.shrink();
+    final remaining = status?['remaining'];
+    final pending = status?['pending'];
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       color: const Color(0xFF8E6BFF).withValues(alpha: .10),
@@ -1301,6 +1308,16 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   String _failText(Fixture f, Object e) {
     var message = safeErrorMessage(e);
     final raw = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '').trim();
+    if (RegExp(r'per UTC day|extra predictions', caseSensitive: false).hasMatch(raw + message) &&
+        SubscriptionService.instance.isPremium) {
+      if (!_dailyLimitHit) {
+        _dailyLimitHit = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() {});
+        });
+      }
+      unawaited(_loadExtraQuotaStatus());
+    }
     if (raw.contains('setup needed')) {
       return 'Automatic analysis is being configured. Please contact the administrator.';
     }
