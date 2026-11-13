@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Deeprowss feed proxy + anonymous usage monitor (Cloudflare Worker).
  *
@@ -2838,19 +2839,23 @@ const FAN_GEMINI_SCHEMA={type:'OBJECT',properties:{read:{type:'STRING'},picks:{t
 async function fanAiGemini(env,system,user,modelOverride) {
   if(!env.GEMINI_API_KEY)return null;
   const wanted=modelOverride || env.GEMINI_MODEL || '';
-  const model=/^[a-z0-9.-]{3,40}$/.test(wanted)?wanted:'gemini-2.5-flash';
+  const model=/^[a-z0-9.-]{3,40}$/.test(wanted)?wanted:'gemini-3.5-flash';
   const generationConfig={temperature:0.2,maxOutputTokens:4096,responseMimeType:'application/json',responseSchema:FAN_GEMINI_SCHEMA};
   if(/2\.5.*flash/.test(model))generationConfig.thinkingConfig={thinkingBudget:0};
+  // Gemini 3 models use a thinking level instead of a budget; thinking tokens count toward the output limit, so keep it low and leave room.
+  else if(/^gemini-3/.test(model)){generationConfig.thinkingConfig={thinkingLevel:'low'};generationConfig.maxOutputTokens=8192;}
   const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{
     method:'POST',
     headers:{'content-type':'application/json','x-goog-api-key':env.GEMINI_API_KEY},
     body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[{role:'user',parts:[{text:user}]}],generationConfig}),
     signal:AbortSignal.timeout(30000)
   });
-  if(!r.ok){console.error('Gemini HTTP',r.status);return null;}
+  if(!r.ok){const why=(await r.text().catch(()=>'')).replace(/\s+/g,' ').replace(/AIza[A-Za-z0-9_-]{10,}/g,'[key]').slice(0,220);console.error('Gemini HTTP',r.status,why);return null;}
   const d=await r.json().catch(()=>null);
   const text=d?.candidates?.[0]?.content?.parts?.map(x=>x?.text || '').join('') || '';
-  try{const o=JSON.parse(text);return o && typeof o.read==='string' && o.read.trim()?o:null;}catch{return null;}
+  try{const o=JSON.parse(text);if(o && typeof o.read==='string' && o.read.trim())return o;}catch{}
+  console.error('Gemini gave no usable answer',model,'finish:',d?.candidates?.[0]?.finishReason || 'none','block:',d?.promptFeedback?.blockReason || 'none','chars:',text.length);
+  return null;
 }
 // ---- More data sources (api_providers.json: data.form.sources "footballdata", data.context) ----
 // 1) football-data.org as another recent-results source (secret FOOTBALL_DATA_KEY, free tier ~10 requests/minute).
@@ -3050,7 +3055,7 @@ async function fanAiOpenAiCompat(env,p,system,user) {
   };
   let r=await ask(true);
   if(r.status===400 || r.status===422)r=await ask(false);
-  if(!r.ok){console.error('AI provider HTTP',p.id,r.status);return null;}
+  if(!r.ok){const why=(await r.text().catch(()=>'')).replace(/\s+/g,' ').replace(/(?:sk|gsk|key)[-_][A-Za-z0-9_-]{8,}/g,'[key]').slice(0,220);console.error('AI provider HTTP',p.id,r.status,why);return null;}
   const d=await r.json().catch(()=>null);
   const text=String(d?.choices?.[0]?.message?.content || '').trim();
   const a=text.indexOf('{'),z=text.lastIndexOf('}');
@@ -5270,8 +5275,20 @@ async function fanNationalSlug(env,slug,from,to,keep,stat={}) {
 }
 // A national side's last good result list is remembered for 30 days. When every live source is down or throttled
 // the analysis keeps working from that copy instead of claiming the team has no results.
+// Each fresh ESPN scoreboard download is parsed in full, which is what uses up the Worker's CPU time. A request stops
+// opening more competitions once it has parsed this many fresh events (cached windows cost almost nothing).
+const FAN_NATIONAL_EVENT_BUDGET=1500;
 async function fanNationalForm(env,name,kickoff,espnId=null) {
   const ck=('natform:v2:'+fanNationalKey(name)).slice(0,120);
+  // A complete form (5 games) found in the last 3 hours is reused: no ESPN calls and almost no CPU.
+  try {
+    const hit=await env.DB.prepare('SELECT data,fetched_at FROM fan_espn_form_cache WHERE cache_key=?').bind(ck).first();
+    if(hit && hit.fetched_at>Date.now()-3*3600000) {
+      const f=JSON.parse(hit.data),limit=Math.min(Date.now(),kickoff);
+      const rows=(Array.isArray(f?.matches)?f.matches:[]).filter(m=>Date.parse(m?.date)<limit);
+      if(rows.length>=5)return {...f,matches:rows,played:rows.length,wins:rows.filter(r=>r.result==='W').length,draws:rows.filter(r=>r.result==='D').length,losses:rows.filter(r=>r.result==='L').length,goalsFor:rows.reduce((n,r)=>n+r.goalsFor,0),goalsAgainst:rows.reduce((n,r)=>n+r.goalsAgainst,0)};
+    }
+  } catch{}
   try {
     const form=await fanNationalFormLive(env,name,kickoff,espnId);
     try{await env.DB.prepare('INSERT INTO fan_espn_form_cache(cache_key,data,fetched_at) VALUES(?,?,?) ON CONFLICT(cache_key) DO UPDATE SET data=excluded.data,fetched_at=excluded.fetched_at').bind(ck,JSON.stringify(form),Date.now()).run();}catch{}
@@ -5312,8 +5329,12 @@ async function fanNationalFormLive(env,name,kickoff,espnId=null) {
   };
   const scan=async (slugs,chs=chunks)=>{
     const jobs=[];
-    for(const slug of slugs)for(const ch of chs)jobs.push(fanNationalSlug(env,slug,ch.from,ch.to,ch.keep,stat).then(g=>{reached++;return g;}).catch(e=>{lastWhy=String(e?.message || '');return null;}));
-    for(const games of await Promise.all(jobs))absorb(games);
+    for(const slug of slugs)for(const ch of chs)jobs.push(()=>fanNationalSlug(env,slug,ch.from,ch.to,ch.keep,stat).then(g=>{reached++;return g;}).catch(e=>{lastWhy=String(e?.message || '');return null;}));
+    // Small batches: once enough fresh data has been parsed and some games are known, stop instead of running out of CPU.
+    for(let i=0;i<jobs.length;i+=6) {
+      if(found.size>0 && (stat.raw || 0)>FAN_NATIONAL_EVENT_BUDGET)break;
+      for(const games of await Promise.all(jobs.slice(i,i+6).map(f=>f())))absorb(games);
+    }
   };
   const caf=FAN_NATIONAL_CAF.has(want) && !wantTag;
   await scan(caf?FAN_NATIONAL_CAF_FIRST:FAN_NATIONAL_CORE);
@@ -5324,7 +5345,7 @@ async function fanNationalFormLive(env,name,kickoff,espnId=null) {
     const loaded=await Promise.all(weeks.map(w=>fanEspnScanWindow(env,w.from,w.to,w.keep).then(g=>{reached++;return g;}).catch(e=>{lastWhy=String(e?.message || '');return null;})));
     for(const games of loaded)absorb(games);
   }
-  if(found.size<5)await scan(FAN_NATIONAL_OTHER);
+  if(found.size<5 && (found.size===0 || (stat.raw || 0)<=FAN_NATIONAL_EVENT_BUDGET))await scan(FAN_NATIONAL_OTHER);
   // A very wide date range can come back truncated; when nothing at all was found ask again in 50-day slices.
   if(!found.size) {
     const fine=[];for(let i=0;i<6;i++){const hi=limit-i*50*86400000,lo=hi-50*86400000+86400000;fine.push({from:ymd(lo),to:ymd(hi),keep:hi<now-2*86400000});}
