@@ -232,26 +232,28 @@ class RemoteConfig with WidgetsBindingObserver {
     return v.endsWith('/') ? v : '$v/';
   }
 
-  /// Which of the two ways an embed link starts with (0 = with the player
-  /// origin, 1 = direct without it). `player.hostMethods` can set it for one
-  /// stream host (`{"forprivateuse.sbs": 2}`), `player.embedMethod` for all
-  /// (1 or 2); the default is 1 (player origin first, direct as the backup).
-  int embedMethodFor(String url) {
-    int? n;
-    final m = _section('player')['hostMethods'];
-    final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
-    if (m is Map && host.isNotEmpty) {
-      for (final e in m.entries) {
-        final h = e.key.toString().toLowerCase().trim();
-        if (h.isNotEmpty && (host == h || host.endsWith('.$h'))) {
-          final v = e.value;
-          n = v is num ? v.toInt() : int.tryParse('$v');
-          break;
-        }
-      }
+  /// Site address that EMBED pages (iframe / .php player pages) are shown
+  /// under. Defaults to [playerOrigin]; set `player.embedOrigin` in
+  /// app_config.json when your stream hosts whitelist a different domain than
+  /// the one the m3u8 player uses.
+  String get embedPageOrigin {
+    final v = _str('player', 'embedOrigin', '').trim();
+    if (!v.startsWith('https://') && !v.startsWith('http://')) {
+      return playerOrigin;
     }
-    n ??= _int('player', 'embedMethod', 1);
-    return n == 2 ? 1 : 0;
+    return v.endsWith('/') ? v : '$v/';
+  }
+
+  /// Second site address tried for embed pages (Reload button): your main
+  /// website, or `player.altEmbedOrigin` when set.
+  String get altEmbedPageOrigin {
+    final v = _str('player', 'altEmbedOrigin', '').trim();
+    if (v.startsWith('https://') || v.startsWith('http://')) {
+      return v.endsWith('/') ? v : '$v/';
+    }
+    final w = AppConfig.websiteUrl.trim();
+    if (w.isEmpty) return playerOrigin;
+    return w.endsWith('/') ? w : '$w/';
   }
 
   // --------------------------------------------------------------- share
