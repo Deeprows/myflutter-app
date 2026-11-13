@@ -587,7 +587,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   String _activeFilter(List<Fixture> all) {
     if (_filter == LeagueFilter.all) return _filter;
     // The top-league tabs stay selectable even when they are empty.
-    if (LeagueFilter.pinned.contains(_filter)) return _filter;
+    if (_pinnedLeagues.contains(_filter)) return _filter;
     return all.any((f) => LeagueFilter.matches(f, _filter))
         ? _filter
         : LeagueFilter.all;
@@ -597,6 +597,15 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     _filter = value;
     _shown = 20;
   });
+
+  /// Top-league tabs that are always shown right after "All", even when empty.
+  static const List<String> _pinnedLeagues = [
+    'Premier League',
+    'LaLiga',
+    'Serie A',
+    'Bundesliga',
+    'Scottish Premiership',
+  ];
 
   static String _filterName(String f) {
     if (f == LeagueFilter.all) return 'All';
@@ -639,12 +648,12 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     final counts = {for (final e in leagues) e.key: e.value};
     // The pinned top leagues have their own tabs, so they are left out here.
     final shownLeagues = leagues
-        .where((e) => !LeagueFilter.pinned.contains(e.key))
+        .where((e) => !_pinnedLeagues.contains(e.key))
         .take(24)
         .toList();
     // A league picked from the finder stays visible in the row.
     if (!LeagueFilter.isSpecial(active) &&
-        !LeagueFilter.pinned.contains(active) &&
+        !_pinnedLeagues.contains(active) &&
         !shownLeagues.any((e) => e.key == active)) {
       final hit = leagues.where((e) => e.key == active);
       if (hit.isNotEmpty) shownLeagues.insert(0, hit.first);
@@ -660,7 +669,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             selected: active == LeagueFilter.all,
             onTap: () => _setFilter(LeagueFilter.all),
           ),
-          for (final name in LeagueFilter.pinned)
+          for (final name in _pinnedLeagues)
             _filterChip(
               label: name,
               count: counts[name] ?? 0,
@@ -758,7 +767,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           padding: const EdgeInsets.symmetric(vertical: 20),
           child: Center(
             child: Text(
-              LeagueFilter.pinned.contains(active)
+              _pinnedLeagues.contains(active)
                   ? 'No ${_filterName(active)} matches are listed for the next 10 days (an international break, perhaps). Tap refresh to check again.'
                   : 'No upcoming matches for ${_filterName(active)}.',
               textAlign: TextAlign.center,
