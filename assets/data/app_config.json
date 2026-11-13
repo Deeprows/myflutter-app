@@ -44,6 +44,6 @@
   },
   "streamHint": {
     "enabled": true,
-    "text": "Double tap the screen to play.\nNot working? Try another stream number."
+    "text": "Double tap the screen to play.\nNot working? Try another stream number.\nClick Fullscreen on each player to bypass ads "
   }
 }
