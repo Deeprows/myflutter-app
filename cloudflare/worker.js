@@ -1887,6 +1887,23 @@ async function subAdmin(request, env, url) {
           note = `+${granted} AI predictions granted to ${row.user_name || "the user"}. It shows in their app within seconds.`;
         }
       }
+    } else if (action === "quota_revoke") {
+      // Take back extra AI predictions that were granted but not used yet.
+      await fanInit(env.DB);
+      const uid = String(form.get("user_id") || "").trim();
+      const credit = await env.DB.prepare(
+        "SELECT granted_total, consumed_total FROM fan_ai_extra_credits WHERE user_id = ?"
+      ).bind(uid).first();
+      const left = credit ? Math.max(0, Number(credit.granted_total) - Number(credit.consumed_total)) : 0;
+      const take = Math.min(left, parseInt(String(form.get("remove") || ""), 10) || left);
+      if (!credit || left < 1 || take < 1) {
+        note = "That user has no unused extra quota left.";
+      } else {
+        await env.DB.prepare(
+          "UPDATE fan_ai_extra_credits SET granted_total = granted_total - ?, updated_at = ? WHERE user_id = ?"
+        ).bind(take, Math.floor(Date.now() / 1000), uid).run();
+        note = `Removed ${take} unused extra prediction(s). ${left - take} left for that user.`;
+      }
     } else if (action === "dismiss") {
       await env.DB.prepare("DELETE FROM token_requests WHERE install_id = ?")
         .bind(id)
@@ -1963,6 +1980,35 @@ ${r.days ? `<div style="font-size:13.5px;margin-bottom:6px;color:#22e07a">Wants 
         .join("")
     : `<p style="color:#8d99ab;font-size:13px">No quota requests waiting.</p>`;
 
+  // Users who still hold unused extra predictions (so you can stop them).
+  let creditRows = [];
+  try {
+    creditRows = (
+      await env.DB.prepare(
+        "SELECT c.user_id, c.granted_total, c.consumed_total, " +
+          "(SELECT user_name FROM fan_ai_quota_requests r WHERE r.user_id = c.user_id ORDER BY r.created_at DESC LIMIT 1) AS user_name, " +
+          "(SELECT contact FROM fan_ai_quota_requests r WHERE r.user_id = c.user_id ORDER BY r.created_at DESC LIMIT 1) AS contact " +
+          "FROM fan_ai_extra_credits c WHERE c.granted_total > c.consumed_total ORDER BY c.updated_at DESC LIMIT 50"
+      ).all()
+    ).results || [];
+  } catch (e) {
+    console.error("quota credits", e && e.message);
+  }
+  const creditHtml = creditRows.length
+    ? creditRows
+        .map((r) => {
+          const left = Number(r.granted_total) - Number(r.consumed_total);
+          return `<form method="post" onsubmit="return confirm('Remove this extra quota?')" style="background:#101722;padding:10px;border-radius:8px;margin:8px 0">
+<input type="hidden" name="token" value="${tk}"><input type="hidden" name="action" value="quota_revoke"><input type="hidden" name="user_id" value="${esc(r.user_id)}">
+<div style="font-size:12.5px;margin-bottom:6px"><b>${esc(r.user_name || String(r.user_id).slice(0, 8) + "…")}</b>${r.contact ? ` &middot; ${esc(r.contact)}` : ""}${waLink(r.contact)}</div>
+<div style="font-size:13.5px;margin-bottom:6px;color:#22e07a"><b>${esc(left)}</b> unused &middot; granted ${esc(r.granted_total)}, used ${esc(r.consumed_total)}</div>
+<input name="remove" type="number" min="1" max="${esc(left)}" value="${esc(left)}" style="width:80px;padding:9px">
+<button style="${btn}">Remove quota</button>
+</form>`;
+        })
+        .join("")
+    : `<p style="color:#8d99ab;font-size:13px">Nobody has unused extra quota.</p>`;
+
   const unused = (
     await env.DB.prepare(
       "SELECT token, days, bound_to, note FROM tokens WHERE redeemed_by IS NULL ORDER BY created_at DESC LIMIT 25"
@@ -2014,6 +2060,8 @@ ${note ? `<p style="background:#16202e;padding:10px;border-radius:8px">${esc(not
 ${madeHtml}
 <h3>AI quota requests${quotaReqs.length ? ` (${quotaReqs.length})` : ""}</h3>
 ${quotaHtml}
+<h3>Extra quota in use</h3>
+${creditHtml}
 <h3>Token requests</h3>
 ${reqHtml}
 <h3>Make tokens</h3>
