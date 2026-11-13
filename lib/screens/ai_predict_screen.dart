@@ -124,7 +124,9 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     final contactCtrl = TextEditingController(text: prefs.getString('ai_quota_whatsapp') ?? '');
-    int amount = 20;
+    final cfgAmounts = (_extraQuotaStatus?['amounts'] as List?)?.whereType<num>().map((e) => e.toInt()).toList();
+    final amounts = (cfgAmounts == null || cfgAmounts.isEmpty) ? [10, 20, 50] : cfgAmounts;
+    int amount = amounts.contains(20) ? 20 : amounts.first;
     String? formError;
     final sent = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -136,7 +138,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               const Text('Choose how many additional predictions you would like and leave your WhatsApp number. We will message you there to agree the extra quota.'),
               const SizedBox(height: 14),
               Wrap(spacing: 8, children: [
-                for (final n in [10, 20, 50])
+                for (final n in amounts)
                   ChoiceChip(
                     label: Text('+$n'),
                     selected: amount == n,
@@ -205,7 +207,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   Widget _extraQuotaCard() {
     if (!SubscriptionService.instance.isPremium) return const SizedBox.shrink();
     final status = _extraQuotaStatus;
-    // Only for Premium users who have used up the 35 included analyses today.
+    // Only for Premium users who have used up their included daily analyses.
     if (!_dailyLimitHit && status?['exhausted'] != true) return const SizedBox.shrink();
     final remaining = status?['remaining'];
     final pending = status?['pending'];
@@ -220,7 +222,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Extra AI Predictions', style: TextStyle(fontWeight: FontWeight.w900)),
-            Text(pending is Map ? 'Request pending admin approval' : 'Daily 35 used · ${remaining ?? 0} extra available', style: TextStyle(color: Ui.muted, fontSize: 12)),
+            Text(pending is Map ? 'Request pending admin approval' : 'Daily ${status?['daily_limit'] ?? 35} used · ${remaining ?? 0} extra available', style: TextStyle(color: Ui.muted, fontSize: 12)),
           ])),
           FilledButton.tonal(
             onPressed: _quotaBusy || pending is Map ? null : _requestExtraPredictions,
