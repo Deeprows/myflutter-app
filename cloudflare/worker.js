@@ -5190,14 +5190,29 @@ async function fanEspnScanForm(env,name,kickoff) {
 // can never find 3 results for them. This reads each international competition over the last ~300 days instead.
 // Competitions that do not exist on ESPN just return an error and are skipped.
 const FAN_NATIONAL_CORE=['fifa.friendly','uefa.nations','fifa.worldq.uefa','uefa.euroq','fifa.world','uefa.euro'];
-const FAN_NATIONAL_OTHER=['fifa.worldq.conmebol','fifa.worldq.caf','fifa.worldq.afc','fifa.worldq.concacaf','fifa.worldq.ofc','conmebol.america','concacaf.gold','concacaf.nations.league','caf.nations','afc.asian.cup'];
-const FAN_NATIONAL_LEAGUE_RE=/nations league|world cup|euro(?:pean)? champ|euro 20|qualif|friendl|international|africa cup|afcon|copa am[eé]rica|gold cup|asian cup/i;
+// African sides are read from the African competitions first (Africa Cup of Nations, its qualifiers, World Cup qualifying
+// for CAF) plus friendlies; reading the European lists for them only wasted requests and found nothing.
+const FAN_NATIONAL_CAF_FIRST=['caf.nations','caf.nations_qual','fifa.worldq.caf','fifa.friendly'];
+const FAN_NATIONAL_OTHER=['fifa.worldq.conmebol','fifa.worldq.caf','fifa.worldq.afc','fifa.worldq.concacaf','fifa.worldq.ofc','conmebol.america','concacaf.gold','concacaf.nations.league','caf.nations','caf.nations_qual','afc.asian.cup'];
+const FAN_NATIONAL_CAF=new Set('algeria|angola|benin|botswana|burkina faso|burundi|cameroon|cape verde|central african republic|chad|comoros|congo|cote d ivoire|dr congo|djibouti|egypt|equatorial guinea|eritrea|eswatini|ethiopia|gabon|gambia|ghana|guinea|guinea bissau|kenya|lesotho|liberia|libya|madagascar|malawi|mali|mauritania|mauritius|morocco|mozambique|namibia|niger|nigeria|rwanda|sao tome and principe|senegal|seychelles|sierra leone|somalia|south africa|south sudan|sudan|tanzania|togo|tunisia|uganda|zambia|zimbabwe'.split('|'));
+const FAN_NATIONAL_LEAGUE_RE=/nations league|world cup|euro(?:pean)? champ|euro 20|qualif|friendl|international|africa cup|cup of nations|afcon|cosafa|cecafa|wafu|arab cup|copa am[eé]rica|gold cup|asian cup/i;
 const FAN_NATIONAL_ALIASES={'turkiye':'turkey','czech republic':'czechia','ivory coast':'cote d ivoire','korea republic':'south korea','united states':'usa','united states of america':'usa','us':'usa','bosnia herzegovina':'bosnia and herzegovina','macedonia':'north macedonia','republic of ireland':'ireland','cabo verde':'cape verde','ir iran':'iran','holland':'netherlands','congo dr':'dr congo','democratic republic of congo':'dr congo','swaziland':'eswatini'};
 // Typed matchups do not carry a competition label. Recognise national sides by name
 // before attempting club/team lookup, otherwise ESPN's domestic team index can route
 // a country through a club-results feed and return an empty recent-form sample.
 const FAN_NATIONAL_TEAM_KEYS=new Set(('afghanistan|albania|algeria|andorra|angola|antigua and barbuda|argentina|armenia|aruba|australia|austria|azerbaijan|bahamas|bahrain|bangladesh|barbados|belarus|belgium|belize|benin|bermuda|bhutan|bolivia|botswana|brazil|brunei|bulgaria|burkina faso|burundi|cambodia|cameroon|canada|central african republic|chad|chile|china|colombia|comoros|congo|costa rica|croatia|cuba|curacao|cyprus|czechia|denmark|djibouti|dominica|dominican republic|dr congo|ecuador|egypt|el salvador|england|equatorial guinea|eritrea|estonia|eswatini|ethiopia|faroe islands|fiji|finland|france|gabon|gambia|georgia|germany|ghana|gibraltar|greece|grenada|guatemala|guinea|guinea bissau|guyana|haiti|honduras|hong kong|hungary|iceland|india|indonesia|iran|iraq|ireland|israel|italy|jamaica|japan|jordan|kazakhstan|kenya|kosovo|kuwait|kyrgyzstan|laos|latvia|lebanon|lesotho|liberia|libya|liechtenstein|lithuania|luxembourg|madagascar|malawi|malaysia|maldives|mali|malta|mauritania|mauritius|mexico|moldova|monaco|mongolia|montenegro|morocco|mozambique|myanmar|namibia|nepal|netherlands|new caledonia|new zealand|nicaragua|niger|nigeria|north korea|north macedonia|northern ireland|norway|oman|pakistan|palestine|panama|papua new guinea|paraguay|peru|philippines|poland|portugal|puerto rico|qatar|romania|russia|rwanda|san marino|saudi arabia|scotland|senegal|serbia|seychelles|sierra leone|singapore|slovakia|slovenia|somalia|south africa|south korea|south sudan|spain|sri lanka|sudan|suriname|sweden|switzerland|syria|tahiti|taiwan|tajikistan|tanzania|thailand|togo|trinidad and tobago|tunisia|turkey|turkmenistan|uganda|ukraine|united arab emirates|usa|uruguay|uzbekistan|venezuela|vietnam|wales|yemen|zambia|zimbabwe').split('|'));;
 function fanNationalKey(raw){const n=fanResultName(raw);return FAN_NATIONAL_ALIASES[n] || n;}
+// Youth and Olympic sides share their country's name on ESPN: "Nigeria U17" has the location "Nigeria". Their games must
+// never be counted as the senior team's form (and the other way round), so every side gets a tag ("" = senior side).
+const FAN_SIDE_AGE_RE=/\b(?:u|under)[\s-]?(1[4-9]|2[0-3])\b/i;
+function fanSideTag(...names) {
+  const s=names.map(x=>String(x || '')).join(' | '),age=FAN_SIDE_AGE_RE.exec(s);
+  return age?'u'+age[1]:/\bolympic\b/i.test(s)?'olympic':'';
+}
+function fanSideStrip(raw) {
+  const t=String(raw || '').replace(/\b(?:u|under)[\s-]?(?:1[4-9]|2[0-3])\b/gi,' ').replace(/\bolympic\b/gi,' ').replace(/\s+/g,' ').trim();
+  return t.length>=2?t:String(raw || '');
+}
 function fanIsNationalTeam(raw){return FAN_NATIONAL_TEAM_KEYS.has(fanNationalKey(raw));}
 async function fanNationalSlug(env,slug,from,to,keep,stat={}) {
   const key=`nat:v1:${slug}:${from}-${to}`;
@@ -5255,7 +5270,7 @@ async function fanNationalSlug(env,slug,from,to,keep,stat={}) {
 // A national side's last good result list is remembered for 30 days. When every live source is down or throttled
 // the analysis keeps working from that copy instead of claiming the team has no results.
 async function fanNationalForm(env,name,kickoff,espnId=null) {
-  const ck=('natform:v1:'+fanNationalKey(name)).slice(0,120);
+  const ck=('natform:v2:'+fanNationalKey(name)).slice(0,120);
   try {
     const form=await fanNationalFormLive(env,name,kickoff,espnId);
     try{await env.DB.prepare('INSERT INTO fan_espn_form_cache(cache_key,data,fetched_at) VALUES(?,?,?) ON CONFLICT(cache_key) DO UPDATE SET data=excluded.data,fetched_at=excluded.fetched_at').bind(ck,JSON.stringify(form),Date.now()).run();}catch{}
@@ -5276,7 +5291,9 @@ async function fanNationalForm(env,name,kickoff,espnId=null) {
 async function fanNationalFormLive(env,name,kickoff,espnId=null) {
   if(!fanResultName(name))throw new FanFormError('No team found for "'+String(name).slice(0,40)+'". Check the spelling or use the full team name.','team_unavailable');
   const now=Date.now(),limit=Math.min(now,kickoff),ymd=t=>new Date(t).toISOString().slice(0,10).replace(/-/g,'');
-  const want=fanNationalKey(name),id=espnId && /^\d{1,9}$/.test(String(espnId))?String(espnId):null;
+  const want=fanNationalKey(fanSideStrip(name)),wantTag=fanSideTag(name),id=espnId && /^\d{1,9}$/.test(String(espnId))?String(espnId):null;
+  // An exact ESPN team id is trusted. A name match only counts when it is the same kind of side (senior / U17 / U20 ...).
+  const sideIs=t=>(id && t.i===id) || (fanSideTag(...t.n)===wantTag && t.n.some(n=>fanNationalKey(fanSideStrip(n))===want));
   // Two 150-day windows, newest first. A window that ended over two days ago never changes, so it is kept for good.
   const chunks=[{from:ymd(limit-150*86400000),to:ymd(limit),keep:false},{from:ymd(limit-300*86400000),to:ymd(limit-151*86400000),keep:limit-151*86400000<now-2*86400000}];
   const found=new Map();let reached=0,lastWhy='';
@@ -5285,8 +5302,8 @@ async function fanNationalFormLive(env,name,kickoff,espnId=null) {
     for(const g of games || []) {
       seen++;
       if(g.at>=limit || g.at<limit-300*86400000)continue;
-      const isH=(id && g.h.i===id) || g.h.n.some(n=>fanNationalKey(n)===want);
-      const isA=!isH && ((id && g.a.i===id) || g.a.n.some(n=>fanNationalKey(n)===want));
+      const isH=sideIs(g.h);
+      const isA=!isH && sideIs(g.a);
       if(!isH && !isA)continue;
       const own=isH?g.h:g.a,other=isH?g.a:g.h;
       found.set(g.id,{date:new Date(g.at).toISOString(),opponent:String(other.n[0] || 'Opponent').slice(0,100),venue:isH?'home':'away',goalsFor:own.s,goalsAgainst:other.s,result:own.s>other.s?'W':own.s<other.s?'L':'D'});
@@ -5297,7 +5314,8 @@ async function fanNationalFormLive(env,name,kickoff,espnId=null) {
     for(const slug of slugs)for(const ch of chs)jobs.push(fanNationalSlug(env,slug,ch.from,ch.to,ch.keep,stat).then(g=>{reached++;return g;}).catch(e=>{lastWhy=String(e?.message || '');return null;}));
     for(const games of await Promise.all(jobs))absorb(games);
   };
-  await scan(FAN_NATIONAL_CORE);
+  const caf=FAN_NATIONAL_CAF.has(want) && !wantTag;
+  await scan(caf?FAN_NATIONAL_CAF_FIRST:FAN_NATIONAL_CORE);
   // Other confederations' competitions are only asked when Europe plus friendlies did not give enough games.
   if(!found.size) {
     const weeks=[];
