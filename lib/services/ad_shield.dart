@@ -125,6 +125,32 @@ class AdShield {
       }
       for(var h=0;h<hits.length;h++)handleAd(doc,win,hits[h]);
     }
+    // ---- floating "Ad" cards (chat / notification style ads that carry a
+    //      small "Ad" badge and an X). Hides the whole floating card, never
+    //      clicks it, never touches anything holding the real player.
+    function badgeAds(doc){
+      var win=doc.defaultView||window;
+      var nodes=doc.querySelectorAll('span,div,small,b,i,p,label');
+      for(var i=0;i<nodes.length&&i<4000;i++){
+        var e=nodes[i];
+        if(e.__dwBadge||e.children.length>0)continue;
+        var t=(e.textContent||'').trim();
+        if(!/^(ad|ads|advert|advertisement|sponsored|promoted)$/i.test(t))continue;
+        var r=e.getBoundingClientRect();
+        if(r.width>90||r.height>40)continue;
+        e.__dwBadge=1;
+        var cur=e;
+        for(var d=0;d<10&&cur&&cur!==doc.body&&cur!==doc.documentElement;d++){
+          var cs=win.getComputedStyle(cur);
+          if(cs.position==='fixed'||cs.position==='absolute'||cs.position==='sticky'){
+            if(!hasPlayer(cur)){hide(cur);cur.__dwDone=1}
+            break;
+          }
+          if(hasPlayer(cur))break;
+          cur=cur.parentElement;
+        }
+      }
+    }
     function frameDocs(doc){
       var out=[],fs=doc.querySelectorAll('iframe');
       for(var i=0;i<fs.length;i++){
@@ -176,8 +202,9 @@ class AdShield {
         }
         // 4. video ad overlay UI in the page and in same-origin frames
         adUi(document);
+        badgeAds(document);
         var fr=frameDocs(document);
-        for(var f=0;f<fr.length;f++)adUi(fr[f]);
+        for(var f=0;f<fr.length;f++){adUi(fr[f]);badgeAds(fr[f])}
       }catch(e){}
     }
     window.__dwShield=sweep;
