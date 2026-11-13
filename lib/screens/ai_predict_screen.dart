@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/safe_error_message.dart';
 import 'package:share_plus/share_plus.dart';
@@ -113,25 +114,75 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       );
       return;
     }
-    final amount = await showDialog<int>(
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final contactCtrl = TextEditingController(text: prefs.getString('ai_quota_whatsapp') ?? '');
+    int amount = 20;
+    String? formError;
+    final sent = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Request extra AI Predictions'),
-        content: const Text('Choose how many additional predictions you would like. Your request will be sent for admin approval.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          for (final n in [10, 20, 50])
-            FilledButton.tonal(onPressed: () => Navigator.pop(context, n), child: Text('+$n')),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          title: const Text('Request extra AI Predictions'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Choose how many additional predictions you would like and leave your WhatsApp number. We will message you there to agree the extra quota.'),
+              const SizedBox(height: 14),
+              Wrap(spacing: 8, children: [
+                for (final n in [10, 20, 50])
+                  ChoiceChip(
+                    label: Text('+$n'),
+                    selected: amount == n,
+                    onSelected: (_) => setDialog(() => amount = n),
+                  ),
+              ]),
+              const SizedBox(height: 14),
+              TextField(
+                controller: contactCtrl,
+                maxLength: 20,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+\- ()]'))],
+                onChanged: (_) {
+                  if (formError != null) setDialog(() => formError = null);
+                },
+                decoration: InputDecoration(
+                  labelText: 'Your WhatsApp number',
+                  hintText: '+234 801 234 5678',
+                  helperText: 'Required. Include your country code.',
+                  errorText: formError,
+                  counterText: '',
+                ),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () {
+                final digits = contactCtrl.text.replaceAll(RegExp(r'\D'), '');
+                if (digits.length < 7 || digits.length > 15) {
+                  setDialog(() => formError = 'Enter your WhatsApp number with country code');
+                  return;
+                }
+                Navigator.pop(context, {'amount': amount, 'contact': contactCtrl.text.trim()});
+              },
+              child: const Text('Send request'),
+            ),
+          ],
+        ),
       ),
     );
-    if (amount == null || !mounted) return;
+    contactCtrl.dispose();
+    if (sent == null || !mounted) return;
+    final int amount0 = sent['amount'] as int;
+    final String contact = sent['contact'] as String;
+    await prefs.setString('ai_quota_whatsapp', contact);
     setState(() => _quotaBusy = true);
     try {
-      await FanZoneService.call('ai-quota/request', body: {'amount': amount});
+      await FanZoneService.call('ai-quota/request', body: {'amount': amount0, 'contact': contact});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Your request for $amount extra predictions was submitted.')),
+        SnackBar(content: Text('Your request for $amount0 extra predictions was sent. We will message you on WhatsApp.')),
       );
       await _loadExtraQuotaStatus();
     } catch (e) {
