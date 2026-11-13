@@ -20,6 +20,7 @@ import 'fan_x_widgets.dart';
 import 'fan_mentions.dart';
 import 'fan_profile_screen.dart';
 import 'fan_thread_screen.dart';
+import 'fan_video_viewer_screen.dart';
 import 'promote_post_screen.dart';
 import '../utils/safe_error_message.dart';
 
@@ -57,6 +58,207 @@ class _FanPostCardState extends State<FanPostCard> {
   String? _translatedText;
   String? _translationTarget;
   String? _translationError;
+  /// Full-screen X-style video viewer opened from the post page.
+  final ValueNotifier<int> _viewerRev = ValueNotifier<int>(0);
+  bool _viewerOpen = false;
+
+  @override
+  void dispose() {
+    _viewerRev.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openVideoViewer(String link) async {
+    if (_viewerOpen) return;
+    _viewerOpen = true;
+    final mine = '${_post['user_id']}' == widget.viewerId;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => FanVideoViewerScreen(
+          url: link,
+          refresh: _viewerRev,
+          menuBuilder: (_) => PopupMenuButton<String>(
+            tooltip: 'More',
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.more_vert_rounded, size: 21),
+            onSelected: (v) {
+              if (v == 'open') {
+                openExternally(link);
+              } else {
+                _action(v);
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'share', child: Text('Share post')),
+              PopupMenuItem(
+                value: 'bookmark',
+                child: Text(
+                  PostBookmarks.instance.isBookmarked('${_post['id']}')
+                      ? 'Remove bookmark'
+                      : 'Bookmark post',
+                ),
+              ),
+              const PopupMenuItem(value: 'open', child: Text('Open original link')),
+              if (!mine)
+                const PopupMenuItem(value: 'report', child: Text('Report post')),
+            ],
+          ),
+          footerBuilder: (_) => _viewerFooter(mine),
+        ),
+      ),
+    );
+    _viewerOpen = false;
+  }
+
+  Widget _viewerFooter(bool mine) {
+    final liked = _post['liked'] == 1 || _post['liked'] == true;
+    final handle = '@${FanZoneService.handleOf(_post, '${_post['user_id']}')}';
+    final text = '${_post['text']}';
+    var caption = text;
+    for (final link in fanPostLinks(text)) {
+      caption = caption.replaceAll(link, '');
+    }
+    caption = caption.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+    const white = Colors.white;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Row(
+            children: [
+              FanAvatar(
+                name: '${_post['name']}',
+                seed: '${_post['user_id']}',
+                size: 44,
+                imageUrl: FanZoneService.avatarUrl(
+                  '${_post['user_id']}',
+                  _post['avatar_at'],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${_post['name']}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      handle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Color(0xFF8B98A5), fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+              if (!mine)
+                OutlinedButton.icon(
+                  onPressed: _followBusy ? null : _follow,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: white,
+                    side: const BorderSide(color: Color(0xFF536471)),
+                    minimumSize: const Size(72, 38),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    shape: const StadiumBorder(),
+                  ),
+                  icon: Icon(
+                    _followed ? Icons.check_rounded : Icons.person_add_alt_1_outlined,
+                    size: 18,
+                  ),
+                  label: Text(
+                    _followBusy
+                        ? '…'
+                        : !_followKnown
+                        ? 'Retry'
+                        : _followed
+                        ? 'Following'
+                        : 'Follow',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (caption.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Text(
+              caption,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: white, fontSize: 16, height: 1.35),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: _viewerActions(liked),
+        ),
+      ],
+    );
+  }
+
+  Widget _viewerActions(bool liked) {
+    final reposts = (_post['reposts'] as num?)?.toInt() ?? 0;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        XAction(
+          icon: Icons.chat_bubble_outline_rounded,
+          count: (_post['comments'] as num?)?.toInt() ?? 0,
+          tooltip: 'Reply to post',
+          onTap: () {
+            Navigator.of(context).maybePop();
+            widget.onReply?.call();
+          },
+        ),
+        XAction(
+          icon: Icons.repeat_rounded,
+          count: reposts,
+          color: const Color(0xFF00BA7C),
+          active: _reposted,
+          tooltip: _reposted ? 'Reposted' : 'Repost or quote',
+          onTap: _repostBusy ? null : _repostMenu,
+        ),
+        XAction(
+          icon: liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          count: (_post['likes'] as num?)?.toInt() ?? 0,
+          color: const Color(0xFFF91880),
+          active: liked,
+          tooltip: liked ? 'Unlike post' : 'Like post',
+          onTap: _busy ? null : _like,
+        ),
+        ValueListenableBuilder<Set<String>>(
+          valueListenable: PostBookmarks.instance.ids,
+          builder: (_, saved, _) {
+            final on = saved.contains('${_post['id']}');
+            return XAction(
+              icon: on ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+              color: const Color(0xFF1D9BF0),
+              active: on,
+              tooltip: on ? 'Remove bookmark' : 'Bookmark post',
+              onTap: () => _action('bookmark'),
+            );
+          },
+        ),
+        XAction(
+          icon: Icons.ios_share_rounded,
+          tooltip: 'Share post',
+          onTap: () => _action('share'),
+        ),
+      ],
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -918,9 +1120,10 @@ class _FanPostCardState extends State<FanPostCard> {
             key: ValueKey(link),
             url: link,
             inline: true,
-            // Feed: tap opens the post. Post page: video plays in place.
+            // Feed: tap opens the post. Post page: tap opens the full-screen
+            // X-style video viewer.
             onTapPreview: widget.openThread ? _thread : null,
-            autoPlay: !widget.openThread && link == videoLinks.first,
+            onOpenViewer: widget.openThread ? null : () => _openVideoViewer(link),
           ),
       ],
     );
@@ -952,6 +1155,11 @@ class _FanPostCardState extends State<FanPostCard> {
 
   @override
   Widget build(BuildContext context) {
+    if (_viewerOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _viewerOpen) _viewerRev.value++;
+      });
+    }
     final mine = '${_post['user_id']}' == widget.viewerId;
     final liked = _post['liked'] == 1 || _post['liked'] == true;
     final handle = '@${FanZoneService.handleOf(_post, '${_post['user_id']}')}';
