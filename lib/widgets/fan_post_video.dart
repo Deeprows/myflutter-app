@@ -28,12 +28,22 @@ class FanPostVideo extends StatefulWidget {
 
   /// Start playing as soon as the card is shown (used on the post page).
   final bool autoPlay;
+
+  /// Post page: tapping the preview opens the full-screen, X-style video
+  /// viewer instead of playing inside the card.
+  final VoidCallback? onOpenViewer;
+
+  /// True inside the full-screen viewer: no card border/margin, the video is
+  /// centred and uses the space it is given.
+  final bool viewer;
   const FanPostVideo({
     super.key,
     required this.url,
     required this.inline,
     this.onTapPreview,
     this.autoPlay = false,
+    this.onOpenViewer,
+    this.viewer = false,
   });
   @override
   State<FanPostVideo> createState() => _FanPostVideoState();
@@ -566,7 +576,9 @@ class _FanPostVideoState extends State<FanPostVideo>
     if (_dmBlocked) return _blockedCard();
     final thumb = _youtubeThumbnail ?? _tiktokThumb;
     return InkWell(
-      onTap: widget.onTapPreview ?? _playTap,
+      onTap: widget.viewer
+          ? _playTap
+          : (widget.onTapPreview ?? widget.onOpenViewer ?? _playTap),
       child: Stack(
         fit: StackFit.expand,
         alignment: Alignment.center,
@@ -617,7 +629,8 @@ class _FanPostVideoState extends State<FanPostVideo>
       WebViewWidget(controller: _controller!),
       if (_loading) const LinearProgressIndicator(),
       Positioned(
-        top: 4,
+        top: widget.viewer ? null : 4,
+        bottom: widget.viewer ? 4 : null,
         right: 4,
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -639,6 +652,7 @@ class _FanPostVideoState extends State<FanPostVideo>
               ),
               const SizedBox(width: 4),
             ],
+            if (!widget.viewer) ...[
             IconButton.filled(
               visualDensity: VisualDensity.compact,
               style: IconButton.styleFrom(
@@ -660,6 +674,7 @@ class _FanPostVideoState extends State<FanPostVideo>
               tooltip: 'Stop video',
               icon: const Icon(Icons.close, size: 18),
             ),
+            ],
           ],
         ),
       ),
@@ -672,6 +687,38 @@ class _FanPostVideoState extends State<FanPostVideo>
     // In the feed keep tall (portrait) videos from taking over the screen;
     // on the post page they can use most of it.
     final maxFraction = widget.onTapPreview != null ? 0.55 : 0.78;
+    if (widget.viewer) {
+      return PopScope(
+        canPop: _fullscreenEntry == null,
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop && _fullscreenEntry != null) _backFromFullscreen();
+        },
+        child: ColoredBox(
+          color: Colors.black,
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final w = box.maxWidth.isFinite ? box.maxWidth : screen.width;
+              _boxW = w;
+              final maxH = box.maxHeight.isFinite ? box.maxHeight : screen.height;
+              final h = (w / (_manualRatio ?? _ratio))
+                  .clamp(w * 0.45, math.max(w * 0.45, maxH * 0.92))
+                  .toDouble();
+              return Center(
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOut,
+                  child: SizedBox(
+                    width: w,
+                    height: h,
+                    child: _controller != null && !_failed ? _player() : _preview(),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
     return PopScope(
       canPop: _fullscreenEntry == null,
       onPopInvokedWithResult: (didPop, result) {
