@@ -635,23 +635,6 @@ class _FanPostVideoState extends State<FanPostVideo>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_info.kind == EmbedKind.tiktok ||
-                _info.kind == EmbedKind.facebook ||
-                _info.kind == EmbedKind.dailymotion) ...[
-              // Some TikTok / Facebook videos refuse to be embedded (private,
-              // region-locked, owner turned embedding off): open the original.
-              IconButton.filled(
-                visualDensity: VisualDensity.compact,
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.black54,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () => openExternally(widget.url),
-                tooltip: 'Open original',
-                icon: const Icon(Icons.open_in_new_rounded, size: 18),
-              ),
-              const SizedBox(width: 4),
-            ],
             if (!widget.viewer) ...[
             IconButton.filled(
               visualDensity: VisualDensity.compact,
