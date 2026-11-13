@@ -13,8 +13,14 @@ import '../utils/safe_error_message.dart';
 
 /// Results board: every prediction the user made, what happened, the points it
 /// earned and how that reflects on the Ranks table.
+///
+/// With [userId] it shows ANOTHER fan's prediction history instead (opened
+/// from their profile). The server only sends predictions whose match has a
+/// verified final score, so pending picks of other fans are never visible.
 class PredictionResultsScreen extends StatefulWidget {
-  const PredictionResultsScreen({super.key});
+  final String? userId;
+  final String? userName;
+  const PredictionResultsScreen({super.key, this.userId, this.userName});
 
   @override
   State<PredictionResultsScreen> createState() =>
@@ -30,6 +36,13 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
   bool _loading = true;
   String? _error;
   _Filter _filter = _Filter.all;
+
+  /// True when viewing somebody else's history (read-only, settled only).
+  bool get _other => widget.userId != null;
+  String get _who {
+    final n = (widget.userName ?? '').trim();
+    return n.isEmpty ? 'This fan' : n;
+  }
 
   @override
   void initState() {
@@ -47,6 +60,23 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
       _error = null;
     });
     try {
+      if (_other) {
+        final data = await FanZoneService.call(
+          'social/predictions',
+          query: {'id': widget.userId!},
+        );
+        if (!mounted) return;
+        setState(() {
+          _picks = FanZoneService.rows(data['picks'])
+            ..sort(
+              (a, b) => ((b['kickoff'] as num?) ?? 0).compareTo(
+                (a['kickoff'] as num?) ?? 0,
+              ),
+            );
+          _loading = false;
+        });
+        return;
+      }
       // Opening the state also lets the server check any finished matches.
       final data = await FanZoneService.call('state');
       final id = '${data['id'] ?? ''}';
@@ -145,7 +175,7 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
           break; // refunded push
       }
     }
-    final week = (_me?['points'] as num?)?.toInt();
+    final week = _other ? null : (_me?['points'] as num?)?.toInt();
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       padding: const EdgeInsets.all(14),
@@ -164,9 +194,9 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'YOUR POINTS',
-                      style: TextStyle(
+                    Text(
+                      _other ? 'POINTS' : 'YOUR POINTS',
+                      style: const TextStyle(
                         fontSize: 11,
                         letterSpacing: 1.2,
                         fontWeight: FontWeight.w900,
@@ -182,12 +212,42 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
                       ),
                     ),
                     Text(
-                      week != null ? 'this week in Ranks' : 'from settled predictions',
+                      week != null && !_other
+                          ? 'this week in Ranks'
+                          : 'from settled predictions',
                       style: const TextStyle(fontSize: 12, color: Colors.white70),
                     ),
                   ],
                 ),
               ),
+              if (_other)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Text(
+                      'SETTLED',
+                      style: TextStyle(
+                        fontSize: 11,
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white70,
+                      ),
+                    ),
+                    Text(
+                      '${exact + correct + missed}',
+                      style: const TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const Text(
+                      'predictions with a result',
+                      style: TextStyle(fontSize: 12, color: Colors.white70),
+                    ),
+                  ],
+                )
+              else
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -228,7 +288,7 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
                 _stat('$exact', 'Exact', const Color(0xFF69F0AE)),
                 _stat('$correct', 'Correct', const Color(0xFF82B1FF)),
                 _stat('$missed', 'Missed', const Color(0xFFFF8A80)),
-                _stat('$pending', 'Pending', Colors.white70),
+                if (!_other) _stat('$pending', 'Pending', Colors.white70),
               ],
             ),
           ),
@@ -242,9 +302,9 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
                 foregroundColor: const Color(0xFF3F2BA8),
               ),
               icon: const Icon(Icons.leaderboard_rounded, size: 18),
-              label: const Text(
-                'See where you stand in Ranks',
-                style: TextStyle(fontWeight: FontWeight.w900),
+              label: Text(
+                _other ? 'Open Ranks' : 'See where you stand in Ranks',
+                style: const TextStyle(fontWeight: FontWeight.w900),
               ),
             ),
           ),
@@ -263,17 +323,17 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
       3 => (
         Ui.green,
         '+3 Exact',
-        'Exact result: 3 points added to your Ranks.',
+        _other ? 'Exact result: 3 points.' : 'Exact result: 3 points added to your Ranks.',
       ),
       1 => (
         const Color(0xFF42A5F5),
         '+1 Correct',
-        'Right outcome: 1 point added to your Ranks.',
+        _other ? 'Right outcome: 1 point.' : 'Right outcome: 1 point added to your Ranks.',
       ),
       0 => (
         const Color(0xFFEF5350),
         '0 Missed',
-        'Not this time: no points added to Ranks.',
+        _other ? 'Missed: no points.' : 'Not this time: no points added to Ranks.',
       ),
       _ =>
         push
@@ -345,7 +405,7 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
           Row(
             children: [
               Expanded(
-                child: _kv('My prediction', fanPredictionLabel(p)),
+                child: _kv(_other ? 'Prediction' : 'My prediction', fanPredictionLabel(p)),
               ),
               Expanded(
                 child: _kv(
@@ -435,10 +495,27 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
     return Scaffold(
       backgroundColor: Ui.bg,
       appBar: AppBar(
-        title: const Text(
-          'My results',
-          style: TextStyle(fontWeight: FontWeight.w900),
-        ),
+        title: _other
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Prediction history',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
+                  Text(
+                    _who,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: Ui.muted),
+                  ),
+                ],
+              )
+            : const Text(
+                'My results',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
         actions: [
           IconButton(
             tooltip: 'Ranks',
@@ -462,7 +539,7 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
                   if (mounted) _load();
                 },
                 icon: const Icon(Icons.login_rounded),
-                label: const Text('Sign in to see your results'),
+                label: Text(_other ? 'Sign in to see this history' : 'Sign in to see your results'),
               ),
             )
           : RefreshIndicator(
@@ -493,8 +570,8 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
                         children: [
                           Icon(Icons.how_to_vote_rounded, size: 46, color: Ui.dim),
                           const SizedBox(height: 10),
-                          const Text(
-                            'No predictions yet',
+                          Text(
+                            _other ? 'No settled predictions yet' : 'No predictions yet',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w900,
@@ -502,7 +579,9 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Predict a match on AI Predict or in the Thread. Your results and points show up here after the final whistle.',
+                            _other
+                                ? '$_who has no finished predictions to show yet. Results appear here after the final whistle.'
+                                : 'Predict a match on AI Predict or in the Thread. Your results and points show up here after the final whistle.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Ui.muted),
                           ),
@@ -512,7 +591,7 @@ class _PredictionResultsScreenState extends State<PredictionResultsScreen> {
                   if (_picks.isNotEmpty) ...[
                     _summary(),
                     const SizedBox(height: 6),
-                    _filters(),
+                    if (!_other) _filters(),
                     const SizedBox(height: 4),
                     if (shown.isEmpty)
                       Padding(
