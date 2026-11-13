@@ -2171,11 +2171,16 @@ async function fanZone(request, env, url, ctx) {
       if(request.method==='GET') {
         const credit=await db.prepare('SELECT granted_total,consumed_total FROM fan_ai_extra_credits WHERE user_id=?').bind(userId).first();
         const pending=await db.prepare("SELECT id,amount,note,status,created_at FROM fan_ai_quota_requests WHERE user_id=? AND status='pending' ORDER BY created_at DESC LIMIT 1").bind(userId).first();
-        return json({ok:true,granted:Number(credit?.granted_total||0),consumed:Number(credit?.consumed_total||0),remaining:Math.max(0,Number(credit?.granted_total||0)-Number(credit?.consumed_total||0)),pending:pending||null});
+        // How many analyses this account has run today (UTC), read without counting a new one.
+        const usedRow=await db.prepare('SELECT count FROM fan_ai_limits WHERE bucket=? AND expires>?').bind(`day:${userId}:${Math.floor(Date.now()/86400000)}`,Date.now()).first();
+        const usedToday=Number(usedRow?.count||0);
+        return json({ok:true,used_today:usedToday,daily_limit:FAN_AI_PREMIUM_ANALYSIS_LIMIT_PER_DAY,exhausted:usedToday>=FAN_AI_PREMIUM_ANALYSIS_LIMIT_PER_DAY,granted:Number(credit?.granted_total||0),consumed:Number(credit?.consumed_total||0),remaining:Math.max(0,Number(credit?.granted_total||0)-Number(credit?.consumed_total||0)),pending:pending||null});
       }
       const body=await request.json().catch(()=>({}));
       const amount=Number(body.amount), note=String(body.note||'').trim().slice(0,500);
       const contact=String(body.contact||'').trim().slice(0,30), contactDigits=contact.replace(/\D/g,'');
+      const usedNow=await db.prepare('SELECT count FROM fan_ai_limits WHERE bucket=? AND expires>?').bind(`day:${userId}:${Math.floor(Date.now()/86400000)}`,Date.now()).first();
+      if(Number(usedNow?.count||0)<FAN_AI_PREMIUM_ANALYSIS_LIMIT_PER_DAY)return fail('Extra predictions can be requested once you have used all 35 daily analyses.',403);
       if(![10,20,50].includes(amount))return fail('Request amount must be 10, 20, or 50.');
       if(contactDigits.length<7||contactDigits.length>15)return fail('Enter your WhatsApp number with country code, e.g. +234 801 234 5678');
       const pending=await db.prepare("SELECT id FROM fan_ai_quota_requests WHERE user_id=? AND status='pending'").bind(userId).first();
