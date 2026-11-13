@@ -1858,6 +1858,35 @@ async function subAdmin(request, env, url) {
         .bind(code)
         .run();
       note = Number(r?.meta?.changes) === 1 ? "Token cancelled." : "That token was not found (or is already used).";
+    } else if (action === "quota_grant" || action === "quota_reject") {
+      // Extra AI-prediction quota asked from the app (Request more).
+      await fanInit(env.DB);
+      const qid = String(form.get("quota_id") || "").trim();
+      const row = await env.DB.prepare(
+        "SELECT * FROM fan_ai_quota_requests WHERE id = ? AND status = 'pending'"
+      ).bind(qid).first();
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (!row) {
+        note = "That quota request was already answered.";
+      } else if (action === "quota_reject") {
+        await env.DB.prepare(
+          "UPDATE fan_ai_quota_requests SET status = 'rejected', updated_at = ? WHERE id = ?"
+        ).bind(nowSec, qid).run();
+        note = "Quota request dismissed.";
+      } else {
+        const granted = parseInt(String(form.get("granted") || ""), 10);
+        if (!Number.isInteger(granted) || granted < 1 || granted > 500) {
+          note = "Quota must be between 1 and 500.";
+        } else {
+          await env.DB.prepare(
+            "UPDATE fan_ai_quota_requests SET status = 'approved', granted = ?, updated_at = ? WHERE id = ?"
+          ).bind(granted, nowSec, qid).run();
+          await env.DB.prepare(
+            "INSERT INTO fan_ai_extra_credits(user_id,granted_total,consumed_total,updated_at) VALUES(?,?,0,?) ON CONFLICT(user_id) DO UPDATE SET granted_total=granted_total+excluded.granted_total,updated_at=excluded.updated_at"
+          ).bind(row.user_id, granted, nowSec).run();
+          note = `+${granted} AI predictions granted to ${row.user_name || "the user"}. It shows in their app within seconds.`;
+        }
+      }
     } else if (action === "dismiss") {
       await env.DB.prepare("DELETE FROM token_requests WHERE install_id = ?")
         .bind(id)
@@ -1907,6 +1936,33 @@ ${r.days ? `<div style="font-size:13.5px;margin-bottom:6px;color:#22e07a">Wants 
         .join("")
     : `<p style="color:#8d99ab;font-size:13px">No requests waiting.</p>`;
 
+  // Pending "Request more" asks for extra AI predictions, newest first.
+  let quotaReqs = [];
+  try {
+    await fanInit(env.DB);
+    quotaReqs = (
+      await env.DB.prepare(
+        "SELECT id, user_name, amount, contact, created_at FROM fan_ai_quota_requests WHERE status = 'pending' ORDER BY created_at DESC LIMIT 50"
+      ).all()
+    ).results || [];
+  } catch (e) {
+    console.error("quota list", e && e.message);
+  }
+  const quotaHtml = quotaReqs.length
+    ? quotaReqs
+        .map(
+          (r) => `<form method="post" style="background:#101722;padding:10px;border-radius:8px;margin:8px 0">
+<input type="hidden" name="token" value="${tk}"><input type="hidden" name="quota_id" value="${esc(r.id)}">
+<div style="font-size:12.5px;margin-bottom:6px"><b>${esc(r.user_name || "User")}</b> &middot; ${esc(new Date(Number(r.created_at) * 1000).toISOString().slice(0, 16).replace("T", " "))}${r.contact ? ` &middot; <b>${esc(r.contact)}</b>` : ""}${waLink(r.contact)}</div>
+<div style="font-size:13.5px;margin-bottom:6px;color:#22e07a">Wants <b>+${esc(r.amount)} predictions</b></div>
+<input name="granted" type="number" min="1" max="500" value="${esc(r.amount)}" style="width:80px;padding:9px">
+<button name="action" value="quota_grant" style="${btn}">Grant quota</button>
+<button name="action" value="quota_reject" style="${btn}">Dismiss</button>
+</form>`
+        )
+        .join("")
+    : `<p style="color:#8d99ab;font-size:13px">No quota requests waiting.</p>`;
+
   const unused = (
     await env.DB.prepare(
       "SELECT token, days, bound_to, note FROM tokens WHERE redeemed_by IS NULL ORDER BY created_at DESC LIMIT 25"
@@ -1951,11 +2007,13 @@ ${r.days ? `<div style="font-size:13.5px;margin-bottom:6px;color:#22e07a">Wants 
     : "";
 
   return html(
-    `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ad-free admin</title>
+    `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>${quotaReqs.length ? `(${quotaReqs.length}) ` : ""}Ad-free admin</title>
 <body style="font-family:sans-serif;background:#080b10;color:#e8edf5;padding:18px;max-width:560px;margin:auto">
 <h2>Ad-free admin</h2>
 ${note ? `<p style="background:#16202e;padding:10px;border-radius:8px">${esc(note)}</p>` : ""}
 ${madeHtml}
+<h3>AI quota requests${quotaReqs.length ? ` (${quotaReqs.length})` : ""}</h3>
+${quotaHtml}
 <h3>Token requests</h3>
 ${reqHtml}
 <h3>Make tokens</h3>
@@ -2061,6 +2119,8 @@ async function fanInit(db) {
         ['fan_comments',[['parent_id',"TEXT NOT NULL DEFAULT ''"],['root_id',"TEXT NOT NULL DEFAULT ''"],['image_key',"TEXT NOT NULL DEFAULT ''"],['edited_at',"INTEGER NOT NULL DEFAULT 0"]]],
         ['fan_posts',[['quote_of',"TEXT NOT NULL DEFAULT ''"],['edited_at',"INTEGER NOT NULL DEFAULT 0"],['is_ad',"INTEGER NOT NULL DEFAULT 0"],['pinned_at',"INTEGER NOT NULL DEFAULT 0"],['pin_until',"INTEGER NOT NULL DEFAULT 0"]]],
         ['fan_users',[['premium_until',"INTEGER NOT NULL DEFAULT 0"]]],
+        // WhatsApp number the person leaves when asking for extra AI predictions.
+        ['fan_ai_quota_requests',[['contact',"TEXT NOT NULL DEFAULT ''"]]],
       ]) {
         const columns=(await db.prepare(`PRAGMA table_info(${table})`).all()).results;
         for(const [name,definition] of list) {
@@ -2115,18 +2175,20 @@ async function fanZone(request, env, url, ctx) {
       }
       const body=await request.json().catch(()=>({}));
       const amount=Number(body.amount), note=String(body.note||'').trim().slice(0,500);
+      const contact=String(body.contact||'').trim().slice(0,30), contactDigits=contact.replace(/\D/g,'');
       if(![10,20,50].includes(amount))return fail('Request amount must be 10, 20, or 50.');
+      if(contactDigits.length<7||contactDigits.length>15)return fail('Enter your WhatsApp number with country code, e.g. +234 801 234 5678');
       const pending=await db.prepare("SELECT id FROM fan_ai_quota_requests WHERE user_id=? AND status='pending'").bind(userId).first();
       if(pending)return fail('You already have a pending extra predictions request.',409);
       const id=crypto.randomUUID(),now=Math.floor(Date.now()/1000),userName=String(identity.name||'').trim().slice(0,80);
-      await db.prepare("INSERT INTO fan_ai_quota_requests(id,user_id,user_name,amount,note,status,created_at,updated_at) VALUES(?,?,?,?,?,'pending',?,?)").bind(id,userId,userName,amount,note,now,now).run();
+      await db.prepare("INSERT INTO fan_ai_quota_requests(id,user_id,user_name,amount,note,contact,status,created_at,updated_at) VALUES(?,?,?,?,?,?,'pending',?,?)").bind(id,userId,userName,amount,note,contact,now,now).run();
       // Notify the configured admin account on every newly submitted request.
       // Push is best-effort: a missing Firebase secret/device never blocks the request.
       const adminEmail=String(env.AI_QUOTA_ADMIN_EMAIL || '').trim().toLowerCase();
       if(adminEmail) {
         const admin=await db.prepare('SELECT id FROM fan_accounts WHERE lower(email)=? LIMIT 1').bind(adminEmail).first();
         if(admin) {
-          const push=fanPush(env,admin.id,{title:'AI prediction quota request',body:`${userName || 'A Premium user'} requested +${amount} predictions`,kind:'ai_quota_request',postId:'',actorId:userId,nid:id});
+          const push=fanPush(env,admin.id,{title:'AI prediction quota request',body:`${userName || 'A Premium user'} (${contact}) requested +${amount} predictions`,kind:'ai_quota_request',postId:'',actorId:userId,nid:id});
           if(ctx && typeof ctx.waitUntil==='function')ctx.waitUntil(push);else await push;
         }
       }
