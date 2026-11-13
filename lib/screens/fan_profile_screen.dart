@@ -12,6 +12,7 @@ import '../widgets/fan_club_picker.dart';
 import '../theme/app_theme.dart';
 import 'fan_posts_feed.dart';
 import 'guide_screen.dart';
+import 'prediction_results_screen.dart';
 import 'support_us_screen.dart';
 import 'fan_widgets.dart';
 import 'fan_x_widgets.dart';
@@ -249,6 +250,20 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
       p['is_premium'] == true ||
       (p['is_me'] == true && SubscriptionService.instance.isPremium);
 
+  void _openPredictionHistory(Map<String, dynamic> p) {
+    final mine = p['is_me'] == true;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => mine
+            ? const PredictionResultsScreen()
+            : PredictionResultsScreen(
+                userId: '${p['id'] ?? widget.userId}',
+                userName: _text(p['name']),
+              ),
+      ),
+    );
+  }
+
   Widget _header() {
     final p = _profile!, stats = Map<String, dynamic>.from(p['stats'] as Map);
     final badges = FanZoneService.rows(p['achievements']);
@@ -483,6 +498,25 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 4),
+              // First button under Achievements: the fan's settled prediction
+              // results. Your own profile opens your full "My results" page.
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonalIcon(
+                  onPressed: () => _openPredictionHistory(p),
+                  icon: const Icon(Icons.history_rounded, size: 20),
+                  label: Text(
+                    'Prediction history (${stats['settled'] ?? 0})',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 44),
+                    shape: const StadiumBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
             ],
           ),
         ),
