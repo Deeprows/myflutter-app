@@ -198,8 +198,10 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   Widget _extraQuotaCard() {
     if (!SubscriptionService.instance.isPremium) return const SizedBox.shrink();
     final status = _extraQuotaStatus;
-    final remaining = status?['remaining'];
-    final pending = status?['pending'];
+    // Only for Premium users who have used up the 35 included analyses today.
+    if (status == null || status['exhausted'] != true) return const SizedBox.shrink();
+    final remaining = status['remaining'];
+    final pending = status['pending'];
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       color: const Color(0xFF8E6BFF).withValues(alpha: .10),
@@ -211,7 +213,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Extra AI Predictions', style: TextStyle(fontWeight: FontWeight.w900)),
-            Text(pending is Map ? 'Request pending admin approval' : '35 daily included · ${remaining ?? 0} extra available', style: TextStyle(color: Ui.muted, fontSize: 12)),
+            Text(pending is Map ? 'Request pending admin approval' : 'Daily 35 used · ${remaining ?? 0} extra available', style: TextStyle(color: Ui.muted, fontSize: 12)),
           ])),
           FilledButton.tonal(
             onPressed: _quotaBusy || pending is Map ? null : _requestExtraPredictions,
@@ -1386,6 +1388,8 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
       if (mounted && run == _run) setState(() => _done++);
     }
     if (mounted && run == _run) setState(() => _busy = false);
+    // The daily count has changed: the extra-quota card may now need to appear.
+    if (mounted && SubscriptionService.instance.isPremium) unawaited(_loadExtraQuotaStatus());
   }
 
   /// Stops the analysis that is running. Matches already analysed keep their
