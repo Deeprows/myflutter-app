@@ -286,37 +286,25 @@ class _FanPostVideoState extends State<FanPostVideo>
     super.dispose();
   }
 
-  /// Two ways for video files / m3u8: 0 = with the player origin, 1 = without
-  /// it (the stream's own site as origin). When 0 fails, 1 takes over.
+  /// 0 = app player origin, 1 = same origin but no Referer, 2 = stream's own
+  /// origin (see the match player page).
   int _attempt = 0;
 
-  /// Two ways for embed pages: 0 = inside a page that presents itself as the
-  /// player origin, 1 = opened directly with no player origin. When the host
-  /// refuses 0, 1 takes over; tapping "Retry video" after a failure switches.
-  late int _embedMode = RemoteConfig.instance.embedMethodFor(_url);
+  /// Embed pages: 0 = iframe on a page presenting as the player origin,
+  /// 1 = direct with that origin as Referer, 2 = direct, no Referer.
+  /// Tapping "Retry video" after a failure tries the next one.
+  int _embedMode = 0;
 
   String _embedBase(String url, String origin) => url.toLowerCase().startsWith('http://')
       ? origin.replaceFirst('https://', 'http://')
       : origin;
 
   void _playTap() {
-    if (_failed) _embedMode = (_embedMode + 1) % 2;
+    if (_failed) _embedMode = (_embedMode + 1) % 4;
     _play();
   }
 
-  void _embedRefused(HttpResponseError e) {
-    final code = e.response?.statusCode ?? 0;
-    final uri = e.request?.uri ?? e.response?.uri;
-    if (code < 400 || uri == null || !mounted || _embedMode != 0) return;
-    final target = Uri.tryParse(StreamResolver.resolve(_url).url);
-    if (target == null || uri.host != target.host || uri.path != target.path) {
-      return;
-    }
-    _embedMode = 1;
-    _play();
-  }
-
-  bool get _ownOrigin => _attempt >= 1;
+  bool get _ownOrigin => _attempt >= 2;
 
   String _streamOrigin(String url) {
     final u = Uri.tryParse(url);
@@ -345,7 +333,7 @@ class _FanPostVideoState extends State<FanPostVideo>
       ..setBackgroundColor(Colors.black)
       ..addJavaScriptChannel('FanSize', onMessageReceived: (m) => _onMeasured(m.message))
       ..addJavaScriptChannel('DwPlayer', onMessageReceived: (m) {
-        if (m.message == 'fail' && _attempt < 1 && mounted) {
+        if (m.message == 'fail' && _attempt < 2 && mounted) {
           _play(attempt: _attempt + 1);
         }
       })
@@ -372,7 +360,6 @@ class _FanPostVideoState extends State<FanPostVideo>
                 _loading = false;
               });
           },
-          onHttpError: _embedRefused,
           onNavigationRequest: _navigation,
         ),
       );
@@ -457,7 +444,7 @@ class _FanPostVideoState extends State<FanPostVideo>
       } else if (stream.usesHtmlPlayer) {
         await c.setUserAgent(AppConfig.userAgent);
         await _loadHtml(c,
-          buildPlayerHtml(stream, lowQuality: false),
+          buildPlayerHtml(stream, lowQuality: false, noReferrer: _attempt == 1),
           baseUrl: _ownOrigin ? _streamOrigin(stream.url) : _streamBase(stream.url),
         );
       } else if (Uri.parse(_url).host == 'www.youtube.com' &&
@@ -471,15 +458,25 @@ class _FanPostVideoState extends State<FanPostVideo>
         // Embed page: same desktop-like agent as the match page's player.
         await c.setUserAgent(AppConfig.userAgent);
         final target = stream.kind == StreamKind.invalid ? _url : stream.url;
-        if (_embedMode == 0 && stream.kind == StreamKind.embed) {
+        if (_embedMode <= 1 && stream.kind == StreamKind.embed) {
           final src = const HtmlEscape(HtmlEscapeMode.attribute).convert(target);
           await _loadHtml(c,
             '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head><body style="margin:0;background:#000"><iframe src="$src" style="position:fixed;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
-            baseUrl: _embedBase(target, AppConfig.playerOrigin),
+            baseUrl: _embedBase(
+                target,
+                _embedMode == 0
+                    ? RemoteConfig.instance.embedPageOrigin
+                    : RemoteConfig.instance.altEmbedPageOrigin),
           );
         } else {
           _htmlMode = false;
-          await c.loadRequest(Uri.parse(target));
+          if (_embedMode == 2 && stream.kind == StreamKind.embed) {
+            await c.loadRequest(Uri.parse(target), headers: {
+              'Referer': _embedBase(target, RemoteConfig.instance.embedPageOrigin)
+            });
+          } else {
+            await c.loadRequest(Uri.parse(target));
+          }
         }
       }
     } catch (_) {
