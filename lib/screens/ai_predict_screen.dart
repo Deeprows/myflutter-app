@@ -72,6 +72,8 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   bool _weeklyPremium = false;
   final Map<String, Map<String, dynamic>> _results = {};
   final Map<String, String> _failures = {};
+  Map<String, dynamic>? _extraQuotaStatus;
+  bool _quotaBusy = false;
 
   /// Per result: the market chip chosen on the match's page. [_rev] makes the
   /// pushed match page rebuild when a chip is tapped.
@@ -90,8 +92,83 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     _loadDailyFreePicks();
     _loadHistory();
     _refreshWeeklyPremium();
+    if (SubscriptionService.instance.isPremium) unawaited(_loadExtraQuotaStatus());
     ContentSync.tick.addListener(_sync);
     if (widget.active) _load();
+  }
+
+  Future<void> _loadExtraQuotaStatus() async {
+    try {
+      final data = await FanZoneService.call('ai-quota/status');
+      if (mounted) setState(() => _extraQuotaStatus = data);
+    } catch (_) {
+      // Status is optional until the updated Worker has been deployed.
+    }
+  }
+
+  Future<void> _requestExtraPredictions() async {
+    if (!SubscriptionService.instance.isPremium) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Extra prediction requests are for Premium subscribers.')),
+      );
+      return;
+    }
+    final amount = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Request extra AI Predictions'),
+        content: const Text('Choose how many additional predictions you would like. Your request will be sent for admin approval.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          for (final n in [10, 20, 50])
+            FilledButton.tonal(onPressed: () => Navigator.pop(context, n), child: Text('+$n')),
+        ],
+      ),
+    );
+    if (amount == null || !mounted) return;
+    setState(() => _quotaBusy = true);
+    try {
+      await FanZoneService.call('ai-quota/request', body: {'amount': amount});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Your request for $amount extra predictions was submitted.')),
+      );
+      await _loadExtraQuotaStatus();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _quotaBusy = false);
+    }
+  }
+
+  Widget _extraQuotaCard() {
+    if (!SubscriptionService.instance.isPremium) return const SizedBox.shrink();
+    final status = _extraQuotaStatus;
+    final remaining = status?['remaining'];
+    final pending = status?['pending'];
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      color: const Color(0xFF8E6BFF).withValues(alpha: .10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: const Color(0xFF8E6BFF).withValues(alpha: .25))),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(children: [
+          const Icon(Icons.add_circle_outline_rounded, color: Color(0xFFB39DFF)),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Extra AI Predictions', style: TextStyle(fontWeight: FontWeight.w900)),
+            Text(pending is Map ? 'Request pending admin approval' : '35 daily included · ${remaining ?? 0} extra available', style: TextStyle(color: Ui.muted, fontSize: 12)),
+          ])),
+          FilledButton.tonal(
+            onPressed: _quotaBusy || pending is Map ? null : _requestExtraPredictions,
+            child: Text(_quotaBusy ? 'Sending…' : pending is Map ? 'Pending' : 'Request more'),
+          ),
+        ]),
+      ),
+    );
   }
 
   @override
@@ -4434,6 +4511,7 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               children: [
                 _hero(),
+                _extraQuotaCard(),
                 const SizedBox(height: 6),
                 Align(
                   alignment: Alignment.centerLeft,
