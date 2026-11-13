@@ -1,10 +1,11 @@
-import 'dart:convert' show HtmlEscape, HtmlEscapeMode;
+import 'dart:convert' show HtmlEscape, HtmlEscapeMode, utf8;
 import 'dart:ui' show ImageFilter;
 
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:flutter/material.dart';
 import '../services/pip_service.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -114,11 +115,17 @@ class _PlayerScreenState extends State<PlayerScreen>
   int _attempt = 0;
 
   /// How an embed page (iframe / .php player page) is opened:
-  /// 0 = inside an iframe on a page that presents itself as the player
-  /// origin (your site, so hosts that only allow your domain accept it),
-  /// 1 = opened directly with the player origin as Referer,
-  /// 2 = opened directly with no Referer. The Reload button tries the next one.
-  int _embedMode = 0; // 0 iframe@embed origin, 1 iframe@main site, 2 direct+Referer, 3 direct
+  /// 0 = "clean embed": the app downloads the embed page itself, removes ad
+  ///     networks from it and shows it as the top page, so the ad shield can
+  ///     see (and remove) the ad cards it draws. Falls back to 1 if the page
+  ///     can't be fetched.
+  /// 1 = inside an iframe on a page that presents itself as the player
+  ///     origin (your site, so hosts that only allow your domain accept it),
+  /// 2 = iframe on the alternative page origin,
+  /// 3 = opened directly with the player origin as Referer,
+  /// 4 = opened directly with no Referer. Reload tries the next one.
+  static const _modeCount = 5;
+  int _embedMode = AppConfig.cleanEmbedFirst ? 0 : 1;
 
   String _embedBase(String url, String origin) => url.toLowerCase().startsWith('http://')
       ? origin.replaceFirst('https://', 'http://')
@@ -126,10 +133,10 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   void _reload() {
     if (_stream.kind == StreamKind.embed) {
-      _embedMode = (_embedMode + 1) % 4;
+      _embedMode = (_embedMode + 1) % _modeCount;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
         duration: const Duration(seconds: 2),
-        content: Text('Reloading (method ${_embedMode + 1}/4)'),
+        content: Text('Reloading (method ${_embedMode + 1}/$_modeCount)'),
       ));
     }
     _start();
@@ -369,7 +376,9 @@ class _PlayerScreenState extends State<PlayerScreen>
           'allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
           baseUrl: AppConfig.embedOrigin,
         );
-      } else if (_embedMode <= 1) {
+      } else if (_embedMode == 0 && await _loadCleanEmbed(s.url)) {
+        // Shown as a cleaned top-level page; nothing else to do.
+      } else if (_embedMode <= 2) {
         final src = const HtmlEscape(HtmlEscapeMode.attribute).convert(s.url);
         await _wc.loadHtmlString(
           '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head>'
@@ -377,11 +386,11 @@ class _PlayerScreenState extends State<PlayerScreen>
           'allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
           baseUrl: _embedBase(
               s.url,
-              _embedMode == 0
+              _embedMode <= 1
                   ? RemoteConfig.instance.embedPageOrigin
                   : RemoteConfig.instance.altEmbedPageOrigin),
         );
-      } else if (_embedMode == 2) {
+      } else if (_embedMode == 3) {
         await _wc.loadRequest(Uri.parse(s.url), headers: {
           'Referer': _embedBase(s.url, RemoteConfig.instance.embedPageOrigin)
         });
@@ -390,6 +399,44 @@ class _PlayerScreenState extends State<PlayerScreen>
       }
     } catch (_) {
       if (mounted) setState(() => _error = true);
+    }
+  }
+
+  /// Method 0. Downloads the embed page, removes ad-network scripts / frames
+  /// from it, puts the ad guard first in it and shows it as the top page.
+  /// Returns false (caller falls back to the plain iframe) when the page can't
+  /// be fetched, isn't HTML, or the guard can't be added.
+  Future<bool> _loadCleanEmbed(String url) async {
+    final idx = _srcIdx;
+    final client = http.Client();
+    try {
+      final base = _embedBase(url, RemoteConfig.instance.embedPageOrigin);
+      final ref = (_referers[idx] ?? '').trim();
+      final req = http.Request('GET', Uri.parse(url))
+        ..followRedirects = true
+        ..headers.addAll({
+          'User-Agent': _agents[idx] ?? AppConfig.userAgent,
+          'Referer': ref.startsWith('http') ? ref : base,
+          'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+        });
+      final res = await client.send(req).timeout(const Duration(seconds: 8));
+      final type = (res.headers['content-type'] ?? '').toLowerCase();
+      if (res.statusCode >= 400 ||
+          (type.isNotEmpty && !type.contains('html'))) {
+        return false;
+      }
+      final bytes =
+          await res.stream.toBytes().timeout(const Duration(seconds: 8));
+      if (!mounted || idx != _srcIdx) return true; // user moved on
+      final html = AdShield.sanitizeEmbedHtml(
+          utf8.decode(bytes, allowMalformed: true), url);
+      if (html == null) return false;
+      await _wc.loadHtmlString(html, baseUrl: url);
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close();
     }
   }
 
@@ -484,14 +531,14 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   void _switchSource() {
     setState(() => _srcIdx = (_srcIdx + 1) % _sources.length);
-    _embedMode = 0;
+    _embedMode = AppConfig.cleanEmbedFirst ? 0 : 1;
     _start();
   }
 
   void _pickSource(int i) {
     if (i == _srcIdx || i < 0 || i >= _sources.length) return;
     setState(() => _srcIdx = i);
-    _embedMode = 0;
+    _embedMode = AppConfig.cleanEmbedFirst ? 0 : 1;
     _start();
   }
 
