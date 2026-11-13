@@ -245,6 +245,11 @@ class AppConfig {
   static const adPreloadLeadSeconds = 60;
   static const adPreloadOnStart = true;
 
+  /// Embedded streams: download the embed page, strip ad networks from it and
+  /// show it as the main page (so on-screen ad cards can be removed). If it
+  /// misbehaves for a host, set this to false to use the plain iframe first.
+  static const cleanEmbedFirst = true;
+
   /// A preloaded page older than this is thrown away and loaded again.
   static const adPreloadMaxAgeSeconds = 240;
 
