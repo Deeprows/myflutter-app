@@ -317,12 +317,65 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
 
   /// Upcoming matches from ESPN across all leagues, so any match can be picked
   /// and analysed (not just the ones in the app's own list).
+  /// Upcoming Premier League, LaLiga, Serie A, Bundesliga and Scottish
+  /// Premiership matches from the server's extra match networks (football-data,
+  /// API-Football, SofaScore, BBC Sport...). A failure here is ignored.
+  Future<List<Fixture>> _loadTop(bool fresh) async {
+    try {
+      final data = await FanZoneService.call(
+        'ai-predict/top-matches',
+        query: fresh ? {'fresh': '1'} : null,
+      );
+      final own = {for (final f in _fixtures) '${_n(f.home)}|${_n(f.away)}'};
+      final out = <Fixture>[];
+      for (final m in FanZoneService.rows(data['matches'])) {
+        final id = '${m['id'] ?? ''}';
+        final kickoff = DateTime.tryParse('${m['kickoff'] ?? ''}');
+        final home = '${m['home'] ?? ''}', away = '${m['away'] ?? ''}';
+        if (id.isEmpty || kickoff == null || home.isEmpty || away.isEmpty) {
+          continue;
+        }
+        if (!kickoff.isAfter(DateTime.now())) continue;
+        if (own.contains('${_n(home)}|${_n(away)}')) continue;
+        out.add(
+          Fixture(
+            id: 'ext:$id',
+            home: home,
+            away: away,
+            homeLogo: '${m['homeLogo'] ?? ''}',
+            awayLogo: '${m['awayLogo'] ?? ''}',
+            league: '${m['league'] ?? ''}',
+            kickoff: kickoff,
+            gender: '${m['gender'] ?? ''}',
+          ),
+        );
+      }
+      return out;
+    } catch (_) {
+      return const <Fixture>[];
+    }
+  }
+
+  /// [base] plus the top-league matches that it does not already list.
+  List<Fixture> _withTop(List<Fixture> base, List<Fixture> top) {
+    String key(Fixture f) =>
+        '${_n(f.home)}|${_n(f.away)}|${f.kickoff.toUtc().toIso8601String().substring(0, 10)}';
+    final seen = {for (final f in base) key(f)};
+    return [
+      ...base,
+      for (final f in top)
+        if (seen.add(key(f))) f,
+    ];
+  }
+
   Future<void> _loadExt({bool fresh = false}) async {
     if (!mounted || _extLoading) return;
     setState(() {
       _extLoading = true;
       _extError = null;
     });
+    // The top-league matches load in parallel and never block the main list.
+    final topFuture = _loadTop(fresh);
     try {
       final data = await FanZoneService.call(
         'ai-predict/matches',
@@ -357,17 +410,20 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           ),
         );
       }
+      final top = await topFuture;
       if (!mounted) return;
       setState(() {
-        _ext = list;
+        _ext = _withTop(list, top);
       });
     } catch (e) {
       // The server's list is unavailable: read the matches from ESPN directly.
       try {
         final direct = await _loadExtDirect();
         if (direct.isNotEmpty && mounted) {
+          final merged = _withTop(direct, await topFuture);
+          if (!mounted) return;
           setState(() {
-            _ext = direct;
+            _ext = merged;
             _extError = null;
           });
           return;
@@ -530,6 +586,8 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
   /// refresh falls back to "All" instead of showing an empty list.
   String _activeFilter(List<Fixture> all) {
     if (_filter == LeagueFilter.all) return _filter;
+    // The top-league tabs stay selectable even when they are empty.
+    if (LeagueFilter.pinned.contains(_filter)) return _filter;
     return all.any((f) => LeagueFilter.matches(f, _filter))
         ? _filter
         : LeagueFilter.all;
@@ -578,9 +636,15 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     final leagues = LeagueFilter.leaguesOf(all);
     final national = all.where(LeagueFilter.isNational).length;
     final women = all.where((f) => f.isWomen).length;
-    final shownLeagues = leagues.take(24).toList();
+    final counts = {for (final e in leagues) e.key: e.value};
+    // The pinned top leagues have their own tabs, so they are left out here.
+    final shownLeagues = leagues
+        .where((e) => !LeagueFilter.pinned.contains(e.key))
+        .take(24)
+        .toList();
     // A league picked from the finder stays visible in the row.
     if (!LeagueFilter.isSpecial(active) &&
+        !LeagueFilter.pinned.contains(active) &&
         !shownLeagues.any((e) => e.key == active)) {
       final hit = leagues.where((e) => e.key == active);
       if (hit.isNotEmpty) shownLeagues.insert(0, hit.first);
@@ -596,6 +660,13 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             selected: active == LeagueFilter.all,
             onTap: () => _setFilter(LeagueFilter.all),
           ),
+          for (final name in LeagueFilter.pinned)
+            _filterChip(
+              label: name,
+              count: counts[name] ?? 0,
+              selected: active == name,
+              onTap: () => _setFilter(name),
+            ),
           if (national > 0)
             _filterChip(
               label: 'National teams',
@@ -687,7 +758,9 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
           padding: const EdgeInsets.symmetric(vertical: 20),
           child: Center(
             child: Text(
-              'No upcoming matches for ${_filterName(active)}.',
+              LeagueFilter.pinned.contains(active)
+                  ? 'No ${_filterName(active)} matches are listed for the next 10 days (an international break, perhaps). Tap refresh to check again.'
+                  : 'No upcoming matches for ${_filterName(active)}.',
               textAlign: TextAlign.center,
             ),
           ),
