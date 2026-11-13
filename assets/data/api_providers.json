@@ -1,6 +1,21 @@
 {
-  "_readme": "Switch the APIs used by the AI Predict analysis without an app update or Worker redeploy (the Worker re-reads this file every ~5 minutes). 'ai.providers' = who writes the analysis: tried top to bottom, first to answer wins. 'data.form.sources' = where each club's recent results come from: tried top to bottom (apifootball, espn, footballdata, espn_scan); set enabled false to switch one off. 'data.extras.apifootball' = injuries/cards/lineups (needs API-Football). NEVER put API keys in this file: add each key as a Worker secret (Settings > Variables and Secrets) with the name in 'keyEnv'. Free-tier model names change over time: check each provider's model list before enabling. 'data.context' adds the league table position and head-to-head (ESPN, no key) to the AI prompt: set standings / headToHead to false to switch one off. 'footballdata' needs the FOOTBALL_DATA_KEY Worker secret and is skipped without it. 'data.upcoming' = where the AI Predict match list comes from. ESPN (espn = league feeds, espn_all = all-soccer feed) is read first, then the extra networks listed here, which only list the top leagues in 'leagues' (eng.1 Premier League, esp.1 LaLiga, ita.1 Serie A, ger.1 Bundesliga, sco.1 Scottish Premiership). Matches seen by several networks are shown once. footballdata needs FOOTBALL_DATA_KEY (no Scottish league on its free tier); apifootball needs API_FOOTBALL_KEY (its free plan may refuse the current season); bbc and flashscore are unofficial public feeds that can change or block the Worker at any time, so flashscore is off by default. 'topLeaguesOnly': true also hides every match outside those leagues, ESPN ones included (no cups, national teams or women's matches).",
+  "_readme": "Switch the APIs used by the AI Predict analysis without an app update or Worker redeploy (the Worker re-reads this file every ~5 minutes). 'ai.providers' = who writes the analysis: tried top to bottom, first to answer wins. 'data.form.sources' = where each club's recent results come from: tried top to bottom (apifootball, espn, footballdata, espn_scan); set enabled false to switch one off. 'data.extras.apifootball' = injuries/cards/lineups (needs API-Football). NEVER put API keys in this file: add each key as a Worker secret (Settings > Variables and Secrets) with the name in 'keyEnv'. Free-tier model names change over time: check each provider's model list before enabling. 'data.context' adds the league table position and head-to-head (ESPN, no key) to the AI prompt: set standings / headToHead to false to switch one off. 'footballdata' needs the FOOTBALL_DATA_KEY Worker secret and is skipped without it. 'data.upcoming' = where the AI Predict match list comes from. ESPN (espn = league feeds, espn_all = all-soccer feed) is read first, then the extra networks listed here, which only list the top leagues in 'leagues' (eng.1 Premier League, esp.1 LaLiga, ita.1 Serie A, ger.1 Bundesliga, sco.1 Scottish Premiership). Matches seen by several networks are shown once. footballdata needs FOOTBALL_DATA_KEY (no Scottish league on its free tier); apifootball needs API_FOOTBALL_KEY (its free plan may refuse the current season); bbc and flashscore are unofficial public feeds that can change or block the Worker at any time, so flashscore is off by default. 'topLeaguesOnly': true also hides every match outside those leagues, ESPN ones included (no cups, national teams or women's matches). 'ai.limits' = how many matches a person may analyse: free and premium accounts, per hour and per UTC day, plus the amounts offered on the Request more button (users must use up the premium daily limit first). Changes apply within ~5 minutes, no app update or Worker redeploy.",
   "ai": {
+    "limits": {
+      "free": {
+        "perHour": 3,
+        "perDay": 3
+      },
+      "premium": {
+        "perHour": 35,
+        "perDay": 35
+      },
+      "extraRequestAmounts": [
+        10,
+        20,
+        50
+      ]
+    },
     "providers": [
       {
         "id": "gemini",
