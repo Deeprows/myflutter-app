@@ -7,8 +7,8 @@
         "perDay": 3
       },
       "premium": {
-        "perHour": 35,
-        "perDay": 35
+        "perHour": 25,
+        "perDay": 25
       },
       "extraRequestAmounts": [
         10,
