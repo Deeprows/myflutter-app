@@ -51,6 +51,9 @@ globalThis.fetch=async(url)=>{const u=String(url);
   return new Response('[]');};
 env.AI={async run(){return {response:'Lean based on recent results; uncertain.'};}};
 const alice=await token();assert.equal((await call('auth',{body:{mode:'signup',idToken:alice}})).status,200);
+// Free users get 3 analyses a day; these tests run many, so make the test user premium.
+sql.exec("CREATE TABLE IF NOT EXISTS subs (install_id TEXT PRIMARY KEY, email TEXT, expires_at INTEGER NOT NULL DEFAULT 0, source TEXT, updated_at INTEGER NOT NULL DEFAULT 0)");
+for(const u of sql.prepare('SELECT id FROM fan_users').all())sql.prepare("INSERT OR REPLACE INTO subs(install_id,email,expires_at,source,updated_at) VALUES(?,?,?,?,?)").run(u.id,'alice@gmail.com',Date.now()+30*86400000,'test',Date.now());
 // 1) Healthy ESPN: analysis works and the form is remembered.
 let r=await call('ai-predict',{body:{custom:{home:'Türkiye',away:'Belgium'}},bearer:alice});
 assert.equal(r.status,200,await r.clone().text());
