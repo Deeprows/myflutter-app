@@ -3794,7 +3794,7 @@ async function fanAiAnyMatch(env,id,b) {
     if(b.ext!==undefined && !await fanSocialBudget(env.DB,id,'ai-attempt',FAN_AI_ATTEMPT_LIMIT_PER_HOUR))return fail('Analysis request limit reached. Retry after the next UTC hour.',429);
     // A lookup that resolved the club under its proper name remembers it, so the app can show the real name and crest.
     const mark=(form,r)=>{if(form && r?.name)Object.defineProperty(form,'resolved',{value:{name:String(r.name).slice(0,60),logo:typeof r.logo==='string'?r.logo:'',league:typeof r.leagueName==='string'?r.leagueName:''},enumerable:false,configurable:true});return form;};
-    const formOf=async t=>{
+    const formOfRaw=async t=>{
       // National teams (including manually typed matchups with no league label) have
       // their own international-results source. Never route them through club feeds.
       if(FAN_NATIONAL_LEAGUE_RE.test(String(info.league || '')) || fanIsNationalTeam(t.name)){
@@ -3831,6 +3831,7 @@ async function fanAiAnyMatch(env,id,b) {
         throw e instanceof FanFormError && e.code==='insufficient_results'?new FanFormError('Could not verify completed recent results for "'+String(t.name).slice(0,40)+'". The team or competition may not be covered by the available results providers; check the spelling or retry later.'+hint,'insufficient_results'):e;
       }
     };
+    const formOf=async t=>fanTopUpForm(env,await formOfRaw(t),t.name,kickoff,{international:FAN_NATIONAL_LEAGUE_RE.test(String(info.league || '')),women:info.gender==='women'});
     const [homeForm,awayForm]=await Promise.all([formOf(home),formOf(away)]);
     if(b.ext===undefined) {
       if(homeForm.resolved){info.home=homeForm.resolved.name;if(homeForm.resolved.logo)info.homeLogo=fanAiLogo(homeForm.resolved.logo);}
@@ -5452,7 +5453,38 @@ async function fanTsdbTeamForm(env,name,kickoff,women=false) {
   Object.defineProperty(form,'club',{value:{name:team.name,leagueName:team.league || '',logo:/^https:\/\/(?:[a-z0-9-]+\.)?thesportsdb\.com\//i.test(team.badge)?team.badge:''},enumerable:false});
   return form;
 }
+// A source that returns 1-4 results is not "done": ESPN's team schedule only lists the one league it was asked for,
+// so a promoted/relegated club, a cup run or a thin lower league gives 1-3 games while other teams get 5.
+// Complete the list from the other sources (all competitions) and merge without duplicates.
+async function fanTopUpForm(env,form,name,kickoff,opts={}) {
+  try {
+    if(!form || !Array.isArray(form.matches) || form.matches.length>=5 || form.matches.length<1)return form;
+    if(opts.international || fanIsNationalTeam(name))return form;
+    const have=new Map();
+    const keyOf=r=>new Date(r.date).toISOString().slice(0,10)+'|'+r.venue+'|'+r.goalsFor+'-'+r.goalsAgainst;
+    const dayMs=86400000;
+    const dup=r=>{for(const k of [-1,0,1]){const d=new Date(Date.parse(r.date)+k*dayMs).toISOString().slice(0,10);if(have.has(d+'|'+r.venue+'|'+r.goalsFor+'-'+r.goalsAgainst))return true;}return false;};
+    for(const r of form.matches)have.set(keyOf(r),r);
+    const extra=[async()=>fanTsdbTeamForm(env,name,kickoff,opts.women===true),async()=>fanEspnScanForm(env,name,kickoff)];
+    for(const get of extra) {
+      if(have.size>=5)break;
+      let more=null;
+      try{more=await get();}catch{continue;}
+      for(const r of more?.matches || []) {if(!dup(r))have.set(keyOf(r),r);}
+    }
+    if(have.size<=form.matches.length)return form;
+    const rows=[...have.values()].sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)).slice(0,5);
+    form.matches=rows;form.played=rows.length;
+    form.wins=rows.filter(r=>r.result==='W').length;form.draws=rows.filter(r=>r.result==='D').length;form.losses=rows.filter(r=>r.result==='L').length;
+    form.goalsFor=rows.reduce((n,r)=>n+r.goalsFor,0);form.goalsAgainst=rows.reduce((n,r)=>n+r.goalsAgainst,0);
+    return form;
+  } catch(e) {console.error('Form top-up failed',e?.message);return form;}
+}
 async function fanAnalysisForm(env,fixture,teamId,name,kickoff) {
+  const form=await fanAnalysisFormRaw(env,fixture,teamId,name,kickoff);
+  return fanTopUpForm(env,form,name,kickoff,{international:FAN_NATIONAL_LEAGUE_RE.test(String(fixture?.league || '')),women:fixture?.gender==='women'});
+}
+async function fanAnalysisFormRaw(env,fixture,teamId,name,kickoff) {
   // Which sources are tried, and in what order, comes from api_providers.json (data.form.sources).
   const order=(await fanAiConfig(env)).form;
   let original=null,lastErr=null,nationalTried=false,natErr=null;
