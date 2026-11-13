@@ -72,6 +72,9 @@ let runs=0,lastPrompt=null;
 env.AI={async run(model,input){runs++;lastPrompt=JSON.parse(input.messages[1].content);return {response:'Lean based on the fetched recent results; uncertain outcome.'};}};
 
 const alice=await token();assert.equal((await call('auth',{body:{mode:'signup',idToken:alice}})).status,200);
+// Free users get 3 analyses a day; these tests run many, so make the test user premium.
+sql.exec("CREATE TABLE IF NOT EXISTS subs (install_id TEXT PRIMARY KEY, email TEXT, expires_at INTEGER NOT NULL DEFAULT 0, source TEXT, updated_at INTEGER NOT NULL DEFAULT 0)");
+for(const u of sql.prepare('SELECT id FROM fan_users').all())sql.prepare("INSERT OR REPLACE INTO subs(install_id,email,expires_at,source,updated_at) VALUES(?,?,?,?,?)").run(u.id,'alice@gmail.com',Date.now()+30*86400000,'test',Date.now());
 
 // --- upcoming list from other sources ---
 assert.equal((await call('ai-predict/matches')).status,401,'list requires login');
