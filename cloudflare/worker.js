@@ -1992,6 +1992,7 @@ export function fanPoints(h, a, rh, ra) {
 }
 const FAN_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS fan_ai_quota_requests (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, user_name TEXT NOT NULL DEFAULT '', amount INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', granted INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS fan_ai_extra_credits (user_id TEXT PRIMARY KEY, granted_total INTEGER NOT NULL DEFAULT 0, consumed_total INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS fan_result_reports (match_key TEXT NOT NULL, user_id TEXT NOT NULL, home INTEGER NOT NULL, away INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(match_key,user_id))`,
   `CREATE TABLE IF NOT EXISTS fan_espn_form_cache (cache_key TEXT PRIMARY KEY, data TEXT NOT NULL, fetched_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_result_jobs (match_key TEXT PRIMARY KEY, fixture_json TEXT NOT NULL DEFAULT '', checked_at INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '')`,
@@ -2091,17 +2092,27 @@ async function fanZone(request, env, url, ctx) {
   try {
     await fanInit(env.DB);
     const db = env.DB;
-    // AI extra quota request workflow. Admin routes require ADMIN_TOKEN (or STATS_TOKEN).
-    if(url.pathname==='/fan/ai-quota/request' && request.method==='POST') {
+    // AI extra quota workflow. User endpoints verify the Google ID token and derive the account ID server-side.
+    if((url.pathname==='/fan/ai-quota/request' && request.method==='POST') || (url.pathname==='/fan/ai-quota/status' && request.method==='GET')) {
+      const bearer=String(request.headers.get('authorization')||'').replace(/^Bearer\s+/i,'');
+      const identity=env.GOOGLE_WEB_CLIENT_ID ? await verifyFanGoogleToken(bearer,env) : null;
+      if(!identity)return fail('Please log in to Deeprowss again.',401);
+      const userId=await fanHash('google:'+identity.sub);
+      const account=await db.prepare('SELECT id FROM fan_accounts WHERE id=?').bind(userId).first();
+      if(!account)return fail('Please register your Deeprowss account first.',403);
+      const premiumUntil=await expiryOf(env,userId);
+      if(premiumUntil<=Date.now())return fail('Extra prediction requests are available to Premium users only.',403);
+      if(request.method==='GET') {
+        const credit=await db.prepare('SELECT granted_total,consumed_total FROM fan_ai_extra_credits WHERE user_id=?').bind(userId).first();
+        const pending=await db.prepare("SELECT id,amount,note,status,created_at FROM fan_ai_quota_requests WHERE user_id=? AND status='pending' ORDER BY created_at DESC LIMIT 1").bind(userId).first();
+        return json({ok:true,granted:Number(credit?.granted_total||0),consumed:Number(credit?.consumed_total||0),remaining:Math.max(0,Number(credit?.granted_total||0)-Number(credit?.consumed_total||0)),pending:pending||null});
+      }
       const body=await request.json().catch(()=>({}));
-      const userId=String(body.userId||'').trim().slice(0,128);
-      const userName=String(body.userName||'').trim().slice(0,80);
-      const amount=Number(body.amount);
-      const note=String(body.note||'').trim().slice(0,500);
-      if(!userId || ![10,20,50].includes(amount))return fail('User ID and request amount (10, 20, or 50) are required.');
+      const amount=Number(body.amount), note=String(body.note||'').trim().slice(0,500);
+      if(![10,20,50].includes(amount))return fail('Request amount must be 10, 20, or 50.');
       const pending=await db.prepare("SELECT id FROM fan_ai_quota_requests WHERE user_id=? AND status='pending'").bind(userId).first();
       if(pending)return fail('You already have a pending extra predictions request.',409);
-      const id=crypto.randomUUID(), now=Math.floor(Date.now()/1000);
+      const id=crypto.randomUUID(),now=Math.floor(Date.now()/1000),userName=String(identity.name||'').trim().slice(0,80);
       await db.prepare("INSERT INTO fan_ai_quota_requests(id,user_id,user_name,amount,note,status,created_at,updated_at) VALUES(?,?,?,?,?,'pending',?,?)").bind(id,userId,userName,amount,note,now,now).run();
       return json({ok:true,id,status:'pending'});
     }
@@ -2127,6 +2138,7 @@ async function fanZone(request, env, url, ctx) {
         const granted=Number(body.granted||row.amount);
         if(!Number.isInteger(granted)||granted<1||granted>500)return fail('Grant must be between 1 and 500.');
         await db.prepare("UPDATE fan_ai_quota_requests SET status='approved',granted=?,updated_at=? WHERE id=?").bind(granted,Math.floor(Date.now()/1000),id).run();
+        await db.prepare('INSERT INTO fan_ai_extra_credits(user_id,granted_total,consumed_total,updated_at) VALUES(?,?,0,?) ON CONFLICT(user_id) DO UPDATE SET granted_total=granted_total+excluded.granted_total,updated_at=excluded.updated_at').bind(row.user_id,granted,Math.floor(Date.now()/1000)).run();
         return json({ok:true,status:'approved',granted});
       }
       return fail('Action must be approve or reject.');
@@ -3135,11 +3147,15 @@ async function fanAiFinish(env,id,promptFixture,home,away,extra={}) {
       env.DB.prepare(`INSERT INTO fan_ai_limits(bucket,count,expires) VALUES(?,1,?) ON CONFLICT(bucket) DO UPDATE SET count=count+1 RETURNING count`).bind(`hour:${id}:${hour}`,(hour+1)*3600000),
       env.DB.prepare(`INSERT INTO fan_ai_limits(bucket,count,expires) VALUES(?,1,?) ON CONFLICT(bucket) DO UPDATE SET count=count+1 RETURNING count`).bind(`day:${id}:${day}`,(day+1)*86400000)
     ]);
-    if(limits[0].results[0].count>hourlyLimit || limits[1].results[0].count>dailyLimit) {
-      const message=premium
-        ? 'Premium AI Predict limit reached (35 matches per UTC day). Try again after the next UTC day.'
-        : 'Free AI Predict limit reached (3 matches per UTC day). Upgrade to Premium for up to 35 matches per day.';
-      return fail(message,429);
+    const overHour=limits[0].results[0].count>hourlyLimit;
+    const overDay=limits[1].results[0].count>dailyLimit;
+    let extraCreditUsed=false;
+    if(overHour) return fail(premium ? 'Premium AI Predict hourly limit reached (35 analyses per hour). Try again later.' : 'Free AI Predict limit reached (3 matches per UTC day). Upgrade to Premium for up to 35 matches per day.',429);
+    if(overDay) {
+      if(!premium) return fail('Free AI Predict limit reached (3 matches per UTC day). Upgrade to Premium for up to 35 matches per day.',429);
+      const credit=await env.DB.prepare('UPDATE fan_ai_extra_credits SET consumed_total=consumed_total+1,updated_at=? WHERE user_id=? AND consumed_total<granted_total RETURNING consumed_total,granted_total').bind(now,id).first();
+      if(!credit) return fail('Premium AI Predict limit reached (35 matches per UTC day). You have no extra predictions available. Request more from the AI Predict screen.',429);
+      extraCreditUsed=true;
     }
     await env.DB.prepare('DELETE FROM fan_ai_limits WHERE expires<?').bind(now).run();
 
