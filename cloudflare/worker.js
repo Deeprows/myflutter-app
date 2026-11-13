@@ -3581,7 +3581,7 @@ const FAN_AI_DOMESTIC=new Set([...FAN_AI_LEAGUES.slice(0,16).map(l=>l[0]),...FAN
 // Lower divisions are looked up too (e.g. Walsall in League One), otherwise such a club has no ESPN id and falls to the slow name scan.
 const FAN_AI_EXTRA_TEAM_LEAGUES=[['eng.3','League One'],['eng.4','League Two'],['eng.5','National League'],['sco.2','Scottish Championship'],['ger.2','2. Bundesliga'],['esp.2','LaLiga 2'],['ita.2','Serie B'],['fra.2','Ligue 2']];
 const FAN_AI_TEAM_LEAGUES=[...FAN_AI_LEAGUES.slice(0,20),...FAN_AI_EXTRA_TEAM_LEAGUES];
-const FAN_AI_UPCOMING_DAYS=10;
+const FAN_AI_UPCOMING_DAYS=30;
 function fanAiLogo(raw){return typeof raw==='string' && /^https:\/\/(?:[a-z0-9.-]+\.espncdn\.com|(?:[a-z0-9-]+\.)?thesportsdb\.com)\//i.test(raw) && raw.length<300?raw:'';}
 // Small D1-backed cache (one row per key). A failed or empty rebuild falls back to the stale copy.
 async function fanAiCached(env,key,ttl,build,fresh=false) {
@@ -3650,7 +3650,7 @@ async function fanAiEspnAllUpcoming(now,day) {
 // Free fallback 2: TheSportsDB (public test key, no sign-up). Results are checked later by team names and time.
 async function fanAiTsdbUpcoming(now,day) {
   const rows=[];
-  const dates=Array.from({length:7},(_,i)=>new Date(now+i*86400000).toISOString().slice(0,10));
+  const dates=Array.from({length:FAN_AI_UPCOMING_DAYS},(_,i)=>new Date(now+i*86400000).toISOString().slice(0,10));
   const parts=await Promise.allSettled(dates.map(async d=>{
     const r=await fetch(`https://www.thesportsdb.com/api/v1/json/${TSDB_KEY}/eventsday.php?d=${d}&s=Soccer`,{headers:FAN_HTTP,signal:AbortSignal.timeout(7000)});
     if(!r.ok)throw new Error('TheSportsDB '+r.status);
@@ -3699,9 +3699,22 @@ async function fanUpFootballData(env,leagues,now) {
   if(!key)throw new Error('football-data.org: FOOTBALL_DATA_KEY missing');
   const tops=FAN_UP_TOP.filter(t=>t[2] && leagues.includes(t[0]));
   if(!tops.length)return [];
-  const d=await fanUpGet(`https://api.football-data.org/v4/matches?competitions=${tops.map(t=>t[2]).join(',')}&dateFrom=${fanUpDay(now)}&dateTo=${fanUpDay(now+9*86400000)}`,{'x-auth-token':key});
+  // football-data.org limits date ranges (often 10 days); fetch the configured
+  // horizon in <=10-day chunks so the 30-day window doesn't trigger HTTP 400.
+  const start=fanUpDay(now),end=fanUpDay(now+(FAN_AI_UPCOMING_DAYS-1)*86400000);
+  const allMatches=[];
+  let cursor=new Date(`${start}T00:00:00Z`);
+  const endDate=new Date(`${end}T00:00:00Z`);
+  while(cursor<=endDate) {
+    const chunkStart=cursor.toISOString().slice(0,10);
+    const chunkEndDate=new Date(Math.min(endDate.getTime(),cursor.getTime()+9*86400000));
+    const chunkEnd=chunkEndDate.toISOString().slice(0,10);
+    const d=await fanUpGet(`https://api.football-data.org/v4/matches?competitions=${tops.map(t=>t[2]).join(',')}&dateFrom=${chunkStart}&dateTo=${chunkEnd}`,{'x-auth-token':key});
+    if(Array.isArray(d?.matches))allMatches.push(...d.matches);
+    cursor=new Date(chunkEndDate.getTime()+86400000);
+  }
   const rows=[];
-  for(const m of Array.isArray(d?.matches)?d.matches:[]) {
+  for(const m of allMatches) {
     const top=tops.find(t=>t[2]===m?.competition?.code);
     if(!top || !/^(?:SCHEDULED|TIMED)$/.test(String(m.status || '')))continue;
     const r=fanUpRow('fd',m.id,top,m.homeTeam?.name,m.awayTeam?.name,Date.parse(m.utcDate));
@@ -3714,7 +3727,7 @@ async function fanUpApiFootball(env,leagues,now) {
   if(!env.API_FOOTBALL_KEY)throw new Error('API-Football: API_FOOTBALL_KEY missing');
   const tops=FAN_UP_TOP.filter(t=>leagues.includes(t[0])),dt=new Date(now),season=dt.getUTCMonth()>=6?dt.getUTCFullYear():dt.getUTCFullYear()-1;
   const rows=await fanAiCached(env,`ai-up-src:apifootball:v1:${tops.map(t=>t[3]).join('-')}`,6*3600000,async()=>{
-    const parts=await Promise.allSettled(tops.map(async t=>[t,await fanAiProviderJson(env,`/fixtures?league=${t[3]}&season=${season}&from=${fanUpDay(now)}&to=${fanUpDay(now+9*86400000)}`)]));
+    const parts=await Promise.allSettled(tops.map(async t=>[t,await fanAiProviderJson(env,`/fixtures?league=${t[3]}&season=${season}&from=${fanUpDay(now)}&to=${fanUpDay(now+(FAN_AI_UPCOMING_DAYS-1)*86400000)}`)]));
     const out=[];let ok=0;
     for(const p of parts) {
       if(p.status!=='fulfilled' || !Array.isArray(p.value[1]))continue;
@@ -3780,7 +3793,7 @@ function fanUpBbcRows(data,top,now) {
 }
 async function fanUpBbc(leagues,now) {
   const tops=FAN_UP_TOP.filter(t=>leagues.includes(t[0]));
-  const parts=await Promise.allSettled(tops.map(async t=>[t,await fanUpGet(`https://web-cdn.api.bbci.co.uk/wc-poll-data/container/sport-data-scores-fixtures?selectedStartDate=${fanUpDay(now)}&selectedEndDate=${fanUpDay(now+9*86400000)}&urn=${encodeURIComponent('urn:bbc:sportsdata:football:tournament:'+t[5])}&useSdApi=false`)]));
+  const parts=await Promise.allSettled(tops.map(async t=>[t,await fanUpGet(`https://web-cdn.api.bbci.co.uk/wc-poll-data/container/sport-data-scores-fixtures?selectedStartDate=${fanUpDay(now)}&selectedEndDate=${fanUpDay(now+(FAN_AI_UPCOMING_DAYS-1)*86400000)}&urn=${encodeURIComponent('urn:bbc:sportsdata:football:tournament:'+t[5])}&useSdApi=false`)]));
   if(!parts.some(p=>p.status==='fulfilled'))throw new Error('BBC Sport unavailable: '+String(parts[0]?.reason?.message || '').slice(0,60));
   return parts.flatMap(p=>p.status==='fulfilled'?fanUpBbcRows(p.value[1],p.value[0],now):[]);
 }
