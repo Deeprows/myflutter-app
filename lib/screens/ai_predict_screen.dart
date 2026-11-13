@@ -646,17 +646,25 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
     final national = all.where(LeagueFilter.isNational).length;
     final women = all.where((f) => f.isWomen).length;
     final counts = {for (final e in leagues) e.key: e.value};
-    // The pinned top leagues have their own tabs, so they are left out here.
-    final shownLeagues = leagues
-        .where((e) => !_pinnedLeagues.contains(e.key))
-        .take(24)
-        .toList();
-    // A league picked from the finder stays visible in the row.
+    // Keep the major competitions available even during their off-season,
+    // but rank every league tab by its live upcoming-match count. This means
+    // populated leagues rise to the front and zero-count placeholders settle
+    // at the end until their fixtures arrive.
+    final leagueCounts = <String, int>{
+      for (final e in leagues) e.key: e.value,
+      for (final name in _pinnedLeagues) name: counts[name] ?? 0,
+    };
+    final shownLeagues = leagueCounts.entries.toList()
+      ..sort((a, b) {
+        final byCount = b.value.compareTo(a.value);
+        if (byCount != 0) return byCount;
+        return a.key.toLowerCase().compareTo(b.key.toLowerCase());
+      });
+    // A league picked from the finder stays visible even if it is beyond the
+    // normal list limit (or has temporarily dropped to zero).
     if (!LeagueFilter.isSpecial(active) &&
-        !_pinnedLeagues.contains(active) &&
         !shownLeagues.any((e) => e.key == active)) {
-      final hit = leagues.where((e) => e.key == active);
-      if (hit.isNotEmpty) shownLeagues.insert(0, hit.first);
+      shownLeagues.insert(0, MapEntry(active, counts[active] ?? 0));
     }
     return SizedBox(
       height: 40,
@@ -669,12 +677,12 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
             selected: active == LeagueFilter.all,
             onTap: () => _setFilter(LeagueFilter.all),
           ),
-          for (final name in _pinnedLeagues)
+          for (final e in shownLeagues)
             _filterChip(
-              label: name,
-              count: counts[name] ?? 0,
-              selected: active == name,
-              onTap: () => _setFilter(name),
+              label: e.key,
+              count: e.value,
+              selected: active == e.key,
+              onTap: () => _setFilter(e.key),
             ),
           if (national > 0)
             _filterChip(
@@ -703,13 +711,6 @@ class _AiPredictScreenState extends State<AiPredictScreen> {
                 visualDensity: VisualDensity.compact,
                 onPressed: () => _openLeagueSheet(all, active),
               ),
-            ),
-          for (final e in shownLeagues)
-            _filterChip(
-              label: e.key,
-              count: e.value,
-              selected: active == e.key,
-              onTap: () => _setFilter(e.key),
             ),
         ],
       ),
