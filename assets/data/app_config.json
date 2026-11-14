@@ -19,8 +19,8 @@
     ]
   },
   "update": {
-    "apkUrl": "https://filemoon.org/en/user/files/download/Zvqzlkay3aD2/Deeprowss%20v2.apk",
-    "version": "v1.0.1863",
+    "apkUrl": "https://filemoon.org/en/user/files/download/5pVzNylJ37wv/Deeprowssv3.apk",
+    "version": "v1.0.2024",
     "notes": "Latest Update!"
   },
   "chat": {
@@ -44,6 +44,6 @@
   },
   "streamHint": {
     "enabled": true,
-    "text": "Double tap the screen to play.\nNot working? Try another stream number.\nClick Fullscreen on each player to bypass ads "
+    "text": "Not working? Try another stream number.\nTap Fullscreen ▢ on player to bypass ads"
   }
 }
