@@ -1,11 +1,11 @@
 {
-  "enabled": false,
+  "enabled": true,
   "id": "App Update",
   "title": "App Update",
-  "message": "🚨 New App Update! Kindly download latest Deeprowss App. If your current app is version 1.0.1863, Ignore.",
+  "message": "🚨 New App Update! Kindly download latest Deeprowss App. If your current app is version 1.0.2024 with login page, Ignore.",
   "popup": true,
   "button_text": "Download Now",
-  "button_url": "https://filemoon.org/en/user/files/download/Zvqzlkay3aD2/Deeprowss%20v2.apk",
+  "button_url": "https://filemoon.org/en/user/files/download/5pVzNylJ37wv/Deeprowssv3.apk",
   "ok_text": "Later",
   "expires": ""
 }
