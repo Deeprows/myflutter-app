@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../services/chat_service.dart';
 import '../services/auth_service.dart';
+import '../services/login_gate.dart';
 import '../services/fan_zone_service.dart';
 import '../services/install_id.dart';
 import '../services/settings_service.dart';
@@ -217,6 +218,10 @@ class _MatchChatState extends State<MatchChat> {
 
   Future<void> _send() async {
     final text = _input.text.trim();
+    if (!AuthService.instance.signedIn) {
+      await ensureSignedIn(context);
+      return;
+    }
     if (text.isEmpty || _sending || _username.isEmpty) return;
     setState(() => _sending = true);
     await _syncProfileName();
@@ -362,7 +367,9 @@ class _MatchChatState extends State<MatchChat> {
           color: Ui.panel,
           border: Border(top: BorderSide(color: Ui.line)),
         ),
-        child: !_ready
+        child: !AuthService.instance.signedIn
+            ? _signInBar()
+            : !_ready
             ? const LinearProgressIndicator()
             : _identityFailed
             ? TextButton.icon(
@@ -379,6 +386,39 @@ class _MatchChatState extends State<MatchChat> {
             ? _joinRow()
             : _composer(),
       ),
+    );
+  }
+
+  /// Visitors can read the comments but must sign in to write one.
+  Widget _signInBar() {
+    return Row(
+      children: [
+        Icon(Icons.lock_outline_rounded, size: 18, color: Ui.muted),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            'Sign in to join the conversation',
+            style: TextStyle(
+              color: Ui.muted,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Ui.red,
+            shape: const StadiumBorder(),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          ),
+          onPressed: () => ensureSignedIn(context),
+          child: const Text(
+            'Sign in',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+      ],
     );
   }
 
