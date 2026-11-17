@@ -11,7 +11,7 @@
     "altUrl2": "https://embedme.st/play/game-soccer_401861185.php",
     "altUrl3": "https://abisnews.com/abc88.php?p=3",
     "homeLogo": "21",
-    "awayLogo": "1118"
+    "awayLogo": "0"
   },
   {
     "id": "2",
@@ -24,7 +24,7 @@
     "altUrl": "",
     "altUrl2": "",
     "altUrl3": "",
-    "homeLogo": "110",
+    "homeLogo": "0",
     "awayLogo": "27"
   },
   {
@@ -38,8 +38,8 @@
     "altUrl": "",
     "altUrl2": "",
     "altUrl3": "",
-    "homeLogo": "46",
-    "awayLogo": "1100"
+    "homeLogo": "0",
+    "awayLogo": "0"
   },
   {
     "id": "4",
@@ -52,8 +52,8 @@
     "altUrl": "",
     "altUrl2": "",
     "altUrl3": "",
-    "homeLogo": "9",
-    "awayLogo": "1105"
+    "homeLogo": "0",
+    "awayLogo": "0"
   },
   {
     "id": "5",
@@ -66,8 +66,8 @@
     "altUrl": "",
     "altUrl2": "",
     "altUrl3": "",
-    "homeLogo": "25",
-    "awayLogo": "1108"
+    "homeLogo": "0",
+    "awayLogo": "0"
   },
   {
     "id": "6",
@@ -80,7 +80,7 @@
     "altUrl": "",
     "altUrl2": "",
     "altUrl3": "",
-    "homeLogo": "777",
+    "homeLogo": "0",
     "awayLogo": "775"
   },
   {
@@ -94,8 +94,8 @@
     "altUrl": "",
     "altUrl2": "",
     "altUrl3": "",
-    "homeLogo": "777",
-    "awayLogo": "113"
+    "homeLogo": "0",
+    "awayLogo": "0"
   },
   {
     "id": "8",
@@ -109,6 +109,6 @@
     "altUrl2": "",
     "altUrl3": "",
     "homeLogo": "24",
-    "awayLogo": "110"
+    "awayLogo": "5"
   }
 ]
