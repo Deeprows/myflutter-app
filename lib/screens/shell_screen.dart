@@ -23,6 +23,7 @@ import 'fan_profile_screen.dart';
 import '../services/auth_service.dart';
 import 'ai_predict_screen.dart';
 import 'auth_screen.dart';
+import '../services/login_gate.dart';
 import 'content_shortcut_screen.dart';
 import 'highlights_screen.dart';
 import 'live_screen.dart';
@@ -79,14 +80,17 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     }
     // Reopen on the tab the user was last on.
     final savedTab = AppMemory.getInt('tab');
-    if (savedTab != null && _order.contains(savedTab)) {
+    if (AuthService.instance.signedIn &&
+        savedTab != null &&
+        _order.contains(savedTab)) {
       _index = savedTab;
       _visited.add(savedTab);
     }
     // A notification tap that launched the app, or one tapped while open.
     final pending = PushService.instance.tabRequest.value;
     if (pending != null) {
-      _index = _tabFor(pending);
+      // Guests stay on Live; other targets ask them to sign in first.
+      _index = AuthService.instance.signedIn ? _tabFor(pending) : 0;
       _visited.add(_index);
       AppMemory.setInt('tab', _index);
       PushService.instance.tabRequest.value = null;
@@ -218,6 +222,11 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     if (tab == null) return;
     PushService.instance.tabRequest.value = null;
     final target = _tabFor(tab);
+    if (!AuthService.instance.signedIn) {
+      final needsLogin = target != 0 || tab == 1 || tab == 3;
+      if (mounted && needsLogin) ensureSignedIn(context);
+      return;
+    }
     if (mounted && target != _index) {
       setState(() {
         _index = target;
@@ -249,6 +258,11 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     _highlightsOpen = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      if (!await ensureSignedIn(context)) {
+        _highlightsOpen = false;
+        return;
+      }
+      if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => const ContentShortcutScreen(
@@ -266,6 +280,11 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     if (_moviesOpen) return;
     _moviesOpen = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (!await ensureSignedIn(context)) {
+        _moviesOpen = false;
+        return;
+      }
       if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -495,8 +514,13 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                 selectedIndex: _order.contains(_index)
                     ? _order.indexOf(_index)
                     : 0,
-                onDestinationSelected: (i) {
+                onDestinationSelected: (i) async {
                   final target = _order[i];
+                  // Live is open to everyone; every other tab needs login.
+                  if (target != 0 && !AuthService.instance.signedIn) {
+                    await ensureSignedIn(context);
+                    return;
+                  }
                   setState(() {
                     _index = target;
                     _visited.add(target);
