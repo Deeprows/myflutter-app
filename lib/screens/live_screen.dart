@@ -22,6 +22,7 @@ import '../services/support_gate.dart';
 import '../widgets/news_ticker.dart';
 import '../widgets/pitch_painter.dart';
 import 'content_shortcut_screen.dart';
+import '../services/login_gate.dart';
 import 'highlights_screen.dart';
 import 'notifications_screen.dart';
 import 'player_screen.dart';
@@ -788,14 +789,18 @@ class _Header extends StatelessWidget {
                       shape: const StadiumBorder(),
                       child: InkWell(
                         customBorder: const StadiumBorder(),
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const ContentShortcutScreen(
-                              title: 'Highlights',
-                              child: HighlightsScreen(),
+                        onTap: () async {
+                          if (!await ensureSignedIn(context)) return;
+                          if (!context.mounted) return;
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const ContentShortcutScreen(
+                                title: 'Highlights',
+                                child: HighlightsScreen(),
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
