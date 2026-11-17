@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/ad_scheduler.dart';
 import '../theme/app_theme.dart';
-import 'auth_screen.dart';
 import 'shell_screen.dart';
 
 /// Signed-in users choose the live-football or community experience.
@@ -26,11 +25,8 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   void _syncAds() {
-    if (!AuthService.instance.signedIn && !_adsHeld) {
-      AdScheduler.instance.hold();
-      _adsHeld = true;
-    }
-    if (AuthService.instance.signedIn && _adsHeld) {
+    // Guests now see the live page, so ads are no longer held back.
+    if (_adsHeld) {
       AdScheduler.instance.release();
       _adsHeld = false;
     }
@@ -40,9 +36,11 @@ class _AuthGateState extends State<AuthGate> {
     _syncAds();
     if (mounted) {
       setState(() {});
-      if (AuthService.instance.ready && !AuthService.instance.signedIn) {
+      if (AuthService.instance.ready) {
+        // Signed out, or just signed in from a login page opened over the
+        // app: return to the first page.
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && !AuthService.instance.signedIn) {
+          if (mounted) {
             Navigator.of(context).popUntil((route) => route.isFirst);
           }
         });
@@ -68,12 +66,10 @@ class _AuthGateState extends State<AuthGate> {
         body: const Center(child: CircularProgressIndicator()),
       );
     }
-    if (!auth.signedIn) {
-      return const AuthScreen();
-    }
-    // Skip the separate Experience page and open the main app directly.
+    // Visitors open straight onto Live Events. The login page appears only
+    // when they tap something else (see ensureSignedIn).
     return KeyedSubtree(
-      key: ValueKey(auth.user!.id),
+      key: ValueKey(auth.user?.id ?? 'guest'),
       child: const ShellScreen(),
     );
   }
