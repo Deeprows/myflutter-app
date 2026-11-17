@@ -18,6 +18,7 @@ import '../services/push_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/brand_tag.dart';
+import '../widgets/prediction_promo_card.dart';
 import 'fan_thread_screen.dart';
 import 'fan_zone_screen.dart';
 import 'fan_profile_screen.dart';
@@ -338,6 +339,19 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
       if (result == null) return; // could not open (offline): ask next time
       await prefs.setBool(key, true);
       if (result && mounted) ContentSync.request(force: true);
+      // New fans: invite them into the weekly prediction game (shown once).
+      final promoKey = 'predict_promo_seen_$uid';
+      if (mounted && !(prefs.getBool(promoKey) ?? false)) {
+        await prefs.setBool(promoKey, true);
+        final join = await showPredictionPromo(context);
+        if (join == true && mounted) {
+          setState(() {
+            _index = 4; // AI Predict tab
+            _visited.add(4);
+          });
+          AppMemory.setInt('tab', 4);
+        }
+      }
     } catch (_) {
     } finally {
       _profilePrompting = false;
