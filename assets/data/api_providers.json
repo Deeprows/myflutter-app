@@ -21,7 +21,7 @@
         "id": "gemini",
         "label": "Gemini",
         "type": "gemini",
-        "enabled": true,
+        "enabled": false,
         "model": "gemini-3.5-flash",
         "keyEnv": "GEMINI_API_KEY"
       },
