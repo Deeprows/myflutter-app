@@ -9,6 +9,7 @@ import '../config.dart';
 
 import '../player/mini_player.dart';
 import '../services/app_memory.dart';
+import '../services/app_updater.dart';
 import '../services/content_sync.dart';
 import '../services/notice_service.dart';
 import '../services/manual_ad_service.dart';
@@ -108,6 +109,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
 
     // Telegram invite repeats on app opening until the user taps Join.
     Future<void>.delayed(const Duration(seconds: 2), () async {
+      if (mounted) await AppUpdater.instance.checkOnStart(context);
       if (mounted) await _showTelegramInvite();
       if (mounted) NoticeService.instance.showOnStart(context);
       if (mounted) _scheduleManualAd();
