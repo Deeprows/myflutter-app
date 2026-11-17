@@ -11,7 +11,7 @@
     "altUrl2": "https://embedme.st/play/game-soccer_401861185.php",
     "altUrl3": "https://abisnews.com/abc88.php?p=3",
     "homeLogo": "21",
-    "awayLogo": "0"
+    "awayLogo": "319"
   },
   {
     "id": "2",
@@ -24,7 +24,7 @@
     "altUrl": "",
     "altUrl2": "",
     "altUrl3": "",
-    "homeLogo": "0",
+    "homeLogo": "43",
     "awayLogo": "27"
   },
   {
@@ -38,8 +38,8 @@
     "altUrl": "",
     "altUrl2": "",
     "altUrl3": "",
-    "homeLogo": "0",
-    "awayLogo": "0"
+    "homeLogo": "576",
+    "awayLogo": "771"
   },
   {
     "id": "4",
@@ -52,8 +52,8 @@
     "altUrl": "",
     "altUrl2": "",
     "altUrl3": "",
-    "homeLogo": "0",
-    "awayLogo": "0"
+    "homeLogo": "550",
+    "awayLogo": "581"
   },
   {
     "id": "5",
@@ -66,8 +66,8 @@
     "altUrl": "",
     "altUrl2": "",
     "altUrl3": "",
-    "homeLogo": "0",
-    "awayLogo": "0"
+    "homeLogo": "584",
+    "awayLogo": "680"
   },
   {
     "id": "6",
@@ -80,25 +80,11 @@
     "altUrl": "",
     "altUrl2": "",
     "altUrl3": "",
-    "homeLogo": "0",
+    "homeLogo": "563",
     "awayLogo": "775"
   },
   {
     "id": "7",
-    "home": "Bosnia and Herzegovina",
-    "away": "Romania",
-    "league": "UEFA Nations League - League B: Group 4",
-    "kickoff": "2026-11-17T20:45:00+01:00",
-    "duration": 130,
-    "url": "",
-    "altUrl": "",
-    "altUrl2": "",
-    "altUrl3": "",
-    "homeLogo": "0",
-    "awayLogo": "0"
-  },
-  {
-    "id": "8",
     "home": "Poland",
     "away": "Sweden",
     "league": "UEFA Nations League - League B: Group 4",
