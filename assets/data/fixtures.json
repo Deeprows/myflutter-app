@@ -96,5 +96,19 @@
     "altUrl3": "",
     "homeLogo": "24",
     "awayLogo": "5"
+  },
+  {
+    "id": "8",
+    "home": "Tanzania",
+    "away": "Nigeria",
+    "league": "African Cup of Nations Qualification",
+    "kickoff": "2026-11-17T14:00:00+01:00",
+    "duration": 130,
+    "url": "https://vivtops.st/vivo1/?ch=13",
+    "altUrl": "",
+    "altUrl2": "",
+    "altUrl3": "",
+    "homeLogo": "1489",
+    "awayLogo": "19"
   }
 ]
