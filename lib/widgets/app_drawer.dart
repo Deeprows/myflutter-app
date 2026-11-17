@@ -22,6 +22,7 @@ import '../screens/plans_screen.dart';
 import '../screens/remove_ads_screen.dart';
 import '../screens/support_us_screen.dart';
 import '../services/auth_service.dart';
+import '../services/login_gate.dart';
 import '../services/fan_zone_service.dart';
 import '../services/notice_service.dart';
 import '../services/notification_center.dart';
@@ -475,35 +476,47 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
                     _row(
                       Icons.play_circle_outline_rounded,
                       'Football Highlights'.tr,
-                      (c) => _push(
-                        c,
-                        const ContentShortcutScreen(
-                          title: 'Football Highlights',
-                          child: HighlightsScreen(),
-                        ),
-                      ),
+                      (c) async {
+                        if (!await ensureSignedIn(c)) return;
+                        if (!c.mounted) return;
+                        await _push(
+                          c,
+                          const ContentShortcutScreen(
+                            title: 'Football Highlights',
+                            child: HighlightsScreen(),
+                          ),
+                        );
+                      },
                     ),
                     _row(
                       Icons.live_tv_rounded,
                       'TV Channels'.tr,
-                      (c) => _push(
-                        c,
-                        const ContentShortcutScreen(
-                          title: 'TV Channels',
-                          child: TvScreen(),
-                        ),
-                      ),
+                      (c) async {
+                        if (!await ensureSignedIn(c)) return;
+                        if (!c.mounted) return;
+                        await _push(
+                          c,
+                          const ContentShortcutScreen(
+                            title: 'TV Channels',
+                            child: TvScreen(),
+                          ),
+                        );
+                      },
                     ),
                     _row(
                       Icons.movie_outlined,
                       'Movies'.tr,
-                      (c) => _push(
-                        c,
-                        const ContentShortcutScreen(
-                          title: 'Movies',
-                          child: MoviesScreen(),
-                        ),
-                      ),
+                      (c) async {
+                        if (!await ensureSignedIn(c)) return;
+                        if (!c.mounted) return;
+                        await _push(
+                          c,
+                          const ContentShortcutScreen(
+                            title: 'Movies',
+                            child: MoviesScreen(),
+                          ),
+                        );
+                      },
                     ),
                     _heading('Scores'.tr),
                     _row(
