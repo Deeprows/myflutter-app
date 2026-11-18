@@ -9,6 +9,7 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../theme/app_theme.dart';
 import '../utils/l10n.dart';
+import '../widgets/cast_button.dart';
 
 /// An in-app YouTube player for trailers supplied by TMDB.
 /// This keeps the user inside DamiMovies instead of launching a browser/app.
@@ -279,6 +280,9 @@ function nudge() {
                 leading: IconButton(
                     onPressed: _back, icon: Icon(Icons.arrow_back_rounded)),
                 actions: [
+                  CastButton(
+                    target: () => CastTarget(title: widget.title),
+                  ),
                   IconButton(
                       tooltip: 'Reload trailer',
                       onPressed: _reload,
