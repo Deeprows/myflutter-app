@@ -84,9 +84,9 @@ class _FanPostVideoState extends State<FanPostVideo>
   }
   String get _url => fanVideoUrl(widget.url);
 
-  // Shape of the video box (width / height). Starts from the link's known
-  // format and follows the real video once the player can measure it.
-  // [_manualRatio] wins when the viewer picks a shape.
+  // Shape of the video box (width / height). Starts from a guess based on the
+  // link (Shorts are portrait) and follows the real video once
+  // the player can measure it. [_manualRatio] wins when the viewer picks a shape.
   late EmbedInfo _info = embedInfoFor(widget.url);
   late double _ratio = _info.ratio;
   double? _manualRatio;
@@ -112,10 +112,28 @@ class _FanPostVideoState extends State<FanPostVideo>
     if ((r - _ratio).abs() > 0.02 && mounted) setState(() => _ratio = r);
   }
 
-  String _iframeHtml(String src) {
+  String _iframeHtml(String src, {String script = '', bool scroll = false}) {
     final safe = const HtmlEscape(HtmlEscapeMode.attribute).convert(src);
-    return '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head><body style="margin:0;background:#000"><iframe src="$safe" style="position:fixed;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write" allowfullscreen scrolling="no"></iframe></body></html>';
+    return '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head><body style="margin:0;background:#000"><iframe src="$safe" style="position:fixed;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write" allowfullscreen scrolling="${scroll ? 'yes' : 'no'}"></iframe>$script</body></html>';
   }
+
+  /// X's embed tells its page how big the post is. Forward that as a size so
+  /// the box fits the post (video included) instead of a fixed guess.
+  static const _tweetSizeScript = r'''<script>
+window.addEventListener('message', function (e) {
+  try {
+    var d = e.data;
+    if (typeof d === 'string') d = JSON.parse(d);
+    var p = d && d['twttr.embed'];
+    if (p && p.method === 'twttr.private.resize' && p.params && p.params[0]) {
+      var o = p.params[0];
+      if (o.width > 0 && o.height > 0) {
+        FanSize.postMessage(Math.round(o.width) + 'x' + Math.round(o.height));
+      }
+    }
+  } catch (x) {}
+});
+</script>''';
 
   String? get _youtubeThumbnail {
     final uri = Uri.tryParse(_url);
@@ -379,9 +397,18 @@ class _FanPostVideoState extends State<FanPostVideo>
       }
     }
     try {
-      // Use the browser-like agent for third-party video players.
+      // Browser-like agent (no "wv"): X serves its full player to it instead
+      // of an "open the app" page.
       await c.setUserAgent(AppConfig.userAgent);
-      if (_info.kind == EmbedKind.vimeo && initialUri != null) {
+      if (_info.kind == EmbedKind.twitter) {
+        final id = tweetIdFrom(_url);
+        if (id == null) throw const FormatException('Invalid X post URL');
+        await _loadHtml(c,
+          _iframeHtml(twitterEmbedUrl(id), script: _tweetSizeScript, scroll: true),
+          baseUrl: AppConfig.embedOrigin,
+        );
+        return;
+      } else if (_info.kind == EmbedKind.vimeo && initialUri != null) {
         final id = _vimeoId(initialUri);
         if (id == null) throw FormatException('Invalid Vimeo video URL');
         await _loadHtml(c, 
@@ -405,19 +432,6 @@ class _FanPostVideoState extends State<FanPostVideo>
         await _loadHtml(c,
           _iframeHtml(DailymotionCheck.playerUrl(id)),
           baseUrl: AppConfig.embedOrigin,
-        );
-        return;
-      }
-      } else if (_info.kind == EmbedKind.twitter && initialUri != null) {
-        // X post pages cannot be embedded directly in a WebView iframe.
-        // Use X's dedicated embedded-post player so native post video is
-        // rendered with the creator's embed permissions and playback controls.
-        final id = tweetIdFrom(_url);
-        if (id == null) throw FormatException('Invalid X post URL');
-        await _loadHtml(
-          c,
-          _iframeHtml(twitterEmbedUrl(id, dark: true)),
-          baseUrl: 'https://platform.twitter.com',
         );
         return;
       }
@@ -510,6 +524,8 @@ class _FanPostVideoState extends State<FanPostVideo>
   String get _playLabel {
     if (_failed) return 'Retry video';
     switch (_info.kind) {
+      case EmbedKind.twitter:
+        return 'Play X video';
       case EmbedKind.vimeo:
         return 'Play Vimeo video';
       case EmbedKind.dailymotion:
