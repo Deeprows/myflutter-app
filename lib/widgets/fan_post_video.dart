@@ -117,6 +117,27 @@ class _FanPostVideoState extends State<FanPostVideo>
     return '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head><body style="margin:0;background:#000"><iframe src="$safe" style="position:fixed;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write" allowfullscreen scrolling="${scroll ? 'yes' : 'no'}"></iframe>$script</body></html>';
   }
 
+  /// X's video-only widget renders the attached clip without the surrounding
+  /// post text, author header, or engagement controls. The standard Tweet.html
+  /// iframe intentionally renders the complete post, so it must not be used
+  /// for this player.
+  String _twitterVideoHtml(String id) {
+    final postUrl = 'https://x.com/i/status/$id';
+    final safeUrl = const HtmlEscape(HtmlEscapeMode.attribute).convert(postUrl);
+    return '''<!doctype html>
+<html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}
+.twitter-video{margin:0!important;max-width:100%!important}</style>
+</head><body>
+<blockquote class="twitter-video" data-theme="dark" data-lang="en" data-media-max-width="560">
+<a href="$safeUrl">Loading video…</a>
+</blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+$_tweetSizeScript
+</body></html>''';
+  }
+
   /// X's embed tells its page how big the post is. Forward that as a size so
   /// the box fits the post (video included) instead of a fixed guess.
   static const _tweetSizeScript = r'''<script>
@@ -403,9 +424,11 @@ window.addEventListener('message', function (e) {
       if (_info.kind == EmbedKind.twitter) {
         final id = tweetIdFrom(_url);
         if (id == null) throw const FormatException('Invalid X post URL');
-        await _loadHtml(c,
-          _iframeHtml(twitterEmbedUrl(id), script: _tweetSizeScript, scroll: true),
-          baseUrl: AppConfig.embedOrigin,
+        // Use X's dedicated video widget instead of Tweet.html. Tweet.html
+        // displays the entire post (author, text and actions) around the clip.
+        _ratio = kLandscape;
+        await _loadHtml(c, _twitterVideoHtml(id),
+          baseUrl: 'https://platform.twitter.com',
         );
         return;
       } else if (_info.kind == EmbedKind.vimeo && initialUri != null) {
