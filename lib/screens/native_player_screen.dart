@@ -10,6 +10,7 @@ import '../services/background_playback.dart';
 import '../services/stream_resolver.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_watermark.dart';
+import '../widgets/cast_button.dart';
 import 'player_screen.dart';
 
 /// One playable stream with the headers its host may require.
@@ -116,6 +117,26 @@ class _NativePlayerScreenState extends State<NativePlayerScreen>
     _c?.pause();
   }
 
+  /// What the cast button sends to the TV: the channel that plays now.
+  CastTarget _castTarget() {
+    final s = widget.streams[_idx];
+    final r = StreamResolver.resolve(s.url);
+    return CastTarget(
+      title: widget.title,
+      url: r.url,
+      kind: r.kind,
+      referer: s.referer,
+      userAgent: s.userAgent,
+    );
+  }
+
+  /// The TV took over: pause the phone's own copy of the channel.
+  void _onCastStarted() {
+    _wasPlaying = false;
+    _c?.pause();
+    if (mounted) setState(() {});
+  }
+
   void _bgSeek(int seconds) {
     final c = _c;
     if (c == null || !c.value.isInitialized) return;
@@ -132,6 +153,7 @@ class _NativePlayerScreenState extends State<NativePlayerScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final c = _c;
     if (c == null || !c.value.isInitialized) return;
+    if (BackgroundPlayback.castActive) return; // the TV is playing
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
@@ -410,6 +432,11 @@ class _NativePlayerScreenState extends State<NativePlayerScreen>
                                 fontWeight: FontWeight.w600)),
                     ],
                   ),
+                ),
+                CastButton(
+                  target: _castTarget,
+                  onCastStarted: _onCastStarted,
+                  color: Colors.white,
                 ),
                 if (multi)
                   TextButton.icon(
