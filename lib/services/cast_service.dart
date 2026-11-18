@@ -1,0 +1,702 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:android_intent_plus/android_intent.dart';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import 'background_playback.dart';
+import 'stream_resolver.dart';
+
+/// A TV / speaker on the Wi-Fi that can play a link by itself (DLNA / UPnP
+/// "media renderer": Samsung, LG, Sony, Hisense, TCL, Xiaomi, Android TV...).
+class CastDevice {
+  final String name;
+  final String location;
+  final String avControl;
+  final String avType;
+  final String? rcControl;
+  final String? rcType;
+
+  const CastDevice({
+    required this.name,
+    required this.location,
+    required this.avControl,
+    required this.avType,
+    this.rcControl,
+    this.rcType,
+  });
+
+  String get host => Uri.tryParse(location)?.host ?? location;
+}
+
+/// Sends a channel / video to a TV so the TV plays it by itself.
+///
+/// Why this keeps working when the phone is locked or the app is minimised:
+///  * The TV pulls the stream directly (or through a tiny relay inside the
+///    app when the stream needs a Referer / User-Agent or is https).
+///  * While casting, the Android foreground service (see
+///    BackgroundPlayback) holds a CPU + Wi-Fi lock, so the relay and the
+///    remote control keep running with the screen off.
+///
+/// Web embeds (pages, iframes) cannot be sent as a link; for those the
+/// caller falls back to screen mirroring ([openMirrorSettings]).
+class CastService extends ChangeNotifier {
+  CastService._();
+  static final CastService instance = CastService._();
+
+  final List<CastDevice> devices = [];
+  bool scanning = false;
+  bool connecting = false;
+  bool casting = false;
+  bool tvPlaying = false;
+  CastDevice? device;
+  String castTitle = '';
+
+  /// TV volume 0-100, or -1 when the TV does not report it.
+  int tvVolume = -1;
+  String? error;
+
+  Timer? _poll;
+  int _fails = 0;
+  int _stoppedPolls = 0;
+  bool _everPlayed = false;
+
+  HttpServer? _server;
+  HttpClient? _client;
+  Map<String, String> _upHeaders = {};
+  File? _localFile;
+
+  // ------------------------------------------------------------- discovery
+
+  static const _ssdpAddr = '239.255.255.250';
+
+  /// Looks for TVs on the Wi-Fi (about 5 seconds).
+  Future<void> scan({Duration duration = const Duration(seconds: 5)}) async {
+    if (scanning) return;
+    scanning = true;
+    error = null;
+    notifyListeners();
+    await BackgroundPlayback.requestLocalNetwork();
+    await BackgroundPlayback.setMulticast(true);
+    RawDatagramSocket? sock;
+    final locations = <String>{};
+    try {
+      sock = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      final s = sock;
+      final re = RegExp(r'^location:\s*(\S+)', caseSensitive: false, multiLine: true);
+      s.listen((e) {
+        if (e != RawSocketEvent.read) return;
+        Datagram? d = s.receive();
+        while (d != null) {
+          final m = re.firstMatch(utf8.decode(d.data, allowMalformed: true));
+          if (m != null) locations.add(m.group(1)!.trim());
+          d = s.receive();
+        }
+      });
+      const targets = [
+        'urn:schemas-upnp-org:device:MediaRenderer:1',
+        'urn:schemas-upnp-org:service:AVTransport:1',
+      ];
+      void ping() {
+        for (final st in targets) {
+          final msg = 'M-SEARCH * HTTP/1.1\r\n'
+              'HOST: $_ssdpAddr:1900\r\n'
+              'MAN: "ssdp:discover"\r\n'
+              'MX: 2\r\n'
+              'ST: $st\r\n\r\n';
+          try {
+            s.send(utf8.encode(msg), InternetAddress(_ssdpAddr), 1900);
+          } catch (_) {}
+        }
+      }
+
+      ping();
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      ping();
+      await Future<void>.delayed(duration - const Duration(milliseconds: 900));
+    } catch (_) {
+      error = 'Could not search for TVs. Check your Wi-Fi connection.';
+    } finally {
+      sock?.close();
+      await BackgroundPlayback.setMulticast(false);
+    }
+
+    final found = await Future.wait(locations.map(_describe));
+    final seen = <String>{};
+    devices
+      ..clear()
+      ..addAll(found.whereType<CastDevice>().where((d) => seen.add('${d.name}|${d.host}')));
+    devices.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    scanning = false;
+    if (devices.isEmpty && error == null) {
+      error = 'No TV found. Put the phone and the TV on the same Wi-Fi.';
+    }
+    notifyListeners();
+  }
+
+  Future<CastDevice?> _describe(String location) async {
+    try {
+      final r = await http
+          .get(Uri.parse(location))
+          .timeout(const Duration(seconds: 4));
+      if (r.statusCode != 200) return null;
+      final xml = utf8.decode(r.bodyBytes, allowMalformed: true);
+      final baseRaw = _tag(xml, 'URLBase');
+      final base = Uri.parse(
+          (baseRaw == null || baseRaw.isEmpty) ? location : baseRaw);
+      String? avUrl, avType, rcUrl, rcType;
+      for (final m in RegExp(r'<service>([\s\S]*?)</service>', caseSensitive: false)
+          .allMatches(xml)) {
+        final block = m.group(1)!;
+        final type = _tag(block, 'serviceType') ?? '';
+        final ctl = _tag(block, 'controlURL');
+        if (ctl == null) continue;
+        final abs = base.resolve(ctl.trim()).toString();
+        if (type.contains('AVTransport') && avUrl == null) {
+          avUrl = abs;
+          avType = type.trim();
+        } else if (type.contains('RenderingControl') && rcUrl == null) {
+          rcUrl = abs;
+          rcType = type.trim();
+        }
+      }
+      if (avUrl == null || avType == null) return null;
+      final name = _unesc(_tag(xml, 'friendlyName') ?? Uri.parse(location).host);
+      return CastDevice(
+        name: name,
+        location: location,
+        avControl: avUrl,
+        avType: avType,
+        rcControl: rcUrl,
+        rcType: rcType,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // -------------------------------------------------------------- casting
+
+  /// Sends a stream link to [d]. Returns true when the TV accepted it.
+  Future<bool> castUrl(
+    CastDevice d,
+    String url, {
+    required String title,
+    StreamKind? kind,
+    String? referer,
+    String? userAgent,
+  }) async {
+    return _begin(d, title, () async {
+      final headers = <String, String>{
+        if ((userAgent ?? '').trim().isNotEmpty) 'User-Agent': userAgent!.trim(),
+        if ((referer ?? '').trim().isNotEmpty) 'Referer': referer!.trim(),
+      };
+      _upHeaders = headers;
+      final lower = url.toLowerCase();
+      final needsRelay = headers.isNotEmpty || lower.startsWith('https');
+      final mime = _mimeFor(kind, lower);
+      if (!needsRelay) return (url: url, mime: mime);
+      final origin = await _ensureServer();
+      final name = kind == StreamKind.hls
+          ? 'index.m3u8'
+          : kind == StreamKind.dash
+              ? 'index.mpd'
+              : _nameOf(url);
+      return (url: '$origin/p/${_b64(url)}/$name', mime: mime);
+    });
+  }
+
+  /// Sends a video file stored on the phone (served over Wi-Fi).
+  Future<bool> castFile(CastDevice d, File file, {required String title}) async {
+    return _begin(d, title, () async {
+      _localFile = file;
+      final origin = await _ensureServer();
+      final name = _nameOf(file.path);
+      return (url: '$origin/f/$name', mime: _mimeOfPath(file.path));
+    });
+  }
+
+  Future<bool> _begin(
+    CastDevice d,
+    String title,
+    Future<({String url, String mime})> Function() prepare,
+  ) async {
+    if (connecting) return false;
+    connecting = true;
+    error = null;
+    notifyListeners();
+    try {
+      if (casting) await stop();
+      final p = await prepare();
+      await _soapQuiet(d.avControl, d.avType, 'Stop', '<InstanceID>0</InstanceID>');
+      final didl = '<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" '
+          'xmlns:dc="http://purl.org/dc/elements/1.1/" '
+          'xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">'
+          '<item id="0" parentID="-1" restricted="1">'
+          '<dc:title>${_esc(title)}</dc:title>'
+          '<upnp:class>object.item.videoItem</upnp:class>'
+          '<res protocolInfo="http-get:*:${p.mime}:*">${_esc(p.url)}</res>'
+          '</item></DIDL-Lite>';
+      await _soap(
+        d.avControl,
+        d.avType,
+        'SetAVTransportURI',
+        '<InstanceID>0</InstanceID>'
+            '<CurrentURI>${_esc(p.url)}</CurrentURI>'
+            '<CurrentURIMetaData>${_esc(didl)}</CurrentURIMetaData>',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await _soap(d.avControl, d.avType, 'Play',
+          '<InstanceID>0</InstanceID><Speed>1</Speed>');
+
+      device = d;
+      casting = true;
+      tvPlaying = true;
+      castTitle = title;
+      _everPlayed = false;
+      _stoppedPolls = 0;
+      _fails = 0;
+      BackgroundPlayback.castActive = true;
+      BackgroundPlayback.castHook = _onNotificationAction;
+      await BackgroundPlayback.startCasting(title, 'Casting to ${d.name}');
+      _poll?.cancel();
+      _poll = Timer.periodic(const Duration(seconds: 8), (_) => _check());
+      connecting = false;
+      notifyListeners();
+      unawaited(refreshTvVolume());
+      return true;
+    } catch (e) {
+      _cleanup();
+      error = e is TimeoutException
+          ? 'The TV did not answer. Try again.'
+          : (e is String ? e : 'The TV could not play this stream.');
+      connecting = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ------------------------------------------------------------- TV remote
+
+  Future<void> play() async {
+    final d = device;
+    if (d == null) return;
+    try {
+      await _soap(d.avControl, d.avType, 'Play',
+          '<InstanceID>0</InstanceID><Speed>1</Speed>');
+      tvPlaying = true;
+      BackgroundPlayback.setPlaying(true, fromCast: true);
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  Future<void> pause() async {
+    final d = device;
+    if (d == null) return;
+    try {
+      await _soap(d.avControl, d.avType, 'Pause', '<InstanceID>0</InstanceID>');
+      tvPlaying = false;
+      BackgroundPlayback.setPlaying(false, fromCast: true);
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  Future<void> togglePlay() => tvPlaying ? pause() : play();
+
+  /// Stops the TV and ends casting.
+  Future<void> stop() async {
+    final d = device;
+    if (d != null) {
+      await _soapQuiet(d.avControl, d.avType, 'Stop', '<InstanceID>0</InstanceID>');
+    }
+    _cleanup();
+    notifyListeners();
+  }
+
+  Future<void> refreshTvVolume() async {
+    final d = device;
+    if (d == null || d.rcControl == null) return;
+    try {
+      final x = await _soap(d.rcControl!, d.rcType!, 'GetVolume',
+          '<InstanceID>0</InstanceID><Channel>Master</Channel>');
+      final v = int.tryParse(_tag(x, 'CurrentVolume') ?? '');
+      if (v != null) {
+        tvVolume = v.clamp(0, 100);
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> setTvVolume(int value) async {
+    final d = device;
+    if (d == null || d.rcControl == null) return;
+    final v = value.clamp(0, 100);
+    tvVolume = v;
+    notifyListeners();
+    try {
+      await _soap(d.rcControl!, d.rcType!, 'SetVolume',
+          '<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredVolume>$v</DesiredVolume>');
+    } catch (_) {}
+  }
+
+  bool get tvVolumeSupported => device?.rcControl != null;
+
+  /// Opens Android's "Cast screen / Smart View" panel (mirrors the phone
+  /// screen to a TV or Chromecast). Used for web embeds, which cannot be sent
+  /// as a link. Mirroring needs the phone screen on.
+  static Future<bool> openMirrorSettings() async {
+    const actions = [
+      'android.settings.CAST_SETTINGS',
+      'android.settings.WIFI_DISPLAY_SETTINGS',
+    ];
+    for (final a in actions) {
+      try {
+        await AndroidIntent(action: a).launch();
+        return true;
+      } catch (_) {}
+    }
+    return false;
+  }
+
+  // ---------------------------------------------------------- housekeeping
+
+  bool _onNotificationAction(String action) {
+    switch (action) {
+      case 'play':
+        play();
+      case 'pause':
+        pause();
+      case 'stop':
+        stop();
+    }
+    return true; // seek buttons do nothing while casting live TV
+  }
+
+  Future<void> _check() async {
+    final d = device;
+    if (d == null || !casting) return;
+    try {
+      final x = await _soap(
+          d.avControl, d.avType, 'GetTransportInfo', '<InstanceID>0</InstanceID>');
+      _fails = 0;
+      final st = (_tag(x, 'CurrentTransportState') ?? '').toUpperCase();
+      final playing = st == 'PLAYING' || st == 'TRANSITIONING';
+      if (playing) _everPlayed = true;
+      if (playing != tvPlaying) {
+        tvPlaying = playing;
+        BackgroundPlayback.setPlaying(playing, fromCast: true);
+        notifyListeners();
+      }
+      if (!playing &&
+          _everPlayed &&
+          (st == 'STOPPED' || st == 'NO_MEDIA_PRESENT')) {
+        if (++_stoppedPolls >= 2) _finish('The TV stopped playing.');
+      } else {
+        _stoppedPolls = 0;
+      }
+    } catch (_) {
+      if (++_fails >= 4) _finish('Lost connection to the TV.');
+    }
+  }
+
+  void _finish(String message) {
+    _cleanup();
+    error = message;
+    notifyListeners();
+  }
+
+  void _cleanup() {
+    _poll?.cancel();
+    _poll = null;
+    final wasCasting = casting;
+    casting = false;
+    connecting = false;
+    tvPlaying = false;
+    tvVolume = -1;
+    device = null;
+    castTitle = '';
+    _localFile = null;
+    _upHeaders = {};
+    _server?.close(force: true);
+    _server = null;
+    _client?.close(force: true);
+    _client = null;
+    BackgroundPlayback.castHook = null;
+    BackgroundPlayback.castActive = false;
+    if (wasCasting) BackgroundPlayback.stopCasting();
+  }
+
+  // ----------------------------------------------------------------- SOAP
+
+  Future<String> _soap(String url, String service, String action, String args) async {
+    final body = '<?xml version="1.0" encoding="utf-8"?>'
+        '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+        's:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">'
+        '<s:Body><u:$action xmlns:u="$service">$args</u:$action></s:Body></s:Envelope>';
+    final r = await http
+        .post(
+          Uri.parse(url),
+          headers: {
+            'Content-Type': 'text/xml; charset="utf-8"',
+            'SOAPAction': '"$service#$action"',
+          },
+          body: utf8.encode(body),
+        )
+        .timeout(const Duration(seconds: 8));
+    if (r.statusCode >= 300) {
+      throw 'The TV refused this stream (${r.statusCode}).';
+    }
+    return utf8.decode(r.bodyBytes, allowMalformed: true);
+  }
+
+  Future<void> _soapQuiet(String url, String service, String action, String args) async {
+    try {
+      await _soap(url, service, action, args);
+    } catch (_) {}
+  }
+
+  // ---------------------------------------------- relay (phone -> TV)
+
+  /// Small web server on the phone. The TV asks it for the stream; it adds
+  /// the headers the channel needs (Referer / User-Agent), rewrites m3u8
+  /// playlists so every segment also goes through it, and turns https into
+  /// plain http, which every TV accepts.
+  Future<String> _ensureServer() async {
+    final ip = await _lanIp();
+    if (ip == null) {
+      throw 'Connect the phone to the same Wi-Fi as the TV.';
+    }
+    if (_server == null) {
+      final s = await HttpServer.bind(InternetAddress.anyIPv4, 0);
+      _server = s;
+      s.listen(_handle, onError: (_) {});
+    }
+    return 'http://$ip:${_server!.port}';
+  }
+
+  Future<String?> _lanIp() async {
+    try {
+      final ifs = await NetworkInterface.list(
+          type: InternetAddressType.IPv4, includeLoopback: false);
+      String? fallback;
+      for (final i in ifs) {
+        for (final a in i.addresses) {
+          final ip = a.address;
+          final lan = ip.startsWith('192.168.') ||
+              ip.startsWith('10.') ||
+              RegExp(r'^172\.(1[6-9]|2\d|3[01])\.').hasMatch(ip);
+          if (!lan) continue;
+          final n = i.name.toLowerCase();
+          if (n.contains('wlan') || n.contains('wifi') || n.startsWith('en')) {
+            return ip;
+          }
+          fallback ??= ip;
+        }
+      }
+      return fallback;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _handle(HttpRequest req) async {
+    try {
+      final segs = req.uri.pathSegments;
+      if (segs.length >= 2 && segs[0] == 'p') {
+        final upstream = utf8.decode(base64Url.decode(base64Url.normalize(segs[1])));
+        await _proxy(req, upstream);
+      } else if (segs.isNotEmpty && segs[0] == 'f' && _localFile != null) {
+        await _serveFile(req, _localFile!);
+      } else {
+        req.response.statusCode = 404;
+        await req.response.close();
+      }
+    } catch (_) {
+      try {
+        req.response.statusCode = 502;
+        await req.response.close();
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _proxy(HttpRequest req, String upstream) async {
+    final client = _client ??= HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15)
+      ..userAgent = null;
+    final up = await client.getUrl(Uri.parse(upstream));
+    up.followRedirects = true;
+    up.maxRedirects = 6;
+    _upHeaders.forEach((k, v) => up.headers.set(k, v));
+    final range = req.headers.value('range');
+    if (range != null) up.headers.set('range', range);
+    final r = await up.close();
+    final res = req.response;
+
+    var base = Uri.parse(upstream);
+    for (final red in r.redirects) {
+      base = base.resolveUri(red.location);
+    }
+    final ct = r.headers.contentType?.mimeType.toLowerCase() ?? '';
+    final isPlaylist = base.path.toLowerCase().endsWith('.m3u8') ||
+        upstream.toLowerCase().contains('.m3u8') ||
+        ct.contains('mpegurl');
+
+    if (isPlaylist && r.statusCode == 200) {
+      final bytes = await r.fold<List<int>>(<int>[], (a, b) => a..addAll(b));
+      final text = utf8.decode(bytes, allowMalformed: true);
+      if (text.trimLeft().startsWith('#EXTM3U')) {
+        final origin = 'http://${req.headers.value('host')}';
+        final out = utf8.encode(_rewritePlaylist(text, base, origin));
+        res.statusCode = 200;
+        res.headers.set('content-type', 'application/vnd.apple.mpegurl');
+        res.headers.set('cache-control', 'no-cache');
+        res.contentLength = out.length;
+        res.add(out);
+        await res.close();
+        return;
+      }
+      res.statusCode = 200;
+      if (ct.isNotEmpty) res.headers.set('content-type', ct);
+      res.contentLength = bytes.length;
+      res.add(bytes);
+      await res.close();
+      return;
+    }
+
+    res.statusCode = r.statusCode;
+    if (ct.isNotEmpty) {
+      res.headers.set('content-type', r.headers.contentType.toString());
+    } else if (base.path.toLowerCase().endsWith('.ts')) {
+      res.headers.set('content-type', 'video/mp2t');
+    }
+    for (final h in const ['content-range', 'accept-ranges']) {
+      final v = r.headers.value(h);
+      if (v != null) res.headers.set(h, v);
+    }
+    if (r.contentLength >= 0) res.contentLength = r.contentLength;
+    if (req.method == 'HEAD') {
+      await res.close();
+      return;
+    }
+    await res.addStream(r);
+    await res.close();
+  }
+
+  String _rewritePlaylist(String text, Uri base, String origin) {
+    String prox(String ref) {
+      final abs = base.resolve(ref.trim()).toString();
+      return '$origin/p/${_b64(abs)}/${_nameOf(abs)}';
+    }
+
+    final uriAttr = RegExp(r'URI="([^"]+)"');
+    final out = <String>[];
+    for (final raw in const LineSplitter().convert(text)) {
+      final line = raw.trimRight();
+      if (line.isEmpty) {
+        out.add(line);
+      } else if (line.startsWith('#')) {
+        out.add(line.replaceAllMapped(
+            uriAttr, (m) => 'URI="${prox(m.group(1)!)}"'));
+      } else {
+        out.add(prox(line));
+      }
+    }
+    return out.join('\n');
+  }
+
+  Future<void> _serveFile(HttpRequest req, File f) async {
+    final len = await f.length();
+    final res = req.response;
+    res.headers.set('accept-ranges', 'bytes');
+    res.headers.set('content-type', _mimeOfPath(f.path));
+    var start = 0;
+    var end = len - 1;
+    final rng = req.headers.value('range');
+    if (rng != null) {
+      final m = RegExp(r'bytes=(\d*)-(\d*)').firstMatch(rng);
+      if (m != null) {
+        final a = m.group(1)!;
+        final b = m.group(2)!;
+        if (a.isEmpty && b.isNotEmpty) {
+          start = len - int.parse(b);
+        } else {
+          if (a.isNotEmpty) start = int.parse(a);
+          if (b.isNotEmpty) end = int.parse(b);
+        }
+        if (start < 0) start = 0;
+        if (end >= len) end = len - 1;
+        if (start > end) {
+          res.statusCode = 416;
+          await res.close();
+          return;
+        }
+        res.statusCode = 206;
+        res.headers.set('content-range', 'bytes $start-$end/$len');
+      }
+    }
+    res.contentLength = end - start + 1;
+    if (req.method == 'HEAD') {
+      await res.close();
+      return;
+    }
+    await res.addStream(f.openRead(start, end + 1));
+    await res.close();
+  }
+
+  // -------------------------------------------------------------- helpers
+
+  static String _b64(String s) => base64Url.encode(utf8.encode(s));
+
+  static String _nameOf(String url) {
+    final path = Uri.tryParse(url)?.path ?? url;
+    var n = path.split(RegExp(r'[\\/]')).where((e) => e.isNotEmpty).lastOrNull ?? 'stream';
+    n = n.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    if (n.length > 40) n = n.substring(n.length - 40);
+    return n.isEmpty ? 'stream' : n;
+  }
+
+  static String _mimeFor(StreamKind? kind, String lowerUrl) {
+    if (kind == StreamKind.hls || lowerUrl.contains('.m3u8')) {
+      return 'application/vnd.apple.mpegurl';
+    }
+    if (kind == StreamKind.dash || lowerUrl.contains('.mpd')) {
+      return 'application/dash+xml';
+    }
+    return _mimeOfPath(lowerUrl.split('?').first);
+  }
+
+  static String _mimeOfPath(String p) {
+    final l = p.toLowerCase();
+    if (l.endsWith('.mkv')) return 'video/x-matroska';
+    if (l.endsWith('.webm')) return 'video/webm';
+    if (l.endsWith('.mov')) return 'video/quicktime';
+    if (l.endsWith('.ts')) return 'video/mpeg';
+    if (l.endsWith('.mp3')) return 'audio/mpeg';
+    if (l.endsWith('.aac')) return 'audio/aac';
+    if (l.endsWith('.m4a')) return 'audio/mp4';
+    return 'video/mp4';
+  }
+
+  static String? _tag(String xml, String tag) {
+    final m = RegExp('<$tag[^>]*>([\\s\\S]*?)</$tag>', caseSensitive: false)
+        .firstMatch(xml);
+    return m?.group(1)?.trim();
+  }
+
+  static String _esc(String s) => s
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&apos;');
+
+  static String _unesc(String s) => s
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&apos;', "'")
+      .replaceAll('&#39;', "'")
+      .replaceAll('&amp;', '&');
+}
