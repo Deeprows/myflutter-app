@@ -6,18 +6,50 @@ void check(bool value, String label) {
 }
 
 void main() {
+  // X (Twitter) post links
   check(
-    tiktokIdFrom('https://www.tiktok.com/@user/video/7234567890123456789') ==
-        '7234567890123456789',
-    'tiktok video id',
+    tweetIdFrom('https://x.com/user/status/1234567890123456789?s=20&t=abc') ==
+        '1234567890123456789',
+    'x.com status id',
   );
-  check(tiktokIdFrom('https://vm.tiktok.com/ZMabc123/') == null, 'short link needs resolve');
-  check(isTikTokShortLink(Uri.parse('https://vm.tiktok.com/ZMabc123/')), 'vm short link');
-  check(isTikTokShortLink(Uri.parse('https://www.tiktok.com/t/ZTabc/')), '/t/ short link');
-  check(embedInfoFor('https://www.tiktok.com/@u/video/7234567890123456789').isPortrait, 'tiktok is portrait');
-  check(embedInfoFor('https://www.facebook.com/reel/123456').isPortrait, 'reel is portrait');
-  check(!embedInfoFor('https://www.facebook.com/watch/?v=123456').isPortrait, 'watch is landscape');
-  check(embedInfoFor('https://fb.watch/abc123/').kind == EmbedKind.facebook, 'fb.watch');
+  check(
+    tweetIdFrom('https://twitter.com/user/status/1234567890123456789') ==
+        '1234567890123456789',
+    'twitter.com status id',
+  );
+  check(
+    tweetIdFrom('https://mobile.twitter.com/user/status/1234567890123456789') ==
+        '1234567890123456789',
+    'mobile.twitter.com status id',
+  );
+  check(
+    tweetIdFrom('https://x.com/i/status/1234567890123456789') ==
+        '1234567890123456789',
+    '/i/status id',
+  );
+  check(
+    tweetIdFrom('https://x.com/user/status/1234567890123456789/video/1') ==
+        '1234567890123456789',
+    'video suffix',
+  );
+  check(tweetIdFrom('https://x.com/user') == null, 'profile is not a post');
+  check(tweetIdFrom('https://example.com/status/1234567890123456789') == null, 'other host');
+  check(
+    embedInfoFor('https://x.com/user/status/1234567890123456789').kind == EmbedKind.twitter,
+    'x.com post is twitter',
+  );
+  check(embedInfoFor('https://x.com/user').kind == EmbedKind.generic, 'x profile is generic');
+  check(
+    embedInfoFor('https://www.tiktok.com/@u/video/7234567890123456789').kind == EmbedKind.generic,
+    'tiktok no longer special',
+  );
+  check(
+    embedInfoFor('https://www.facebook.com/watch/?v=123456').kind == EmbedKind.generic,
+    'facebook no longer special',
+  );
+  final tw = twitterEmbedUrl('1234567890123456789');
+  check(tw.startsWith('https://platform.twitter.com/embed/Tweet.html?'), 'tweet embed url');
+  check(tw.contains('id=1234567890123456789'), 'tweet embed id');
   check(embedInfoFor('https://www.youtube.com/shorts/efzxdQeODpU').isPortrait, 'shorts portrait');
   check(embedInfoFor('https://example.com/x').kind == EmbedKind.generic, 'generic');
   check(embedInfoFor('https://vimeo.com/123456789').kind == EmbedKind.vimeo, 'Vimeo');
@@ -27,8 +59,5 @@ void main() {
   check(embedInfoFor('https://cdn.example.com/live/index.m3u8').kind == EmbedKind.hls, 'HLS stream');
   check(embedInfoFor('https://cdn.example.com/video.mp4').kind == EmbedKind.direct, 'direct video');
   check(embedInfoFor('https://cdn.example.com/live/manifest.mpd').kind == EmbedKind.direct, 'DASH stream');
-  final fb = facebookEmbedUrl('https://m.facebook.com/watch/?v=123456');
-  check(fb.startsWith('https://www.facebook.com/plugins/video.php?href='), 'fb plugin url');
-  check(fb.contains('www.facebook.com%2Fwatch'), 'm. host normalised');
   print('embed_info checks passed');
 }
