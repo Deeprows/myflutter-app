@@ -40,7 +40,8 @@ Future<bool?> showFirstTimeProfileEditor(
   final saved = await Navigator.of(context).push<bool>(
     MaterialPageRoute<bool>(
       fullscreenDialog: true,
-      builder: (_) => _EditFanProfile(userId: userId, profile: profile),
+      builder: (_) =>
+          _EditFanProfile(userId: userId, profile: profile, welcome: true),
     ),
   );
   return saved == true;
@@ -631,7 +632,14 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
 class _EditFanProfile extends StatefulWidget {
   final String userId;
   final Map<String, dynamic> profile;
-  const _EditFanProfile({required this.userId, required this.profile});
+
+  /// True right after registration: shows a short setup guide.
+  final bool welcome;
+  const _EditFanProfile({
+    required this.userId,
+    required this.profile,
+    this.welcome = false,
+  });
   @override
   State<_EditFanProfile> createState() => _EditFanProfileState();
 }
@@ -870,6 +878,64 @@ class _EditFanProfileState extends State<_EditFanProfile> {
     );
   }
 
+  Widget _welcomeGuide() {
+    Widget step(String n, String text) => Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: Ui.red, shape: BoxShape.circle),
+            child: Text(
+              n,
+              style: TextStyle(
+                color: Ui.palette.onAccent,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: Ui.text, fontSize: 13, height: 1.3),
+            ),
+          ),
+        ],
+      ),
+    );
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Ui.red.withValues(alpha: .10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Ui.red.withValues(alpha: .35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Welcome to Deeprowss! Let\'s set up your profile',
+            style: TextStyle(
+              color: Ui.text,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          step('1', 'Tap the cover and the round photo to add your pictures.'),
+          step('2', 'Enter your name and pick a unique @username.'),
+          step('3', 'Write a short bio and choose the club you support.'),
+          step('4', 'Add your location, then tap Save at the top.'),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Ui.bg,
@@ -879,8 +945,8 @@ class _EditFanProfileState extends State<_EditFanProfile> {
         onPressed: _saving ? null : () => Navigator.pop(context, false),
         icon: const Icon(Icons.close_rounded),
       ),
-      title: const Text(
-        'Edit profile',
+      title: Text(
+        widget.welcome ? 'Set up your profile' : 'Edit profile',
         style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
       ),
       actions: [
@@ -908,6 +974,7 @@ class _EditFanProfileState extends State<_EditFanProfile> {
         bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
       ),
       children: [
+        if (widget.welcome) _welcomeGuide(),
         SizedBox(
           height: _coverHeight + _avatarSize / 2 + 8,
           child: Stack(
