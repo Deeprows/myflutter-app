@@ -408,6 +408,19 @@ class _FanPostVideoState extends State<FanPostVideo>
         );
         return;
       }
+      } else if (_info.kind == EmbedKind.twitter && initialUri != null) {
+        // X post pages cannot be embedded directly in a WebView iframe.
+        // Use X's dedicated embedded-post player so native post video is
+        // rendered with the creator's embed permissions and playback controls.
+        final id = tweetIdFrom(_url);
+        if (id == null) throw FormatException('Invalid X post URL');
+        await _loadHtml(
+          c,
+          _iframeHtml(twitterEmbedUrl(id, dark: true)),
+          baseUrl: 'https://platform.twitter.com',
+        );
+        return;
+      }
       if (_attempt == 0 &&
           stream.kind == StreamKind.embed &&
           _youtubeId(initialUri) == null &&
