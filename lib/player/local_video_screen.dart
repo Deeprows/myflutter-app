@@ -9,6 +9,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../services/app_lock.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_watermark.dart';
+import '../widgets/cast_button.dart';
 import 'audio_handler.dart';
 import 'media_entry.dart';
 import 'music_player.dart';
@@ -475,6 +476,12 @@ class _LocalVideoScreenState extends State<LocalVideoScreen>
                       style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w800),
                     ),
+                  ),
+                  CastButton(
+                    target: () =>
+                        CastTarget(title: _item.title, file: _item.file),
+                    onCastStarted: () => _c?.pause(),
+                    color: Colors.white,
                   ),
                   TextButton(
                     onPressed: _pickSpeed,
