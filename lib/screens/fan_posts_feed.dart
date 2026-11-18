@@ -14,6 +14,7 @@ import '../services/embed_info.dart';
 import '../services/stream_resolver.dart';
 import '../utils/post_links.dart';
 import '../widgets/fan_post_video.dart';
+import '../services/auth_service.dart';
 import '../services/fan_zone_service.dart';
 import '../services/app_memory.dart';
 import '../services/content_sync.dart';
@@ -211,6 +212,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
         _next = null;
       });
       await _load();
+      widget.onSocialChanged?.call();
     }
   }
 
@@ -524,7 +526,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
       child: ListView(
         controller: home ? _scroll : null,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.only(bottom: home ? 96 : 28),
+        padding: const EdgeInsets.only(bottom: 96),
         children: [
           if (!home) ...[_filters(), const XDivider()],
           if (home) _composerRow(),
@@ -629,7 +631,30 @@ class _FanPostsFeedState extends State<FanPostsFeed>
         ],
       ),
     );
-    if (!home) return list;
+    if (!home) {
+      // Profile pages get the same round "+" button as the Thread page so a
+      // signed-in user can start a post without leaving their profile.
+      final signedIn = (AuthService.instance.user?.id ?? '').isNotEmpty;
+      if (!signedIn) return list;
+      return Stack(
+        children: [
+          Positioned.fill(child: list),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton(
+              heroTag: null,
+              tooltip: 'New post',
+              backgroundColor: Ui.red,
+              foregroundColor: Ui.palette.onAccent,
+              shape: const CircleBorder(),
+              onPressed: _busy ? null : () => _create('banter'),
+              child: const Icon(Icons.add_rounded, size: 30),
+            ),
+          ),
+        ],
+      );
+    }
     return Column(
       children: [
         XTabBar(
