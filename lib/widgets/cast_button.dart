@@ -109,6 +109,10 @@ class _CastSheetState extends State<_CastSheet> {
   final svc = CastService.instance;
   double _phoneVol = 0.5;
 
+  /// 0 = send to a TV (keeps playing when the phone locks), 1 = mirror the
+  /// phone screen.
+  late int _mode = widget.target.canCast ? 0 : 1;
+
   @override
   void initState() {
     super.initState();
@@ -178,7 +182,7 @@ class _CastSheetState extends State<_CastSheet> {
                           style: TextStyle(
                               fontSize: 18, fontWeight: FontWeight.w900)),
                     ),
-                    if (widget.target.canCast && !svc.casting)
+                    if (_mode == 0 && widget.target.canCast && !svc.casting)
                       IconButton(
                         tooltip: 'Search again',
                         onPressed: svc.scanning ? null : svc.scan,
@@ -187,11 +191,12 @@ class _CastSheetState extends State<_CastSheet> {
                   ],
                 ),
                 if (svc.casting) _nowCasting(),
+                if (!svc.casting) ...[
+                  const SizedBox(height: 10),
+                  _modePicker(),
+                  if (_mode == 0) ..._deviceSection() else _mirrorPanel(),
+                ],
                 _phoneVolume(),
-                const SizedBox(height: 6),
-                if (!svc.casting) ..._deviceSection(),
-                const SizedBox(height: 6),
-                _mirrorTile(),
               ],
             );
           },
@@ -319,7 +324,7 @@ class _CastSheetState extends State<_CastSheet> {
         _card(
           child: Text(
             'This channel is a web page, so it cannot be sent to a TV as a '
-            'link. Use screen mirroring below.',
+            'link. Choose "Mirror screen" above.',
             style: TextStyle(color: Ui.muted, fontSize: 12.5, height: 1.35),
           ),
         ),
@@ -362,18 +367,92 @@ class _CastSheetState extends State<_CastSheet> {
     ];
   }
 
-  Widget _mirrorTile() {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.screen_share_rounded),
-      title: const Text('Mirror phone screen',
-          style: TextStyle(fontWeight: FontWeight.w800)),
-      subtitle: Text(
-        'For Chromecast, Smart View and web pages. Mirroring may pause when '
-        'the phone locks.',
-        style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.3),
+  Widget _modePicker() {
+    Widget chip(int i, IconData icon, String label, String sub) {
+      final sel = _mode == i;
+      return Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Ui.radius),
+          onTap: () {
+            setState(() => _mode = i);
+            if (i == 0 &&
+                widget.target.canCast &&
+                svc.devices.isEmpty &&
+                !svc.scanning) {
+              svc.scan();
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            decoration: BoxDecoration(
+              color: sel ? Ui.red.withValues(alpha: .14) : Ui.card,
+              borderRadius: BorderRadius.circular(Ui.radius),
+              border: Border.all(color: sel ? Ui.red : Ui.line, width: sel ? 1.6 : 1),
+            ),
+            child: Column(
+              children: [
+                Icon(icon, color: sel ? Ui.red : null),
+                const SizedBox(height: 4),
+                Text(label,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 2),
+                Text(sub,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Ui.muted, fontSize: 11, height: 1.2)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        chip(0, Icons.tv_rounded, 'Cast to TV', 'Plays with phone locked'),
+        const SizedBox(width: 10),
+        chip(1, Icons.screen_share_rounded, 'Mirror screen',
+            'Chromecast, Smart View'),
+      ],
+    );
+  }
+
+  Widget _mirrorPanel() {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '1. Tap the button below to open Cast / Smart View.\n'
+            '2. Pick your TV or Chromecast.\n'
+            '3. Come back here and press play.',
+            style: TextStyle(color: Ui.muted, fontSize: 12.5, height: 1.45),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(Icons.screen_lock_portrait_rounded, size: 18, color: Ui.red),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Keep the phone screen on while mirroring. Locking it may '
+                  'stop the picture on the TV.',
+                  style: TextStyle(
+                      color: Ui.muted, fontSize: 12, height: 1.3),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: Ui.red),
+            onPressed: _mirror,
+            icon: const Icon(Icons.cast_rounded, size: 20),
+            label: const Text('Open Cast / Smart View'),
+          ),
+        ],
       ),
-      onTap: _mirror,
     );
   }
 }
