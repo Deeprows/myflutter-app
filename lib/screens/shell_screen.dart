@@ -345,11 +345,17 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
         await prefs.setBool(promoKey, true);
         final join = await showPredictionPromo(context);
         if (join == true && mounted) {
-          setState(() {
-            _index = 4; // AI Predict tab
-            _visited.add(4);
-          });
-          AppMemory.setInt('tab', 4);
+          // Open the Predict page (same one as the Predict button on the
+          // Thread page), not the AI Predict tab.
+          await Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const FanZoneScreen(
+                active: true,
+                page: FanZonePage.predict,
+                pushed: true,
+              ),
+            ),
+          );
         }
       }
     } catch (_) {
