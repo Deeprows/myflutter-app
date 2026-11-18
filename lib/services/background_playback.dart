@@ -15,6 +15,19 @@ class BackgroundPlayback {
   /// notification / lock screen are ignored meanwhile.
   static bool locked = false;
 
+  /// True while a TV is playing the stream (see CastService). The service
+  /// and its CPU / Wi-Fi locks then stay on even when no player page is open,
+  /// and notification buttons control the TV through [castHook].
+  static bool castActive = false;
+
+  /// Handles notification / lock-screen buttons while casting. Returns true
+  /// when it dealt with the action.
+  static bool Function(String action)? castHook;
+
+  static String _lastTitle = 'Deeprowss';
+  static bool _castHold = false;
+  static String? _note;
+
   /// Pauses the player page that is on screen (used when App Lock engages).
   static void pauseForLock() => _onPause?.call();
 
@@ -29,6 +42,7 @@ class BackgroundPlayback {
     _channel.setMethodCallHandler((call) async {
       switch (call.method) {
         case 'action':
+          if (castHook?.call('${call.arguments}') == true) return null;
           switch (call.arguments) {
             case 'play':
               if (!locked) _onPlay?.call();
@@ -96,16 +110,82 @@ class BackgroundPlayback {
     _onPlay = onPlay;
     _onPause = onPause;
     _onSeekBy = onSeekBy;
+    _lastTitle = title;
     await ensureNotificationPermission();
     try {
-      await _channel
-          .invokeMethod<bool>('start', {'title': title, 'playing': true});
+      await _channel.invokeMethod<bool>(
+          'start', {'title': title, 'playing': true, 'note': _note});
+    } catch (_) {}
+  }
+
+  /// Starts (or keeps) the foreground service for a cast session, without
+  /// touching the handlers of the player page that is open.
+  static Future<void> startCasting(String title, String note) async {
+    _hook();
+    _castHold = true;
+    _note = note;
+    await ensureNotificationPermission();
+    try {
+      await _channel.invokeMethod<bool>(
+          'start', {'title': 'Casting: $title', 'playing': true, 'note': note});
+    } catch (_) {}
+  }
+
+  /// Casting ended. The service stops too unless a player page still needs it.
+  static Future<void> stopCasting() async {
+    _castHold = false;
+    _note = null;
+    if (_stopHandlers.isEmpty) {
+      try {
+        await _channel.invokeMethod<bool>('stop');
+      } catch (_) {}
+      return;
+    }
+    // The notification's Stop button also ends the service: bring it back for
+    // the player page that is still open.
+    try {
+      await _channel.invokeMethod<bool>(
+          'start', {'title': _lastTitle, 'playing': true, 'note': null});
+    } catch (_) {}
+  }
+
+  /// Phone media volume, 0.0 - 1.0.
+  static Future<double> getVolume() async {
+    try {
+      return (await _channel.invokeMethod<double>('getVolume')) ?? 0.5;
+    } catch (_) {
+      return 0.5;
+    }
+  }
+
+  static Future<void> setVolume(double value) async {
+    try {
+      await _channel.invokeMethod<bool>(
+          'setVolume', {'value': value.clamp(0.0, 1.0)});
+    } catch (_) {}
+  }
+
+  /// Android 17+ asks before an app may talk to devices on the home Wi-Fi
+  /// (needed to find TVs). Older Android versions ignore this.
+  static Future<void> requestLocalNetwork() async {
+    try {
+      await _channel.invokeMethod<bool>('localNetwork');
+    } catch (_) {}
+  }
+
+  /// Wi-Fi multicast lock, needed on some phones to hear TVs answer a search.
+  static Future<void> setMulticast(bool on) async {
+    try {
+      await _channel.invokeMethod<bool>('multicast', {'on': on});
     } catch (_) {}
   }
 
   /// Tells the notification whether the video is really playing, so the
   /// button shows Pause or Play correctly.
-  static Future<void> setPlaying(bool playing) async {
+  static Future<void> setPlaying(bool playing, {bool fromCast = false}) async {
+    // While a TV plays, the phone's own (paused) player must not flip the
+    // notification to "Paused".
+    if (castActive && !fromCast) return;
     try {
       await _channel.invokeMethod<bool>('update', {'playing': playing});
     } catch (_) {}
@@ -114,7 +194,7 @@ class BackgroundPlayback {
   /// Call when that player page closes. The service ends with the last one.
   static Future<void> stop(VoidCallback onStopRequested) async {
     _stopHandlers.remove(onStopRequested);
-    if (_stopHandlers.isNotEmpty) return;
+    if (_stopHandlers.isNotEmpty || _castHold) return;
     _onPlay = null;
     _onPause = null;
     _onSeekBy = null;
