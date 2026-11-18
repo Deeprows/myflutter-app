@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../config.dart';
 
 import '../player/mini_player.dart';
+import '../services/ad_scheduler.dart';
 import '../services/app_memory.dart';
 import '../services/app_updater.dart';
 import '../services/content_sync.dart';
@@ -108,13 +109,74 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
       (_) => ContentSync.request(),
     );
 
-    // Telegram invite repeats on app opening until the user taps Join.
-    Future<void>.delayed(const Duration(seconds: 2), () async {
-      if (mounted) await AppUpdater.instance.checkOnStart(context);
-      if (mounted) await _showTelegramInvite();
-      if (mounted) NoticeService.instance.showOnStart(context);
-      if (mounted) _scheduleManualAd();
-    });
+    unawaited(_startupFlow());
+  }
+
+  // One short pause between popups so they arrive one at a time, never
+  // stacked or jumping in on top of each other.
+  Future<void> _beat([int ms = 700]) =>
+      Future<void>.delayed(Duration(milliseconds: ms));
+
+  /// Everything that greets the user on opening, strictly in order:
+  /// 1. New account: profile setup (with guide) -> prediction promo card
+  ///    (-> Predict page if they join).
+  /// 2. App update prompt, then the admin notice.
+  /// 3. Telegram invite: about 5 minutes later for new users (when idle);
+  ///    returning users get it right after the start delay, as before.
+  /// 4. The timed ads start counting after the steps above.
+  Future<void> _startupFlow() async {
+    var onboarding = false;
+    try {
+      final uid = AuthService.instance.user?.id ?? '';
+      if (uid.isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        onboarding = !(prefs.getBool('profile_setup_seen_$uid') ?? false);
+      }
+    } catch (_) {}
+
+    if (onboarding) {
+      // Keep the support/ad overlay away while they set up.
+      AdScheduler.instance.hold();
+      try {
+        await _beat(600); // let the sign-in page finish closing
+        if (mounted) await _maybeShowFirstProfile();
+        await _beat();
+      } finally {
+        AdScheduler.instance.release();
+      }
+    } else {
+      await _beat(2000);
+    }
+    if (!mounted) return;
+    if (onboarding) {
+      // New users are left alone first; the invite comes later, when they
+      // are busy using the app and nothing else is open.
+      unawaited(_telegramLater());
+    } else {
+      await _showTelegramInvite();
+    }
+    if (!mounted) return;
+    await AppUpdater.instance.checkOnStart(context);
+    if (!mounted) return;
+    await NoticeService.instance.showOnStart(context);
+    if (mounted) _scheduleManualAd();
+  }
+
+  /// Shows the Telegram invite about 5 minutes after setup, and only while
+  /// the person is on a normal page (not in a player, a dialog or an ad).
+  /// If something is open it waits and tries again every 30 seconds.
+  Future<void> _telegramLater() async {
+    await _beat(5 * 60 * 1000);
+    while (mounted) {
+      final idle = (ModalRoute.of(context)?.isCurrent ?? true) &&
+          !_manualAdShowing &&
+          !AdScheduler.instance.isShowing;
+      if (idle) {
+        await _showTelegramInvite();
+        return;
+      }
+      await _beat(30 * 1000);
+    }
   }
 
   Future<void> _showTelegramInvite() async {
