@@ -69,9 +69,6 @@ class _FanPostVideoState extends State<FanPostVideo>
   /// navigate anywhere, so every top-level hop to another site is an ad.
   bool _htmlMode = false;
 
-  /// Width of the video box, so Facebook's plugin is asked for a size that fits.
-  double _boxW = 360;
-
   Future<void> _loadHtml(WebViewController c, String html, {String? baseUrl}) {
     _htmlMode = true;
     return c.loadHtmlString(html, baseUrl: baseUrl);
@@ -87,13 +84,12 @@ class _FanPostVideoState extends State<FanPostVideo>
   }
   String get _url => fanVideoUrl(widget.url);
 
-  // Shape of the video box (width / height). Starts from a guess based on the
-  // link (Shorts / TikTok / Reels are portrait) and follows the real video once
-  // the player can measure it. [_manualRatio] wins when the viewer picks a shape.
+  // Shape of the video box (width / height). Starts from the link's known
+  // format and follows the real video once the player can measure it.
+  // [_manualRatio] wins when the viewer picks a shape.
   late EmbedInfo _info = embedInfoFor(widget.url);
   late double _ratio = _info.ratio;
   double? _manualRatio;
-  String? _tiktokThumb;
 
   static const _shapes = [kLandscape, 1.0, kPortrait];
 
@@ -144,11 +140,6 @@ class _FanPostVideoState extends State<FanPostVideo>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (_info.kind == EmbedKind.tiktok) {
-      tiktokThumbnail(widget.url).then((t) {
-        if (mounted && t != null) setState(() => _tiktokThumb = t);
-      });
-    }
     if (widget.autoPlay) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _controller == null) _play();
@@ -388,28 +379,9 @@ class _FanPostVideoState extends State<FanPostVideo>
       }
     }
     try {
-      // Browser-like agent (no "wv"): TikTok and Facebook serve their full
-      // players to it instead of an "open the app" page.
+      // Use the browser-like agent for third-party video players.
       await c.setUserAgent(AppConfig.userAgent);
-      if (_info.kind == EmbedKind.tiktok) {
-        final id = await resolveTikTokId(_url);
-        if (!mounted || _controller != c) return;
-        if (id != null) {
-          await _loadHtml(c, 
-            _iframeHtml(tiktokEmbedUrl(id)),
-            baseUrl: AppConfig.embedOrigin,
-          );
-          return;
-        }
-      } else if (_info.kind == EmbedKind.facebook && initialUri != null) {
-        final fbUrl = await resolveFacebookUrl(_url);
-        if (!mounted || _controller != c) return;
-        await _loadHtml(c,
-          _iframeHtml(facebookEmbedUrl(fbUrl, width: _boxW.round().clamp(220, 734))),
-          baseUrl: AppConfig.embedOrigin,
-        );
-        return;
-      } else if (_info.kind == EmbedKind.vimeo && initialUri != null) {
+      if (_info.kind == EmbedKind.vimeo && initialUri != null) {
         final id = _vimeoId(initialUri);
         if (id == null) throw FormatException('Invalid Vimeo video URL');
         await _loadHtml(c, 
@@ -525,10 +497,6 @@ class _FanPostVideoState extends State<FanPostVideo>
   String get _playLabel {
     if (_failed) return 'Retry video';
     switch (_info.kind) {
-      case EmbedKind.tiktok:
-        return 'Play TikTok';
-      case EmbedKind.facebook:
-        return 'Play Facebook video';
       case EmbedKind.vimeo:
         return 'Play Vimeo video';
       case EmbedKind.dailymotion:
@@ -574,7 +542,7 @@ class _FanPostVideoState extends State<FanPostVideo>
 
   Widget _preview() {
     if (_dmBlocked) return _blockedCard();
-    final thumb = _youtubeThumbnail ?? _tiktokThumb;
+    final thumb = _youtubeThumbnail;
     return InkWell(
       onTap: widget.viewer
           ? _playTap
@@ -681,7 +649,6 @@ class _FanPostVideoState extends State<FanPostVideo>
           child: LayoutBuilder(
             builder: (context, box) {
               final w = box.maxWidth.isFinite ? box.maxWidth : screen.width;
-              _boxW = w;
               final maxH = box.maxHeight.isFinite ? box.maxHeight : screen.height;
               final h = (w / (_manualRatio ?? _ratio))
                   .clamp(w * 0.45, math.max(w * 0.45, maxH * 0.92))
