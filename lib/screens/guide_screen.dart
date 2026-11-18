@@ -38,13 +38,54 @@ class GuideScreen extends StatelessWidget {
               initiallyOpen: true,
               children: const [
                 _P('Open the side menu (top-left) to reach everything in the app:'),
+                _B('Premium: plans and your Premium status.'),
                 _B('Live Now: matches that are on or about to start.'),
                 _B('Football Highlights: goals and match recaps.'),
                 _B('TV Channels, Movies, Network Stream and Playlists.'),
                 _B('Football Score and Cricket Score: live scores.'),
-                _B('Fan Zone: predictions, ranks, community posts and match chats.'),
+                _B('Support Us, Instructions and Contact Us.'),
+                _P('The bar at the bottom switches between Live, Thread, '
+                    'AI Predict, Match Room, Profile and Search.'),
                 _P('Sign in with Gmail to join the Fan Zone. There is no password: '
-                    'just tap "Continue with Gmail". Only Gmail accounts work.'),
+                    'just tap \"Continue with Gmail\". Only Gmail accounts work.'),
+                _Note('First time in? Set up your profile next. See '
+                    '\"Setting up your profile\" below.'),
+              ],
+            ),
+            _Section(
+              icon: Icons.account_circle_rounded,
+              color: _teal,
+              title: 'Setting up your profile',
+              children: const [
+                _P('The first time you sign in, a short guide opens the '
+                    'profile editor. You can come back any time: open '
+                    'Profile and tap \"Edit profile\".'),
+                _N(1, 'Tap the cover and the round photo to add your '
+                    'pictures. JPG or PNG, smaller than 4 MB.'),
+                _N(2, 'Enter your name (up to 30 characters) and pick a '
+                    'unique @username.'),
+                _N(3, 'Write a short bio (up to 160 characters) and choose '
+                    'the club you support. Pick a crest cover, or upload '
+                    'your own club image.'),
+                _N(4, 'Add your location (up to 40 characters), then tap '
+                    'Save at the top.'),
+                _Sub('Username rules'),
+                _B('3 to 20 letters, numbers or underscores (_).'),
+                _B('It must be unique. If it is taken, try another.'),
+                _B('Once set, you can change it again every 60 days. The '
+                    'editor shows the date it unlocks.'),
+                _Sub('What your profile shows'),
+                _B('Followers and Following. Tap them to see the fans.'),
+                _B('Achievements: badges you have earned.'),
+                _B('Prediction history: your settled picks.'),
+                _B('A blue tick appears beside your name when you are '
+                    'Premium.'),
+                _B('Tap Follow on another fan\u2019s profile to see their '
+                    'posts under Following.'),
+                _B('Need to switch Gmail? Log out from your profile and '
+                    'sign in with the other account.'),
+                _Note('Your name, username, bio and photos are public. Your '
+                    'Gmail stays private.'),
               ],
             ),
             _Section(
@@ -65,6 +106,85 @@ class GuideScreen extends StatelessWidget {
               ],
             ),
             _Section(
+              icon: Icons.live_tv_rounded,
+              color: _blue,
+              title: 'TV Channels',
+              children: const [
+                _N(1, 'Open TV Channels from the side menu and tap a '
+                    'channel to watch it live.'),
+                _N(2, 'Use the search box, or choose a country, to find a '
+                    'channel faster.'),
+                _N(3, 'Tap the star on a channel to save it under '
+                    'Favourites. Tap it again to remove it.'),
+                _N(4, 'Tap the link icon (Play a link) to watch your own '
+                    'stream link, and Player to open your files and '
+                    'playlists.'),
+                _Sub('Free and Premium'),
+                _B('Free users can watch up to 2 different channels per '
+                    'day. Premium unlocks every channel with no limit.'),
+                _P('The Cast icon on the channel player sends the channel to '
+                    'your TV. See \"Cast to TV and screen mirroring\".'),
+              ],
+            ),
+            _Section(
+              icon: Icons.cast_connected_rounded,
+              color: Ui.green,
+              title: 'Cast to TV and screen mirroring',
+              children: const [
+                _P('Look for the Cast icon at the top of the player on TV '
+                    'channels, movies, trailers, match streams and your '
+                    'own videos. Tap it to choose how to show the video on '
+                    'a bigger screen.'),
+                _Sub('Cast to TV'),
+                _N(1, 'Connect the phone and the TV to the same Wi-Fi.'),
+                _N(2, 'On the TV, switch on \"Screen share\", \"Media\" or '
+                    '\"DLNA\".'),
+                _N(3, 'Tap the Cast icon, stay on \"Cast to TV\" and wait '
+                    'for your TV to appear under \"TVs on your Wi-Fi\".'),
+                _N(4, 'Tap your TV. The TV plays the video by itself.'),
+                _B('You can lock the phone or minimise the app. The TV '
+                    'keeps playing.'),
+                _B('Control it from the same sheet: Pause, Play, Stop '
+                    'casting and the TV volume.'),
+                _B('No TV found? Tap the refresh icon to search again.'),
+                _Sub('Mirror screen'),
+                _P('Some channels and match streams are web pages, so they '
+                    'cannot be sent to the TV as a link. Use Mirror screen '
+                    'for those.'),
+                _N(1, 'Tap the Cast icon, then choose \"Mirror screen\".'),
+                _N(2, 'Tap \"Open Cast / Smart View\".'),
+                _N(3, 'Pick your Chromecast, Smart TV or other display in '
+                    'your phone\u2019s own screen-cast list.'),
+                _Note('Keep the phone screen on while mirroring. Locking it '
+                    'may stop the picture on the TV. If the button does not '
+                    'open anything, use \"Cast\" or \"Smart View\" from your '
+                    'phone\u2019s quick settings.'),
+              ],
+            ),
+            _Section(
+              icon: Icons.movie_rounded,
+              color: Ui.red,
+              title: 'Movies',
+              children: const [
+                _B('The Movies front page changes every 24 hours. Swipe '
+                    'through Trending Now, Top 10 and the other rails, or '
+                    'search and filter by genre.'),
+                _B('Tap a movie for its details, trailer and More Like '
+                    'This.'),
+                _B('Tap the bookmark icon at the top of the Movies page to '
+                    'open your Watch later list, and the clock icon for '
+                    'your Watch history.'),
+                _B('On a movie, tap the Watch later button beside Cast to '
+                    'save it. Tap it again to remove it.'),
+                _B('Play and Download need Premium. Everyone can browse; '
+                    'if you are not Premium, the button takes you to the '
+                    'upgrade page.'),
+                _B('Downloads keep going in the background with a '
+                    'notification and are saved to your Downloads folder. '
+                    'Open Downloads to pause, resume or delete them.'),
+              ],
+            ),
+            _Section(
               icon: Icons.edit_note_rounded,
               color: _teal,
               title: 'Posting in the Fan Zone',
@@ -73,8 +193,12 @@ class GuideScreen extends StatelessWidget {
                 const _B('Prediction: call a score or a player moment before kick-off.'),
                 const _B('Betslip: show your slip. Crop out account details first.'),
                 const _B('Banter: share a hot take with the community.'),
-                const _B('Video: share a YouTube, Vimeo, Dailymotion or Filemoon '
-                    'link, a stream link (m3u8, mp4, mpd) or any embed page.'),
+                const _B('Embed video: share a YouTube, TikTok, Facebook, '
+                    'Vimeo, Dailymotion or Filemoon link, or a stream link '
+                    '(m3u8, mp4, mpd).'),
+                const _B('To embed: open the video, tap Share, then Copy '
+                    'link. Paste it in the Embed video tab, add a title and '
+                    'tap Post.'),
                 const SizedBox(height: 6),
                 const _Sub('Limits'),
                 const _B('Post text: up to 5,000 characters.'),
@@ -82,7 +206,11 @@ class GuideScreen extends StatelessWidget {
                 const _B('Images: smaller than 4 MB.'),
                 const _B('Replies (comments): up to 500 characters.'),
                 const _B('Match chat messages: up to 300 characters.'),
-                const _B('TikTok and Facebook videos cannot be embedded.'),
+                const _B('Plain web pages (embed pages, WhatsApp or Telegram '
+                    'links) in posts are for Premium members.'),
+                const _B('Some hosts block embedded playback. Portrait '
+                    'videos (Shorts, TikTok, Reels) show in a tall player '
+                    'automatically.'),
                 const SizedBox(height: 6),
                 const _Sub('Rules'),
                 const _B('Be respectful. No hate speech, threats, harassment or bullying.'),
@@ -231,7 +359,42 @@ class GuideScreen extends StatelessWidget {
                     'menu and tap "Request token". Once you receive your '
                     'token, enter it to remove ads on that phone for the '
                     'number of days given.'),
-                const _B('Movies: some titles need Premium to play or download.'),
+                const _B('Premium removes the pop-ups, unlocks every TV '
+                    'channel, Movies Play and Download, post and comment '
+                    'editing and more AI Predict picks. Pay by card, USSD '
+                    'or bank transfer, monthly or yearly.'),
+                const _B('Premium belongs to the Gmail account you are '
+                    'logged in with, not to the phone. Switching Gmail '
+                    'switches the Premium status too.'),
+                const _B('New phone or paid before? Open Premium and tap '
+                    '\"Restore purchase\".'),
+                const _B('Support Us (side menu, your profile and the AI '
+                    'Predict header) lets you give any amount in your own '
+                    'currency to help improve the app.'),
+              ],
+            ),
+            _Section(
+              icon: Icons.tune_rounded,
+              color: _violet,
+              title: 'Tools and settings',
+              children: const [
+                _B('Network Stream: paste an m3u8, mpd, mp4 or embed link '
+                    'and play it.'),
+                _B('Playlists: keep your own channels and videos together.'),
+                _B('Themes: tap Themes at the bottom of the side menu to '
+                    'change how the app looks.'),
+                _B('Language: choose a language, or leave it on Automatic '
+                    'to follow your phone.'),
+                _B('Alerts: choose which notifications you receive.'),
+                _B('More \u203A Floating Player shrinks the video into a '
+                    'small window so you can keep using the app.'),
+                _B('More \u203A Video Quality Setting forces lower quality '
+                    'to save data.'),
+                _B('More \u203A App Lock protects the app with a PIN, for '
+                    'example for children. If you forget it, answer your '
+                    'recovery question.'),
+                _B('Bookmarks: tap the bookmark icon under a Thread post '
+                    'to save it for later.'),
               ],
             ),
             _Section(
@@ -278,8 +441,9 @@ class GuideScreen extends StatelessWidget {
                           TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 3),
                   Text(
-                    ('Using the app, posting rules, AI Predict, predictions, '
-                            'ranks and rewards. Tap a section to open it.')
+                    ('Profile setup, TV channels, casting to your TV, movies, '
+                            'posting rules, AI Predict, predictions, ranks and '
+                            'rewards. Tap a section to open it.')
                         .tr,
                     style:
                         TextStyle(color: Ui.muted, fontSize: 12.5, height: 1.35),
