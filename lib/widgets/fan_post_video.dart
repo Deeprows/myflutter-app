@@ -685,7 +685,6 @@ class _FanPostVideoState extends State<FanPostVideo>
         child: LayoutBuilder(
           builder: (context, box) {
             final w = box.maxWidth.isFinite ? box.maxWidth : screen.width;
-            _boxW = w;
             final maxH = math.max(w * 0.5, screen.height * maxFraction);
             final h = (w / (_manualRatio ?? _ratio)).clamp(w * 0.45, maxH).toDouble();
             return AnimatedSize(
