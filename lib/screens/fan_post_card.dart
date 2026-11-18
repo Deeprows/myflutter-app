@@ -8,6 +8,7 @@ import '../utils/post_links.dart';
 import '../models/fan_post_link.dart';
 import 'package:flutter/material.dart';
 import '../services/fan_zone_service.dart';
+import '../services/subscription_service.dart';
 import '../services/post_translation_service.dart';
 import '../services/locale_service.dart';
 import '../services/post_bookmarks.dart';
@@ -135,15 +136,27 @@ class _FanPostCardState extends State<FanPostCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '${_post['name']}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '${_post['name']}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        if (_post['is_premium'] == 1 ||
+                            _post['is_premium'] == true ||
+                            (mine && SubscriptionService.instance.isPremium)) ...[
+                          const SizedBox(width: 4),
+                          const FanVerifiedBadge(size: 17),
+                        ],
+                      ],
                     ),
                     Text(
                       handle,
