@@ -1,7 +1,6 @@
 import 'dart:convert' show HtmlEscape, HtmlEscapeMode, utf8;
 import 'dart:ui' show ImageFilter;
 
-import 'package:android_intent_plus/android_intent.dart';
 import 'package:flutter/material.dart';
 import '../services/pip_service.dart';
 import 'package:flutter/services.dart';
@@ -23,6 +22,7 @@ import '../services/stream_resolver.dart';
 import '../services/tmdb_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_watermark.dart';
+import '../widgets/cast_button.dart';
 import '../widgets/live_dot.dart';
 import '../widgets/match_chat.dart';
 import '../services/remote_config.dart';
@@ -301,6 +301,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.inactive) {
+      if (BackgroundPlayback.castActive) return; // the TV is playing
       _wc.runJavaScript(BackgroundPlayback.rememberPlayingJs)
           .catchError((_) {});
       // If the page still paused its video, start it again.
@@ -313,6 +314,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         });
       }
     } else if (state == AppLifecycleState.resumed) {
+      if (BackgroundPlayback.castActive) return;
       _wc.runJavaScript(BackgroundPlayback.resumePlayingJs)
           .catchError((_) {});
     }
@@ -594,23 +596,23 @@ class _PlayerScreenState extends State<PlayerScreen>
         const SnackBar(content: Text('Floating player is not supported here')));
   }
 
-  /// Opens Android's "Cast screen" panel so the stream (including web embeds)
-  /// can be mirrored to a TV or Chromecast.
-  Future<void> _cast() async {
-    const actions = [
-      'android.settings.CAST_SETTINGS',
-      'android.settings.WIFI_DISPLAY_SETTINGS',
-    ];
-    for (final a in actions) {
-      try {
-        await AndroidIntent(action: a).launch();
-        return;
-      } catch (_) {}
-    }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text(
-            'Open "Cast" or "Smart View" from your phone\'s quick settings')));
+  /// What the cast button sends to the TV: the stream that plays right now.
+  /// Web embeds cannot be sent as a link (the sheet then offers mirroring).
+  CastTarget _castTarget() {
+    final st = _stream;
+    return CastTarget(
+      title: widget.title,
+      url: st.usesHtmlPlayer ? st.url : null,
+      kind: st.kind,
+      referer: _referers[_srcIdx],
+      userAgent: _agents[_srcIdx],
+    );
+  }
+
+  /// The TV took over: stop the phone's own video so it doesn't play twice.
+  void _onCastStarted() {
+    _wc.runJavaScript('window.__dwWas=[];').catchError((_) {});
+    _wc.runJavaScript(_videosJs('v.pause()')).catchError((_) {});
   }
 
   /// Bookmark next to "Cast to screen": saves the movie for later.
@@ -696,9 +698,24 @@ class _PlayerScreenState extends State<PlayerScreen>
               Positioned(
                 right: 12,
                 top: 12,
-                child: _RoundButton(
-                    icon: Icons.screen_rotation_rounded,
-                    onTap: _toggleLandscape),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: const BoxDecoration(
+                          color: Color(0x99000000), shape: BoxShape.circle),
+                      child: CastButton(
+                        target: _castTarget,
+                        onCastStarted: _onCastStarted,
+                        color: Colors.white,
+                      ),
+                    ),
+                    _RoundButton(
+                        icon: Icons.screen_rotation_rounded,
+                        onTap: _toggleLandscape),
+                  ],
+                ),
               ),
             ],
             if (fs)
@@ -925,10 +942,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                   ),
                 ),
                 if (widget.movie != null) _watchLaterButton(widget.movie!),
-                IconButton(
-                  tooltip: 'Cast to screen',
-                  onPressed: _cast,
-                  icon: const Icon(Icons.cast_rounded),
+                CastButton(
+                  target: _castTarget,
+                  onCastStarted: _onCastStarted,
                 ),
                 if (_pipEnabled)
                   IconButton(
