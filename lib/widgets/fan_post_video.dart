@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'package:http/http.dart' as http;
-import 'package:video_player/video_player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -54,12 +52,6 @@ class FanPostVideo extends StatefulWidget {
 class _FanPostVideoState extends State<FanPostVideo>
     with WidgetsBindingObserver {
   WebViewController? _controller;
-  VideoPlayerController? _xVideo;
-  String? _xPoster;
-  bool _xLoading = false;
-  bool _xAutoplayAttempted = false;
-  ScrollPosition? _scrollPosition;
-  bool _xVisible = false;
   OverlayEntry? _fullscreenEntry;
   VoidCallback? _fullscreenHidden;
   final Set<String> _allowedSites = {};
@@ -183,114 +175,10 @@ window.addEventListener('message', function (e) {
     }
     return 'https://img.youtube.com/vi/$id/hqdefault.jpg';
   }
-
-  bool get _isX => _info.kind == EmbedKind.twitter;
-
-  Future<void> _loadXMedia() async {
-    if (!_isX || _xLoading || _xVideo != null) return;
-    final id = tweetIdFrom(_url);
-    if (id == null) return;
-    _xLoading = true;
-    try {
-      final uri = Uri.https('cdn.syndication.twimg.com', '/tweet-result', {
-        'id': id,
-        'lang': 'en',
-      });
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Accept': 'application/json',
-      }).timeout(const Duration(seconds: 12));
-      if (response.statusCode != 200) return;
-      final data = jsonDecode(response.body);
-      if (data is! Map) return;
-      final media = data['mediaDetails'];
-      if (media is! List || media.isEmpty || media.first is! Map) return;
-      final first = media.first as Map;
-      final poster = first['media_url_https']?.toString();
-      final videoInfo = first['video_info'];
-      if (poster != null && poster.startsWith('http') && mounted) {
-        setState(() => _xPoster = poster);
-      }
-      if (videoInfo is! Map) return;
-      final variants = videoInfo['variants'];
-      if (variants is! List) return;
-      final mp4s = variants.where((v) =>
-          v is Map && v['content_type'] == 'video/mp4' &&
-          v['url'] is String).toList();
-      if (mp4s.isEmpty) return;
-      mp4s.sort((a, b) =>
-          ((b['bitrate'] as num?)?.toInt() ?? 0)
-              .compareTo((a['bitrate'] as num?)?.toInt() ?? 0));
-      final videoUrl = (mp4s.first as Map)['url'].toString();
-      final controller = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
-      await controller.initialize().timeout(const Duration(seconds: 20));
-      await controller.setLooping(true);
-      await controller.setVolume(0);
-      if (!mounted) {
-        await controller.dispose();
-        return;
-      }
-      setState(() => _xVideo = controller);
-      if (_xVisible) _startXAutoplay();
-    } catch (_) {
-      // X may block syndication access or disable third-party playback.
-      // Keep the thumbnail and tap-to-open fallback available.
-    } finally {
-      _xLoading = false;
-      if (mounted) setState(() {});
-    }
-  }
-
-  void _startXAutoplay() {
-    final controller = _xVideo;
-    if (!_isX || !_xVisible || controller == null ||
-        !controller.value.isInitialized || _xAutoplayAttempted) return;
-    _xAutoplayAttempted = true;
-    unawaited(controller.play());
-  }
-
-  void _updateXVisibility() {
-    if (!_isX || !widget.inline || !mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final render = context.findRenderObject();
-      if (render is! RenderBox || !render.hasSize) return;
-      final rect = render.localToGlobal(Offset.zero) & render.size;
-      final screenHeight = MediaQuery.sizeOf(context).height;
-      final visibleHeight = math.max(
-        0.0,
-        math.min(rect.bottom, screenHeight) - math.max(rect.top, 0.0),
-      );
-      final fraction = rect.height <= 0 ? 0.0 : visibleHeight / rect.height;
-      final visible = fraction >= 0.55;
-      if (visible != _xVisible) {
-        _xVisible = visible;
-        if (visible) {
-          _loadXMedia();
-          _startXAutoplay();
-        } else {
-          _xVideo?.pause();
-          _xVideo?.setVolume(0);
-          _xAutoplayAttempted = false;
-        }
-      }
-    });
-  }
-
-  void _onScrollChanged() => _updateXVisibility();
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (_isX) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _updateXVisibility();
-          _loadXMedia();
-        }
-      });
-    }
     if (widget.autoPlay) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _controller == null) _play();
@@ -300,22 +188,13 @@ window.addEventListener('message', function (e) {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) { _stop(); _xVideo?.pause(); }
+    if (state != AppLifecycleState.resumed) _stop();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!TickerMode.of(context)) _stop();
-    if (_isX && widget.inline) {
-      final nextPosition = Scrollable.maybeOf(context)?.position;
-      if (nextPosition != _scrollPosition) {
-        _scrollPosition?.removeListener(_onScrollChanged);
-        _scrollPosition = nextPosition;
-        _scrollPosition?.addListener(_onScrollChanged);
-      }
-      _updateXVisibility();
-    }
   }
 
   Future<void> _restoreSystemUi() async {
@@ -439,8 +318,6 @@ window.addEventListener('message', function (e) {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _scrollPosition?.removeListener(_onScrollChanged);
-    _xVideo?.dispose();
     _backFromFullscreen();
     unawaited(_restoreSystemUi());
     final c = _controller;
@@ -463,19 +340,6 @@ window.addEventListener('message', function (e) {
       : origin;
 
   void _playTap() {
-    if (_isX && _xVideo != null) {
-      if (_xVideo!.value.isPlaying && _xVideo!.value.volume == 0) {
-        _xVideo!.setVolume(1);
-      } else if (_xVideo!.value.isPlaying) {
-        _xVideo!.pause();
-      } else {
-        _xVideo!.setVolume(1);
-        _xVideo!.play();
-      }
-      if (mounted) setState(() {});
-      return;
-    }
-    if (_isX && _xVideo == null) unawaited(_loadXMedia());
     if (_failed) _embedMode = (_embedMode + 1) % 4;
     _play();
   }
@@ -682,7 +546,6 @@ window.addEventListener('message', function (e) {
 
   String get _playLabel {
     if (_failed) return 'Retry video';
-    if (_isX && _xLoading && _xVideo == null) return 'Loading video…';
     switch (_info.kind) {
       case EmbedKind.twitter:
         return 'Play X video';
@@ -731,9 +594,9 @@ window.addEventListener('message', function (e) {
 
   Widget _preview() {
     if (_dmBlocked) return _blockedCard();
-    final thumb = _isX ? _xPoster : _youtubeThumbnail;
+    final thumb = _youtubeThumbnail;
     return InkWell(
-      onTap: (widget.viewer || _isX)
+      onTap: widget.viewer
           ? _playTap
           : (widget.onTapPreview ?? widget.onOpenViewer ?? _playTap),
       child: Stack(
@@ -774,58 +637,6 @@ window.addEventListener('message', function (e) {
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  Widget _xNativePlayer() {
-    final controller = _xVideo!;
-    return GestureDetector(
-      onTap: () {
-        if (controller.value.isPlaying && controller.value.volume == 0) {
-          controller.setVolume(1);
-        } else if (controller.value.isPlaying) {
-          controller.pause();
-        } else {
-          controller.setVolume(1);
-          controller.play();
-        }
-        setState(() {});
-      },
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          FittedBox(
-            fit: BoxFit.contain,
-            child: SizedBox(
-              width: controller.value.size.width,
-              height: controller.value.size.height,
-              child: VideoPlayer(controller),
-            ),
-          ),
-          if (!controller.value.isPlaying)
-            const Center(
-              child: Icon(Icons.play_circle_fill_rounded,
-                  color: Colors.white, size: 64),
-            ),
-          Positioned(
-            right: 10,
-            bottom: 10,
-            child: IconButton.filled(
-              onPressed: () {
-                controller.setVolume(controller.value.volume > 0 ? 0 : 1);
-                setState(() {});
-              },
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.black54,
-                foregroundColor: Colors.white,
-              ),
-              icon: Icon(controller.value.volume > 0
-                  ? Icons.volume_up_rounded : Icons.volume_off_rounded),
             ),
           ),
         ],
@@ -875,7 +686,6 @@ window.addEventListener('message', function (e) {
 
   @override
   Widget build(BuildContext context) {
-    if (_isX && widget.inline) _updateXVisibility();
     final screen = MediaQuery.sizeOf(context);
     // In the feed keep tall (portrait) videos from taking over the screen;
     // on the post page they can use most of it.
@@ -902,7 +712,7 @@ window.addEventListener('message', function (e) {
                   child: SizedBox(
                     width: w,
                     height: h,
-                    child: _isX && _xVideo != null && _xVideo!.value.isInitialized ? _xNativePlayer() : (_controller != null && !_failed ? _player() : _preview()),
+                    child: _controller != null && !_failed ? _player() : _preview(),
                   ),
                 ),
               );
@@ -936,7 +746,7 @@ window.addEventListener('message', function (e) {
               child: SizedBox(
                 width: w,
                 height: h,
-                child: _isX && _xVideo != null && _xVideo!.value.isInitialized ? _xNativePlayer() : (_controller != null && !_failed ? _player() : _preview()),
+                child: _controller != null && !_failed ? _player() : _preview(),
               ),
             );
           },
