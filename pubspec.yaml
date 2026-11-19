@@ -26,6 +26,9 @@ dependencies:
   permission_handler: ^11.3.1
   share_plus: ^10.1.4
   android_intent_plus: ^5.2.0
+  screen_share_plugin: ^1.0.0
+  flutter_webrtc: ^1.6.3
+  qr_flutter: ^4.1.0
   open_filex: ^4.7.0
   photo_manager: ^3.6.0
   file_picker: ^8.1.2
