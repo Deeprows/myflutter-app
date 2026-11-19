@@ -57,15 +57,83 @@ class CastService extends ChangeNotifier {
 
   /// TV volume 0-100, or -1 when the TV does not report it.
   int tvVolume = -1;
-  bool tvMuted = false;
   Duration position = Duration.zero;
   Duration duration = Duration.zero;
-  final List<String> recentDevices = [];
-  final List<String> savedDevices = [];
+  final List<CastDevice> savedDevices = [];
+  final List<Map<String, String>> recentSessions = [];
   Timer? _sleepTimer;
   DateTime? sleepEndsAt;
-  int? sleepMinutes;
   String? error;
+
+  Future<void> loadDeviceMemory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList('decoder_saved_tvs') ?? const <String>[];
+    final recent = prefs.getStringList('decoder_cast_recents') ?? const <String>[];
+    savedDevices.clear();
+    for (final raw in saved) {
+      try {
+        final d = await _describe(raw);
+        if (d != null) savedDevices.add(d);
+      } catch (_) {}
+    }
+    recentSessions
+      ..clear()
+      ..addAll(recent.map((v) {
+        final bits = v.split('|');
+        return <String, String>{'title': bits.first, 'device': bits.length > 1 ? bits[1] : ''};
+      }));
+    notifyListeners();
+  }
+
+  Future<void> saveDevice(CastDevice d) async {
+    if (!savedDevices.any((x) => x.host == d.host)) savedDevices.add(d);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('decoder_saved_tvs', savedDevices.map((x) => x.location).toList());
+    notifyListeners();
+  }
+
+  Future<void> removeSavedDevice(CastDevice d) async {
+    savedDevices.removeWhere((x) => x.host == d.host);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('decoder_saved_tvs', savedDevices.map((x) => x.location).toList());
+    notifyListeners();
+  }
+
+  Future<CastDevice?> addDeviceByIp(String value) async {
+    var input = value.trim();
+    if (input.isEmpty) return null;
+    if (!input.contains('://')) input = 'http://$input';
+    final base = Uri.tryParse(input);
+    if (base == null || base.host.isEmpty) return null;
+    final candidates = <String>{base.toString()};
+    if (base.path == '/' || base.path.isEmpty) {
+      for (final path in ['/description.xml', '/rootDesc.xml', '/device.xml', '/upnp/description.xml']) {
+        candidates.add(base.replace(path: path).toString());
+      }
+    }
+    for (final url in candidates) {
+      final d = await _describe(url);
+      if (d != null) {
+        if (!devices.any((x) => x.host == d.host)) devices.add(d);
+        notifyListeners();
+        return d;
+      }
+    }
+    error = 'No compatible DLNA media renderer was found at that address.';
+    notifyListeners();
+    return null;
+  }
+
+  Future<void> setSleepTimer(Duration? value) async {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    sleepEndsAt = null;
+    if (value != null && value > Duration.zero) {
+      sleepEndsAt = DateTime.now().add(value);
+      _sleepTimer = Timer(value, () { stop(); });
+    }
+    notifyListeners();
+  }
 
   Timer? _poll;
   int _fails = 0;
@@ -78,70 +146,6 @@ class CastService extends ChangeNotifier {
   File? _localFile;
 
   // ------------------------------------------------------------- discovery
-
-  Future<void> loadSavedDevices() async {
-    final p = await SharedPreferences.getInstance();
-    savedDevices
-      ..clear()
-      ..addAll(p.getStringList('cast_saved_devices') ?? const []);
-    recentDevices
-      ..clear()
-      ..addAll(p.getStringList('cast_recent_devices') ?? const []);
-    final knownHosts = <String>{};
-    for (final key in [...savedDevices, ...recentDevices]) {
-      final parts = key.split('|');
-      if (parts.length < 2 || !knownHosts.add(parts.last)) continue;
-      await addManualDevice(parts.last);
-    }
-    notifyListeners();
-  }
-
-  Future<void> toggleSaved(CastDevice d) async {
-    final key = '${d.name}|${d.host}';
-    if (savedDevices.contains(key)) {
-      savedDevices.remove(key);
-    } else {
-      savedDevices.insert(0, key);
-    }
-    final p = await SharedPreferences.getInstance();
-    await p.setStringList('cast_saved_devices', savedDevices);
-    notifyListeners();
-  }
-
-  bool isSaved(CastDevice d) => savedDevices.contains('${d.name}|${d.host}');
-
-  Future<CastDevice?> addManualDevice(String host) async {
-    final clean = host.trim().replaceFirst(RegExp(r'^https?://'), '').split('/').first;
-    if (clean.isEmpty) return null;
-    final candidates = [
-      'http://$clean:1400/xml/device_description.xml',
-      'http://$clean:8001/api/v2/',
-      'http://$clean:49152/description.xml',
-      'http://$clean:80/description.xml',
-      'http://$clean:1900/description.xml',
-    ];
-    for (final url in candidates) {
-      final d = await _describe(url);
-      if (d != null) {
-        if (!devices.any((x) => x.host == d.host)) devices.add(d);
-        notifyListeners();
-        return d;
-      }
-    }
-    error = 'Could not identify a DLNA TV at $clean. Try scanning the Wi-Fi.';
-    notifyListeners();
-    return null;
-  }
-
-  Future<void> _rememberDevice(CastDevice d) async {
-    final key = '${d.name}|${d.host}';
-    recentDevices.remove(key);
-    recentDevices.insert(0, key);
-    if (recentDevices.length > 8) recentDevices.removeLast();
-    final p = await SharedPreferences.getInstance();
-    await p.setStringList('cast_recent_devices', recentDevices);
-  }
-
 
   static const _ssdpAddr = '239.255.255.250';
 
@@ -325,7 +329,6 @@ class CastService extends ChangeNotifier {
           '<InstanceID>0</InstanceID><Speed>1</Speed>');
 
       device = d;
-      await _rememberDevice(d);
       casting = true;
       tvPlaying = true;
       castTitle = title;
@@ -336,7 +339,8 @@ class CastService extends ChangeNotifier {
       BackgroundPlayback.castHook = _onNotificationAction;
       await BackgroundPlayback.startCasting(title, 'Casting to ${d.name}');
       _poll?.cancel();
-      _poll = Timer.periodic(const Duration(seconds: 8), (_) => _check());
+      _poll = Timer.periodic(const Duration(seconds: 8), (_) { _check(); refreshPosition(); });
+      unawaited(_rememberRecent(title, d.name));
       connecting = false;
       notifyListeners();
       unawaited(refreshTvVolume());
@@ -394,64 +398,37 @@ class CastService extends ChangeNotifier {
     if (d == null || !casting) return;
     try {
       final x = await _soap(d.avControl, d.avType, 'GetPositionInfo', '<InstanceID>0</InstanceID>');
-      position = _duration(_tag(x, 'RelTime') ?? '');
-      duration = _duration(_tag(x, 'TrackDuration') ?? '');
+      position = _parseClock(_tag(x, 'RelTime') ?? '00:00:00');
+      duration = _parseClock(_tag(x, 'TrackDuration') ?? '00:00:00');
       notifyListeners();
     } catch (_) {}
-  }
-
-  Duration _duration(String raw) {
-    final p = raw.split(':');
-    if (p.length != 3) return Duration.zero;
-    final h = int.tryParse(p[0]) ?? 0;
-    final m = int.tryParse(p[1]) ?? 0;
-    final sec = double.tryParse(p[2]) ?? 0;
-    return Duration(seconds: h * 3600 + m * 60 + sec.floor());
-  }
-
-  String _time(Duration d) {
-    final h = d.inHours.toString().padLeft(2, '0');
-    final m = (d.inMinutes % 60).toString().padLeft(2, '0');
-    final sec = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$h:$m:$sec';
   }
 
   Future<void> seekTo(Duration value) async {
     final d = device;
-    if (d == null || !casting || duration == Duration.zero) return;
+    if (d == null || duration <= Duration.zero) return;
     final target = value < Duration.zero ? Duration.zero : (value > duration ? duration : value);
+    final h = target.inHours.toString().padLeft(2, '0');
+    final m = (target.inMinutes % 60).toString().padLeft(2, '0');
+    final sec = (target.inSeconds % 60).toString().padLeft(2, '0');
     try {
-      await _soap(d.avControl, d.avType, 'Seek', '<InstanceID>0</InstanceID><Unit>REL_TIME</Unit><Target>${_time(target)}</Target>');
+      await _soap(d.avControl, d.avType, 'Seek', '<InstanceID>0</InstanceID><Unit>REL_TIME</Unit><Target>$h:$m:$sec</Target>');
       position = target;
       notifyListeners();
-    } catch (_) {}
+    } catch (_) { error = 'Seeking is not supported by this TV or stream.'; notifyListeners(); }
   }
 
-  Future<void> seekBy(Duration delta) => seekTo(position + delta);
-
-  Future<void> setMuted(bool muted) async {
-    final d = device;
-    if (d == null || d.rcControl == null || d.rcType == null) return;
-    try {
-      await _soap(d.rcControl!, d.rcType!, 'SetMute', '<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredMute>${muted ? 1 : 0}</DesiredMute>');
-      tvMuted = muted;
-      notifyListeners();
-    } catch (_) {}
+  static Duration _parseClock(String raw) {
+    final p = raw.split(':');
+    if (p.length != 3) return Duration.zero;
+    return Duration(hours: int.tryParse(p[0]) ?? 0, minutes: int.tryParse(p[1]) ?? 0, seconds: int.tryParse(p[2].split('.').first) ?? 0);
   }
 
-  void setSleepTimer(Duration? duration) {
-    _sleepTimer?.cancel();
-    sleepEndsAt = duration == null ? null : DateTime.now().add(duration);
-    sleepMinutes = duration?.inMinutes;
-    if (duration != null) {
-      _sleepTimer = Timer(duration, () {
-        stop();
-        sleepEndsAt = null;
-        sleepMinutes = null;
-        notifyListeners();
-      });
-    }
-    notifyListeners();
+  Future<void> _rememberRecent(String title, String tv) async {
+    recentSessions.insert(0, {'title': title, 'device': tv});
+    if (recentSessions.length > 12) recentSessions.removeRange(12, recentSessions.length);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('decoder_cast_recents', recentSessions.map((x) => '${x['title']}|${x['device']}').toList());
   }
 
   Future<void> refreshTvVolume() async {
@@ -523,7 +500,6 @@ class CastService extends ChangeNotifier {
       final st = (_tag(x, 'CurrentTransportState') ?? '').toUpperCase();
       final playing = st == 'PLAYING' || st == 'TRANSITIONING';
       if (playing) _everPlayed = true;
-      await refreshPosition();
       if (playing != tvPlaying) {
         tvPlaying = playing;
         BackgroundPlayback.setPlaying(playing, fromCast: true);
@@ -553,10 +529,6 @@ class CastService extends ChangeNotifier {
     _sleepTimer?.cancel();
     _sleepTimer = null;
     sleepEndsAt = null;
-    sleepMinutes = null;
-    position = Duration.zero;
-    duration = Duration.zero;
-    tvMuted = false;
     final wasCasting = casting;
     casting = false;
     connecting = false;
@@ -564,6 +536,8 @@ class CastService extends ChangeNotifier {
     tvVolume = -1;
     device = null;
     castTitle = '';
+    position = Duration.zero;
+    duration = Duration.zero;
     _localFile = null;
     _upHeaders = {};
     _server?.close(force: true);
