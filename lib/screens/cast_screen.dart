@@ -6,7 +6,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../models/cast_target.dart';
 import '../services/cast_service.dart';
-import '../services/google_cast_service.dart';
 import '../services/tv_remote_service.dart';
 import '../services/webrtc_mirror_service.dart';
 import '../services/subscription_service.dart';
@@ -185,20 +184,13 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
 
   Widget _devices() => _page([
     _heading('TV devices', 'Find compatible TVs on the same Wi-Fi network.'),
-    _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [Icon(Icons.cast_connected, color: Ui.red), const SizedBox(width: 10), Expanded(child: Text('Google Cast / Chromecast', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)))]),
-      const SizedBox(height: 6), Text('Use Google’s native Cast discovery and receiver session, separately from DLNA devices.', style: TextStyle(color: Ui.muted, fontSize: 12)),
-      const SizedBox(height: 10), SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () async {
-        try { await GoogleCastService.showPicker(); } catch (_) { _toast('Google Cast is not available on this device.'); }
-      }, icon: const Icon(Icons.cast), label: const Text('Find Chromecast / Google TV'))),
-      if (widget.target?.url != null) TextButton.icon(onPressed: () async {
-        final t = widget.target!;
-        final kind = t.kind;
-        final mime = kind == null ? 'video/mp4' : kind.name == 'hls' ? 'application/x-mpegURL' : kind.name == 'dash' ? 'application/dash+xml' : 'video/mp4';
-        final ok = await GoogleCastService.load(url: t.url!, title: t.title, contentType: mime, live: kind?.name == 'hls');
-        if (ok) { widget.onCastStarted?.call(); _toast('Sent to Google Cast receiver.'); }
-        else _toast('Choose a Google Cast device first, then try again.');
-      }, icon: const Icon(Icons.play_arrow), label: const Text('Send current video to selected Cast device')),
+    _panel(Row(children: [
+      Icon(Icons.cast_connected, color: Ui.muted), const SizedBox(width: 10),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Google Cast / Chromecast', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 4),
+        Text('Coming soon', style: TextStyle(color: Ui.muted, fontSize: 12)),
+      ])),
     ])),
     Row(children: [Expanded(child: FilledButton.icon(onPressed: svc.scanning ? null : _scan,
       icon: const Icon(Icons.radar), label: Text(svc.scanning ? 'Scanning…' : 'Scan network'))),
@@ -209,7 +201,7 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
     ...svc.devices.map((d) => _deviceTile(d, saved: svc.savedDevices.any((x) => x.host == d.host))),
     if (svc.savedDevices.isNotEmpty) ...[_heading('Saved TVs', 'Reconnect to devices you use often.'),
       ...svc.savedDevices.where((d) => !svc.devices.any((x) => x.host == d.host)).map((d) => _deviceTile(d, saved: true))],
-    _panel(Text('DLNA / UPnP devices appear below. Chromecast and Google TV use the native Google Cast picker above. TV-specific remote functions depend on the model and pairing permissions.', style: TextStyle(color: Ui.muted, fontSize: 12))),
+    _panel(Text('DLNA / UPnP devices appear below. Google Cast (Chromecast / Google TV) is coming soon. TV-specific remote functions depend on the model and pairing permissions.', style: TextStyle(color: Ui.muted, fontSize: 12))),
   ]);
 
   Widget _deviceTile(CastDevice d, {required bool saved}) => _panel(Row(children: [
@@ -288,8 +280,7 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
   Widget _remote() => _page([
     _heading('TV remote', 'Control media playback and supported TV navigation.'),
     _vendorRemotePanel(),
-    _panel(Row(children: [Expanded(child: Text('Google Cast remote', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800))), IconButton(onPressed: GoogleCastService.play, icon: const Icon(Icons.play_arrow)), IconButton(onPressed: GoogleCastService.pause, icon: const Icon(Icons.pause)), IconButton(onPressed: GoogleCastService.stop, icon: const Icon(Icons.stop))])),
-    if (!svc.casting) _panel(Text('DLNA playback controls appear after connecting to a DLNA TV. Google Cast controls work for an active Google Cast session.', style: TextStyle(color: Ui.muted)))
+    if (!svc.casting) _panel(Text('DLNA playback controls appear after connecting to a DLNA TV.', style: TextStyle(color: Ui.muted)))
     else ...[
       _panel(Column(children: [Text(svc.device?.name ?? 'Connected TV', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900, fontSize: 17)),
         const SizedBox(height: 8), Text(svc.castTitle, style: TextStyle(color: Ui.muted), maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -409,7 +400,7 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
       _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Other TV connection options', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
-        Text('• Google Cast: use the Chromecast / Google TV picker in Devices.\n• DLNA: send supported video streams directly to compatible TVs.\n• Android Cast / Smart View: use the phone’s system mirroring picker for Miracast-compatible TVs.', style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5)),
+        Text('• Google Cast (Chromecast / Google TV): coming soon.\n• DLNA: send supported video streams directly to compatible TVs.\n• Android Cast / Smart View: use the phone’s system mirroring picker for Miracast-compatible TVs.', style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5)),
         const SizedBox(height: 12),
         SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () async {
           final ok = await CastService.openMirrorSettings();
@@ -419,7 +410,7 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
       _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('AirPlay compatibility', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)),
         const SizedBox(height: 6),
-        Text('Android has no general-purpose Apple AirPlay sender SDK. Deeprowss uses Google Cast, DLNA or Android’s system mirroring when the TV supports them. Apple TV / AirPlay-only devices need a separately licensed and compatible sender implementation; Deeprowss does not claim native AirPlay support.', style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5)),
+        Text('Android has no general-purpose Apple AirPlay sender SDK. Deeprowss uses DLNA or Android’s system mirroring when the TV supports them. Apple TV / AirPlay-only devices need a separately licensed and compatible sender implementation; Deeprowss does not claim native AirPlay support.', style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5)),
       ])),
       _panel(Text('Mirroring requires the phone and TV to be on the same local network. Android displays a screen-capture consent prompt and a persistent sharing notification. Some apps protect their video with DRM and may show a black screen. Phone sound is sent too when you allow the audio permission (Android 10+; some apps block audio capture). Mirroring copies what is on the phone screen, so keep the screen on: locking the phone ends it on most Android versions. To watch with the phone locked, cast a video or channel with Google Cast or DLNA instead — the TV plays it directly.', style: TextStyle(color: Ui.muted, fontSize: 12))),
     ]),
