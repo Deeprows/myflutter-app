@@ -84,6 +84,23 @@ jobs:
       - name: Patch audio service (music / lock-screen controls)
         run: python3 tool/patch_audio_service.py
 
+      - name: Patch TV discovery permissions
+        run: python3 tool/patch_tv_integrations.py
+
+      # Google Cast sender SDK (Chromecast / Google TV). Must run after the
+      # MainActivity patches because it adds a channel to MainActivity.kt.
+      # Off by default (the app shows "coming soon"). To build it in, set the
+      # repository variable ENABLE_GOOGLE_CAST to true.
+      - name: Add Google Cast SDK
+        if: ${{ vars.ENABLE_GOOGLE_CAST == 'true' }}
+        env:
+          DEEPROWSS_CAST_RECEIVER_APP_ID: ${{ vars.DEEPROWSS_CAST_RECEIVER_APP_ID }}
+        run: python3 tool/patch_google_cast.py
+
+      - name: Add Google Cast native bridge
+        if: ${{ vars.ENABLE_GOOGLE_CAST == 'true' }}
+        run: python3 tool/patch_google_cast_native.py
+
       - name: Patch plugin compileSdk (Android API 36)
         run: python3 tool/patch_compile_sdk.py
 
