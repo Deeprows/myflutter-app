@@ -65,6 +65,14 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
   Map<String, dynamic>? _profile;
   String? _error;
   bool _loading = false, _following = false;
+  Key _feedKey = UniqueKey();
+
+  Future<void> _pullRefresh() async {
+    // New key = the posts list reloads from the top with the profile.
+    if (mounted) setState(() => _feedKey = UniqueKey());
+    await _load();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -604,11 +612,15 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
           Padding(padding: const EdgeInsets.all(16), child: Text(_error!)),
         if (_profile != null)
           Expanded(
-            child: NestedScrollView(
+            child: RefreshIndicator(
+              onRefresh: _pullRefresh,
+              child: NestedScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               headerSliverBuilder: (_, innerScrolled) => [
                 SliverToBoxAdapter(child: _header()),
               ],
               body: FanPostsFeed(
+                key: _feedKey,
                 active: true,
                 authorId: widget.userId,
                 onSocialChanged: _load,
@@ -617,6 +629,7 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
                 fixtures: const [],
                 onOpenMatch: (_) {},
               ),
+            ),
             ),
           ),
       ],
