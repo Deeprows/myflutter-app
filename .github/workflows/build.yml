@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: write  # needed to attach the APK to a GitHub release
+  pages: write     # needed to publish the TV receiver pages
+  id-token: write  # needed by the GitHub Pages deployment action
 
 jobs:
   android:
@@ -373,3 +375,51 @@ jobs:
           name: Deeprowss v${{ steps.ver.outputs.version }}
           files: Deeprowss-v${{ steps.ver.outputs.version }}.apk
           generate_release_notes: true
+
+
+  # -------------------------------------------------------------------
+  # Publish the browser-based TV receivers to GitHub Pages.
+  # The mirror receiver is hosted at the Pages root; the Google Cast
+  # receiver is hosted separately under /cast/.
+  # -------------------------------------------------------------------
+  deploy-tv-receivers:
+    name: Deploy Deeprowss TV Receivers
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: github-pages
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare receiver website
+        run: |
+          test -f receiver/deeprowss-mirror-receiver/index.html || {
+            echo "::error::Mirror receiver page is missing."
+            exit 1
+          }
+          test -f receiver/deeprowss-cast-receiver/index.html || {
+            echo "::error::Google Cast receiver page is missing."
+            exit 1
+          }
+
+          mkdir -p site/cast
+          cp receiver/deeprowss-mirror-receiver/index.html site/index.html
+          cp receiver/deeprowss-cast-receiver/index.html site/cast/index.html
+          touch site/.nojekyll
+
+      - name: Upload receiver website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy receiver website to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
