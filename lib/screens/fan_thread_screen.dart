@@ -688,13 +688,6 @@ class _FanThreadScreenState extends State<FanThreadScreen> {
       backgroundColor: Ui.bg,
       appBar: AppBar(
         title: const Text('Post'),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _loading ? null : _load,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
       ),
       body: Column(
         children: [
