@@ -10,6 +10,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'background_playback.dart';
 import 'stream_resolver.dart';
 
+class _KodiAuth implements Exception {
+  const _KodiAuth();
+}
+
+enum _KodiResult { ok, unavailable, failed }
+
 /// A TV / speaker on the Wi-Fi that can play a link by itself (DLNA / UPnP
 /// "media renderer": Samsung, LG, Sony, Hisense, TCL, Xiaomi, Android TV...).
 class CastDevice {
@@ -19,6 +25,8 @@ class CastDevice {
   final String avType;
   final String? rcControl;
   final String? rcType;
+  final String? manufacturer;
+  final String? model;
 
   const CastDevice({
     required this.name,
@@ -27,7 +35,16 @@ class CastDevice {
     required this.avType,
     this.rcControl,
     this.rcType,
+    this.manufacturer,
+    this.model,
   });
+
+  /// Kodi (and XBMC) advertise themselves as DLNA renderers too, but they
+  /// play far more reliably when driven through their own JSON-RPC API.
+  bool get isKodi {
+    final s = '$name ${manufacturer ?? ''} ${model ?? ''}'.toLowerCase();
+    return s.contains('kodi') || s.contains('xbmc');
+  }
 
   String get host => Uri.tryParse(location)?.host ?? location;
 }
@@ -64,6 +81,61 @@ class CastService extends ChangeNotifier {
   Timer? _sleepTimer;
   DateTime? sleepEndsAt;
   String? error;
+
+  // ------------------------------------------------------------ cast log
+  /// Everything the cast engine does, newest last. Shown on the Devices tab
+  /// so a failure ("Playback failed" on the TV) can actually be diagnosed.
+  final List<String> log = [];
+  int _relayHits = 0;
+
+  void _log(String m) {
+    final t = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    log.add('${two(t.hour)}:${two(t.minute)}:${two(t.second)}  $m');
+    if (log.length > 150) log.removeRange(0, log.length - 150);
+    if (kDebugMode) debugPrint('[cast] $m');
+  }
+
+  void clearLog() {
+    log.clear();
+    notifyListeners();
+  }
+
+  String get logText => log.join('\n');
+
+  /// URL without its query string (tokens) for logging.
+  static String _short(String url) {
+    final u = Uri.tryParse(url);
+    if (u == null || u.host.isEmpty) return url;
+    return '${u.scheme}://${u.host}${u.hasPort ? ':${u.port}' : ''}${u.path}';
+  }
+
+  // ------------------------------------------------------------ Kodi state
+  int? _kodiPort;
+  bool _kodiMode = false;
+  int? _kodiPlayerId;
+  bool kodiNeedsLogin = false;
+  String? kodiHint;
+  String _kodiUser = 'kodi';
+  String _kodiPass = '';
+
+  Future<void> _loadKodiLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    _kodiUser = prefs.getString('kodi_user') ?? 'kodi';
+    _kodiPass = prefs.getString('kodi_pass') ?? '';
+  }
+
+  Future<void> setKodiLogin(String user, String pass) async {
+    _kodiUser = user;
+    _kodiPass = pass;
+    _kodiPort = null;
+    kodiNeedsLogin = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('kodi_user', user);
+    await prefs.setString('kodi_pass', pass);
+    _log('Kodi login saved (user "$user").');
+    notifyListeners();
+  }
 
   Future<void> loadDeviceMemory() async {
     final prefs = await SharedPreferences.getInstance();
@@ -240,6 +312,8 @@ class CastService extends ChangeNotifier {
         '${hosts.isEmpty ? '' : ' ($hosts)'}\n'
         'Playable DLNA TVs among them: ${devices.length}';
     scanning = false;
+    _log('Scan: ${locations.length} answered, ${devices.length} playable'
+        '${devices.isEmpty ? '' : ' (${devices.map((d) => d.isKodi ? '${d.name} [Kodi]' : d.name).join(', ')})'}');
     if (devices.isEmpty && error == null) {
       error = locations.isEmpty
           ? 'No device answered. The TV / laptop may be on another network, the router may block device-to-device traffic, or a firewall on the TV / laptop is blocking the search.'
@@ -283,6 +357,8 @@ class CastService extends ChangeNotifier {
         avType: avType,
         rcControl: rcUrl,
         rcType: rcType,
+        manufacturer: _unesc(_tag(xml, 'manufacturer') ?? ''),
+        model: _unesc(_tag(xml, 'modelName') ?? ''),
       );
     } catch (_) {
       return null;
@@ -300,11 +376,33 @@ class CastService extends ChangeNotifier {
     String? referer,
     String? userAgent,
   }) async {
+    final headers = <String, String>{
+      if ((userAgent ?? '').trim().isNotEmpty) 'User-Agent': userAgent!.trim(),
+      if ((referer ?? '').trim().isNotEmpty) 'Referer': referer!.trim(),
+    };
+    _log('Cast "$title" to ${d.name} (${d.host}) <- ${_short(url)}'
+        '${headers.isEmpty ? '' : ' [headers: ${headers.keys.join(', ')}]'}');
+
+    // 1. Make sure the channel itself answers. A dead / blocked stream is the
+    //    most common reason a TV or Kodi reports "Playback failed".
+    try {
+      await _probeStream(url, headers);
+    } catch (e) {
+      error = e is String ? e : 'Could not check the stream.';
+      _log('Stream check failed: $error');
+      notifyListeners();
+      return false;
+    }
+
+    // 2. Kodi: drive it through its own API (no relay, headers are native).
+    if (d.isKodi) {
+      final r = await _castKodi(d, url, title, headers);
+      if (r != _KodiResult.unavailable) return r == _KodiResult.ok;
+      _log('Kodi web control not usable, falling back to DLNA.');
+    }
+
+    // 3. Everything else (and Kodi without web control): DLNA / UPnP.
     return _begin(d, title, () async {
-      final headers = <String, String>{
-        if ((userAgent ?? '').trim().isNotEmpty) 'User-Agent': userAgent!.trim(),
-        if ((referer ?? '').trim().isNotEmpty) 'Referer': referer!.trim(),
-      };
       _upHeaders = headers;
       final lower = url.toLowerCase();
       final needsRelay = headers.isNotEmpty || lower.startsWith('https');
@@ -318,6 +416,50 @@ class CastService extends ChangeNotifier {
               : _nameOf(url);
       return (url: '$origin/p/${_b64(url)}/$name', mime: mime);
     });
+  }
+
+  /// Opens the stream from the phone once, with the same headers the TV will
+  /// use, so a dead / geo-blocked / HTML-error stream is reported here with a
+  /// clear message instead of as a vague "Playback failed" on the TV.
+  Future<void> _probeStream(String url, Map<String, String> headers) async {
+    final c = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 8)
+      ..userAgent = null;
+    try {
+      final req = await c.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 8));
+      req.followRedirects = true;
+      req.maxRedirects = 6;
+      headers.forEach((k, v) => req.headers.set(k, v));
+      final res = await req.close().timeout(const Duration(seconds: 10));
+      final ct = res.headers.contentType?.mimeType.toLowerCase() ?? '';
+      List<int> head = const [];
+      try {
+        head = await res.first.timeout(const Duration(seconds: 8));
+      } catch (_) {}
+      _log('Stream check: HTTP ${res.statusCode}, type ${ct.isEmpty ? 'unknown' : ct}, '
+          '${head.length} bytes read');
+      if (res.statusCode >= 400) {
+        throw 'This channel is not responding right now (HTTP ${res.statusCode}), '
+            'so Kodi / the TV shows "Playback failed". Try another channel.';
+      }
+      final sniff = utf8
+          .decode(head.take(300).toList(), allowMalformed: true)
+          .trimLeft()
+          .toLowerCase();
+      if (ct.contains('html') ||
+          sniff.startsWith('<!doctype') ||
+          sniff.startsWith('<html')) {
+        throw 'The channel returned a web page instead of video (it may need a login, '
+            'be blocked in your country or be offline). Try another channel.';
+      }
+    } on String {
+      rethrow;
+    } catch (e) {
+      // Network hiccup on the phone side: do not block casting, just note it.
+      _log('Stream check skipped: $e');
+    } finally {
+      c.close(force: true);
+    }
   }
 
   /// Sends a video file stored on the phone (served over Wi-Fi).
@@ -363,24 +505,11 @@ class CastService extends ChangeNotifier {
       await _soap(d.avControl, d.avType, 'Play',
           '<InstanceID>0</InstanceID><Speed>1</Speed>');
 
-      device = d;
-      casting = true;
-      tvPlaying = true;
-      castTitle = title;
-      _everPlayed = false;
-      _stoppedPolls = 0;
-      _fails = 0;
-      BackgroundPlayback.castActive = true;
-      BackgroundPlayback.castHook = _onNotificationAction;
-      await BackgroundPlayback.startCasting(title, 'Casting to ${d.name}');
-      _poll?.cancel();
-      _poll = Timer.periodic(const Duration(seconds: 8), (_) { _check(); refreshPosition(); });
-      unawaited(_rememberRecent(title, d.name));
-      connecting = false;
-      notifyListeners();
-      unawaited(refreshTvVolume());
+      _kodiMode = false;
+      await _startSession(d, title);
       return true;
     } catch (e) {
+      _log('DLNA cast failed: $e');
       _cleanup();
       error = e is TimeoutException
           ? 'The TV did not answer. Try again.'
@@ -391,11 +520,160 @@ class CastService extends ChangeNotifier {
     }
   }
 
+  Future<void> _startSession(CastDevice d, String title) async {
+    device = d;
+    casting = true;
+    tvPlaying = true;
+    castTitle = title;
+    _everPlayed = false;
+    _stoppedPolls = 0;
+    _fails = 0;
+    _relayHits = 0;
+    BackgroundPlayback.castActive = true;
+    BackgroundPlayback.castHook = _onNotificationAction;
+    await BackgroundPlayback.startCasting(title, 'Casting to ${d.name}');
+    _poll?.cancel();
+    _poll = Timer.periodic(const Duration(seconds: 8), (_) { _check(); refreshPosition(); });
+    // First health check early, so a failure shows up in seconds.
+    Timer(const Duration(seconds: 4), _check);
+    unawaited(_rememberRecent(title, d.name));
+    connecting = false;
+    notifyListeners();
+    unawaited(refreshTvVolume());
+  }
+
+  // ------------------------------------------------------ Kodi (JSON-RPC)
+
+  Future<dynamic> _rpc(String host, int port, String method, [Map<String, dynamic>? params]) async {
+    final r = await http
+        .post(
+          Uri.parse('http://$host:$port/jsonrpc'),
+          headers: {
+            'Content-Type': 'application/json',
+            if (_kodiUser.isNotEmpty || _kodiPass.isNotEmpty)
+              'Authorization': 'Basic ${base64Encode(utf8.encode('$_kodiUser:$_kodiPass'))}',
+          },
+          body: jsonEncode({
+            'jsonrpc': '2.0',
+            'id': 1,
+            'method': method,
+            if (params != null) 'params': params,
+          }),
+        )
+        .timeout(const Duration(seconds: 5));
+    if (r.statusCode == 401) {
+      kodiNeedsLogin = true;
+      throw const _KodiAuth();
+    }
+    if (r.statusCode != 200) throw 'HTTP ${r.statusCode}';
+    final j = jsonDecode(utf8.decode(r.bodyBytes, allowMalformed: true));
+    if (j is Map && j['error'] != null) {
+      final e = j['error'];
+      throw 'Kodi: ${e is Map ? e['message'] : e}';
+    }
+    return j is Map ? j['result'] : null;
+  }
+
+  Future<int?> _findKodi(String host) async {
+    for (final port in const [8080, 80]) {
+      try {
+        await _rpc(host, port, 'JSONRPC.Ping');
+        _log('Kodi web control found on port $port.');
+        return port;
+      } on _KodiAuth {
+        _log('Kodi on port $port asked for a username / password.');
+      } catch (e) {
+        _log('Kodi web control not on port $port ($e).');
+      }
+    }
+    return null;
+  }
+
+  Future<_KodiResult> _castKodi(
+      CastDevice d, String url, String title, Map<String, String> headers) async {
+    if (connecting) return _KodiResult.failed;
+    connecting = true;
+    error = null;
+    kodiNeedsLogin = false;
+    kodiHint = null;
+    notifyListeners();
+    try {
+      await _loadKodiLogin();
+      final port = await _findKodi(d.host);
+      if (port == null) {
+        kodiHint = kodiNeedsLogin
+            ? 'Kodi is asking for its web login. Enter the username and password from Kodi → Settings → Services → Control.'
+            : 'Kodi is not accepting remote control yet. On the laptop open Kodi → Settings → Services → Control and turn ON "Allow remote control via HTTP" (port 8080). Then try again.';
+        connecting = false;
+        notifyListeners();
+        return kodiNeedsLogin ? _KodiResult.failed : _KodiResult.unavailable;
+      }
+      _kodiPort = port;
+      if (casting) await stop();
+      // Kodi understands "url|Header=value&Header2=value" natively.
+      final pipe = headers.entries
+          .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+          .join('&');
+      final file = pipe.isEmpty ? url : '$url|$pipe';
+      await _rpc(d.host, port, 'Player.Open', {'item': {'file': file}});
+      _log('Kodi accepted Player.Open.');
+      _kodiMode = true;
+      await _startSession(d, title);
+      return _KodiResult.ok;
+    } on _KodiAuth {
+      kodiHint = 'Kodi rejected the web login. Check the username / password in Kodi → Settings → Services → Control.';
+      error = kodiHint;
+      _log('Kodi login rejected.');
+      connecting = false;
+      notifyListeners();
+      return _KodiResult.failed;
+    } catch (e) {
+      _log('Kodi cast failed: $e');
+      _cleanup();
+      error = e is TimeoutException ? 'Kodi did not answer. Is Kodi open on the laptop?' : (e is String ? e : 'Kodi could not start this stream.');
+      connecting = false;
+      notifyListeners();
+      return _KodiResult.failed;
+    }
+  }
+
+  Future<int?> _kodiActivePlayer() async {
+    final d = device;
+    final port = _kodiPort;
+    if (d == null || port == null) return null;
+    final r = await _rpc(d.host, port, 'Player.GetActivePlayers');
+    if (r is List && r.isNotEmpty && r.first is Map) {
+      final id = (r.first as Map)['playerid'];
+      if (id is int) {
+        _kodiPlayerId = id;
+        return id;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _kodiPlayPause(bool wantPlaying) async {
+    final d = device;
+    final port = _kodiPort;
+    if (d == null || port == null) return;
+    try {
+      final id = await _kodiActivePlayer();
+      if (id == null) return;
+      await _rpc(d.host, port, 'Player.PlayPause', {'playerid': id, 'play': wantPlaying});
+      tvPlaying = wantPlaying;
+      BackgroundPlayback.setPlaying(wantPlaying, fromCast: true);
+    } catch (e) {
+      _log('Kodi play/pause failed: $e');
+    }
+    notifyListeners();
+  }
+
   // ------------------------------------------------------------- TV remote
 
   Future<void> play() async {
     final d = device;
     if (d == null) return;
+    if (_kodiMode) return _kodiPlayPause(true);
     try {
       await _soap(d.avControl, d.avType, 'Play',
           '<InstanceID>0</InstanceID><Speed>1</Speed>');
@@ -408,6 +686,7 @@ class CastService extends ChangeNotifier {
   Future<void> pause() async {
     final d = device;
     if (d == null) return;
+    if (_kodiMode) return _kodiPlayPause(false);
     try {
       await _soap(d.avControl, d.avType, 'Pause', '<InstanceID>0</InstanceID>');
       tvPlaying = false;
@@ -421,7 +700,14 @@ class CastService extends ChangeNotifier {
   /// Stops the TV and ends casting.
   Future<void> stop() async {
     final d = device;
-    if (d != null) {
+    if (d != null && _kodiMode && _kodiPort != null) {
+      try {
+        final id = _kodiPlayerId ?? await _kodiActivePlayer();
+        if (id != null) await _rpc(d.host, _kodiPort!, 'Player.Stop', {'playerid': id});
+      } catch (e) {
+        _log('Kodi stop failed: $e');
+      }
+    } else if (d != null) {
       await _soapQuiet(d.avControl, d.avType, 'Stop', '<InstanceID>0</InstanceID>');
     }
     _cleanup();
@@ -430,7 +716,7 @@ class CastService extends ChangeNotifier {
 
   Future<void> refreshPosition() async {
     final d = device;
-    if (d == null || !casting) return;
+    if (d == null || !casting || _kodiMode) return;
     try {
       final x = await _soap(d.avControl, d.avType, 'GetPositionInfo', '<InstanceID>0</InstanceID>');
       position = _parseClock(_tag(x, 'RelTime') ?? '00:00:00');
@@ -468,6 +754,17 @@ class CastService extends ChangeNotifier {
 
   Future<void> refreshTvVolume() async {
     final d = device;
+    if (d != null && _kodiMode && _kodiPort != null) {
+      try {
+        final r = await _rpc(d.host, _kodiPort!, 'Application.GetProperties', {'properties': ['volume']});
+        final v = r is Map ? r['volume'] : null;
+        if (v is num) {
+          tvVolume = v.round().clamp(0, 100);
+          notifyListeners();
+        }
+      } catch (_) {}
+      return;
+    }
     if (d == null || d.rcControl == null) return;
     try {
       final x = await _soap(d.rcControl!, d.rcType!, 'GetVolume',
@@ -482,8 +779,16 @@ class CastService extends ChangeNotifier {
 
   Future<void> setTvVolume(int value) async {
     final d = device;
-    if (d == null || d.rcControl == null) return;
     final v = value.clamp(0, 100);
+    if (d != null && _kodiMode && _kodiPort != null) {
+      tvVolume = v;
+      notifyListeners();
+      try {
+        await _rpc(d.host, _kodiPort!, 'Application.SetVolume', {'volume': v});
+      } catch (_) {}
+      return;
+    }
+    if (d == null || d.rcControl == null) return;
     tvVolume = v;
     notifyListeners();
     try {
@@ -492,7 +797,7 @@ class CastService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  bool get tvVolumeSupported => device?.rcControl != null;
+  bool get tvVolumeSupported => _kodiMode || device?.rcControl != null;
 
   /// Opens Android's "Cast screen / Smart View" panel (mirrors the phone
   /// screen to a TV or Chromecast). Used for web embeds, which cannot be sent
@@ -528,6 +833,25 @@ class CastService extends ChangeNotifier {
   Future<void> _check() async {
     final d = device;
     if (d == null || !casting) return;
+    if (_kodiMode) {
+      try {
+        final id = await _kodiActivePlayer();
+        _fails = 0;
+        if (id != null) {
+          _everPlayed = true;
+          _stoppedPolls = 0;
+        } else if (_everPlayed) {
+          if (++_stoppedPolls >= 2) _finish('Kodi stopped playing.');
+        } else if (++_stoppedPolls >= 3) {
+          _log('Kodi never started a player for this stream.');
+          _finish('Kodi could not play this channel ("Playback failed"). The stream may be offline or blocked. See the Cast log on the Devices tab.');
+        }
+      } catch (e) {
+        _log('Kodi check failed: $e');
+        if (++_fails >= 4) _finish('Lost connection to Kodi.');
+      }
+      return;
+    }
     try {
       final x = await _soap(
           d.avControl, d.avType, 'GetTransportInfo', '<InstanceID>0</InstanceID>');
@@ -553,6 +877,7 @@ class CastService extends ChangeNotifier {
   }
 
   void _finish(String message) {
+    _log(message);
     _cleanup();
     error = message;
     notifyListeners();
@@ -575,6 +900,8 @@ class CastService extends ChangeNotifier {
     duration = Duration.zero;
     _localFile = null;
     _upHeaders = {};
+    _kodiMode = false;
+    _kodiPlayerId = null;
     _server?.close(force: true);
     _server = null;
     _client?.close(force: true);
@@ -602,7 +929,12 @@ class CastService extends ChangeNotifier {
         )
         .timeout(const Duration(seconds: 8));
     if (r.statusCode >= 300) {
-      throw 'The TV refused this stream (${r.statusCode}).';
+      final body = utf8.decode(r.bodyBytes, allowMalformed: true);
+      final desc = _tag(body, 'errorDescription');
+      final code = _tag(body, 'errorCode');
+      _log('$action refused: HTTP ${r.statusCode}'
+          '${code == null ? '' : ' UPnP $code'}${desc == null ? '' : ' ($desc)'}');
+      throw 'The TV refused this stream (${r.statusCode}${desc == null ? '' : ': $desc'}).';
     }
     return utf8.decode(r.bodyBytes, allowMalformed: true);
   }
@@ -689,6 +1021,9 @@ class CastService extends ChangeNotifier {
     if (range != null) up.headers.set('range', range);
     final r = await up.close();
     final res = req.response;
+    if (r.statusCode >= 400 || _relayHits++ < 4) {
+      _log('Relay: ${req.method} ${_short(upstream)} -> ${r.statusCode}');
+    }
 
     var base = Uri.parse(upstream);
     for (final red in r.redirects) {
