@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="color-scheme" content="dark">
+  <title>Deeprowss TV Receiver</title>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#07090e;color:#fff}
+    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#07090e}
+    body{display:grid;place-items:center}.shell{width:min(92vw,680px);padding:32px;text-align:center}
+    .logo{font-size:clamp(25px,5vw,46px);font-weight:950;letter-spacing:.12em}.sub{color:#aab4c4;margin:10px 0 28px}
+    .panel{background:#111722;border:1px solid #293345;border-radius:22px;padding:26px;box-shadow:0 24px 80px #0008}
+    input{width:min(100%,320px);padding:16px;border-radius:12px;border:1px solid #46536a;background:#080d15;color:white;text-align:center;font-size:24px;letter-spacing:.3em}
+    button{display:block;margin:16px auto 0;padding:14px 26px;border:0;border-radius:12px;background:#e32636;color:#fff;font-weight:800;font-size:16px;cursor:pointer}
+    #status{margin-top:18px;color:#aab4c4;min-height:24px}.hint{font-size:13px;color:#8290a4;margin-top:18px}
+    video{position:fixed;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none}
+    .pill{display:inline-block;border:1px solid #334155;border-radius:999px;padding:6px 12px;color:#9caec4;font-size:12px;margin-top:12px}
+  </style>
+</head>
+<body>
+  <video id="screen" autoplay playsinline muted></video>
+  <main class="shell" id="join">
+    <div class="logo">DEEProWSS</div>
+    <div class="sub">Deeprowss TV Screen Receiver</div>
+    <section class="panel">
+      <h2>Connect your phone</h2>
+      <p class="sub">Enter the phone address and six-digit code shown in the Deeprowss app.</p>
+      <input id="host" inputmode="url" autocomplete="url" aria-label="Phone address" placeholder="192.168.1.20:12345" style="width:min(100%,420px);font-size:18px;letter-spacing:0;margin-bottom:12px">
+      <input id="pin" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" aria-label="Six digit pairing code">
+      <button id="connect">Connect phone</button>
+      <div id="status" role="status">Ready to receive a screen stream</div>
+      <div class="pill">Same Wi-Fi network required</div>
+      <div class="hint">Keep this screen open while Deeprowss is mirroring.</div>
+    </section>
+  </main>
+  <script>
+  (() => {
+    const pinInput = document.getElementById('pin');
+    const hostInput = document.getElementById('host');
+    const status = document.getElementById('status');
+    const video = document.getElementById('screen');
+    const join = document.getElementById('join');
+    let socket, peer;
+    const pendingCandidates = [];
+    const params = new URLSearchParams(location.search);
+    if (/^\d{6}$/.test(params.get('pin') || '')) pinInput.value = params.get('pin');
+    if (params.get('host')) hostInput.value = params.get('host');
+    const say = (value) => { status.textContent = value; };
+    const send = (value) => { if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(value)); };
+    async function connect() {
+      if (socket && socket.readyState === WebSocket.OPEN) return;
+      pendingCandidates.length = 0;
+      if (peer) { peer.close(); peer = null; }
+      const pin = pinInput.value.trim();
+      let host = hostInput.value.trim();
+      if (host.startsWith('http://') || host.startsWith('https://')) {
+        try { host = new URL(host).host; } catch (_) { host = ''; }
+      }
+      if (!host || !/^\d{6}$/.test(pin)) { say('Enter the phone address and six-digit code from Deeprowss.'); return; }
+      document.getElementById('connect').disabled = true;
+      say('Connecting to your phone…');
+      socket = new WebSocket(`ws://${host}/ws?pin=${encodeURIComponent(pin)}`);
+      socket.onopen = () => { say('Connected. Waiting for the phone screen…'); send({type:'ready'}); };
+      socket.onerror = () => { say('Could not connect. Check the address, code and Wi-Fi.'); document.getElementById('connect').disabled = false; };
+      socket.onclose = () => {
+        say('Connection closed. Re-enter the code to reconnect.');
+        document.getElementById('connect').disabled = false;
+        video.pause(); video.srcObject = null; video.style.display = 'none'; join.style.display = 'grid';
+        if (peer) { peer.close(); peer = null; }
+      };
+      socket.onmessage = async (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'offer') {
+            peer = new RTCPeerConnection({iceServers:[
+              {urls:'stun:stun.l.google.com:19302'},
+              {urls:'stun:stun1.l.google.com:19302'}
+            ]});
+            peer.ontrack = (e) => {
+              video.srcObject = e.streams[0];
+              video.style.display = 'block';
+              join.style.display = 'none';
+              video.play().catch(() => {});
+            };
+            peer.onicecandidate = (e) => { if (e.candidate) send({type:'candidate',candidate:e.candidate.toJSON()}); };
+            peer.onconnectionstatechange = () => {
+              if (peer.connectionState === 'connected') say('Mirroring is live');
+              if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') say('Video connection interrupted');
+            };
+            await peer.setRemoteDescription({type:message.sdpType || 'offer',sdp:message.sdp});
+            while (pendingCandidates.length) await peer.addIceCandidate(pendingCandidates.shift());
+            const answer = await peer.createAnswer();
+            await peer.setLocalDescription(answer);
+            send({type:'answer',sdp:answer.sdp,sdpType:answer.type});
+          } else if (message.type === 'candidate') {
+            if (peer && peer.remoteDescription) await peer.addIceCandidate(message.candidate);
+            else pendingCandidates.push(message.candidate);
+          }
+        } catch (e) { say('Receiver error: ' + e.message); }
+      };
+    }
+    document.getElementById('connect').addEventListener('click', connect);
+    pinInput.addEventListener('keydown', e => { if (e.key === 'Enter') connect(); });
+    if (hostInput.value && pinInput.value) setTimeout(connect, 450);
+  })();
+  </script>
+</body>
+</html>
