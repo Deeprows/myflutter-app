@@ -6,6 +6,7 @@ import '../services/background_playback.dart';
 import '../services/cast_service.dart';
 import '../services/stream_resolver.dart';
 import '../theme/app_theme.dart';
+import '../screens/cast_screen.dart';
 
 /// What a player page wants to send to the TV.
 class CastTarget {
@@ -69,8 +70,9 @@ class CastButton extends StatelessWidget {
         return IconButton(
           tooltip: on ? 'Casting to ${svc.device?.name ?? 'TV'}' : 'Cast to screen',
           iconSize: size,
-          onPressed: () =>
-              showCastSheet(context, target(), onCastStarted: onCastStarted),
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => CastScreen(target: target(), onCastStarted: onCastStarted),
+          )),
           icon: Icon(
             on ? Icons.cast_connected_rounded : Icons.cast_rounded,
             color: on ? Ui.red : color,
