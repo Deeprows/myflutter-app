@@ -589,11 +589,6 @@ class _FanProfileScreenState extends State<FanProfileScreen> {
           onPressed: () => GuideScreen.open(context),
           icon: const Icon(Icons.menu_book_outlined),
         ),
-        IconButton(
-          tooltip: 'Refresh profile',
-          onPressed: _loading ? null : _load,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
         if (widget.userId.isNotEmpty &&
             widget.userId == AuthService.instance.user?.id)
           IconButton(
