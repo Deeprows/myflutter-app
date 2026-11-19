@@ -149,18 +149,16 @@ class CastService extends ChangeNotifier {
 
   static const _ssdpAddr = '239.255.255.250';
 
-  /// Looks for TVs on the Wi-Fi (about 5 seconds).
-  Future<void> scan({Duration duration = const Duration(seconds: 5)}) async {
-    if (scanning) return;
-    scanning = true;
-    error = null;
-    notifyListeners();
-    await BackgroundPlayback.requestLocalNetwork();
-    await BackgroundPlayback.setMulticast(true);
-    RawDatagramSocket? sock;
+  /// What the last scan saw, shown on the Devices tab to help troubleshooting.
+  String? scanReport;
+
+  /// One SSDP search round. Binding to the phone's Wi-Fi address makes the
+  /// multicast search leave through Wi-Fi even when mobile data is on.
+  Future<Set<String>> _ssdpRound(InternetAddress bindTo, Duration duration) async {
     final locations = <String>{};
+    RawDatagramSocket? sock;
     try {
-      sock = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      sock = await RawDatagramSocket.bind(bindTo, 0);
       final s = sock;
       final re = RegExp(r'^location:\s*(\S+)', caseSensitive: false, multiLine: true);
       s.listen((e) {
@@ -175,6 +173,8 @@ class CastService extends ChangeNotifier {
       const targets = [
         'urn:schemas-upnp-org:device:MediaRenderer:1',
         'urn:schemas-upnp-org:service:AVTransport:1',
+        'upnp:rootdevice',
+        'ssdp:all',
       ];
       void ping() {
         for (final st in targets) {
@@ -189,14 +189,42 @@ class CastService extends ChangeNotifier {
         }
       }
 
+      final step = Duration(milliseconds: duration.inMilliseconds ~/ 3);
       ping();
-      await Future<void>.delayed(const Duration(milliseconds: 900));
+      await Future<void>.delayed(step);
       ping();
-      await Future<void>.delayed(duration - const Duration(milliseconds: 900));
+      await Future<void>.delayed(step);
+      ping();
+      await Future<void>.delayed(step);
+    } finally {
+      sock?.close();
+    }
+    return locations;
+  }
+
+  /// Looks for TVs on the Wi-Fi (about 6 seconds).
+  Future<void> scan({Duration duration = const Duration(seconds: 6)}) async {
+    if (scanning) return;
+    scanning = true;
+    error = null;
+    scanReport = null;
+    notifyListeners();
+    await BackgroundPlayback.requestLocalNetwork();
+    await BackgroundPlayback.setMulticast(true);
+    var locations = <String>{};
+    String? ip;
+    try {
+      ip = await _lanIp();
+      if (ip != null) {
+        locations = await _ssdpRound(InternetAddress(ip), duration);
+      }
+      if (locations.isEmpty) {
+        // Second try on every interface, in case the Wi-Fi address guess was wrong.
+        locations = await _ssdpRound(InternetAddress.anyIPv4, duration);
+      }
     } catch (_) {
       error = 'Could not search for TVs. Check your Wi-Fi connection.';
     } finally {
-      sock?.close();
       await BackgroundPlayback.setMulticast(false);
     }
 
@@ -206,9 +234,16 @@ class CastService extends ChangeNotifier {
       ..clear()
       ..addAll(found.whereType<CastDevice>().where((d) => seen.add('${d.name}|${d.host}')));
     devices.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final hosts = locations.map((l) => Uri.tryParse(l)?.host ?? l).toSet().take(8).join(', ');
+    scanReport = 'Phone Wi-Fi address: ${ip ?? 'not found'}\n'
+        'Devices that answered the search: ${locations.length}'
+        '${hosts.isEmpty ? '' : ' ($hosts)'}\n'
+        'Playable DLNA TVs among them: ${devices.length}';
     scanning = false;
     if (devices.isEmpty && error == null) {
-      error = 'No TV found. Put the phone and the TV on the same Wi-Fi.';
+      error = locations.isEmpty
+          ? 'No device answered. The TV / laptop may be on another network, the router may block device-to-device traffic, or a firewall on the TV / laptop is blocking the search.'
+          : 'Some devices answered, but none is a DLNA player that Deeprowss can use.';
     }
     notifyListeners();
   }
