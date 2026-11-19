@@ -28,6 +28,8 @@ perms = [
     "android.permission.POST_NOTIFICATIONS",
     "android.permission.FOREGROUND_SERVICE",
     "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+    "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION",  # screen mirroring
+    "android.permission.RECORD_AUDIO",  # screen mirroring: capture phone audio
     "android.permission.REQUEST_INSTALL_PACKAGES",  # install Deeprows Browser
     "android.permission.READ_MEDIA_VIDEO",  # Player tab: phone videos (Android 13+)
     "android.permission.READ_MEDIA_AUDIO",  # Player tab: phone music (Android 13+)
