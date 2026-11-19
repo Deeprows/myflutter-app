@@ -15,6 +15,7 @@ import '../services/remote_config.dart';
 import '../services/stream_resolver.dart';
 import '../screens/browser_screen.dart' show openExternally;
 import '../theme/app_theme.dart';
+import 'viewport_autoplay.dart';
 
 /// A lightweight play card. In the feed, tapping it opens the post (like a
 /// Twitter timeline); inside the post, the video plays right there.
@@ -36,6 +37,10 @@ class FanPostVideo extends StatefulWidget {
   /// True inside the full-screen viewer: no card border/margin, the video is
   /// centred and uses the space it is given.
   final bool viewer;
+
+  /// Play when scrolled into view and pause when scrolled away (muted, like
+  /// X / Facebook). Only one video plays at a time.
+  final bool autoPlayInView;
   const FanPostVideo({
     super.key,
     required this.url,
@@ -44,6 +49,7 @@ class FanPostVideo extends StatefulWidget {
     this.autoPlay = false,
     this.onOpenViewer,
     this.viewer = false,
+    this.autoPlayInView = true,
   });
   @override
   State<FanPostVideo> createState() => _FanPostVideoState();
@@ -179,6 +185,7 @@ window.addEventListener('message', function (e) {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (_viewportMode) AutoPlayCoordinator.winner.addListener(_onWinner);
     if (widget.autoPlay) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _controller == null) _play();
@@ -186,15 +193,46 @@ window.addEventListener('message', function (e) {
     }
   }
 
+  /// Viewport autoplay is for cards inside a scrolling list (feed / thread),
+  /// not the full-screen viewer or the composer preview.
+  bool get _viewportMode =>
+      widget.autoPlayInView && !widget.viewer && !widget.autoPlay;
+
+  bool _userStopped = false;
+
+  void _onVisible(double f) {
+    if (!_viewportMode) return;
+    AutoPlayCoordinator.report(this, f);
+    if (f <= 0.05) _userStopped = false; // scrolled away: allow replay later
+  }
+
+  void _onWinner() {
+    if (!mounted) return;
+    final mine = AutoPlayCoordinator.winner.value == this;
+    if (mine && _controller == null && !_userStopped && !_failed) {
+      _play(muted: true);
+    } else if (!mine && _controller != null) {
+      _stop();
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) _stop();
+    if (state != AppLifecycleState.resumed) {
+      _stop();
+    } else if (_viewportMode) {
+      _onWinner();
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!TickerMode.of(context)) _stop();
+    if (!TickerMode.of(context)) {
+      _stop();
+    } else if (_viewportMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onWinner());
+    }
   }
 
   Future<void> _restoreSystemUi() async {
@@ -317,6 +355,8 @@ window.addEventListener('message', function (e) {
 
   @override
   void dispose() {
+    AutoPlayCoordinator.winner.removeListener(_onWinner);
+    AutoPlayCoordinator.remove(this);
     WidgetsBinding.instance.removeObserver(this);
     _backFromFullscreen();
     unawaited(_restoreSystemUi());
@@ -340,6 +380,7 @@ window.addEventListener('message', function (e) {
       : origin;
 
   void _playTap() {
+    _userStopped = false;
     if (_failed) _embedMode = (_embedMode + 1) % 4;
     _play();
   }
@@ -352,8 +393,11 @@ window.addEventListener('message', function (e) {
     return '${u.scheme}://${u.host}${u.hasPort ? ':${u.port}' : ''}/';
   }
 
-  Future<void> _play({int attempt = 0}) async {
+  bool _muted = false;
+
+  Future<void> _play({int attempt = 0, bool muted = false}) async {
     _attempt = attempt;
+    _muted = muted;
     setState(() {
       _loading = true;
       _failed = false;
@@ -374,7 +418,7 @@ window.addEventListener('message', function (e) {
       ..addJavaScriptChannel('FanSize', onMessageReceived: (m) => _onMeasured(m.message))
       ..addJavaScriptChannel('DwPlayer', onMessageReceived: (m) {
         if (m.message == 'fail' && _attempt < 2 && mounted) {
-          _play(attempt: _attempt + 1);
+          _play(attempt: _attempt + 1, muted: _muted);
         }
       })
       ..setNavigationDelegate(
@@ -391,6 +435,9 @@ window.addEventListener('message', function (e) {
             _settled = true;
             c.runJavaScript(AdShield.adShieldJs).catchError((_) {});
             c.runJavaScript(embedSizeJs).catchError((_) {});
+            if (_muted) {
+              c.runJavaScript("document.querySelectorAll('video').forEach(function(v){v.muted=true;v.play&&v.play().catch(function(){});});").catchError((_) {});
+            }
             if (mounted) setState(() => _loading = false);
           },
           onWebResourceError: (e) {
@@ -435,7 +482,7 @@ window.addEventListener('message', function (e) {
         final id = _vimeoId(initialUri);
         if (id == null) throw FormatException('Invalid Vimeo video URL');
         await _loadHtml(c, 
-          _iframeHtml('https://player.vimeo.com/video/$id?autoplay=1&title=0&byline=0&portrait=0'),
+          _iframeHtml('https://player.vimeo.com/video/$id?autoplay=1&title=0&byline=0&portrait=0${_muted ? '&muted=1' : ''}'),
           baseUrl: AppConfig.embedOrigin,
         );
         return;
@@ -453,7 +500,7 @@ window.addEventListener('message', function (e) {
         }
         if (!mounted || _controller != c) return;
         await _loadHtml(c,
-          _iframeHtml(DailymotionCheck.playerUrl(id)),
+          _iframeHtml(DailymotionCheck.playerUrl(id) + (_muted ? '&mute=1' : '')),
           baseUrl: AppConfig.embedOrigin,
         );
         return;
@@ -470,7 +517,7 @@ window.addEventListener('message', function (e) {
       final youtubeId = _youtubeId(initialUri);
       if (youtubeId != null) {
         await _loadHtml(c, 
-          '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head><body style="margin:0;background:#000"><iframe src="https://www.youtube-nocookie.com/embed/$youtubeId?autoplay=1&playsinline=1&rel=0&controls=1" style="position:fixed;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
+          '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head><body style="margin:0;background:#000"><iframe src="https://www.youtube-nocookie.com/embed/$youtubeId?autoplay=1&playsinline=1&rel=0&controls=1${_muted ? '&mute=1' : ''}" style="position:fixed;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></body></html>',
           baseUrl: 'https://www.youtube-nocookie.com',
         );
       } else if (stream.usesHtmlPlayer) {
@@ -673,7 +720,10 @@ window.addEventListener('message', function (e) {
                 backgroundColor: Colors.black54,
                 foregroundColor: Colors.white,
               ),
-              onPressed: _stop,
+              onPressed: () {
+                _userStopped = true;
+                _stop();
+              },
               tooltip: 'Stop video',
               icon: const Icon(Icons.close, size: 18),
             ),
@@ -721,7 +771,7 @@ window.addEventListener('message', function (e) {
         ),
       );
     }
-    return PopScope(
+    final card = PopScope(
       canPop: _fullscreenEntry == null,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop && _fullscreenEntry != null) _backFromFullscreen();
@@ -753,5 +803,8 @@ window.addEventListener('message', function (e) {
         ),
       ),
     );
+    return _viewportMode
+        ? ViewportWatcher(onVisible: _onVisible, child: card)
+        : card;
   }
 }
