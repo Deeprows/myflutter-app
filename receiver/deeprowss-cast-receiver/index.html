@@ -1,1 +1,10 @@
-i
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Deeprowss TV Receiver</title>
+<style>html,body{margin:0;width:100%;height:100%;background:#080b10;color:#fff;font:16px system-ui}body{display:grid;place-items:center}#splash{text-align:center;color:#aeb6c2}#splash strong{display:block;color:#fff;font-size:clamp(24px,4vw,44px);margin-bottom:10px}video{width:100%;height:100%;object-fit:contain;background:#000}</style>
+<script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script></head>
+<body><div id="splash"><strong>DEEprowss</strong>Ready to receive your cast</div><cast-media-player></cast-media-player>
+<script>
+(() => { const ctx = cast.framework.CastReceiverContext.getInstance();
+ ctx.start({});
+})();
+</script></body></html>
