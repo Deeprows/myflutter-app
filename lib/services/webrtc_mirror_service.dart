@@ -34,6 +34,9 @@ class DeeprowssMirrorService extends ChangeNotifier {
   bool connected = false;
   bool audioShared = false;
 
+  /// Why phone sound is not being sent (null when it is, or not yet known).
+  String? audioNote;
+
   /// True when the session only sends a channel link to the receiver page
   /// (no screen capture). The receiver plays the stream itself, so the phone
   /// can be minimised or locked.
@@ -111,10 +114,12 @@ class DeeprowssMirrorService extends ChangeNotifier {
         // AudioPlaybackCapture (Android 10+), which needs the microphone
         // (RECORD_AUDIO) permission. If it is refused or unsupported we still
         // mirror the video, just without sound.
+        audioNote = null;
         var wantAudio = false;
         try {
           wantAudio = (await Permission.microphone.request()).isGranted;
         } catch (_) {}
+        if (!wantAudio) audioNote = 'Audio permission was not granted, so no phone sound is sent.';
         Future<MediaStream?> capture(bool audio) => ScreenSharePlugin.startScreenShare(
               options: ScreenShareOptions(
                 audio: audio,
@@ -132,9 +137,13 @@ class DeeprowssMirrorService extends ChangeNotifier {
           final refused = m.contains('permission') || m.contains('denied') || m.contains('cancel');
           if (!wantAudio || refused) rethrow;
           wantAudio = false;
+          audioNote = 'Phone audio capture failed: $e';
           _screenStream = await capture(false);
         }
         audioShared = wantAudio && (_screenStream?.getAudioTracks().isNotEmpty ?? false);
+        if (wantAudio && !audioShared) {
+          audioNote = 'The screen-share plugin sent no audio track, so phone sound cannot be mirrored with it. The phone stays unmuted.';
+        }
         // Keep the phone awake: Android ends a full-screen capture when the
         // phone is locked, so the screen must not time out while mirroring.
         try { await WakelockPlus.enable(); } catch (_) {}
@@ -405,6 +414,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
     await _releaseResources(stopCapture: true);
     connected = false;
     audioShared = false;
+    audioNote = null;
     urlMode = false;
     _pendingPlay = null;
     status = 'Mirroring stopped';
