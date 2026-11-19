@@ -69,6 +69,10 @@ class _FanPostVideoState extends State<FanPostVideo>
   static const _redirectGate = Duration(seconds: 5);
   bool _loading = false, _failed = false;
 
+  /// False while an embed is still drawing itself: the poster picture covers
+  /// the player so the viewer never sees a blank / "Loading…" page.
+  bool _embedReady = true;
+
   /// Dailymotion says this video cannot be embedded (owner turned it off,
   /// private or removed): show a clear message instead of "Forbidden".
   bool _dmBlocked = false;
@@ -137,18 +141,35 @@ class _FanPostVideoState extends State<FanPostVideo>
 <html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}
-.twitter-video{margin:0!important;max-width:100%!important}</style>
+.twitter-video{margin:0!important;max-width:100%!important}
+blockquote.twitter-video,blockquote.twitter-video a{color:transparent!important;text-decoration:none!important;font-size:0!important}</style>
 </head><body>
 <blockquote class="twitter-video" data-theme="dark" data-lang="en" data-media-max-width="560">
-<a href="$safeUrl">Loading video…</a>
+<a href="$safeUrl">&nbsp;</a>
 </blockquote>
 <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 $_tweetSizeScript
+$_tweetReadyScript
 </body></html>''';
   }
 
   /// X's embed tells its page how big the post is. Forward that as a size so
   /// the box fits the post (video included) instead of a fixed guess.
+  /// Tells the app when X's player iframe has really appeared, so the poster
+  /// picture stays visible until then (no "Loading video…" flash).
+  static const _tweetReadyScript = r'''<script>
+(function () {
+  var n = 0;
+  var t = setInterval(function () {
+    n++;
+    if (document.querySelector('iframe')) {
+      clearInterval(t);
+      setTimeout(function () { try { DwPlayer.postMessage('ready'); } catch (x) {} }, 500);
+    } else if (n > 80) { clearInterval(t); }
+  }, 150);
+})();
+</script>''';
+
   static const _tweetSizeScript = r'''<script>
 window.addEventListener('message', function (e) {
   try {
@@ -699,6 +720,11 @@ window.addEventListener('message', function (e) {
       _loading = true;
       _failed = false;
       _dmBlocked = false;
+      _embedReady = false;
+    });
+    // Never keep the cover up forever (slow hosts, odd embeds).
+    Future<void>.delayed(const Duration(seconds: 10), () {
+      if (mounted && !_embedReady) setState(() => _embedReady = true);
     });
     var stream = StreamResolver.resolve(_url);
     final initialUri = Uri.tryParse(_url);
@@ -714,7 +740,9 @@ window.addEventListener('message', function (e) {
       ..setBackgroundColor(Colors.black)
       ..addJavaScriptChannel('FanSize', onMessageReceived: (m) => _onMeasured(m.message))
       ..addJavaScriptChannel('DwPlayer', onMessageReceived: (m) {
-        if (m.message == 'fail' && _attempt < 2 && mounted) {
+        if (m.message == 'ready') {
+          if (mounted && !_embedReady) setState(() => _embedReady = true);
+        } else if (m.message == 'fail' && _attempt < 2 && mounted) {
           _play(attempt: _attempt + 1, muted: _muted);
         }
       })
@@ -735,7 +763,12 @@ window.addEventListener('message', function (e) {
             if (_muted) {
               c.runJavaScript("document.querySelectorAll('video').forEach(function(v){v.muted=true;v.play&&v.play().catch(function(){});});").catchError((_) {});
             }
-            if (mounted) setState(() => _loading = false);
+            if (mounted) {
+              setState(() {
+                _loading = false;
+                if (_info.kind != EmbedKind.twitter) _embedReady = true;
+              });
+            }
           },
           onWebResourceError: (e) {
             if (e.isForMainFrame == true && mounted)
@@ -1029,7 +1062,25 @@ window.addEventListener('message', function (e) {
   Widget _player() => Stack(
     children: [
       WebViewWidget(controller: _controller!),
-      if (_loading) const LinearProgressIndicator(),
+      if (!_embedReady)
+        Positioned.fill(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              const ColoredBox(color: Color(0xFF171A20)),
+              if (_thumb != null) _thumbImage(_thumb!),
+              const ColoredBox(color: Color(0x55000000)),
+              const Center(
+                child: SizedBox(
+                  width: 34,
+                  height: 34,
+                  child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+      if (_loading && _embedReady) const LinearProgressIndicator(),
       Positioned(
         top: widget.viewer ? null : 4,
         bottom: widget.viewer ? 4 : null,
