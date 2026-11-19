@@ -316,6 +316,16 @@ if "setupPlayback" not in src:
         "super.configureFlutterEngine(flutterEngine)\n        setupPlayback(flutterEngine)", 1)
     method = '''
     private var mcLock: android.net.wifi.WifiManager.MulticastLock? = null
+    private var localNetworkPermissionResult: MethodChannel.Result? = null
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 4108) {
+            val granted = grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+            localNetworkPermissionResult?.success(granted)
+            localNetworkPermissionResult = null
+        }
+    }
 
     private fun setupPlayback(flutterEngine: FlutterEngine) {
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "footbolive/playback")
@@ -367,12 +377,17 @@ if "setupPlayback" not in src:
                         if (Build.VERSION.SDK_INT >= 36) {
                             val perm = "android.permission.ACCESS_LOCAL_NETWORK"
                             if (checkSelfPermission(perm) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                localNetworkPermissionResult = result
                                 requestPermissions(arrayOf(perm), 4108)
+                            } else {
+                                result.success(true)
                             }
+                        } else {
+                            result.success(true)
                         }
                     } catch (e: Exception) {
+                        result.success(false)
                     }
-                    result.success(true)
                 }
                 "multicast" -> {
                     try {
