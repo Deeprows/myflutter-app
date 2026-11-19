@@ -402,7 +402,7 @@ class CastService extends ChangeNotifier {
     }
 
     // 3. Everything else (and Kodi without web control): DLNA / UPnP.
-    return _begin(d, title, () async {
+    final ok = await _begin(d, title, () async {
       _upHeaders = headers;
       final lower = url.toLowerCase();
       final needsRelay = headers.isNotEmpty || lower.startsWith('https');
@@ -416,6 +416,11 @@ class CastService extends ChangeNotifier {
               : _nameOf(url);
       return (url: '$origin/p/${_b64(url)}/$name', mime: mime);
     });
+    if (d.isKodi) {
+      // Show why Kodi did / did not play, straight from Kodi's own log.
+      unawaited(Future<void>.delayed(Duration(seconds: ok ? 8 : 1), () => fetchKodiLog(d)));
+    }
+    return ok;
   }
 
   /// Opens the stream from the phone once, with the same headers the TV will
@@ -589,6 +594,66 @@ class CastService extends ChangeNotifier {
     return null;
   }
 
+  Map<String, String> get _kodiAuthHeader => {
+        if (_kodiUser.isNotEmpty || _kodiPass.isNotEmpty)
+          'Authorization': 'Basic ${base64Encode(utf8.encode('$_kodiUser:$_kodiPass'))}',
+      };
+
+  /// Reads Kodi's own log (kodi.log) from the laptop through Kodi's web
+  /// server and copies the important lines (errors / warnings / playback)
+  /// into the Cast log. Needs "Allow remote control via HTTP" in Kodi.
+  Future<bool> fetchKodiLog(CastDevice d) async {
+    _log('--- Reading Kodi log from ${d.name} ---');
+    notifyListeners();
+    try {
+      await _loadKodiLogin();
+      final port = _kodiPort ?? await _findKodi(d.host);
+      if (port == null) {
+        _log(kodiNeedsLogin
+            ? 'Kodi log: Kodi needs its web login (Devices tab → Kodi login).'
+            : 'Kodi log: cannot read it. On the laptop open Kodi → Settings → Services → Control and turn ON "Allow remote control via HTTP".');
+        notifyListeners();
+        return false;
+      }
+      _kodiPort = port;
+      final r = await _rpc(d.host, port, 'Files.PrepareDownload', {'path': 'special://logpath/kodi.log'});
+      final details = r is Map ? r['details'] : null;
+      final path = details is Map ? details['path'] : null;
+      if (path is! String) throw 'Kodi did not return the log file';
+      final res = await http
+          .get(Uri.parse('http://${d.host}:$port/$path'), headers: {..._kodiAuthHeader, 'Range': 'bytes=-300000'})
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200 && res.statusCode != 206) throw 'HTTP ${res.statusCode}';
+      final lines = const LineSplitter().convert(utf8.decode(res.bodyBytes, allowMalformed: true));
+      final re = RegExp(r'ERROR|WARNING|OpenFile|Open failed|failed|PLT|UPnP|Platinum|Playback|CVideoPlayer|ffmpeg|inputstream', caseSensitive: false);
+      final hits = lines.where(re.hasMatch).toList();
+      if (hits.isEmpty) {
+        _log('Kodi log: no errors in the latest lines.');
+      } else {
+        for (final l in hits.skip(hits.length > 40 ? hits.length - 40 : 0)) {
+          _log('KODI  ${l.length > 220 ? l.substring(0, 220) : l}');
+        }
+      }
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _log('Kodi log: could not read it ($e).');
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> _kodiPrepare(CastDevice d, int port, String title) async {
+    try {
+      // More detailed Kodi log, so a failure has a real reason in it.
+      await _rpc(d.host, port, 'Settings.SetSettingValue', {'setting': 'debug.showloginfo', 'value': true});
+    } catch (_) {}
+    try {
+      await _rpc(d.host, port, 'GUI.ShowNotification',
+          {'title': 'Deeprowss', 'message': 'Loading $title', 'displaytime': 4000});
+    } catch (_) {}
+  }
+
   Future<_KodiResult> _castKodi(
       CastDevice d, String url, String title, Map<String, String> headers) async {
     if (connecting) return _KodiResult.failed;
@@ -609,6 +674,7 @@ class CastService extends ChangeNotifier {
         return kodiNeedsLogin ? _KodiResult.failed : _KodiResult.unavailable;
       }
       _kodiPort = port;
+      await _kodiPrepare(d, port, title);
       if (casting) await stop();
       // Kodi understands "url|Header=value&Header2=value" natively.
       final pipe = headers.entries
@@ -844,6 +910,7 @@ class CastService extends ChangeNotifier {
           if (++_stoppedPolls >= 2) _finish('Kodi stopped playing.');
         } else if (++_stoppedPolls >= 3) {
           _log('Kodi never started a player for this stream.');
+          unawaited(fetchKodiLog(d));
           _finish('Kodi could not play this channel ("Playback failed"). The stream may be offline or blocked. See the Cast log on the Devices tab.');
         }
       } catch (e) {
@@ -864,10 +931,14 @@ class CastService extends ChangeNotifier {
         BackgroundPlayback.setPlaying(playing, fromCast: true);
         notifyListeners();
       }
-      if (!playing &&
-          _everPlayed &&
-          (st == 'STOPPED' || st == 'NO_MEDIA_PRESENT')) {
-        if (++_stoppedPolls >= 2) _finish('The TV stopped playing.');
+      final stopped = st == 'STOPPED' || st == 'NO_MEDIA_PRESENT';
+      if (!playing && stopped) {
+        if (_everPlayed) {
+          if (++_stoppedPolls >= 2) _finish('The TV stopped playing.');
+        } else if (++_stoppedPolls >= 3) {
+          if (d.isKodi) unawaited(fetchKodiLog(d));
+          _finish('The TV accepted the stream but never started playing it ("Playback failed"). See the Cast log for the reason.');
+        }
       } else {
         _stoppedPolls = 0;
       }
