@@ -186,7 +186,7 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
   Widget _devices() => _page([
     _heading('TV devices', 'Find compatible TVs on the same Wi-Fi network.'),
     _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [const Icon(Icons.cast_connected, color: Ui.red), const SizedBox(width: 10), Expanded(child: Text('Google Cast / Chromecast', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)))]),
+      Row(children: [Icon(Icons.cast_connected, color: Ui.red), const SizedBox(width: 10), Expanded(child: Text('Google Cast / Chromecast', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)))]),
       const SizedBox(height: 6), Text('Use Google’s native Cast discovery and receiver session, separately from DLNA devices.', style: TextStyle(color: Ui.muted, fontSize: 12)),
       const SizedBox(height: 10), SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () async {
         try { await GoogleCastService.showPicker(); } catch (_) { _toast('Google Cast is not available on this device.'); }
@@ -221,19 +221,19 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
 
   Future<void> _pairVendorRemote() async {
     final ip = TextEditingController(text: _remoteHost);
-    String brand = _remoteBrand;
+    String dialogBrand = _remoteBrand;
     final choice = await showDialog<({String ip, String brand})>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setDialog) => AlertDialog(
       backgroundColor: Ui.panel,
       title: const Text('Connect TV remote'),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
         TextField(controller: ip, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'TV IP address', hintText: '192.168.1.50')),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(value: brand, decoration: const InputDecoration(labelText: 'TV platform'),
+        DropdownButtonFormField<String>(initialValue: dialogBrand, decoration: const InputDecoration(labelText: 'TV platform'),
           items: const [DropdownMenuItem(value: 'Auto detect', child: Text('Auto detect TV brand')), DropdownMenuItem(value: 'Roku', child: Text('Roku')), DropdownMenuItem(value: 'LG webOS', child: Text('LG webOS')), DropdownMenuItem(value: 'Samsung', child: Text('Samsung Tizen'))],
-          onChanged: (v) { if (v != null) setDialog(() => brand = v); }),
+          onChanged: (v) { if (v != null) setDialog(() => dialogBrand = v); }),
       ]),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, (ip: ip.text.trim(), brand: brand)), child: const Text('Connect'))],
+        FilledButton(onPressed: () => Navigator.pop(ctx, (ip: ip.text.trim(), brand: dialogBrand)), child: const Text('Connect'))],
     )));
     ip.dispose();
     if (choice == null || choice.ip.isEmpty) return;
@@ -327,7 +327,7 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
       _heading('Screen mirroring', 'Stream your entire Android display to a TV over your local Wi-Fi.'),
       _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const Icon(Icons.screen_share_rounded, size: 32, color: Ui.red),
+          Icon(Icons.screen_share_rounded, size: 32, color: Ui.red),
           const SizedBox(width: 12),
           Expanded(child: Text(mirrorSvc.status, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800))),
           if (mirrorSvc.connected) const Icon(Icons.circle, color: Colors.green, size: 10),
@@ -390,7 +390,7 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
         SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () async {
           final ok = await CastService.openMirrorSettings();
           if (!ok) _toast('Open Cast or Smart View from Android Quick Settings.');
-        }, icon: const Icon(Icons.settings_input_antenna), label: const Text('Open Android Cast / Smart View')),
+        }, icon: const Icon(Icons.settings_input_antenna), label: const Text('Open Android Cast / Smart View'))),
       ])),
       _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('AirPlay compatibility', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)),
