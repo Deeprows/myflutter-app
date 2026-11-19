@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../config.dart';
 import '../models/highlight.dart';
 import '../models/push_target.dart';
+import '../models/fan_post_link.dart';
+import '../services/fan_zone_service.dart';
 import '../services/feed_service.dart';
+import '../utils/posted_at.dart';
 import '../services/push_service.dart';
 import '../services/support_gate.dart';
 import '../services/content_sync.dart';
@@ -23,7 +28,19 @@ class HighlightsScreen extends StatefulWidget {
 }
 
 class _HighlightsScreenState extends State<HighlightsScreen> {
-  List<Highlight> _all = const [];
+  List<Highlight> _official = const [];
+
+  /// Highlight-style posts from the community Thread (a video link plus the
+  /// word "highlights" or a "Team vs Team" title).
+  List<Highlight> _community = const [];
+
+  List<Highlight> get _all {
+    if (_community.isEmpty) return _official;
+    final seen = _official.map((h) => h.url.trim()).toSet();
+    final extra = _community.where((h) => seen.add(h.url.trim())).toList();
+    return newestFirst([..._official, ...extra], (h) => h.date);
+  }
+
   bool _loading = true;
   String _query = '';
   String? _comp;
@@ -33,6 +50,7 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
   @override
   void initState() {
     super.initState();
+    _loadCommunity();
     _load().then((_) {
       if (AppConfig.highlightsUrl.isNotEmpty) _load(remote: true);
     });
@@ -41,6 +59,7 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
   }
 
   void _onSync() {
+    _loadCommunity();
     if (_loading) {
       // First load still running: try again shortly instead of skipping.
       Future<void>.delayed(const Duration(seconds: 2), () {
@@ -86,11 +105,77 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
     super.dispose();
   }
 
+  static final _vsTitle = RegExp(r'\S+\s+vs\.?\s+\S+', caseSensitive: false);
+  static final _lead = RegExp(
+    r'^\W*(watch\s+)?(full\s+match\s+)?(highlights?|replay|goals?)\s*[:\-–|]\s*',
+    caseSensitive: false,
+  );
+
+  /// Turns a Thread post into a highlight, or null when it is not one.
+  Highlight? _fromPost(Map<String, dynamic> post) {
+    if (post['is_ad'] == true || post['is_ad'] == 1) return null;
+    final text = '${post['text'] ?? ''}';
+    final links = fanPostLinks(text);
+    if (links.isEmpty) return null;
+    final lower = text.toLowerCase();
+    if (!lower.contains('highlight') && !_vsTitle.hasMatch(text)) return null;
+    var clean = text;
+    for (final l in links) {
+      clean = clean.replaceAll(l, '');
+    }
+    final lines = clean
+        .split('\n')
+        .map((l) => l.replaceAll(RegExp(r'#\w+'), '').trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+    if (lines.isEmpty) return null;
+    var title = lines.first.replaceFirst(_lead, '').trim();
+    if (title.isEmpty) title = lines.first;
+    final comp = lines.length > 1 && lines[1].length <= 40 ? lines[1] : '';
+    final name = comp.isNotEmpty && !title.contains(' - ')
+        ? '$title - $comp'
+        : title;
+    final parsed = Highlight.tryParse({'name': name, 'url': fanVideoUrl(links.first)});
+    if (parsed == null) return null;
+    final at = post['at'];
+    return Highlight(
+      name: parsed.name,
+      url: parsed.url,
+      date: at is num ? DateTime.fromMillisecondsSinceEpoch(at.toInt()) : null,
+      home: parsed.home,
+      away: parsed.away,
+      competition: parsed.competition,
+    );
+  }
+
+  Future<void> _loadCommunity() async {
+    try {
+      final results = await Future.wait([
+        FanZoneService.call('posts', query: {'kind': 'all', 'scope': 'all'}),
+        FanZoneService.call('posts', query: {'kind': 'video', 'scope': 'all'}),
+      ].map((f) => f.then<Map<String, dynamic>?>((v) => v).catchError(
+            (Object _) => null,
+          )));
+      final ids = <Object?>{};
+      final found = <Highlight>[];
+      for (final data in results) {
+        if (data == null) continue;
+        for (final post in FanZoneService.rows(data['posts'])) {
+          if (!ids.add(post['id'])) continue;
+          final h = _fromPost(post);
+          if (h != null) found.add(h);
+        }
+      }
+      if (!mounted) return;
+      setState(() => _community = found);
+    } catch (_) {}
+  }
+
   Future<void> _load({bool remote = false}) async {
     final list = await feed.loadHighlights(remote: remote);
     if (!mounted) return;
     setState(() {
-      _all = list;
+      _official = list;
       _loading = false;
     });
     _afterLoad(last: remote || AppConfig.highlightsUrl.isEmpty);
@@ -412,6 +497,7 @@ class _HighlightsScreenState extends State<HighlightsScreen> {
       backgroundColor: Colors.transparent,
       body: AppRefresh(
         onRefresh: () async {
+          unawaited(_loadCommunity());
           await _load(remote: true);
           return !feed.lastRemoteFailed;
         },
