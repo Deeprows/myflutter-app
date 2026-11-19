@@ -1,11 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../models/cast_target.dart';
 import '../services/cast_service.dart';
 import '../services/google_cast_service.dart';
 import '../services/tv_remote_service.dart';
+import '../services/webrtc_mirror_service.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 import 'plans_screen.dart';
@@ -25,10 +28,12 @@ class CastScreen extends StatefulWidget {
 
 class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateMixin {
   final CastService svc = CastService.instance;
+  final DeeprowssMirrorService mirrorSvc = DeeprowssMirrorService.instance;
   late final TabController _tabs = TabController(length: 5, vsync: this);
   bool _busy = false;
   String _remoteHost = '';
-  String _remoteBrand = 'Roku';
+  String _remoteBrand = 'Auto detect';
+  String _remoteModel = '';
 
   @override
   void initState() {
@@ -224,7 +229,7 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
         TextField(controller: ip, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'TV IP address', hintText: '192.168.1.50')),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(value: brand, decoration: const InputDecoration(labelText: 'TV platform'),
-          items: const [DropdownMenuItem(value: 'Roku', child: Text('Roku')), DropdownMenuItem(value: 'LG webOS', child: Text('LG webOS')), DropdownMenuItem(value: 'Samsung', child: Text('Samsung Tizen'))],
+          items: const [DropdownMenuItem(value: 'Auto detect', child: Text('Auto detect TV brand')), DropdownMenuItem(value: 'Roku', child: Text('Roku')), DropdownMenuItem(value: 'LG webOS', child: Text('LG webOS')), DropdownMenuItem(value: 'Samsung', child: Text('Samsung Tizen'))],
           onChanged: (v) { if (v != null) setDialog(() => brand = v); }),
       ]),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -232,32 +237,46 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
     )));
     ip.dispose();
     if (choice == null || choice.ip.isEmpty) return;
-    setState(() { _remoteHost = choice.ip; _remoteBrand = choice.brand; });
+    var brand = choice.brand;
+    var model = '';
+    if (brand == 'Auto detect') {
+      final info = await TvRemoteService.detect(choice.ip);
+      if (info == null) {
+        _toast('Could not identify a supported Roku, LG webOS or Samsung TV at that IP.');
+        return;
+      }
+      brand = info.brand;
+      model = info.model;
+    }
+    setState(() { _remoteHost = choice.ip; _remoteBrand = brand; _remoteModel = model; });
     final ok = await _sendVendorKey('KEY_HOME');
-    _toast(ok ? 'Remote connected. Your TV may ask you to approve Deeprowss.' : 'Could not reach this TV. Check its IP and remote-control settings.');
+    _toast(ok ? '$brand remote command sent. Approve Deeprowss on the TV if prompted.' : '$brand was detected, but pairing or command delivery did not complete. Check the TV prompt and try again.');
   }
 
   Future<bool> _sendVendorKey(String key) async {
     if (_remoteHost.isEmpty) return false;
     switch (_remoteBrand) {
       case 'Roku':
-        final rokuKey = {'KEY_UP':'Up','KEY_DOWN':'Down','KEY_LEFT':'Left','KEY_RIGHT':'Right','KEY_ENTER':'Select','KEY_HOME':'Home','KEY_BACK':'Back','KEY_VOLUMEUP':'VolumeUp','KEY_VOLUMEDOWN':'VolumeDown'}[key] ?? key;
+        final rokuKey = {'KEY_UP':'Up','KEY_DOWN':'Down','KEY_LEFT':'Left','KEY_RIGHT':'Right','KEY_ENTER':'Select','KEY_HOME':'Home','KEY_BACK':'Back','KEY_VOLUMEUP':'VolumeUp','KEY_VOLUMEDOWN':'VolumeDown','KEY_MUTE':'VolumeMute','KEY_MENU':'Info','KEY_POWER':'Power','KEY_SOURCE':'InputTuner'}[key] ?? key;
         return TvRemoteService.roku(_remoteHost, rokuKey);
       case 'LG webOS':
-        final lgKey = {'KEY_UP':'UP','KEY_DOWN':'DOWN','KEY_LEFT':'LEFT','KEY_RIGHT':'RIGHT','KEY_ENTER':'ENTER','KEY_HOME':'HOME','KEY_BACK':'BACK','KEY_VOLUMEUP':'VOLUMEUP','KEY_VOLUMEDOWN':'VOLUMEDOWN'}[key] ?? key;
+        final lgKey = {'KEY_UP':'UP','KEY_DOWN':'DOWN','KEY_LEFT':'LEFT','KEY_RIGHT':'RIGHT','KEY_ENTER':'ENTER','KEY_HOME':'HOME','KEY_BACK':'BACK','KEY_VOLUMEUP':'VOLUMEUP','KEY_VOLUMEDOWN':'VOLUMEDOWN','KEY_MUTE':'MUTE','KEY_MENU':'MENU','KEY_POWER':'POWER','KEY_SOURCE':'INPUT'}[key] ?? key;
         return TvRemoteService.lgWebOs(_remoteHost, lgKey);
-      case 'Samsung': return TvRemoteService.samsung(_remoteHost, key);
+      case 'Samsung':
+        final samsungKey = {'KEY_VOLUMEUP':'KEY_VOLUP','KEY_VOLUMEDOWN':'KEY_VOLDOWN','KEY_BACK':'KEY_RETURN'}[key] ?? key;
+        return TvRemoteService.samsung(_remoteHost, samsungKey);
       default: return false;
     }
   }
 
   Widget _vendorRemotePanel() => _panel(Column(children: [
-    Row(children: [Expanded(child: Text(_remoteHost.isEmpty ? 'Manufacturer remote' : '$_remoteBrand · $_remoteHost', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800))), TextButton(onPressed: _pairVendorRemote, child: Text(_remoteHost.isEmpty ? 'Set up' : 'Change'))]),
+    Row(children: [Expanded(child: Text(_remoteHost.isEmpty ? 'Manufacturer remote' : '$_remoteBrand · $_remoteHost${_remoteModel.isEmpty ? '' : ' · $_remoteModel'}', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800))), TextButton(onPressed: _pairVendorRemote, child: Text(_remoteHost.isEmpty ? 'Set up' : 'Change'))]),
     if (_remoteHost.isNotEmpty) ...[
       Row(mainAxisAlignment: MainAxisAlignment.center, children: [_remoteKey(Icons.arrow_upward, 'Up', 'KEY_UP')]),
       Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [_remoteKey(Icons.arrow_back, 'Left', 'KEY_LEFT'), _remoteKey(Icons.circle_outlined, 'OK', 'KEY_ENTER'), _remoteKey(Icons.arrow_forward, 'Right', 'KEY_RIGHT')]),
       Row(mainAxisAlignment: MainAxisAlignment.center, children: [_remoteKey(Icons.arrow_downward, 'Down', 'KEY_DOWN')]),
       Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [_remoteKey(Icons.home, 'Home', 'KEY_HOME'), _remoteKey(Icons.undo, 'Back', 'KEY_BACK'), _remoteKey(Icons.volume_up, 'Vol +', 'KEY_VOLUMEUP'), _remoteKey(Icons.volume_down, 'Vol −', 'KEY_VOLUMEDOWN')]),
+      Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [_remoteKey(Icons.volume_off, 'Mute', 'KEY_MUTE'), _remoteKey(Icons.menu, 'Menu', 'KEY_MENU'), _remoteKey(Icons.power_settings_new, 'Power', 'KEY_POWER'), _remoteKey(Icons.input, 'Input', 'KEY_SOURCE')]),
     ],
   ]));
 
@@ -281,7 +300,7 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
         ]), if (svc.duration > Duration.zero) _seekControl(), if (svc.tvVolumeSupported) _volumeControl(), _sleepControl(),
         FilledButton.tonalIcon(onPressed: svc.stop, icon: const Icon(Icons.stop), label: const Text('Stop casting')),
       ])),
-      _panel(Text('Roku ECP, LG webOS and Samsung remote-control endpoints are provided as separate manufacturer adapters. Some TVs require an on-screen approval prompt, local-network access, or a saved pairing token; commands vary by model and firmware. Power and input switching are intentionally not sent unless the TV exposes them.', style: TextStyle(color: Ui.muted, fontSize: 12))),
+      _panel(Text('Roku ECP, LG webOS and Samsung Tizen remotes support automatic endpoint detection, saved pairing keys/tokens where supplied by the TV, and navigation, playback, volume and additional keys where the model exposes them. Some TVs require an on-screen approval prompt. A command can still be rejected by firmware or parental/network settings.', style: TextStyle(color: Ui.muted, fontSize: 12))),
     ],
   ]);
 
@@ -302,19 +321,85 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
   Widget _sleepControl() => Row(children: [const Icon(Icons.bedtime_outlined), const SizedBox(width: 8), Expanded(child: Text(svc.sleepEndsAt == null ? 'Sleep timer off' : 'Stops at ${TimeOfDay.fromDateTime(svc.sleepEndsAt!).format(context)}', style: TextStyle(color: Ui.muted))),
     PopupMenuButton<int>(tooltip: 'Sleep timer', onSelected: (v) => svc.setSleepTimer(v == 0 ? null : Duration(minutes: v)), itemBuilder: (_) => const [PopupMenuItem(value: 0, child: Text('Off')), PopupMenuItem(value: 15, child: Text('15 minutes')), PopupMenuItem(value: 30, child: Text('30 minutes')), PopupMenuItem(value: 60, child: Text('1 hour')), PopupMenuItem(value: 120, child: Text('2 hours'))], child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.timer_outlined)))]);
 
-  Widget _mirror() => _page([
-    _heading('Screen mirroring', 'Mirror your entire phone screen using Android wireless display.'),
-    _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Icon(Icons.screen_share_rounded, size: 42), const SizedBox(height: 12),
-      Text('Start Android screen casting', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 17)),
-      const SizedBox(height: 8), Text('This opens Android’s native Cast / Smart View route picker for compatible Chromecast, Google TV and Miracast-capable receivers. Android controls the actual display mirroring session; Deeprowss cannot override vendor restrictions or keep the display mirrored if the phone/OS ends the projection.', style: TextStyle(color: Ui.muted)),
-      const SizedBox(height: 16), SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () async {
-        final ok = await CastService.openMirrorSettings();
-        if (!ok) _toast('Open Cast or Smart View from Android Quick Settings.');
-      }, icon: const Icon(Icons.cast), label: const Text('Open screen mirroring'))),
-    ])),
-    _panel(Text('The Deeprowss Cast Web Receiver is supplied in receiver/deeprowss-cast-receiver and supports casting media to a registered Cast receiver. It is not a full-screen MediaProjection receiver. Full-phone mirroring to a custom receiver still needs a separate secure capture/encoding/signalling pipeline; Android's MediaProjection permission alone does not transmit the screen. Use the native system mirror route for whole-screen mirroring.', style: TextStyle(color: Ui.muted, fontSize: 12))),
-  ]);
+  Widget _mirror() => ListenableBuilder(
+    listenable: mirrorSvc,
+    builder: (context, _) => _page([
+      _heading('Screen mirroring', 'Stream your entire Android display to a TV over your local Wi-Fi.'),
+      _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.screen_share_rounded, size: 32, color: Ui.red),
+          const SizedBox(width: 12),
+          Expanded(child: Text(mirrorSvc.status, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800))),
+          if (mirrorSvc.connected) const Icon(Icons.circle, color: Colors.green, size: 10),
+        ]),
+        const SizedBox(height: 10),
+        Text('Deeprowss captures the Android screen with the system permission dialog and sends the video directly to a receiver on the same Wi-Fi network using WebRTC. The secure receiver page is hosted on GitHub Pages, while the actual screen video travels directly over your local network.', style: TextStyle(color: Ui.muted, fontSize: 12)),
+        const SizedBox(height: 16),
+        if (!mirrorSvc.running) SizedBox(width: double.infinity, child: FilledButton.icon(
+          onPressed: () async {
+            try {
+              await mirrorSvc.start();
+              if (mounted) _toast('Screen capture started. Connect your TV using the address and code below.');
+            } catch (e) {
+              if (mounted) _toast(mirrorSvc.error ?? 'Could not start screen mirroring: $e');
+            }
+          },
+          icon: const Icon(Icons.cast_connected),
+          label: const Text('Start Deeprowss screen mirroring'),
+        )) else SizedBox(width: double.infinity, child: FilledButton.tonalIcon(
+          onPressed: () async { await mirrorSvc.stop(); if (mounted) _toast('Screen mirroring stopped.'); },
+          icon: const Icon(Icons.stop_circle_outlined),
+          label: const Text('Stop mirroring'),
+        )),
+        if (mirrorSvc.error != null) ...[
+          const SizedBox(height: 10),
+          Text(mirrorSvc.error!, style: TextStyle(color: Ui.red, fontSize: 12)),
+        ],
+      ])),
+      if (mirrorSvc.running && mirrorSvc.pairingUrl != null) _panel(Column(children: [
+        Text('Connect your TV', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900, fontSize: 17)),
+        const SizedBox(height: 12),
+        Container(color: Colors.white, padding: const EdgeInsets.all(12), child: QrImageView(
+          data: mirrorSvc.pairingUrl!, size: 190, backgroundColor: Colors.white,
+          errorCorrectionLevel: QrErrorCorrectLevel.M,
+        )),
+        const SizedBox(height: 12),
+        Text('1. Open the Deeprowss TV Receiver app or a compatible TV browser.\n2. Open the secure receiver page below (or scan the QR code).\n3. Enter the phone address and six-digit code if they are not filled automatically.', textAlign: TextAlign.center, style: TextStyle(color: Ui.muted, height: 1.5, fontSize: 12)),
+        const SizedBox(height: 14),
+        SelectableText(mirrorSvc.pairingUrl!, textAlign: TextAlign.center, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w700, fontSize: 12)),
+        const SizedBox(height: 10),
+        Text('Phone address', style: TextStyle(color: Ui.muted, fontSize: 11)),
+        SelectableText(mirrorSvc.url!, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 16)),
+        const SizedBox(height: 12),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text('PAIRING CODE', style: TextStyle(color: Ui.muted, fontSize: 11, letterSpacing: 1.4)),
+          const SizedBox(width: 12),
+          SelectableText(mirrorSvc.pin!, style: TextStyle(color: Ui.red, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: 5)),
+        ]),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(onPressed: () async {
+          await Clipboard.setData(ClipboardData(text: '${mirrorSvc.pairingUrl}\nPhone: ${mirrorSvc.url}\nCode: ${mirrorSvc.pin}'));
+          if (mounted) _toast('Receiver address and code copied.');
+        }, icon: const Icon(Icons.copy), label: const Text('Copy receiver details')),
+      ])),
+      _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Other TV connection options', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        Text('• Google Cast: use the Chromecast / Google TV picker in Devices.\n• DLNA: send supported video streams directly to compatible TVs.\n• Android Cast / Smart View: use the phone’s system mirroring picker for Miracast-compatible TVs.', style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5)),
+        const SizedBox(height: 12),
+        SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () async {
+          final ok = await CastService.openMirrorSettings();
+          if (!ok) _toast('Open Cast or Smart View from Android Quick Settings.');
+        }, icon: const Icon(Icons.settings_input_antenna), label: const Text('Open Android Cast / Smart View')),
+      ])),
+      _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('AirPlay compatibility', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        Text('Android has no general-purpose Apple AirPlay sender SDK. Deeprowss uses Google Cast, DLNA or Android’s system mirroring when the TV supports them. Apple TV / AirPlay-only devices need a separately licensed and compatible sender implementation; Deeprowss does not claim native AirPlay support.', style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5)),
+      ])),
+      _panel(Text('Mirroring requires the phone and TV to be on the same local network. Android displays a screen-capture consent prompt and a persistent sharing notification. Some apps protect their video with DRM and may show a black screen. Locking the phone, stopping the system projection, or battery-management restrictions can end mirroring.', style: TextStyle(color: Ui.muted, fontSize: 12))),
+    ]),
+  );
 
   Widget _subscription() {
     final sub = SubscriptionService.instance;
