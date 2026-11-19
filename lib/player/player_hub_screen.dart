@@ -139,7 +139,12 @@ class _PlayerHubScreenState extends State<PlayerHubScreen> {
               children: [
                 _header(),
                 _segments(),
-                Expanded(child: _body()),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _media.load,
+                    child: _body(),
+                  ),
+                ),
               ],
             ),
           ),
@@ -231,11 +236,6 @@ class _PlayerHubScreenState extends State<PlayerHubScreen> {
                             title: Text('Open folder…'),
                             contentPadding: EdgeInsets.zero)),
                   ],
-                ),
-                IconButton(
-                  tooltip: 'Refresh',
-                  icon: const Icon(Icons.refresh_rounded),
-                  onPressed: _media.load,
                 ),
               ],
             ),
@@ -377,6 +377,7 @@ class _PlayerHubScreenState extends State<PlayerHubScreen> {
           'Videos on your phone show up here. You can also open any file or folder.');
     }
     return GridView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 18),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
@@ -405,6 +406,7 @@ class _PlayerHubScreenState extends State<PlayerHubScreen> {
       builder: (context, _) {
         final cur = MusicPlayer.instance.current;
         return ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
           itemCount: list.length + 1,
           itemBuilder: (_, i) {
