@@ -399,6 +399,13 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
           if (mounted) _toast('Receiver address and code copied.');
         }, icon: const Icon(Icons.copy), label: const Text('Copy receiver details')),
       ])),
+      if (!mirrorSvc.urlMode) _panel(SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        value: mirrorSvc.mutePhone,
+        onChanged: (v) => mirrorSvc.setMutePhone(v),
+        title: Text('Mute phone sound while mirroring', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)),
+        subtitle: Text('Sound plays only on the TV / laptop. Your phone volume is restored when mirroring stops.', style: TextStyle(color: Ui.muted, fontSize: 12)),
+      )),
       _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Other TV connection options', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
