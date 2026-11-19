@@ -385,6 +385,9 @@ jobs:
   deploy-tv-receivers:
     name: Deploy Deeprowss TV Receivers
     runs-on: ubuntu-latest
+    # Pages must be enabled once (Settings > Pages > Source: GitHub Actions).
+    # Until then, don't let this optional job mark the whole build as failed.
+    continue-on-error: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
