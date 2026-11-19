@@ -100,9 +100,66 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
       _tabs.animateTo(0);
       _toast('Playing on ${d.name}');
     } else {
-      _toast(svc.error ?? 'Could not start casting.');
+      _toast(svc.error ?? svc.kodiHint ?? 'Could not start casting.');
+      if (svc.kodiNeedsLogin && mounted && await _kodiLogin()) {
+        await _cast(d);
+      }
     }
   }
+
+  Future<bool> _kodiLogin() async {
+    final u = TextEditingController(text: 'kodi');
+    final p = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      backgroundColor: Ui.panel,
+      title: const Text('Kodi web login'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('Kodi → Settings → Services → Control shows the username and password for "Allow remote control via HTTP". The default username is kodi (password can be empty).',
+          style: TextStyle(color: Ui.muted, fontSize: 12)),
+        const SizedBox(height: 10),
+        TextField(controller: u, decoration: const InputDecoration(labelText: 'Username')),
+        TextField(controller: p, obscureText: true, decoration: const InputDecoration(labelText: 'Password')),
+      ]),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save & retry'))],
+    ));
+    final user = u.text.trim();
+    final pass = p.text;
+    u.dispose();
+    p.dispose();
+    if (ok != true) return false;
+    await svc.setKodiLogin(user, pass);
+    return true;
+  }
+
+  Future<void> _readKodiLog() async {
+    CastDevice? k = svc.device?.isKodi == true ? svc.device : null;
+    k ??= [...svc.devices, ...svc.savedDevices].where((d) => d.isKodi).firstOrNull;
+    if (k == null) {
+      _toast('No Kodi found yet. Scan the network first.');
+      return;
+    }
+    final ok = await svc.fetchKodiLog(k);
+    if (!ok) {
+      _toast('Could not read Kodi\'s log. See the Cast log for why.');
+      if (svc.kodiNeedsLogin && mounted) await _kodiLogin();
+    }
+  }
+
+  Widget _logPanel() => _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Row(children: [
+      Expanded(child: Text('Cast log', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800))),
+      TextButton(onPressed: _readKodiLog, child: const Text('Kodi log')),
+      TextButton(onPressed: svc.log.isEmpty ? null : () async {
+        await Clipboard.setData(ClipboardData(text: svc.logText));
+        _toast('Log copied');
+      }, child: const Text('Copy')),
+      TextButton(onPressed: svc.log.isEmpty ? null : svc.clearLog, child: const Text('Clear')),
+    ]),
+    const SizedBox(height: 6),
+    if (svc.log.isEmpty) Text('Nothing yet. Cast a channel and every step (stream check, Kodi / TV answers, errors) appears here.', style: TextStyle(color: Ui.muted, fontSize: 12))
+    else SelectableText(svc.logText, style: TextStyle(color: Ui.muted, fontSize: 11, height: 1.45, fontFamily: 'monospace')),
+  ]));
 
   @override
   Widget build(BuildContext context) {
@@ -168,6 +225,11 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
         label: Text(svc.scanning ? 'Scanning…' : 'Scan for TVs'))), const SizedBox(width: 8),
         IconButton.filledTonal(onPressed: _manualAdd, icon: const Icon(Icons.add_link), tooltip: 'Add by IP')]),
     ])),
+    if (svc.error != null && !svc.connecting) _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [Icon(Icons.error_outline, color: Ui.red), const SizedBox(width: 10),
+        Expanded(child: Text(svc.error!, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w700)))]),
+      Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () => _tabs.animateTo(1), child: const Text('View cast log'))),
+    ])),
     if (widget.target != null) _panel(Row(children: [const Icon(Icons.play_circle_outline), const SizedBox(width: 10), Expanded(child: Text('Ready to cast: ${widget.target!.title}', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w700))),
       TextButton(onPressed: () => _tabs.animateTo(1), child: const Text('Choose TV'))])),
     _panel(ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.live_tv_rounded, color: Ui.red),
@@ -196,12 +258,19 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
       icon: const Icon(Icons.radar), label: Text(svc.scanning ? 'Scanning…' : 'Scan network'))),
       const SizedBox(width: 8), OutlinedButton.icon(onPressed: _manualAdd, icon: const Icon(Icons.add), label: const Text('IP'))]),
     if (svc.error != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(svc.error!, style: TextStyle(color: Ui.red))),
+    if (svc.kodiHint != null) Padding(padding: const EdgeInsets.only(top: 10), child: _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Kodi setup', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 6),
+      Text(svc.kodiHint!, style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.4)),
+      Align(alignment: Alignment.centerRight, child: TextButton(onPressed: _kodiLogin, child: const Text('Kodi login'))),
+    ]))),
     if (svc.scanReport != null) Padding(padding: const EdgeInsets.only(top: 8), child: SelectableText(svc.scanReport!, style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.4))),
     const SizedBox(height: 12),
     if (svc.devices.isEmpty && !svc.scanning) _panel(Text('No discovered TVs yet. Ensure your phone and TV are on the same Wi-Fi. Some routers isolate wireless devices.', style: TextStyle(color: Ui.muted))),
     ...svc.devices.map((d) => _deviceTile(d, saved: svc.savedDevices.any((x) => x.host == d.host))),
     if (svc.savedDevices.isNotEmpty) ...[_heading('Saved TVs', 'Reconnect to devices you use often.'),
       ...svc.savedDevices.where((d) => !svc.devices.any((x) => x.host == d.host)).map((d) => _deviceTile(d, saved: true))],
+    _logPanel(),
     _panel(Text('DLNA / UPnP devices appear below. Google Cast (Chromecast / Google TV) is coming soon. TV-specific remote functions depend on the model and pairing permissions.', style: TextStyle(color: Ui.muted, fontSize: 12))),
   ]);
 
