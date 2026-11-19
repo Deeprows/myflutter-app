@@ -19,7 +19,7 @@
   </style>
 </head>
 <body>
-  <video id="screen" autoplay playsinline muted></video>
+  <video id="screen" autoplay playsinline></video>
   <main class="shell" id="join">
     <div class="logo">DEEProWSS</div>
     <div class="sub">Deeprowss TV Screen Receiver</div>
@@ -34,6 +34,7 @@
       <div class="hint">Keep this screen open while Deeprowss is mirroring.</div>
     </section>
   </main>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
   <script>
   (() => {
     const pinInput = document.getElementById('pin');
@@ -41,14 +42,53 @@
     const status = document.getElementById('status');
     const video = document.getElementById('screen');
     const join = document.getElementById('join');
-    let socket, peer;
+    let socket, peer, hls, urlPlaying = false;
     const pendingCandidates = [];
     const params = new URLSearchParams(location.search);
     if (/^\d{6}$/.test(params.get('pin') || '')) pinInput.value = params.get('pin');
     if (params.get('host')) hostInput.value = params.get('host');
     const say = (value) => { status.textContent = value; };
     const send = (value) => { if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(value)); };
+    function stopUrl() {
+      urlPlaying = false;
+      if (hls) { try { hls.destroy(); } catch (_) {} hls = null; }
+      video.removeAttribute('src');
+    }
+    function showJoin(msg) {
+      video.pause(); video.style.display = 'none'; join.style.display = 'grid'; say(msg);
+    }
+    function playUrl(url, kind) {
+      stopUrl();
+      urlPlaying = true;
+      video.srcObject = null;
+      video.muted = false; video.volume = 1;
+      video.style.display = 'block';
+      join.style.display = 'none';
+      const isHls = kind === 'hls' || /\.m3u8(\?|$)/i.test(url);
+      const start = () => video.play().catch(() => {
+        video.muted = true; video.play().catch(() => {});
+        const unmute = () => { video.muted = false; video.play().catch(() => {}); document.removeEventListener('click', unmute); document.removeEventListener('keydown', unmute); };
+        document.addEventListener('click', unmute); document.addEventListener('keydown', unmute);
+      });
+      if (kind === 'dash' || /\.mpd(\?|$)/i.test(url)) { showJoin('This browser receiver cannot play DASH (.mpd) streams yet.'); urlPlaying = false; return; }
+      if (isHls && !video.canPlayType('application/vnd.apple.mpegurl')) {
+        if (!window.Hls || !Hls.isSupported()) { showJoin('This browser cannot play HLS streams.'); urlPlaying = false; return; }
+        hls = new Hls({ lowLatencyMode: true });
+        hls.on(Hls.Events.MANIFEST_PARSED, start);
+        hls.on(Hls.Events.ERROR, (_, d) => {
+          if (d.fatal) showJoin('Could not play this channel in the browser (' + (d.details || 'error') + '). Some streams need special headers or block other sites.');
+        });
+        hls.loadSource(url);
+        hls.attachMedia(video);
+      } else {
+        video.src = url;
+        video.onerror = () => showJoin('Could not play this video in the browser. The stream may block other sites or need special headers.');
+        start();
+      }
+    }
     async function connect() {
+      // The click on "Connect phone" is the user gesture that lets the page play sound.
+      video.muted = false; video.volume = 1;
       if (socket && socket.readyState === WebSocket.OPEN) return;
       pendingCandidates.length = 0;
       if (peer) { peer.close(); peer = null; }
@@ -66,13 +106,18 @@
       socket.onclose = () => {
         say('Connection closed. Re-enter the code to reconnect.');
         document.getElementById('connect').disabled = false;
+        if (urlPlaying) { say('Phone disconnected. The channel keeps playing here.'); return; }
         video.pause(); video.srcObject = null; video.style.display = 'none'; join.style.display = 'grid';
         if (peer) { peer.close(); peer = null; }
       };
       socket.onmessage = async (event) => {
         try {
           const message = JSON.parse(event.data);
-          if (message.type === 'offer') {
+          if (message.type === 'play' && typeof message.url === 'string') {
+            if (peer) { peer.close(); peer = null; }
+            playUrl(message.url, message.kind);
+          } else if (message.type === 'offer') {
+            stopUrl();
             peer = new RTCPeerConnection({iceServers:[
               {urls:'stun:stun.l.google.com:19302'},
               {urls:'stun:stun1.l.google.com:19302'}
@@ -81,7 +126,13 @@
               video.srcObject = e.streams[0];
               video.style.display = 'block';
               join.style.display = 'none';
-              video.play().catch(() => {});
+              video.muted = false;
+              video.play().catch(() => {
+                // Browser blocked sound: start muted, show a tap-to-unmute hint.
+                video.muted = true; video.play().catch(() => {});
+                const unmute = () => { video.muted = false; video.play().catch(() => {}); document.removeEventListener('click', unmute); document.removeEventListener('keydown', unmute); };
+                document.addEventListener('click', unmute); document.addEventListener('keydown', unmute);
+              });
             };
             peer.onicecandidate = (e) => { if (e.candidate) send({type:'candidate',candidate:e.candidate.toJSON()}); };
             peer.onconnectionstatechange = () => {
