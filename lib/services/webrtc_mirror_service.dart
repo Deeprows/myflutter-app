@@ -38,6 +38,36 @@ class DeeprowssMirrorService extends ChangeNotifier {
   /// (no screen capture). The receiver plays the stream itself, so the phone
   /// can be minimised or locked.
   bool urlMode = false;
+
+  /// While mirroring with sound, silence the phone's own speaker so the audio
+  /// only plays on the TV / laptop. The previous volume is restored on stop.
+  bool mutePhone = true;
+  double? _savedVolume;
+
+  Future<void> setMutePhone(bool value) async {
+    mutePhone = value;
+    if (running && audioShared) {
+      if (value) { await _applyPhoneMute(); } else { await _restorePhoneVolume(); }
+    }
+    notifyListeners();
+  }
+
+  Future<void> _applyPhoneMute() async {
+    if (_savedVolume != null) return;
+    try {
+      _savedVolume = await BackgroundPlayback.getVolume();
+      await BackgroundPlayback.setVolume(0);
+    } catch (_) {
+      _savedVolume = null;
+    }
+  }
+
+  Future<void> _restorePhoneVolume() async {
+    final v = _savedVolume;
+    _savedVolume = null;
+    if (v == null) return;
+    try { await BackgroundPlayback.setVolume(v); } catch (_) {}
+  }
   Map<String, dynamic>? _pendingPlay;
   String status = 'Not running';
   String? error;
@@ -108,6 +138,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
         // Keep the phone awake: Android ends a full-screen capture when the
         // phone is locked, so the screen must not time out while mirroring.
         try { await WakelockPlus.enable(); } catch (_) {}
+        if (audioShared && mutePhone) await _applyPhoneMute();
       }
       running = true;
       status = captureScreen
@@ -122,6 +153,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
       _pendingPlay = null;
       _stopping = true;
       try { await WakelockPlus.disable(); } catch (_) {}
+      await _restorePhoneVolume();
       await _releaseResources(stopCapture: true);
       _stopping = false;
       notifyListeners();
@@ -369,6 +401,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
     notifyListeners();
     running = false;
     try { await WakelockPlus.disable(); } catch (_) {}
+    await _restorePhoneVolume();
     await _releaseResources(stopCapture: true);
     connected = false;
     audioShared = false;
