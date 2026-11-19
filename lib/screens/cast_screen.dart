@@ -325,6 +325,23 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
     listenable: mirrorSvc,
     builder: (context, _) => _page([
       _heading('Screen mirroring', 'Stream your entire Android display to a TV over your local Wi-Fi.'),
+      if (widget.target?.url != null) _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Play this channel on the receiver page', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        Text('Sends the stream link to the Deeprowss receiver page (laptop or TV browser), which plays it with sound by itself. Your phone can be minimised or locked. Open the receiver page and connect with the code shown below.', style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.4)),
+        const SizedBox(height: 10),
+        SizedBox(width: double.infinity, child: FilledButton.icon(
+          onPressed: () async {
+            final t = widget.target!;
+            final ok = await mirrorSvc.sendChannel(url: t.url!, title: t.title, kind: t.kind);
+            if (!mounted) return;
+            if (ok) { widget.onCastStarted?.call(); _toast(mirrorSvc.status); }
+            else { _toast(mirrorSvc.error ?? 'This channel is a web embed and cannot be sent as a link.'); }
+          },
+          icon: const Icon(Icons.play_circle_outline),
+          label: const Text('Send channel to receiver page'),
+        )),
+      ])),
       _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Icon(Icons.screen_share_rounded, size: 32, color: Ui.red),
@@ -349,7 +366,7 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
         )) else SizedBox(width: double.infinity, child: FilledButton.tonalIcon(
           onPressed: () async { await mirrorSvc.stop(); if (mounted) _toast('Screen mirroring stopped.'); },
           icon: const Icon(Icons.stop_circle_outlined),
-          label: const Text('Stop mirroring'),
+          label: Text(mirrorSvc.urlMode ? 'Stop receiver session' : 'Stop mirroring'),
         )),
         if (mirrorSvc.error != null) ...[
           const SizedBox(height: 10),
@@ -397,7 +414,7 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
         const SizedBox(height: 6),
         Text('Android has no general-purpose Apple AirPlay sender SDK. Deeprowss uses Google Cast, DLNA or Android’s system mirroring when the TV supports them. Apple TV / AirPlay-only devices need a separately licensed and compatible sender implementation; Deeprowss does not claim native AirPlay support.', style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5)),
       ])),
-      _panel(Text('Mirroring requires the phone and TV to be on the same local network. Android displays a screen-capture consent prompt and a persistent sharing notification. Some apps protect their video with DRM and may show a black screen. Locking the phone, stopping the system projection, or battery-management restrictions can end mirroring.', style: TextStyle(color: Ui.muted, fontSize: 12))),
+      _panel(Text('Mirroring requires the phone and TV to be on the same local network. Android displays a screen-capture consent prompt and a persistent sharing notification. Some apps protect their video with DRM and may show a black screen. Phone sound is sent too when you allow the audio permission (Android 10+; some apps block audio capture). Mirroring copies what is on the phone screen, so keep the screen on: locking the phone ends it on most Android versions. To watch with the phone locked, cast a video or channel with Google Cast or DLNA instead — the TV plays it directly.', style: TextStyle(color: Ui.muted, fontSize: 12))),
     ]),
   );
 
