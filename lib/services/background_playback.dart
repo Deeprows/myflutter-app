@@ -165,12 +165,15 @@ class BackgroundPlayback {
     } catch (_) {}
   }
 
-  /// Android 17+ asks before an app may talk to devices on the home Wi-Fi
-  /// (needed to find TVs). Older Android versions ignore this.
-  static Future<void> requestLocalNetwork() async {
+  /// Android 16+ can ask before an app may talk to devices on the home Wi-Fi.
+  /// Returns false when the user denies the permission; older Android versions
+  /// and builds without the native bridge are treated as allowed.
+  static Future<bool> requestLocalNetwork() async {
     try {
-      await _channel.invokeMethod<bool>('localNetwork');
-    } catch (_) {}
+      return await _channel.invokeMethod<bool>('localNetwork') ?? true;
+    } catch (_) {
+      return true;
+    }
   }
 
   /// Wi-Fi multicast lock, needed on some phones to hear TVs answer a search.
