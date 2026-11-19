@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
+import 'package:video_player/video_player.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import '../services/ad_shield.dart';
@@ -13,6 +15,7 @@ import '../services/embed_info.dart';
 import '../services/player_html.dart';
 import '../services/remote_config.dart';
 import '../services/stream_resolver.dart';
+import '../services/video_thumbs.dart';
 import '../screens/browser_screen.dart' show openExternally;
 import '../theme/app_theme.dart';
 import 'viewport_autoplay.dart';
@@ -162,33 +165,300 @@ window.addEventListener('message', function (e) {
 });
 </script>''';
 
-  String? get _youtubeThumbnail {
-    final uri = Uri.tryParse(_url);
-    if (uri == null) return null;
-    final host = uri.host.toLowerCase();
-    if (!host.contains('youtube.com') && host != 'youtu.be') return null;
-    String? id;
-    if (host == 'youtu.be' && uri.pathSegments.isNotEmpty) {
-      id = uri.pathSegments.first;
-    } else if (uri.pathSegments.length > 1 &&
-        ['embed', 'shorts', 'live'].contains(uri.pathSegments.first)) {
-      id = uri.pathSegments[1];
-    } else {
-      id = uri.queryParameters['v'];
-    }
-    if (id == null || !RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(id)) {
-      return null;
-    }
-    return 'https://img.youtube.com/vi/$id/hqdefault.jpg';
+  // ---------------------------------------------------------------- thumbnail
+  // Real poster picture (YouTube / Vimeo / Dailymotion / X) so the card looks
+  // like a Twitter timeline video before it starts.
+  VideoThumb? _thumb;
+  double? _thumbRatio;
+
+  void _loadThumb() {
+    if (_nativeEligible) return; // the native player shows the first frame
+    VideoThumbs.lookup(widget.url, _info.kind).then((t) {
+      if (!mounted || t == null) return;
+      setState(() {
+        _thumb = t;
+        _thumbRatio = t.ratio;
+        if (t.ratio != null && _manualRatio == null && _controller == null) {
+          _ratio = t.ratio!.clamp(0.4, 2.4).toDouble();
+        }
+      });
+    });
   }
+
+  // ------------------------------------------------- native (ExoPlayer) video
+  // Direct files (mp4, webm...) and HLS / DASH streams play in Android's own
+  // player: sharp full-resolution picture (adaptive streams pick the best
+  // quality), the real video shape from the first frame, muted looping
+  // autoplay in the feed, a mute button and a time badge - like X. If a host
+  // refuses the native player we fall back to the web player below.
+  static bool _soundOn = false; // remembered between videos, like X
+
+  late final StreamKind _streamKind = StreamResolver.resolve(_url).kind;
+  VideoPlayerController? _vp;
+  bool _vpFailed = false, _vpReady = false, _vpInitializing = false, _wantPlay = false;
+
+  bool get _nativeEligible =>
+      !_vpFailed &&
+      (_streamKind == StreamKind.hls ||
+          _streamKind == StreamKind.video ||
+          _streamKind == StreamKind.dash);
+
+  VideoFormat? get _vpFormat {
+    switch (_streamKind) {
+      case StreamKind.hls:
+        return VideoFormat.hls;
+      case StreamKind.dash:
+        return VideoFormat.dash;
+      default:
+        return null;
+    }
+  }
+
+  Future<void> _initNative({bool play = false}) async {
+    if (!mounted) return;
+    if (play) _wantPlay = true;
+    if (_vp != null) {
+      _applyNativePlay();
+      return;
+    }
+    if (_vpInitializing) return;
+    _vpInitializing = true;
+    setState(() {});
+    final stream = StreamResolver.resolve(_url);
+    final c = VideoPlayerController.networkUrl(
+      Uri.parse(stream.url),
+      formatHint: _vpFormat,
+      httpHeaders: {
+        'User-Agent': AppConfig.userAgent,
+        'Referer': AppConfig.playerOrigin,
+      },
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: !widget.viewer),
+    );
+    _vp = c;
+    try {
+      await c.initialize().timeout(const Duration(seconds: 20));
+      if (!mounted || _vp != c) {
+        if (_vp != c) unawaited(c.dispose());
+        return;
+      }
+      await c.setLooping(true);
+      await c.setVolume(widget.viewer || widget.autoPlay || _soundOn ? 1 : 0);
+      c.addListener(_onVpTick);
+      final ar = c.value.aspectRatio;
+      if (_manualRatio == null && ar.isFinite && ar > 0) {
+        _ratio = ar.clamp(0.4, 2.4).toDouble();
+      }
+      _vpInitializing = false;
+      setState(() => _vpReady = true);
+      _applyNativePlay();
+    } catch (_) {
+      _vpInitializing = false;
+      _nativeFailed();
+    }
+  }
+
+  void _onVpTick() {
+    final c = _vp;
+    if (c != null && c.value.hasError) _nativeFailed();
+  }
+
+  void _nativeFailed() {
+    if (_vpFailed) return;
+    final wasPlaying = _wantPlay;
+    _releaseNative(notify: false);
+    _vpFailed = true;
+    if (!mounted) return;
+    setState(() {});
+    // Hand over to the web player (handles referer-locked hosts, odd files).
+    if (wasPlaying || widget.autoPlay) _play(muted: !(widget.viewer || widget.autoPlay));
+  }
+
+  void _applyNativePlay() {
+    final c = _vp;
+    if (c == null || !_vpReady) return;
+    if (_wantPlay) {
+      unawaited(c.play());
+    } else {
+      unawaited(c.pause());
+    }
+  }
+
+  void _releaseNative({bool notify = true}) {
+    final c = _vp;
+    _vp = null;
+    _vpReady = false;
+    _vpInitializing = false;
+    if (c != null) {
+      c.removeListener(_onVpTick);
+      unawaited(c.dispose().catchError((Object _) {}));
+    }
+    if (notify && mounted) setState(() {});
+  }
+
+  void _toggleNativeSound() {
+    final c = _vp;
+    if (c == null) return;
+    final on = c.value.volume > 0;
+    unawaited(c.setVolume(on ? 0 : 1));
+    if (!widget.viewer) _soundOn = !on;
+  }
+
+  void _onNativeTap() {
+    final cb = widget.viewer ? null : (widget.onTapPreview ?? widget.onOpenViewer);
+    if (cb != null) {
+      cb();
+      return;
+    }
+    final c = _vp;
+    if (c == null) return;
+    if (c.value.isPlaying) {
+      _wantPlay = false;
+      _userStopped = true;
+      unawaited(c.pause());
+    } else {
+      _wantPlay = true;
+      _userStopped = false;
+      unawaited(c.play());
+    }
+  }
+
+  String _fmtDuration(Duration d) {
+    if (d.isNegative) d = Duration.zero;
+    final m = d.inMinutes, s = d.inSeconds.remainder(60);
+    final two = s.toString().padLeft(2, '0');
+    if (d.inHours > 0) return '${d.inHours}:${(m % 60).toString().padLeft(2, '0')}:$two';
+    return '$m:$two';
+  }
+
+  Widget _pill(Widget child) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: const Color(0xB3000000),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: child,
+  );
+
+  Widget _roundButton(IconData icon, VoidCallback onTap, {double size = 34, double iconSize = 18}) =>
+      GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: const BoxDecoration(color: Color(0xB3000000), shape: BoxShape.circle),
+          child: Icon(icon, color: Colors.white, size: iconSize),
+        ),
+      );
+
+  Widget _nativeOverlay(VideoPlayerValue v) {
+    final dur = v.duration;
+    final live = dur == Duration.zero || dur.inHours >= 6;
+    final shown = live ? null : (v.isPlaying ? dur - v.position : dur);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (!v.isPlaying && !v.isBuffering)
+          Center(
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: const BoxDecoration(color: Color(0x99000000), shape: BoxShape.circle),
+              child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 40),
+            ),
+          ),
+        if (v.isBuffering)
+          const Center(
+            child: SizedBox(
+              width: 34,
+              height: 34,
+              child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+            ),
+          ),
+        if (!widget.viewer)
+          Positioned(
+            left: 10,
+            bottom: 12,
+            child: _pill(Text(
+              live ? 'LIVE' : _fmtDuration(shown!),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            )),
+          ),
+        Positioned(
+          right: 10,
+          bottom: widget.viewer ? 30 : 10,
+          child: _roundButton(
+            v.volume > 0 ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+            _toggleNativeSound,
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: VideoProgressIndicator(
+            _vp!,
+            allowScrubbing: widget.viewer,
+            padding: widget.viewer
+                ? const EdgeInsets.symmetric(vertical: 10)
+                : EdgeInsets.zero,
+            colors: const VideoProgressColors(
+              playedColor: Colors.white,
+              bufferedColor: Color(0x55FFFFFF),
+              backgroundColor: Color(0x33FFFFFF),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _nativeView() {
+    final c = _vp!;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _onNativeTap,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const ColoredBox(color: Colors.black),
+          Center(
+            child: AspectRatio(
+              aspectRatio: c.value.aspectRatio > 0 ? c.value.aspectRatio : _ratio,
+              child: VideoPlayer(c),
+            ),
+          ),
+          ValueListenableBuilder<VideoPlayerValue>(
+            valueListenable: c,
+            builder: (_, v, __) => _nativeOverlay(v),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _startPlayback() {
+    if (_nativeEligible) {
+      _userStopped = false;
+      _initNative(play: true);
+    } else {
+      _play();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     if (_viewportMode) AutoPlayCoordinator.winner.addListener(_onWinner);
+    _loadThumb();
     if (widget.autoPlay) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _controller == null) _play();
+        if (mounted && _controller == null && _vp == null) _startPlayback();
       });
     }
   }
@@ -204,11 +474,30 @@ window.addEventListener('message', function (e) {
     if (!_viewportMode) return;
     AutoPlayCoordinator.report(this, f);
     if (f <= 0.05) _userStopped = false; // scrolled away: allow replay later
+    if (_nativeEligible) {
+      // Load frame one (thumbnail + real shape) as the card nears the screen,
+      // free the decoder once it is fully scrolled away.
+      if (f > 0.05 && _vp == null && !_vpInitializing) {
+        _initNative();
+      } else if (f <= 0 && _vp != null) {
+        _wantPlay = false;
+        _releaseNative();
+      }
+    }
   }
 
   void _onWinner() {
     if (!mounted) return;
     final mine = AutoPlayCoordinator.winner.value == this;
+    if (_nativeEligible) {
+      if (mine && !_userStopped) {
+        _initNative(play: true);
+      } else if (!mine) {
+        _wantPlay = false;
+        _vp?.pause();
+      }
+      return;
+    }
     if (mine && _controller == null && !_userStopped && !_failed) {
       _play(muted: true);
     } else if (!mine && _controller != null) {
@@ -222,6 +511,9 @@ window.addEventListener('message', function (e) {
       _stop();
     } else if (_viewportMode) {
       _onWinner();
+    } else if (_vp != null && !_userStopped && (widget.viewer || widget.autoPlay)) {
+      _wantPlay = true;
+      _applyNativePlay();
     }
   }
 
@@ -345,6 +637,10 @@ window.addEventListener('message', function (e) {
 
   void _stop() {
     _backFromFullscreen();
+    if (_vp != null) {
+      _wantPlay = false;
+      unawaited(_vp!.pause());
+    }
     final c = _controller;
     if (c != null) {
       _controller = null;
@@ -360,6 +656,7 @@ window.addEventListener('message', function (e) {
     WidgetsBinding.instance.removeObserver(this);
     _backFromFullscreen();
     unawaited(_restoreSystemUi());
+    _releaseNative(notify: false);
     final c = _controller;
     if (c != null)
       unawaited(c.loadHtmlString('<html></html>').catchError((Object _) {}));
@@ -382,7 +679,7 @@ window.addEventListener('message', function (e) {
   void _playTap() {
     _userStopped = false;
     if (_failed) _embedMode = (_embedMode + 1) % 4;
-    _play();
+    _startPlayback();
   }
 
   bool get _ownOrigin => _attempt >= 2;
@@ -473,7 +770,7 @@ window.addEventListener('message', function (e) {
         if (id == null) throw const FormatException('Invalid X post URL');
         // Use X's dedicated video widget instead of Tweet.html. Tweet.html
         // displays the entire post (author, text and actions) around the clip.
-        _ratio = kLandscape;
+        _ratio = _thumbRatio ?? kLandscape;
         await _loadHtml(c, _twitterVideoHtml(id),
           baseUrl: 'https://platform.twitter.com',
         );
@@ -639,9 +936,28 @@ window.addEventListener('message', function (e) {
     ),
   );
 
+  Widget _thumbImage(VideoThumb t) {
+    final fit = _ratio < 1 ? BoxFit.contain : BoxFit.cover;
+    Widget dark() => const ColoredBox(color: Color(0xFF171A20));
+    return CachedNetworkImage(
+      imageUrl: t.url,
+      fit: fit,
+      fadeInDuration: const Duration(milliseconds: 180),
+      placeholder: (_, __) => dark(),
+      errorWidget: (_, __, ___) => t.fallback == null
+          ? dark()
+          : CachedNetworkImage(
+              imageUrl: t.fallback!,
+              fit: fit,
+              placeholder: (_, __) => dark(),
+              errorWidget: (_, __, ___) => dark(),
+            ),
+    );
+  }
+
   Widget _preview() {
     if (_dmBlocked) return _blockedCard();
-    final thumb = _youtubeThumbnail;
+    final t = _thumb;
     return InkWell(
       onTap: widget.viewer
           ? _playTap
@@ -650,45 +966,64 @@ window.addEventListener('message', function (e) {
         fit: StackFit.expand,
         alignment: Alignment.center,
         children: [
-          if (thumb != null)
-            Image.network(
-              thumb,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  const ColoredBox(color: Color(0xFF171A20)),
-            )
-          else
-            Image.asset(
-              'assets/themes/cr7.png',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  const ColoredBox(color: Color(0xFF171A20)),
+          const ColoredBox(color: Color(0xFF171A20)),
+          if (t != null) _thumbImage(t),
+          // Soft bottom shade so the badge / play button stay readable.
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x00000000), Color(0x66000000)],
+              ),
             ),
-          const ColoredBox(color: Color(0x66000000)),
+          ),
           Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.play_circle_fill_rounded,
-                  size: 58,
-                  color: Colors.white,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  _playLabel,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    shadows: [Shadow(blurRadius: 5, color: Colors.black)],
+            child: _vpInitializing || _loading
+                ? const SizedBox(
+                    width: 34,
+                    height: 34,
+                    child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: const BoxDecoration(
+                          color: Color(0x99000000),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _failed ? Icons.refresh_rounded : Icons.play_arrow_rounded,
+                          size: 40,
+                          color: Colors.white,
+                        ),
+                      ),
+                      if (_failed) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _playLabel,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            shadows: [Shadow(blurRadius: 5, color: Colors.black)],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _content() {
+    if (_vp != null && _vpReady) return _nativeView();
+    if (_controller != null && !_failed) return _player();
+    return _preview();
   }
 
   Widget _player() => Stack(
@@ -739,7 +1074,7 @@ window.addEventListener('message', function (e) {
     final screen = MediaQuery.sizeOf(context);
     // In the feed keep tall (portrait) videos from taking over the screen;
     // on the post page they can use most of it.
-    final maxFraction = widget.onTapPreview != null ? 0.55 : 0.78;
+    final maxFraction = widget.onTapPreview != null ? 0.66 : 0.82;
     if (widget.viewer) {
       return PopScope(
         canPop: _fullscreenEntry == null,
@@ -762,7 +1097,7 @@ window.addEventListener('message', function (e) {
                   child: SizedBox(
                     width: w,
                     height: h,
-                    child: _controller != null && !_failed ? _player() : _preview(),
+                    child: _content(),
                   ),
                 ),
               );
@@ -777,7 +1112,7 @@ window.addEventListener('message', function (e) {
         if (!didPop && _fullscreenEntry != null) _backFromFullscreen();
       },
       child: Container(
-        margin: const EdgeInsets.only(top: 10),
+        margin: const EdgeInsets.only(top: 8, bottom: 2),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: Colors.black,
@@ -796,7 +1131,7 @@ window.addEventListener('message', function (e) {
               child: SizedBox(
                 width: w,
                 height: h,
-                child: _controller != null && !_failed ? _player() : _preview(),
+                child: _content(),
               ),
             );
           },
