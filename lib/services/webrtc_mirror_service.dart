@@ -5,9 +5,12 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:screen_share_plugin/screen_share_plugin.dart' show ScreenSharePlugin, ScreenShareOptions;
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'background_playback.dart';
+import 'stream_resolver.dart' show StreamKind;
 
 /// Streams the Android display to a browser / Deeprowss TV Receiver over a
 /// local-network WebRTC connection. Signalling stays on the phone; the video
@@ -29,6 +32,13 @@ class DeeprowssMirrorService extends ChangeNotifier {
   bool _starting = false;
   bool running = false;
   bool connected = false;
+  bool audioShared = false;
+
+  /// True when the session only sends a channel link to the receiver page
+  /// (no screen capture). The receiver plays the stream itself, so the phone
+  /// can be minimised or locked.
+  bool urlMode = false;
+  Map<String, dynamic>? _pendingPlay;
   String status = 'Not running';
   String? error;
 
@@ -45,10 +55,11 @@ class DeeprowssMirrorService extends ChangeNotifier {
           'pin': _pin!,
         }).toString();
 
-  Future<void> start() async {
+  Future<void> start({bool captureScreen = true}) async {
     if (running || _starting) return;
     _starting = true;
     error = null;
+    urlMode = !captureScreen;
     status = 'Preparing local mirroring session…';
     notifyListeners();
     try {
@@ -65,24 +76,52 @@ class DeeprowssMirrorService extends ChangeNotifier {
       unawaited(_serve(_server!));
       _url = 'http://$ip:${_server!.port}';
 
-      _screenStream = await ScreenSharePlugin.startScreenShare(
-        options: const ScreenShareOptions(
-          audio: false,
-          frameRate: 20,
-          androidNotificationTitle: 'Deeprowss screen mirroring',
-          androidNotificationText: 'Your screen is being shared with a TV',
-          androidFullScreenOnly: true,
-        ),
-        onStopped: () => unawaited(stop()),
-      );
+      if (captureScreen) {
+        // Phone audio (games, videos, music) is captured with Android's
+        // AudioPlaybackCapture (Android 10+), which needs the microphone
+        // (RECORD_AUDIO) permission. If it is refused or unsupported we still
+        // mirror the video, just without sound.
+        var wantAudio = false;
+        try {
+          wantAudio = (await Permission.microphone.request()).isGranted;
+        } catch (_) {}
+        Future<MediaStream?> capture(bool audio) => ScreenSharePlugin.startScreenShare(
+              options: ScreenShareOptions(
+                audio: audio,
+                frameRate: 20,
+                androidNotificationTitle: 'Deeprowss screen mirroring',
+                androidNotificationText: 'Your screen is being shared with a TV',
+                androidFullScreenOnly: true,
+              ),
+              onStopped: () => unawaited(stop()),
+            );
+        try {
+          _screenStream = await capture(wantAudio);
+        } catch (e) {
+          final m = e.toString().toLowerCase();
+          final refused = m.contains('permission') || m.contains('denied') || m.contains('cancel');
+          if (!wantAudio || refused) rethrow;
+          wantAudio = false;
+          _screenStream = await capture(false);
+        }
+        audioShared = wantAudio && (_screenStream?.getAudioTracks().isNotEmpty ?? false);
+        // Keep the phone awake: Android ends a full-screen capture when the
+        // phone is locked, so the screen must not time out while mirroring.
+        try { await WakelockPlus.enable(); } catch (_) {}
+      }
       running = true;
-      status = 'Waiting for your TV to connect…';
+      status = captureScreen
+          ? 'Waiting for your TV to connect…'
+          : 'Open the receiver page and connect to start the channel';
       notifyListeners();
       if (_socket != null) await _createPeerConnection();
     } catch (e) {
       error = _friendlyError(e);
       status = 'Could not start mirroring';
+      urlMode = false;
+      _pendingPlay = null;
       _stopping = true;
+      try { await WakelockPlus.disable(); } catch (_) {}
       await _releaseResources(stopCapture: true);
       _stopping = false;
       notifyListeners();
@@ -131,6 +170,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
           );
           status = 'TV connected · establishing video…';
           notifyListeners();
+          _flushPending();
           if (_screenStream != null) await _createPeerConnection();
           continue;
         }
@@ -163,6 +203,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
       final message = jsonDecode(raw as String) as Map<String, dynamic>;
       switch (message['type']) {
         case 'ready':
+          _flushPending();
           if (_screenStream != null) await _createPeerConnection();
           break;
         case 'answer':
@@ -230,7 +271,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
         final value = state.toString().toLowerCase();
         if (value.contains('connected')) {
           connected = true;
-          status = 'Mirroring to your TV';
+          status = audioShared ? 'Mirroring to your TV (with sound)' : 'Mirroring to your TV (no sound)';
         } else if (value.contains('failed')) {
           connected = false;
           status = 'Connection failed · keep both devices on the same Wi-Fi';
@@ -263,6 +304,37 @@ class DeeprowssMirrorService extends ChangeNotifier {
     }
   }
 
+  /// Sends a channel/video link to the receiver page, which plays it itself.
+  /// Starts a receiver session (no screen capture) when none is running.
+  Future<bool> sendChannel({required String url, required String title, StreamKind? kind}) async {
+    if (url.trim().isEmpty || kind == StreamKind.embed || kind == StreamKind.invalid) return false;
+    if (!running) {
+      try { await start(captureScreen: false); } catch (_) { return false; }
+    }
+    _pendingPlay = {
+      'type': 'play',
+      'url': url,
+      'title': title,
+      'kind': kind?.name ?? 'video',
+    };
+    if (_socket != null) {
+      _flushPending();
+    } else {
+      status = 'Open the receiver page and connect to start the channel';
+      notifyListeners();
+    }
+    return true;
+  }
+
+  void _flushPending() {
+    final play = _pendingPlay;
+    if (play == null || _socket == null) return;
+    _send(play);
+    connected = true;
+    status = 'Playing "${play['title']}" on the receiver page';
+    notifyListeners();
+  }
+
   void _send(Map<String, dynamic> value) {
     final socket = _socket;
     if (socket == null || socket.readyState != WebSocket.open) return;
@@ -274,7 +346,9 @@ class DeeprowssMirrorService extends ChangeNotifier {
     connected = false;
     unawaited(_closePeer());
     if (running) {
-      status = 'TV disconnected · receiver can reconnect using the same code';
+      status = urlMode
+          ? 'Receiver disconnected · the channel keeps playing there'
+          : 'TV disconnected · receiver can reconnect using the same code';
       notifyListeners();
     }
   }
@@ -294,8 +368,12 @@ class DeeprowssMirrorService extends ChangeNotifier {
     status = 'Stopping mirroring…';
     notifyListeners();
     running = false;
+    try { await WakelockPlus.disable(); } catch (_) {}
     await _releaseResources(stopCapture: true);
     connected = false;
+    audioShared = false;
+    urlMode = false;
+    _pendingPlay = null;
     status = 'Mirroring stopped';
     _stopping = false;
     notifyListeners();
