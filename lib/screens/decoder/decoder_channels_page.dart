@@ -228,34 +228,105 @@ class _DecoderChannelsPageState extends State<DecoderChannelsPage> {
                 child: shown.isEmpty
                     ? Center(child: Text('No channels here.', style: TextStyle(color: Ui.muted)))
                     : ListView(
+                        padding: const EdgeInsets.only(bottom: 20),
                         children: [
-                          for (final category in ChannelCategory.values)
-                            if (shown.any((c) => c.category == category))
-                              Theme(
-                                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                                child: ExpansionTile(
-                                  initiallyExpanded: _query.isNotEmpty || category == ChannelCategory.sports,
-                                  leading: Icon(category.icon, color: Ui.red),
-                                  title: Text(category.label,
-                                      style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900)),
-                                  trailing: Text('${shown.where((c) => c.category == category).length}',
-                                      style: TextStyle(color: Ui.muted, fontWeight: FontWeight.w700)),
+                          for (final category in const [
+                            ChannelCategory.sports,
+                            ChannelCategory.news,
+                            ChannelCategory.movies,
+                            ChannelCategory.entertainment,
+                            ChannelCategory.music,
+                            ChannelCategory.kids,
+                            ChannelCategory.documentary,
+                            ChannelCategory.lifestyle,
+                            ChannelCategory.religious,
+                            ChannelCategory.general,
+                            ChannelCategory.other,
+                          ])
+                            if (shown.any((c) => c.category == category)) ...[
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 14, 16, 9),
+                                child: Row(
                                   children: [
-                                    for (final c in shown.where((c) => c.category == category))
-                                      ListTile(
-                                        leading: CircleAvatar(
-                                          backgroundColor: Ui.panel,
-                                          backgroundImage: (c.logo ?? '').isEmpty ? null : NetworkImage(c.logo!),
-                                          onBackgroundImageError: (c.logo ?? '').isEmpty ? null : (_, _) {},
-                                          child: (c.logo ?? '').isEmpty ? Icon(c.category.icon, size: 18, color: Ui.muted) : null,
-                                        ),
-                                        title: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                        trailing: _badge(_info[c.url]),
-                                        onTap: () => _open(c),
+                                    Container(
+                                      width: 30,
+                                      height: 30,
+                                      decoration: BoxDecoration(
+                                        color: Ui.red.withValues(alpha: .14),
+                                        borderRadius: BorderRadius.circular(9),
                                       ),
+                                      child: Icon(category.icon, color: Ui.red, size: 17),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(category.label,
+                                        style: TextStyle(color: Ui.text, fontSize: 16,
+                                          fontWeight: FontWeight.w900)),
+                                    ),
+                                    Text('${shown.where((c) => c.category == category).length}',
+                                      style: TextStyle(color: Ui.muted, fontSize: 12,
+                                        fontWeight: FontWeight.w800)),
                                   ],
                                 ),
                               ),
+                              SizedBox(
+                                height: 78,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  itemCount: shown.where((c) => c.category == category).length,
+                                  separatorBuilder: (_, __) => const SizedBox(width: 9),
+                                  itemBuilder: (context, index) {
+                                    final channels = shown.where((c) => c.category == category).toList();
+                                    final c = channels[index];
+                                    return SizedBox(
+                                      width: 230,
+                                      child: Material(
+                                        color: Ui.card,
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(14),
+                                          onTap: () => _open(c),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                            child: Row(
+                                              children: [
+                                                CircleAvatar(
+                                                  radius: 19,
+                                                  backgroundColor: Ui.panel,
+                                                  backgroundImage: (c.logo ?? '').isEmpty ? null : NetworkImage(c.logo!),
+                                                  onBackgroundImageError: (c.logo ?? '').isEmpty ? null : (_, _) {},
+                                                  child: (c.logo ?? '').isEmpty
+                                                    ? Icon(c.category.icon, size: 18, color: Ui.muted)
+                                                    : null,
+                                                ),
+                                                const SizedBox(width: 9),
+                                                Expanded(
+                                                  child: Column(
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(c.name, maxLines: 2, overflow: TextOverflow.ellipsis,
+                                                        style: TextStyle(color: Ui.text, fontSize: 12.5,
+                                                          fontWeight: FontWeight.w800)),
+                                                      const SizedBox(height: 4),
+                                                      _badge(_info[c.url]),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Icon(Icons.play_circle_outline_rounded,
+                                                  color: Ui.redSoft, size: 21),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
                         ],
                       ),
               ),
