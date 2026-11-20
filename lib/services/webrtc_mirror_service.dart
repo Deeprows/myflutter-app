@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:screen_share_plugin/screen_share_plugin.dart' show ScreenSharePlugin, ScreenShareOptions;
@@ -89,16 +90,12 @@ class DeeprowssMirrorService extends ChangeNotifier {
 
   String? get url => _url;
   String? get pin => _pin;
-  static const String _receiverPageBase = String.fromEnvironment(
-    'DEEProWSS_MIRROR_RECEIVER_URL',
-    defaultValue: 'https://deeprows.github.io/myflutter-app/',
-  );
+  // Serve the receiver page from this same local HTTP origin. A GitHub Pages
+  // HTTPS page cannot open an insecure ws:// connection to the phone on modern
+  // browsers (mixed-content blocking), so the TV opens this LAN URL directly.
   String? get pairingUrl => _url == null || _pin == null
       ? null
-      : Uri.parse(_receiverPageBase).replace(queryParameters: {
-          'host': Uri.parse(_url!).authority,
-          'pin': _pin!,
-        }).toString();
+      : Uri.parse(_url!).replace(queryParameters: {'pin': _pin!}).toString();
 
   Future<void> start({bool captureScreen = true}) async {
     if (running || _starting) return;
@@ -247,10 +244,19 @@ class DeeprowssMirrorService extends ChangeNotifier {
         }
 
         if (request.method == 'GET' && (request.uri.path == '/' || request.uri.path == '/index.html')) {
-          request.response
-            ..statusCode = HttpStatus.found
-            ..headers.set(HttpHeaders.locationHeader, pairingUrl ?? _receiverPageBase)
-            ..headers.set('cache-control', 'no-store');
+          try {
+            final html = await rootBundle.loadString('assets/receiver/index.html');
+            request.response
+              ..statusCode = HttpStatus.ok
+              ..headers.contentType = ContentType.html
+              ..headers.set(HttpHeaders.cacheControlHeader, 'no-store')
+              ..headers.set('x-content-type-options', 'nosniff')
+              ..write(html);
+          } catch (e) {
+            request.response
+              ..statusCode = HttpStatus.internalServerError
+              ..write('Deeprowss receiver page could not be loaded: $e');
+          }
           await request.response.close();
           continue;
         }
@@ -404,6 +410,25 @@ class DeeprowssMirrorService extends ChangeNotifier {
     };
     nowPlayingTitle = title;
     nowPlayingKind = kind?.name ?? 'video';
+    // Keep a foreground media notification alive while the remote receiver
+    // plays. Notification actions are forwarded over the same receiver socket.
+    BackgroundPlayback.castActive = true;
+    BackgroundPlayback.castHook = (action) {
+      switch (action) {
+        case 'play': case 'pause': case 'rewind': case 'forward':
+          sendRemoteCommand(action);
+          return true;
+        case 'stop':
+          sendRemoteCommand('stop');
+          BackgroundPlayback.castActive = false;
+          BackgroundPlayback.castHook = null;
+          unawaited(BackgroundPlayback.stopCasting());
+          return true;
+        default:
+          return false;
+      }
+    };
+    unawaited(BackgroundPlayback.startCasting(title, 'Playing on Deeprowss receiver'));
     if (_socket != null) {
       _flushPending();
     } else {
@@ -477,6 +502,9 @@ class DeeprowssMirrorService extends ChangeNotifier {
     audioNote = null;
     urlMode = false;
     _pendingPlay = null;
+    BackgroundPlayback.castHook = null;
+    BackgroundPlayback.castActive = false;
+    unawaited(BackgroundPlayback.stopCasting());
     nowPlayingTitle = '';
     nowPlayingKind = '';
     status = 'Mirroring stopped';
