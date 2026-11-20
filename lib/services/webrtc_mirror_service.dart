@@ -20,7 +20,6 @@ class DeeprowssMirrorService extends ChangeNotifier {
   static final DeeprowssMirrorService instance = DeeprowssMirrorService._();
 
   HttpServer? _server;
-  static const int _receiverPort = 42385;
   WebSocket? _socket;
   RTCPeerConnection? _peerConnection;
   final List<RTCIceCandidate> _pendingRemoteCandidates = [];
@@ -82,7 +81,9 @@ class DeeprowssMirrorService extends ChangeNotifier {
     try { await BackgroundPlayback.setVolume(v); } catch (_) {}
   }
   Map<String, dynamic>? _pendingPlay;
-  Map<String, String> _mediaHeaders = {};
+  String nowPlayingTitle = '';
+  String nowPlayingKind = '';
+  int receiverVolume = 100;
   String status = 'Not running';
   String? error;
 
@@ -116,7 +117,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
       final ip = await _findLanAddress();
       if (ip == null) throw StateError('Could not find your Wi-Fi IP address. Connect to the same Wi-Fi as your TV.');
       // Bind only to the selected LAN interface rather than every phone network.
-      _server = await HttpServer.bind(InternetAddress(ip), _receiverPort, shared: true);
+      _server = await HttpServer.bind(InternetAddress(ip), 0, shared: true);
       unawaited(_serve(_server!));
       _url = 'http://$ip:${_server!.port}';
 
@@ -149,7 +150,6 @@ class DeeprowssMirrorService extends ChangeNotifier {
             });
             if (s.getVideoTracks().isNotEmpty) {
               _screenStream = s;
-              wantAudio = s.getAudioTracks().isNotEmpty;
               for (final track in s.getVideoTracks()) {
                 track.onEnded = () => unawaited(stop());
               }
@@ -204,20 +204,6 @@ class DeeprowssMirrorService extends ChangeNotifier {
   Future<void> _serve(HttpServer server) async {
     try {
       await for (final request in server) {
-        if (request.uri.path == '/media' && request.method == 'OPTIONS') {
-          request.response
-            ..statusCode = HttpStatus.noContent
-            ..headers.set('Access-Control-Allow-Origin', '*')
-            ..headers.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
-            ..headers.set('Access-Control-Allow-Headers', 'Range')
-            ..headers.set('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
-          await request.response.close();
-          continue;
-        }
-        if (request.uri.path == '/media' && (request.method == 'GET' || request.method == 'HEAD')) {
-          await _proxyMedia(request);
-          continue;
-        }
         if (request.uri.path == '/ws') {
           if (_failedPairAttempts >= 10) {
             request.response
@@ -247,6 +233,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
             continue;
           }
           _socket = incoming;
+          connected = true;
           incoming.listen(_onSignal,
             onError: (_) => _receiverDisconnected(),
             onDone: _receiverDisconnected,
@@ -279,79 +266,6 @@ class DeeprowssMirrorService extends ChangeNotifier {
         status = 'Receiver connection ended';
         notifyListeners();
       }
-    }
-  }
-
-  Future<void> _proxyMedia(HttpRequest request) async {
-    final raw = request.uri.queryParameters['url'];
-    final uri = Uri.tryParse(raw ?? '');
-    if (uri == null || !{'http', 'https'}.contains(uri.scheme)) {
-      request.response.statusCode = HttpStatus.badRequest;
-      await request.response.close();
-      return;
-    }
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 12);
-    try {
-      final upstream = await client.openUrl(request.method, uri);
-      _mediaHeaders.forEach((k, v) => upstream.headers.set(k, v));
-      if (!_mediaHeaders.keys.any((k) => k.toLowerCase() == 'user-agent')) {
-        upstream.headers.set(HttpHeaders.userAgentHeader,
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36');
-      }
-      final range = request.headers.value(HttpHeaders.rangeHeader);
-      if (range != null) upstream.headers.set(HttpHeaders.rangeHeader, range);
-      final response = await upstream.close().timeout(const Duration(seconds: 20));
-      final contentType = response.headers.contentType?.mimeType.toLowerCase() ?? '';
-      final isHls = uri.path.toLowerCase().endsWith('.m3u8') || contentType.contains('mpegurl');
-      final out = request.response;
-      out.headers
-        ..set('Access-Control-Allow-Origin', '*')
-        ..set('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
-        ..set('Cache-Control', 'no-store');
-      if (isHls && response.statusCode < 400) {
-        final body = await response.transform(utf8.decoder).join();
-        if (body.trimLeft().startsWith('#EXTM3U')) {
-          final origin = 'http://${request.headers.value(HttpHeaders.hostHeader)}';
-          String proxied(String value) {
-            final absolute = uri.resolve(value.trim()).toString();
-            return '$origin/media?url=${Uri.encodeQueryComponent(absolute)}';
-          }
-          final rewritten = body.split('\n').map((line) {
-            final value = line.trimRight();
-            if (value.isEmpty) return value;
-            if (value.startsWith('#')) {
-              return value.replaceAllMapped(RegExp(r'URI="([^"]+)"'), (m) => 'URI="${proxied(m.group(1)!)}"');
-            }
-            return proxied(value);
-          }).join('\n');
-          final bytes = utf8.encode(rewritten);
-          out
-            ..statusCode = HttpStatus.ok
-            ..headers.set(HttpHeaders.contentTypeHeader, 'application/vnd.apple.mpegurl')
-            ..contentLength = bytes.length;
-          if (request.method != 'HEAD') out.add(bytes);
-          await out.close();
-          return;
-        }
-      }
-      out.statusCode = response.statusCode;
-      if (contentType.isNotEmpty) out.headers.set(HttpHeaders.contentTypeHeader, contentType);
-      for (final header in [HttpHeaders.contentRangeHeader, HttpHeaders.acceptRangesHeader]) {
-        final value = response.headers.value(header);
-        if (value != null) out.headers.set(header, value);
-      }
-      if (response.contentLength >= 0) out.contentLength = response.contentLength;
-      if (request.method != 'HEAD') await out.addStream(response);
-      await out.close();
-    } catch (e) {
-      try {
-        request.response
-          ..statusCode = HttpStatus.badGateway
-          ..write('Upstream stream proxy failed: $e');
-        await request.response.close();
-      } catch (_) {}
-    } finally {
-      client.close(force: true);
     }
   }
 
@@ -391,14 +305,10 @@ class DeeprowssMirrorService extends ChangeNotifier {
             }
           }
           break;
-        case 'receiver_status':
-          if (message['playing'] is bool) {
-            status = (message['playing'] as bool)
-                ? 'Receiver playing · ${message['title'] ?? 'Video'}'
-                : 'Receiver connected · playback paused';
-            connected = true;
-            notifyListeners();
-          }
+        case 'receiver-status':
+          final detail = message['message'];
+          if (detail is String && detail.isNotEmpty) status = detail;
+          notifyListeners();
           break;
         case 'stop':
           await stop();
@@ -479,29 +389,41 @@ class DeeprowssMirrorService extends ChangeNotifier {
     String? referer,
     String? userAgent,
   }) async {
-    if (url.trim().isEmpty || kind == StreamKind.embed || kind == StreamKind.invalid) return false;
+    if (url.trim().isEmpty || kind == StreamKind.invalid) return false;
     if (!running) {
       try { await start(captureScreen: false); } catch (_) { return false; }
     }
-    _mediaHeaders = {
-      if ((referer ?? '').trim().isNotEmpty) 'Referer': referer!.trim(),
-      if ((userAgent ?? '').trim().isNotEmpty) 'User-Agent': userAgent!.trim(),
-    };
-    // Route receiver playback through the phone so CORS, Referer and
-    // User-Agent restrictions can be handled before the TV browser sees it.
-    final playUrl = '$_url/media?url=${Uri.encodeQueryComponent(url)}';
     _pendingPlay = {
       'type': 'play',
-      'url': playUrl,
+      'url': url,
       'title': title,
       'kind': kind?.name ?? 'video',
+      if ((referer ?? '').trim().isNotEmpty) 'referer': referer!.trim(),
+      if ((userAgent ?? '').trim().isNotEmpty) 'userAgent': userAgent!.trim(),
+      'mode': kind == StreamKind.embed ? 'iframe' : 'media',
     };
+    nowPlayingTitle = title;
+    nowPlayingKind = kind?.name ?? 'video';
     if (_socket != null) {
       _flushPending();
     } else {
       status = 'Open the receiver page and connect to start the channel';
       notifyListeners();
     }
+    return true;
+  }
+
+  /// Sends a remote command to the connected browser receiver. Embed providers
+  /// may expose different control APIs; the receiver reports unsupported commands.
+  void setReceiverVolume(double value) {
+    receiverVolume = value.round().clamp(0, 100).toInt();
+    sendRemoteCommand('volume', value: receiverVolume.toDouble());
+    notifyListeners();
+  }
+
+  bool sendRemoteCommand(String command, {double? value}) {
+    if (_socket == null || _socket!.readyState != WebSocket.open) return false;
+    _send({'type': 'remote', 'command': command, if (value != null) 'value': value});
     return true;
   }
 
@@ -555,7 +477,8 @@ class DeeprowssMirrorService extends ChangeNotifier {
     audioNote = null;
     urlMode = false;
     _pendingPlay = null;
-    _mediaHeaders = {};
+    nowPlayingTitle = '';
+    nowPlayingKind = '';
     status = 'Mirroring stopped';
     _stopping = false;
     notifyListeners();
