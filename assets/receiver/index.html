@@ -5,18 +5,26 @@
   <meta name="color-scheme" content="dark"><meta name="theme-color" content="#080b12">
   <title>Deeprowss TV</title>
   <style>
-    :root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#080b12;color:#f7f8fb;--gold:#ffc629;--muted:#a7afbd;--line:#293141}
-    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(ellipse at 50% -20%,#263044 0,transparent 55%),#080b12}
-    body{min-height:100vh;padding:clamp(14px,3vw,34px);display:grid;place-items:center}.shell{width:min(100%,980px)}
-    .brand{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 20px}.logo{font-size:clamp(22px,4vw,32px);font-weight:950;letter-spacing:.1em}.tag{color:var(--muted);font-size:12px}
-    .panel{background:linear-gradient(145deg,#171d29,#10151e);border:1px solid var(--line);border-radius:24px;padding:clamp(18px,3vw,30px);box-shadow:0 24px 80px #0007}
-    h1,h2,p{margin-top:0}h1{font-size:clamp(21px,4vw,30px);margin-bottom:8px}p{color:var(--muted);line-height:1.55}
+    :root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#000;color:#fff;--gold:#ffc629;--muted:#c2c8d2}
+    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;min-height:100%;overflow:hidden;background:#000;color:#fff}
+    body{padding:0;display:block}.shell{width:100%;height:100%;max-width:none}
+    .brand{display:none}
+    .panel{background:#090b10;border:0;border-radius:0;padding:clamp(16px,3vw,34px);box-shadow:none}
+    #join{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;margin:auto;width:min(100%,620px);height:max-content;min-height:100%;padding:clamp(22px,5vw,56px)}
+    h1{font-size:clamp(24px,4vw,38px);margin:0 0 12px}p{color:var(--muted);line-height:1.55}
     input{display:block;width:100%;padding:15px 16px;border:1px solid #3a465a;border-radius:13px;background:#090e17;color:white;font-size:17px;outline:none;margin:12px 0}input:focus{border-color:var(--gold)}
     button{border:0;border-radius:13px;padding:13px 18px;background:var(--gold);color:#17130a;font-weight:850;font-size:15px;cursor:pointer}button:disabled{opacity:.5;cursor:default}.secondary{background:#202938;color:#f7f8fb;border:1px solid #39465a}
-    #status{min-height:22px;color:var(--muted);font-size:13px;margin-top:14px}.hint{font-size:12px;color:#8792a4;margin-top:14px}
-    .player{display:none}.player-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.title{font-weight:850;font-size:clamp(17px,3vw,22px);overflow-wrap:anywhere}.live{border:1px solid #315f43;color:#78d99a;border-radius:999px;padding:6px 10px;font-size:11px;white-space:nowrap}
-    .stage{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:17px;overflow:hidden;border:1px solid #303848}.stage video,.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;object-fit:contain;display:none}.controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;margin-top:15px}.controls button{min-width:82px}.progress{display:flex;gap:12px;align-items:center;margin-top:14px;color:var(--muted);font-size:12px}.progress input{margin:0;padding:0;accent-color:var(--gold)}.volume{max-width:180px}.foot{color:#7f899a;font-size:11px;text-align:center;margin-top:17px}
-    @media(max-width:520px){body{padding:12px}.panel{border-radius:18px}.brand{align-items:flex-start}.controls button{flex:1;min-width:65px;padding:12px 8px}.progress{flex-wrap:wrap}}
+    #statusJoin,#statusPlayer{min-height:20px;color:var(--muted);font-size:13px;margin-top:10px}.hint,.foot{display:none}
+    .player{display:none;position:fixed;inset:0;width:100vw;height:100dvh;padding:0;background:#000;z-index:10;overflow:hidden}
+    .player-head{position:absolute;z-index:4;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:clamp(12px,2vw,24px);background:linear-gradient(#000b,transparent);transition:opacity .35s}
+    .title{font-weight:850;font-size:clamp(15px,2.2vw,23px);overflow-wrap:anywhere}.live{border:1px solid #315f43;color:#78d99a;border-radius:999px;padding:6px 10px;font-size:11px;white-space:nowrap}
+    .stage{position:absolute;inset:0;width:100vw;height:100dvh;aspect-ratio:auto;background:#000;border:0;border-radius:0;overflow:hidden}
+    .stage video,.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;object-fit:contain;display:none}
+    .controls{position:absolute;z-index:5;left:0;right:0;bottom:0;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:9px;padding:20px 14px max(18px,env(safe-area-inset-bottom));background:linear-gradient(transparent,#000e 22%);opacity:1;transition:opacity .35s}
+    .controls button{min-width:82px}.progress{display:flex;gap:12px;align-items:center;width:min(900px,94vw);margin:0 auto 8px;color:var(--muted);font-size:12px}.progress input{margin:0;padding:0;accent-color:var(--gold)}.volume{max-width:150px}
+    .player.controls-hidden .controls,.player.controls-hidden .player-head{opacity:0;pointer-events:none}
+    #statusPlayer{position:absolute;z-index:6;left:14px;bottom:6px;max-width:70vw;margin:0;color:#ffffffa8;text-shadow:0 1px 4px #000;pointer-events:none;font-size:11px}
+    @media(max-width:600px){.controls{gap:6px;padding:12px 8px max(14px,env(safe-area-inset-bottom))}.controls button{flex:1;min-width:58px;padding:11px 6px;font-size:12px}.progress{gap:7px}.volume{max-width:90px}}
   </style>
 </head>
 <body>
@@ -31,7 +39,7 @@
     </section>
     <section class="panel player" id="playerPanel">
       <div class="player-head"><div class="title" id="mediaTitle">Ready to play</div><span class="live" id="playState">CONNECTED</span></div>
-      <div class="stage"><video id="screen" playsinline autoplay controls></video><iframe id="movieFrame" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope" allowfullscreen referrerpolicy="no-referrer-when-downgrade" title="Deeprowss movie embed"></iframe></div>
+      <div class="stage"><video id="screen" playsinline autoplay controls></video><iframe id="movieFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-downloads" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope" allowfullscreen referrerpolicy="no-referrer-when-downgrade" title="Deeprowss movie embed"></iframe></div>
       <div class="controls"><button class="secondary" id="rewind">−10 sec</button><button id="play">▶ Play</button><button class="secondary" id="pause">Ⅱ Pause</button><button class="secondary" id="forward">+10 sec</button><button class="secondary" id="fullscreen">⛶ Fullscreen</button><button class="secondary" id="stop">■ Stop</button></div>
       <div class="progress"><span id="currentTime">00:00</span><input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek"><span id="totalTime">LIVE</span><label>Vol <input class="volume" id="volume" type="range" min="0" max="100" value="100" aria-label="Volume"></label></div>
       <div id="statusPlayer" role="status">Connected.</div>
@@ -44,32 +52,45 @@
   (() => {
     const $ = id => document.getElementById(id);
     const pinInput=$('pin'),hostInput=$('host'),video=$('screen'),frame=$('movieFrame'),join=$('join'),panel=$('playerPanel');
-    let socket,peer,hls,dash,urlPlaying=false,iframePlaying=false,currentTitle='',reconnectAttempts=0,reconnectTimer;const pendingCandidates=[];
+    let socket,peer,hls,dash,urlPlaying=false,iframePlaying=false,currentTitle='',reconnectAttempts=0,reconnectTimer,controlsTimer;const pendingCandidates=[];
     const params=new URLSearchParams(location.search);const savedHost=localStorage.getItem('deeprowss_receiver_host')||'';const savedPin=localStorage.getItem('deeprowss_receiver_pin')||'';if(/^\d{6}$/.test(params.get('pin')||''))pinInput.value=params.get('pin');else if(/^\d{6}$/.test(savedPin))pinInput.value=savedPin;hostInput.value=params.get('host')||savedHost||location.host;
     const say=value=>{$('statusJoin').textContent=value;$('statusPlayer').textContent=value;};
     const send=value=>{if(socket&&socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify(value));};
     const report=value=>send({type:'receiver-status',message:value});
     const clock=v=>{if(!Number.isFinite(v))return '00:00';const n=Math.floor(v);return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');};
+    function revealControls(){panel.classList.remove('controls-hidden');clearTimeout(controlsTimer);if(urlPlaying||iframePlaying)controlsTimer=setTimeout(()=>panel.classList.add('controls-hidden'),4200);}
+    function enterPlayer(){panel.classList.remove('controls-hidden');revealControls();document.documentElement.classList.add('receiver-active');}
+
     function clearMedia(){urlPlaying=false;iframePlaying=false;if(hls){try{hls.destroy();}catch(_){}hls=null;}if(dash){try{dash.reset();}catch(_){}dash=null;}video.pause();video.removeAttribute('src');video.srcObject=null;frame.src='about:blank';video.style.display='none';frame.style.display='none';$('seek').value=0;$('currentTime').textContent='00:00';$('totalTime').textContent='LIVE';}
     function showJoin(msg){clearMedia();panel.style.display='none';join.style.display='block';say(msg);}
     function safeUrl(raw){try{const u=new URL(raw);return ['http:','https:'].includes(u.protocol)?u.href:null;}catch(_){return null;}}
-    function playEmbed(raw,title){const url=safeUrl(raw);if(!url){say('This movie embed URL is invalid.');return;}clearMedia();iframePlaying=true;currentTitle=title||'Movie';$('mediaTitle').textContent=currentTitle;$('playState').textContent='EMBED';panel.style.display='block';join.style.display='none';
-      const u=new URL(url);if(/(^|\.)youtube\.com$/.test(u.hostname)&&u.pathname.includes('/embed/')){u.searchParams.set('enablejsapi','1');u.searchParams.set('origin',location.origin);}frame.src=u.href;frame.style.display='block';say('Movie embed loaded. Use the controls below; provider support varies.');report('Movie embed loaded: '+currentTitle);}
-    function playUrl(raw,kind,title){const url=safeUrl(raw);if(!url){say('The media URL is invalid.');return;}if(kind==='embed'){playEmbed(url,title);return;}clearMedia();urlPlaying=true;currentTitle=title||'Media';$('mediaTitle').textContent=currentTitle;$('playState').textContent='PLAYING';panel.style.display='block';join.style.display='none';video.srcObject=null;video.muted=false;video.volume=Number($('volume').value)/100;video.style.display='block';
-      const start=()=>video.play().then(()=>{say('Playing '+currentTitle);report('Playing '+currentTitle);}).catch(()=>say('Playback is ready. Press Play on the receiver or phone.'));
+    function playEmbed(raw,title){const url=safeUrl(raw);if(!url){say('This movie embed URL is invalid.');return;}clearMedia();iframePlaying=true;currentTitle=title||'Movie';$('mediaTitle').textContent=currentTitle;$('playState').textContent='EMBED';panel.style.display='block';join.style.display='none';enterPlayer();
+      const u=new URL(url);u.searchParams.set('autoplay','1');u.searchParams.set('muted','0');u.searchParams.set('mute','0');u.searchParams.set('playsinline','0');u.searchParams.set('controls','0');u.searchParams.set('disablekb','0');
+      if(/(^|\\.)youtube\\.com$/.test(u.hostname)&&u.pathname.includes('/embed/')){u.searchParams.set('enablejsapi','1');u.searchParams.set('origin',location.origin);}
+      frame.src=u.href;frame.style.display='block';frame.onload=()=>{try{frame.contentWindow.focus();}catch(_){}};say('Opening full-screen player…');report('Movie embed opened: '+currentTitle);}
+    function playUrl(raw,kind,title){const url=safeUrl(raw);if(!url){say('The media URL is invalid.');return;}if(kind==='embed'){playEmbed(url,title);return;}clearMedia();urlPlaying=true;currentTitle=title||'Media';$('mediaTitle').textContent=currentTitle;$('playState').textContent='PLAYING';panel.style.display='block';join.style.display='none';enterPlayer();video.srcObject=null;video.muted=false;video.volume=Number($('volume').value)/100;video.style.display='block';
+      const start=()=>{video.muted=false;video.volume=Number($('volume').value)/100;return video.play().then(()=>{say('Playing '+currentTitle);report('Playing '+currentTitle);}).catch(()=>say('Playback is ready. Press Play on the receiver or phone.'));};
       if(kind==='dash'||/\.mpd(\?|$)/i.test(url)){if(!window.dashjs){say('DASH playback library is unavailable.');return;}dash=dashjs.MediaPlayer().create();dash.initialize(video,url,true);dash.on(dashjs.MediaPlayer.events.ERROR,e=>{say('DASH playback failed. This source may require provider authorization or a supported codec.');report('DASH playback failed: '+(e.error||'unknown'));});return;}
       const isHls=kind==='hls'||/\.m3u8(\?|$)/i.test(url);
       if(isHls&&!video.canPlayType('application/vnd.apple.mpegurl')){if(!window.Hls||!Hls.isSupported()){say('This browser cannot play HLS.');return;}hls=new Hls({enableWorker:true,lowLatencyMode:true});hls.on(Hls.Events.MANIFEST_PARSED,start);hls.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal){say('HLS error: '+d.details+'. This source may require provider headers or authorization.');report('HLS playback failed: '+d.details);}});hls.loadSource(url);hls.attachMedia(video);}else{video.src=url;video.onerror=()=>{say('Could not play this direct stream. The provider may require headers, cookies, DRM or a supported codec.');report('Direct media playback failed.');};start();}}
     function iframeCommand(command,value){if(!frame.contentWindow)return;
-      // YouTube's documented iframe API message shape, plus common embed
-      // player conventions. Cross-origin providers may ignore these messages.
-      const yt={event:'command',func:({play:'playVideo',pause:'pauseVideo',stop:'stopVideo',mute:'mute',unmute:'unMute',volume:'setVolume',rewind:'seekTo',forward:'seekTo'})[command],args:[]};
+      const map={play:'playVideo',pause:'pauseVideo',stop:'stopVideo',mute:'mute',unmute:'unMute',volume:'setVolume',rewind:'seekTo',forward:'seekTo'};
+      const yt={event:'command',func:map[command]||command,args:[]};
       if(command==='volume')yt.args=[Number(value)||0];
       if(command==='rewind'||command==='forward'){yt.func='seekTo';yt.args=[command==='rewind'?-10:10,true];}
-      try{frame.contentWindow.postMessage(JSON.stringify(yt),'*');frame.contentWindow.postMessage({type:'player:command',command,value},'*');frame.contentWindow.postMessage({method:command==='stop'?'unload':command,value},'*');frame.contentWindow.postMessage({command,value},'*');}catch(_){}
-      say('Remote command sent. This provider may limit external playback controls.');}
-    function remote(command,value){if(iframePlaying){if(command==='fullscreen'){frame.requestFullscreen?.().catch?.(()=>{});return;}iframeCommand(command,value);return;}if(!urlPlaying)return;
-      if(command==='play')video.play().catch(()=>{});else if(command==='pause')video.pause();else if(command==='stop'){clearMedia();say('Playback stopped.');report('Playback stopped.');return;}else if(command==='rewind')video.currentTime=Math.max(0,video.currentTime-10);else if(command==='forward')video.currentTime=Math.min(video.duration||Infinity,video.currentTime+10);else if(command==='mute')video.muted=!video.muted;else if(command==='volume'){video.volume=Math.max(0,Math.min(1,Number(value)/100));video.muted=video.volume===0;}else if(command==='seek'&&Number.isFinite(Number(value)))video.currentTime=Number(value);else if(command==='fullscreen')video.requestFullscreen?.().catch?.(()=>{});}
+      const messages=[
+        {type:'player:command',command,value},
+        {method:command==='stop'?'unload':command,value},
+        {command,value},
+        {event:'command',func:map[command]||command,value},
+        {type:'media-control',action:command,value}
+      ];
+      try{frame.contentWindow.postMessage(JSON.stringify(yt),'*');for(const msg of messages){frame.contentWindow.postMessage(msg,'*');frame.contentWindow.postMessage(JSON.stringify(msg),'*');}}catch(_){}
+      if(command==='play')say('Play command sent to embed.');
+      else if(command==='pause')say('Pause command sent to embed.');
+      revealControls();}
+    function remote(command,value){revealControls();if(iframePlaying){if(command==='fullscreen'){(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen)?.call(document.documentElement)?.catch?.(()=>{});revealControls();return;}iframeCommand(command,value);return;}if(!urlPlaying)return;
+      if(command==='play')video.play().catch(()=>{});else if(command==='pause')video.pause();else if(command==='stop'){clearMedia();say('Playback stopped.');report('Playback stopped.');return;}else if(command==='rewind')video.currentTime=Math.max(0,video.currentTime-10);else if(command==='forward')video.currentTime=Math.min(video.duration||Infinity,video.currentTime+10);else if(command==='mute')video.muted=!video.muted;else if(command==='unmute')video.muted=false;else if(command==='volume'){video.volume=Math.max(0,Math.min(1,Number(value)/100));video.muted=video.volume===0;}else if(command==='seek'&&Number.isFinite(Number(value)))video.currentTime=Number(value);else if(command==='fullscreen')video.requestFullscreen?.().catch?.(()=>{});}
     async function connect(){video.muted=false;video.volume=1;if(socket&&socket.readyState===WebSocket.OPEN)return;pendingCandidates.length=0;if(peer){peer.close();peer=null;}const pin=pinInput.value.trim();let host=hostInput.value.trim();if(host.startsWith('http://')||host.startsWith('https://')){try{host=new URL(host).host;}catch(_){host='';}}if(!host||!/^\d{6}$/.test(pin)){say('Enter the phone address and six-digit PIN.');return;}
       $('connect').disabled=true;say('Connecting to Deeprowss…');socket=new WebSocket(`ws://${host}/ws?pin=${encodeURIComponent(pin)}`);
       socket.onopen=()=>{reconnectAttempts=0;localStorage.setItem('deeprowss_receiver_host',host);localStorage.setItem('deeprowss_receiver_pin',pin);$('connectionBadge').textContent='CONNECTED';say('Connected. Waiting for media…');send({type:'ready'});};
@@ -77,13 +98,19 @@
       socket.onclose=()=>{$('connectionBadge').textContent='DISCONNECTED';$('connect').disabled=false;if(urlPlaying||iframePlaying){say('Phone disconnected. Current media remains on the receiver.');return;}showJoin('Connection closed. Reconnecting automatically…');if(reconnectAttempts<5){reconnectAttempts++;clearTimeout(reconnectTimer);reconnectTimer=setTimeout(()=>{if(hostInput.value&&pinInput.value&&(!socket||socket.readyState===WebSocket.CLOSED))connect();},Math.min(1200*reconnectAttempts,6000));}else say('Reconnect attempts stopped. Tap Connect to retry.');if(peer){peer.close();peer=null;}};
       socket.onmessage=async event=>{try{const msg=JSON.parse(event.data);if(msg.type==='play'&&typeof msg.url==='string'){if(peer){peer.close();peer=null;}playUrl(msg.url,msg.kind||'video',msg.title||'Deeprowss media');}
         else if(msg.type==='remote'){remote(msg.command,msg.value);}
-        else if(msg.type==='offer'){clearMedia();peer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]});peer.ontrack=e=>{video.srcObject=e.streams[0];video.style.display='block';frame.style.display='none';panel.style.display='block';join.style.display='none';video.muted=false;video.play().catch(()=>{video.muted=true;video.play().catch(()=>{});say('Mirroring video. Browser autoplay blocked audio; tap the player to enable sound.');});};peer.onicecandidate=e=>{if(e.candidate)send({type:'candidate',candidate:e.candidate.toJSON()});};peer.onconnectionstatechange=()=>{if(peer.connectionState==='connected'){say('Screen mirroring connected');report('Screen mirroring connected');}if(['failed','disconnected'].includes(peer.connectionState))say('Video connection interrupted');};await peer.setRemoteDescription({type:msg.sdpType||'offer',sdp:msg.sdp});while(pendingCandidates.length)await peer.addIceCandidate(pendingCandidates.shift());const answer=await peer.createAnswer();await peer.setLocalDescription(answer);send({type:'answer',sdp:answer.sdp,sdpType:answer.type});}
+        else if(msg.type==='offer'){clearMedia();peer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]});peer.ontrack=e=>{video.srcObject=e.streams[0];video.style.display='block';frame.style.display='none';panel.style.display='block';join.style.display='none';enterPlayer();video.muted=false;video.play().catch(()=>say('Mirroring connected. Press Play to enable audio if autoplay is blocked.'));};peer.onicecandidate=e=>{if(e.candidate)send({type:'candidate',candidate:e.candidate.toJSON()});};peer.onconnectionstatechange=()=>{if(peer.connectionState==='connected'){say('Screen mirroring connected');report('Screen mirroring connected');}if(['failed','disconnected'].includes(peer.connectionState))say('Video connection interrupted');};await peer.setRemoteDescription({type:msg.sdpType||'offer',sdp:msg.sdp});while(pendingCandidates.length)await peer.addIceCandidate(pendingCandidates.shift());const answer=await peer.createAnswer();await peer.setLocalDescription(answer);send({type:'answer',sdp:answer.sdp,sdpType:answer.type});}
         else if(msg.type==='candidate'){if(peer&&peer.remoteDescription)await peer.addIceCandidate(msg.candidate);else pendingCandidates.push(msg.candidate);}}
         catch(e){say('Receiver error: '+e.message);}};
     }
     $('connect').addEventListener('click',connect);pinInput.addEventListener('keydown',e=>{if(e.key==='Enter')connect();});
     $('play').onclick=()=>remote('play');$('pause').onclick=()=>remote('pause');$('stop').onclick=()=>remote('stop');$('rewind').onclick=()=>remote('rewind');$('forward').onclick=()=>remote('forward');$('fullscreen').onclick=()=>remote('fullscreen');
     $('volume').oninput=e=>remote('volume',e.target.value);$('seek').oninput=e=>{if(urlPlaying&&Number.isFinite(video.duration))remote('seek',Number(e.target.value)/1000*video.duration);};
+    ['pointermove','pointerdown','mousemove','touchstart'].forEach(evt=>document.addEventListener(evt,revealControls,{passive:true}));
+    document.addEventListener('keydown',e=>{if(!urlPlaying&&!iframePlaying)return;const k=e.key.toLowerCase();if(['arrowleft','arrowright','arrowup','arrowdown',' ','enter','f','m','escape','backspace'].includes(k))e.preventDefault();revealControls();
+      if(k==='arrowleft')remote('rewind');else if(k==='arrowright')remote('forward');else if(k==='arrowup')remote('volume',Math.min(100,Number($('volume').value)+5));else if(k==='arrowdown')remote('volume',Math.max(0,Number($('volume').value)-5));else if(k===' '||k==='enter')remote(urlPlaying&&!video.paused?'pause':'play');else if(k==='f')remote('fullscreen');else if(k==='m')remote('mute');else if(k==='escape'&&document.fullscreenElement)document.exitFullscreen?.().catch?.(()=>{});
+    },{passive:false});
+    document.addEventListener('fullscreenchange',revealControls);
+
     video.addEventListener('timeupdate',()=>{if(!urlPlaying||!Number.isFinite(video.duration)||video.duration<=0)return;$('seek').value=Math.round(video.currentTime/video.duration*1000);$('currentTime').textContent=clock(video.currentTime);$('totalTime').textContent=clock(video.duration);});
     video.addEventListener('play',()=>{$('playState').textContent='PLAYING';report('Playing '+currentTitle);});video.addEventListener('pause',()=>{$('playState').textContent='PAUSED';report('Paused '+currentTitle);});
     if(hostInput.value&&pinInput.value)setTimeout(connect,400);
