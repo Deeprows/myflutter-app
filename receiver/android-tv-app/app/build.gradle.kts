@@ -13,6 +13,16 @@ android {
     namespace = "com.deeprows.receiver"
     compileSdk = 35
 
+    // Keep Java and Kotlin bytecode targets aligned for release builds.
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
     defaultConfig {
         applicationId = "com.deeprows.receiver"
         minSdk = 23
