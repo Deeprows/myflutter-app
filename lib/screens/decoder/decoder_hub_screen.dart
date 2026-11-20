@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../models/cast_target.dart';
 import '../../services/cast_service.dart';
+import '../../services/app_memory.dart';
 import '../../services/webrtc_mirror_service.dart';
 import '../../theme/app_theme.dart';
 import '../plans_screen.dart';
@@ -10,7 +13,6 @@ import 'decoder_channels_page.dart';
 import 'decoder_common.dart';
 import 'decoder_flows.dart';
 import 'decoder_mirror_page.dart';
-import 'decoder_movies_page.dart';
 import 'decoder_receiver_page.dart';
 import 'decoder_remote_page.dart';
 
@@ -19,7 +21,9 @@ class DecoderHubScreen extends StatefulWidget {
   /// The channel / video the user came from (cast button in a player).
   final CastTarget? target;
   final VoidCallback? onCastStarted;
-  const DecoderHubScreen({super.key, this.target, this.onCastStarted});
+  /// Optional saved subpage to reopen after the app is restarted.
+  final String? initialPage;
+  const DecoderHubScreen({super.key, this.target, this.onCastStarted, this.initialPage});
 
   @override
   State<DecoderHubScreen> createState() => _DecoderHubScreenState();
@@ -29,7 +33,47 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
   final CastService svc = CastService.instance;
   final DeeprowssMirrorService mirror = DeeprowssMirrorService.instance;
 
-  void _open(Widget page) => Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => page));
+  bool _restoring = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final page = widget.initialPage;
+    DecoderMemory.save(page ?? 'hub');
+    if (page != null && page != 'hub') {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _restorePage(page));
+    }
+  }
+
+  Future<void> _restorePage(String page) async {
+    if (!mounted || _restoring) return;
+    _restoring = true;
+    // The saved page is being opened above the hub; popping it should return
+    // to the hub rather than reopening the same child again.
+    DecoderMemory.save('hub');
+    switch (page) {
+      case 'cast': await pushDecoderPage<void>(context, const DecoderCastPage(), 'cast'); break;
+      case 'mirror': await pushDecoderPage<void>(context, const DecoderMirrorPage(), 'mirror'); break;
+      case 'receiver': await pushDecoderPage<void>(context, const DecoderReceiverPage(), 'receiver'); break;
+      case 'remote': await pushDecoderPage<void>(context, const DecoderRemotePage(), 'remote'); break;
+      case 'channels': await pushDecoderPage<void>(context, const DecoderChannelsPage(), 'channels'); break;
+      case 'plans': await pushDecoderPage<void>(context, const PlansScreen(), 'plans'); break;
+      default: DecoderMemory.save('hub');
+    }
+    _restoring = false;
+  }
+
+  void _open(Widget page, String pageId) {
+    unawaited(pushDecoderPage<void>(context, page, pageId));
+  }
+
+  @override
+  void dispose() {
+    // The hub is the Decoder entry route; leaving it means the user has
+    // intentionally exited Decoder, so don't reopen it on the next launch.
+    DecoderMemory.clear();
+    super.dispose();
+  }
 
   Widget _tile(IconData icon, String title, String subtitle, VoidCallback onTap) => Container(
         margin: const EdgeInsets.only(bottom: 10),
@@ -115,13 +159,12 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
               ]),
             ])),
           decoderHeading('Connect', 'Pick how you want to use your TV or laptop.'),
-          _tile(Icons.cast_rounded, 'Cast to TV / Kodi', 'Smart TVs and Kodi on your Wi-Fi', () => _open(const DecoderCastPage())),
-          _tile(Icons.screen_share_rounded, 'Screen mirroring', 'Show your phone screen', () => _open(const DecoderMirrorPage())),
-          _tile(Icons.web_rounded, 'Send to receiver page', 'Play channels in a laptop or TV browser', () => _open(const DecoderReceiverPage())),
-          _tile(Icons.gamepad_rounded, 'TV remote', 'Roku, LG, Samsung and playback controls', () => _open(const DecoderRemotePage())),
-          _tile(Icons.live_tv_rounded, 'Supported channels', 'Browse channels grouped by category', () => _open(const DecoderChannelsPage())),
-          _tile(Icons.movie_rounded, 'Movies & series', 'Browse and send movies to Kodi or the receiver', () => _open(const DecoderMoviesPage())),
-          _tile(Icons.workspace_premium_rounded, 'Membership', 'Manage your Deeprowss plan', () => _open(const PlansScreen())),
+          _tile(Icons.cast_rounded, 'Cast to TV / Kodi', 'Smart TVs and Kodi on your Wi-Fi', () => _open(const DecoderCastPage(), 'cast')),
+          _tile(Icons.screen_share_rounded, 'Screen mirroring', 'Show your phone screen', () => _open(const DecoderMirrorPage(), 'mirror')),
+          _tile(Icons.web_rounded, 'Send to receiver page', 'Play channels in a laptop or TV browser', () => _open(const DecoderReceiverPage(), 'receiver')),
+          _tile(Icons.gamepad_rounded, 'TV remote', 'Roku, LG, Samsung and playback controls', () => _open(const DecoderRemotePage(), 'remote')),
+          _tile(Icons.live_tv_rounded, 'Supported channels', 'See what works, then pick how to watch', () => _open(const DecoderChannelsPage(), 'channels')),
+          _tile(Icons.workspace_premium_rounded, 'Membership', 'Manage your Deeprowss plan', () => _open(const PlansScreen(), 'plans')),
         ]),
       ),
     );
