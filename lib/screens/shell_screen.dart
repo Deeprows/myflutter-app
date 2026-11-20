@@ -21,6 +21,7 @@ import '../widgets/app_drawer.dart';
 import '../widgets/brand_tag.dart';
 import '../widgets/prediction_promo_card.dart';
 import 'fan_thread_screen.dart';
+import 'cast_screen.dart';
 import 'fan_zone_screen.dart';
 import 'fan_profile_screen.dart';
 import '../services/auth_service.dart';
@@ -100,6 +101,19 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
       if (pending == 1) _openHighlights();
       if (pending == 3) _openMovies();
     }
+    // Restore the last open Decoder subpage as well as the ordinary app tab.
+    // This runs after the shell has mounted so the Decoder route is pushed
+    // onto the app's root navigator safely.
+    final decoderPage = DecoderMemory.lastPage;
+    if (decoderPage != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).push<void>(MaterialPageRoute<void>(
+          builder: (_) => CastScreen(initialPage: decoderPage),
+        ));
+      });
+    }
+
     PushService.instance.tabRequest.addListener(_openRequestedTab);
 
     // Keep every list current without the person having to pull down.
