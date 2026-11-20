@@ -52,6 +52,7 @@ flutter:
   assets:
     - assets/data/
     - assets/themes/
+    - assets/receiver/
     - assets/splash/splash.png
     - assets/icon/logo_header.png
 
