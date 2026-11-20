@@ -22,6 +22,7 @@ import '../widgets/brand_tag.dart';
 import '../widgets/prediction_promo_card.dart';
 import 'fan_thread_screen.dart';
 import 'cast_screen.dart';
+import 'decoder/decoder_common.dart' show DecoderMemory;
 import 'fan_zone_screen.dart';
 import 'fan_profile_screen.dart';
 import '../services/auth_service.dart';
@@ -105,7 +106,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     // This runs after the shell has mounted so the Decoder route is pushed
     // onto the app's root navigator safely.
     final decoderPage = DecoderMemory.lastPage;
-    if (decoderPage != null) {
+    if (decoderPage != null && decoderPage.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         Navigator.of(context).push<void>(MaterialPageRoute<void>(
