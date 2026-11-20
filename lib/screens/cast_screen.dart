@@ -37,6 +37,7 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    if (widget.target?.canCast == true) svc.lastTarget = widget.target;
     svc.loadDeviceMemory();
     if (svc.devices.isEmpty && !svc.scanning && !svc.casting) svc.scan();
     if (svc.casting) svc.refreshPosition();
@@ -77,9 +78,14 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _cast(CastDevice d) async {
-    final t = widget.target;
+    final t = (widget.target?.canCast == true ? widget.target : null) ?? svc.lastTarget;
     if (t == null || !t.canCast) {
-      _toast('Open a supported video or channel first, then tap Cast.');
+      // No channel chosen yet: keep this TV and let the user pick a channel.
+      await svc.saveDevice(d);
+      _toast('${d.name} saved. Pick a channel, tap its cast icon, then Connect.');
+      if (mounted) {
+        Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const TvScreen()));
+      }
       return;
     }
     setState(() => _busy = true);
@@ -230,7 +236,7 @@ class _CastScreenState extends State<CastScreen> with SingleTickerProviderStateM
         Expanded(child: Text(svc.error!, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w700)))]),
       Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () => _tabs.animateTo(1), child: const Text('View cast log'))),
     ])),
-    if (widget.target != null) _panel(Row(children: [const Icon(Icons.play_circle_outline), const SizedBox(width: 10), Expanded(child: Text('Ready to cast: ${widget.target!.title}', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w700))),
+    if ((widget.target ?? svc.lastTarget) != null) _panel(Row(children: [const Icon(Icons.play_circle_outline), const SizedBox(width: 10), Expanded(child: Text('Ready to cast: ${(widget.target ?? svc.lastTarget)!.title}', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w700))),
       TextButton(onPressed: () => _tabs.animateTo(1), child: const Text('Choose TV'))])),
     _panel(ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.live_tv_rounded, color: Ui.red),
       title: Text('Browse live channels', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)),
