@@ -198,6 +198,12 @@ class FanKind {
 
   static FanKind of(String kind) {
     switch (kind) {
+      case 'fanpost':
+        return const FanKind(
+          'FanDrop',
+          Icons.bolt_rounded,
+          Color(0xFFFFB300),
+        );
       case 'betslip':
         return const FanKind(
           'Bet Slip',
@@ -209,7 +215,7 @@ class FanKind {
       case 'movie':
         return const FanKind('Movie', Icons.movie_creation_outlined, Color(0xFFB58CFF));
       case 'general':
-        return const FanKind('World gist', Icons.public_rounded, Color(0xFF35B8A5));
+        return const FanKind('Gist', Icons.public_rounded, Color(0xFF35B8A5));
       case 'video':
         return const FanKind(
           'Embed video',
