@@ -34,7 +34,7 @@ const _labels = {
   'banter': 'Banter',
   'video': 'Videos',
   'movie': 'Movies',
-  'general': 'World gist',
+  'general': 'Gist',
 };
 const _filterIcons = {
   'all': Icons.dashboard_rounded,
@@ -104,8 +104,6 @@ class _FanPostsFeedState extends State<FanPostsFeed>
     super.initState();
     if (widget.authorId == null) {
       if (AppMemory.getString('thread_scope') == 'following') _scope = 'following';
-      final k = AppMemory.getString('thread_kind');
-      if (k != null && _labels.containsKey(k)) _kind = k;
       _scroll.addListener(() => _scrollMemory.save(_scroll.offset));
     }
     WidgetsBinding.instance.addObserver(this);
@@ -155,7 +153,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
       final data = await FanZoneService.call(
         'posts',
         query: {
-          'kind': _kind,
+          'kind': 'all',
           'scope': _scope,
           if (widget.authorId != null) 'author': widget.authorId!,
           if (more && _next != null) 'before': _next!,
@@ -200,7 +198,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
     }
   }
 
-  Future<void> _create([String kind = 'prediction']) async {
+  Future<void> _create([String kind = 'fanpost']) async {
     if (!await widget.onJoin() || !mounted) return;
     final created = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
@@ -445,7 +443,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
 
   // X-style "What's happening?" box at the top of the home feed.
   Widget _composerRow() => InkWell(
-    onTap: _busy ? null : () => _create('banter'),
+    onTap: _busy ? null : () => _create('fanpost'),
     child: Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       decoration: BoxDecoration(
@@ -599,11 +597,11 @@ class _FanPostsFeedState extends State<FanPostsFeed>
                     ? 'This fan has not posted here yet.'
                     : _scope == 'following'
                     ? 'Follow fans from their profiles to see their posts here.'
-                    : 'Be the first to share a prediction or some gist.',
+                    : 'Be the first to share something with the community.',
                 action: widget.authorId != null
                     ? null
                     : FilledButton.icon(
-                        onPressed: () => _create('banter'),
+                        onPressed: () => _create('fanpost'),
                         icon: const Icon(Icons.edit_rounded, size: 18),
                         label: const Text('Create a post'),
                       ),
@@ -654,7 +652,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
               backgroundColor: Ui.red,
               foregroundColor: Ui.palette.onAccent,
               shape: const CircleBorder(),
-              onPressed: _busy ? null : () => _create('banter'),
+              onPressed: _busy ? null : () => _create('fanpost'),
               child: const Icon(Icons.add_rounded, size: 30),
             ),
           ),
@@ -668,15 +666,13 @@ class _FanPostsFeedState extends State<FanPostsFeed>
           index: _scope == 'following' ? 1 : 0,
           onTap: (i) => _setScope(i == 1 ? 'following' : 'all'),
         ),
-        Row(
-          children: [
-            Expanded(child: _filters()),
-            IconButton(
-              tooltip: 'Match rooms',
-              onPressed: _showRooms,
-              icon: const Icon(Icons.forum_outlined),
-            ),
-          ],
+        Align(
+          alignment: Alignment.centerRight,
+          child: IconButton(
+            tooltip: 'Match rooms',
+            onPressed: _showRooms,
+            icon: const Icon(Icons.forum_outlined),
+          ),
         ),
         const XDivider(),
         Expanded(
@@ -692,7 +688,7 @@ class _FanPostsFeedState extends State<FanPostsFeed>
                   backgroundColor: Ui.red,
                   foregroundColor: Ui.palette.onAccent,
                   shape: const CircleBorder(),
-                  onPressed: _busy ? null : () => _create('banter'),
+                  onPressed: _busy ? null : () => _create('fanpost'),
                   child: const Icon(Icons.add_rounded, size: 30),
                 ),
               ),
@@ -792,7 +788,7 @@ class _ComposePostState extends State<_ComposePost> {
     168: '7 days',
   };
 
-  bool get _pollAllowed => _kind == 'banter' || _kind == 'prediction' || _kind == 'general';
+  bool get _pollAllowed => _kind == 'fanpost' || _kind == 'banter' || _kind == 'prediction' || _kind == 'general';
 
   void _togglePoll() {
     if (_busy) return;
@@ -830,6 +826,7 @@ class _ComposePostState extends State<_ComposePost> {
   }
 
   static const _hints = {
+    'fanpost': 'Share a prediction, bet slip, football take or anything happening in the community…',
     'prediction': 'Arsenal 2-1 Chelsea. Saka scores, Palmer gets one back…',
     'betslip': 'Add a caption for your slip (optional)…',
     'banter': 'What is your take on the football today?',
@@ -838,8 +835,9 @@ class _ComposePostState extends State<_ComposePost> {
     'general': 'What is happening around the world? Share your take…',
   };
 
-  static const _kinds = ['prediction', 'betslip', 'banter', 'video', 'movie', 'general'];
+  static const _kinds = ['fanpost', 'video', 'movie', 'general'];
   static const _blurbs = {
+    'fanpost': 'Share predictions, bet slips, opinions and football conversations in one post.',
     'prediction': 'Call a score or a player moment before kick-off.',
     'betslip': 'Show your slip. Crop out account details first.',
     'banter': 'Share a hot take with the community.',
@@ -1081,10 +1079,7 @@ class _ComposePostState extends State<_ComposePost> {
       pollOptions = _validPoll();
       if (pollOptions == null) return;
     }
-    if (_kind == 'betslip' && _image == null) {
-      _notice('Attach your bet-slip image.');
-      return;
-    }
+    
     if (_kind == 'movie' && _taggedMovie == null) {
       _notice('Choose a movie to tag in your post.');
       return;
@@ -1093,10 +1088,7 @@ class _ComposePostState extends State<_ComposePost> {
       _notice('Keep your movie review under 4,900 characters.');
       return;
     }
-    if (_kind == 'prediction' && _text.text.trim().isEmpty) {
-      _notice('Write your prediction first.');
-      return;
-    }
+    
     if (_image == null && _text.text.trim().isEmpty && !(_kind == 'movie' && _taggedMovie != null)) {
       _notice('Write something or attach an image.');
       return;
@@ -1111,7 +1103,7 @@ class _ComposePostState extends State<_ComposePost> {
           ? '🎬 Movie: ${_taggedMovie!.name}${_taggedMovie!.date == null ? '' : ' (${_taggedMovie!.date!.year})'}\n\n${_text.text.trim()}'
           : _text.text;
       await FanZoneService.publish(
-        kind: _kind,
+        kind: _kind == 'fanpost' ? 'banter' : _kind,
         isAd: _asAd,
         text: postText,
         image: _image,
@@ -1622,9 +1614,7 @@ class _ComposePostState extends State<_ComposePost> {
         label: Text(
           _picking
               ? 'Opening photos…'
-              : _kind == 'betslip'
-              ? 'Attach your bet slip'
-              : 'Attach a photo',
+              : 'Attach a photo or bet slip',
         ),
         style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
       ),
