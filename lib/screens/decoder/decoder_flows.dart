@@ -125,15 +125,18 @@ Future<void> castToTv(BuildContext context, CastTarget target) async {
 
 Future<void> sendToReceiver(BuildContext context, CastTarget target) async {
   if (!await PremiumGate.allowDecoder(context) || !context.mounted) return;
-  final ready = await prepareTarget(context, target);
-  if (ready == null || !context.mounted) return;
-  final url = ready.url;
-  if (url == null || url.isEmpty) {
-    decoderToast(context, 'There is no video link to send.');
+  // Receiver mode deliberately does NOT run StreamResolver / StreamFinder.
+  // Send the original page URL immediately: the receiver owns the iframe and
+  // lets the provider initialise its own scripts, cookies and player.
+  final url = (target.url ?? '').trim();
+  if (url.isEmpty || !url.startsWith(RegExp(r'https?://', caseSensitive: false))) {
+    decoderToast(context, 'This item has no valid web address to send.');
     return;
   }
   final mirror = DeeprowssMirrorService.instance;
-  final ok = await mirror.sendChannel(url: url, title: ready.title, kind: ready.kind);
+  final kind = target.kind == StreamKind.invalid ? StreamKind.embed : target.kind;
+  final ok = await mirror.sendChannel(url: url, title: target.title, kind: kind,
+      referer: target.referer, userAgent: target.userAgent);
   if (!context.mounted) return;
   if (!ok) {
     decoderToast(context, mirror.error ?? 'Could not start the receiver session.');
