@@ -130,7 +130,7 @@ Future<void> sendToReceiver(BuildContext context, CastTarget target) async {
     return;
   }
   final mirror = DeeprowssMirrorService.instance;
-  final ok = await mirror.sendChannel(url: url, title: ready.title, kind: ready.kind);
+  final ok = await mirror.sendChannel(url: url, title: ready.title, kind: ready.kind, referer: ready.referer, userAgent: ready.userAgent);
   if (!context.mounted) return;
   if (!ok) {
     decoderToast(context, mirror.error ?? 'Could not start the receiver session.');
