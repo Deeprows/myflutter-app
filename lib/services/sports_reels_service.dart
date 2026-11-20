@@ -368,6 +368,8 @@ class SportsReelsService {
         return '\u{1F3CE}\uFE0F F1';
       case 'sports':
         return '\u26BD Sports';
+      case 'news':
+        return '\u{1F4F0} News';
       case 'other':
         return '\u{1F3C5} More sports';
       default:
