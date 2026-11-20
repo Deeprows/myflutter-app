@@ -497,7 +497,7 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
                   Padding(
                     padding: const EdgeInsets.all(20),
                     child: Text(
-                      'Headlines from BBC Sport and Sky Sports. Tap a story to read the original article.',
+                      'Latest headlines from BBC News, BBC Sport, Al Jazeera and Sky Sports. Tap a story to read the original article.',
                       style: TextStyle(color: Ui.dim, fontSize: 11),
                       textAlign: TextAlign.center,
                     ),
