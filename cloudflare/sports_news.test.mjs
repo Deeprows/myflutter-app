@@ -17,8 +17,8 @@ globalThis.fetch=async url=>{calls.push(String(url));if(offline || skyDown && St
  const sky=String(url).includes('skysports');
  return new Response(rss(sky?item('Newest story','https://www.skysports.com/football/news/1',now-30000,'https://e0.365dm.com/img.jpg')+item('Sports &amp; goals','https://www.skysports.com/football/news/2',now-120000):item()),{headers:{'content-type':'text/xml'}});};
 const env={};const call=(category='all',e=env,method='GET')=>worker.fetch(new Request('https://worker.test/sports-news?category='+category,{method}),e,{});
-let response=await call();assert.equal(response.status,200);let data=await response.json();assert.equal(data.items.length,2);assert.equal(data.items[0].title,'Newest story');assert.equal(data.items[1].source,'BBC Sport');assert.equal(calls.length,2);
-await call();assert.equal(calls.length,2,'Fresh cache avoids repeated publisher requests');
+let response=await call();assert.equal(response.status,200);let data=await response.json();assert.equal(data.items.length,2);assert.equal(data.items[0].title,'Newest story');assert.equal(data.items[1].source,'BBC Sport');assert.equal(calls.length,4);
+await call();assert.equal(calls.length,4,'Fresh cache avoids repeated publisher requests');
 assert.equal((await call('invalid')).status,400);assert.equal((await call('all',env,'POST')).status,405);
 calls=[];await Promise.all([call('football'),call('football')]);assert.equal(calls.length,2,'Concurrent requests share a fetch');
 calls=[];await call('cricket');assert.equal(calls.length,1);assert.ok(calls[0].includes('/cricket/rss.xml'));
