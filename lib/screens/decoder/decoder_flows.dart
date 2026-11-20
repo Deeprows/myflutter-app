@@ -118,7 +118,7 @@ Future<void> chooseConnectivity(BuildContext context, CastTarget target) async {
 Future<void> castToTv(BuildContext context, CastTarget target) async {
   final ready = await prepareTarget(context, target);
   if (ready == null || !context.mounted) return;
-  await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => DecoderCastPage(target: ready)));
+  await pushDecoderPage<void>(context, DecoderCastPage(target: ready), 'cast');
 }
 
 Future<void> sendToReceiver(BuildContext context, CastTarget target) async {
@@ -153,5 +153,5 @@ Future<void> sendToReceiver(BuildContext context, CastTarget target) async {
     decoderToast(context, mirror.error ?? 'Could not start the receiver session.');
     return;
   }
-  await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => const DecoderReceiverPage()));
+  await pushDecoderPage<void>(context, const DecoderReceiverPage(), 'receiver');
 }
