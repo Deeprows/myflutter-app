@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/cast_service.dart';
+import '../../services/app_memory.dart';
 import '../../theme/app_theme.dart';
 
 /// Short message that disappears by itself (replaces on-screen logs).
@@ -153,4 +154,17 @@ Future<bool> decoderKodiLogin(BuildContext context) async {
   if (ok != true) return false;
   await CastService.instance.setKodiLogin(user, pass);
   return true;
+}
+
+
+/// Push a Decoder subpage while remembering both the current page and the
+/// destination. When the user returns, restore the page underneath it.
+Future<T?> pushDecoderPage<T>(BuildContext context, Widget page, String pageId) async {
+  final previous = DecoderMemory.lastPage ?? 'hub';
+  DecoderMemory.save(pageId);
+  final result = await Navigator.of(context).push<T>(
+    MaterialPageRoute<T>(builder: (_) => page),
+  );
+  DecoderMemory.save(previous);
+  return result;
 }
