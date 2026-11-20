@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets"
+        xmlns:tizen="http://tizen.org/ns/widgets"
+        id="http://deeprows.com/tv/receiver"
+        version="1.0.0" viewmodes="maximized">
+  <tizen:application id="deeprowsTV.DeeprowssReceiver" package="deeprowsTV" required_version="5.5"/>
+  <tizen:profile name="tv-samsung"/>
+  <content src="index.html"/>
+  <name>Deeprowss TV Receiver</name>
+  <icon src="icon.png"/>
+  <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"/>
+</widget>
