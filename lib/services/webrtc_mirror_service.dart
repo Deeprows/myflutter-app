@@ -96,7 +96,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
   // browsers (mixed-content blocking), so the TV opens this LAN URL directly.
   String? get pairingUrl => _url == null || _pin == null
       ? null
-      : Uri.parse('https://deeprows.github.io/myflutter-app/').replace(queryParameters: {'host': Uri.parse(_url!).host + ':' + Uri.parse(_url!).port.toString(), 'pin': _pin!}).toString();
+      : Uri.parse('https://deeprows.github.io/myflutter-app/assets/receiver/').replace(queryParameters: {'host': Uri.parse(_url!).host + ':' + Uri.parse(_url!).port.toString(), 'pin': _pin!}).toString();
 
   Future<void> start({bool captureScreen = true}) async {
     if (running || _starting) return;
