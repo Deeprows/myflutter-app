@@ -32,7 +32,7 @@ class DecoderReceiverPage extends StatelessWidget {
               Icon(Icons.circle, color: m.connected ? Colors.green : Ui.muted, size: 10),
             ]),
             const SizedBox(height: 10),
-            Text('The TV plays the selected media directly. Send movies from the movie player's Cast button and choose 'Send to receiver page'. Your phone then works as the remote and can be locked.',
+            Text("The TV plays the selected media directly. Send movies from the movie player's Cast button and choose 'Send to receiver page'. Your phone then works as the remote and can be locked.",
                 style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.45)),
             const SizedBox(height: 14),
             if (!m.running)
@@ -44,8 +44,7 @@ class DecoderReceiverPage extends StatelessWidget {
               ))
             else ...[
               SizedBox(width: double.infinity, child: FilledButton.icon(
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => const DecoderChannelsPage(only: 'receiver'))),
+                onPressed: () => pushDecoderPage<void>(context, const DecoderChannelsPage(only: 'receiver'), 'channels'),
                 icon: const Icon(Icons.video_library_outlined), label: const Text('Choose a TV channel'),
               )),
               const SizedBox(height: 8),
