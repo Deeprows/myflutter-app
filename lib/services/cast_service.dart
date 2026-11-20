@@ -388,7 +388,7 @@ class CastService extends ChangeNotifier {
       try {
         final found = await _resolveLink(url, referer: referer, userAgent: userAgent);
         if (found == null) {
-          error = 'This link is a web page that hides its video, so it cannot be sent to Kodi / the TV as a stream. Use the Mirror tab to show it on the screen instead.';
+          error = 'Kodi cannot play an HTML embed page directly, and Deeprowss could not resolve a direct media stream from this page. Send it to the browser Receiver iframe instead, or use a Kodi add-on/provider that exposes a direct stream.';
           _log('Could not find a stream inside ${_short(url)}');
           notifyListeners();
           return false;
@@ -421,7 +421,7 @@ class CastService extends ChangeNotifier {
 
     // 2. Kodi: drive it through its own API (no relay, headers are native).
     if (d.isKodi) {
-      final r = await _castKodi(d, url, title, headers, kind);
+      final r = await _castKodi(d, url, title, headers);
       if (r != _KodiResult.unavailable) return r == _KodiResult.ok;
       _log('Kodi web control not usable, falling back to DLNA.');
     }
@@ -754,7 +754,7 @@ class CastService extends ChangeNotifier {
   }
 
   Future<_KodiResult> _castKodi(
-      CastDevice d, String url, String title, Map<String, String> headers, StreamKind? kind) async {
+      CastDevice d, String url, String title, Map<String, String> headers) async {
     if (connecting) return _KodiResult.failed;
     connecting = true;
     error = null;
@@ -775,21 +775,11 @@ class CastService extends ChangeNotifier {
       _kodiPort = port;
       await _kodiPrepare(d, port, title);
       if (casting) await stop();
-      // Prefer a phone-side HTTP relay for HTTPS streams and header-gated
-      // hosts. Kodi's native URL|Header syntax is inconsistent across input
-      // stream add-ons; the relay applies headers and rewrites HLS segment URLs.
-      var file = url;
-      if (headers.isNotEmpty || url.toLowerCase().startsWith('https://')) {
-        _upHeaders = headers;
-        final origin = await _ensureServer();
-        final name = kind == StreamKind.hls
-            ? 'index.m3u8'
-            : kind == StreamKind.dash
-                ? 'index.mpd'
-                : _nameOf(url);
-        file = '$origin/p/${_b64(url)}/$name';
-        _log('Kodi relay enabled for ${headers.isEmpty ? 'HTTPS compatibility' : 'required request headers'}.');
-      }
+      // Kodi understands "url|Header=value&Header2=value" natively.
+      final pipe = headers.entries
+          .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+          .join('&');
+      final file = pipe.isEmpty ? url : '$url|$pipe';
       await _rpc(d.host, port, 'Player.Open', {'item': {'file': file}});
       _log('Kodi accepted Player.Open.');
       _kodiMode = true;
@@ -832,24 +822,13 @@ class CastService extends ChangeNotifier {
     final port = _kodiPort;
     if (d == null || port == null) return;
     try {
-      var id = _kodiPlayerId ?? await _kodiActivePlayer();
-      // Kodi can take a moment to expose the player after Player.Open.
-      for (var attempt = 0; id == null && attempt < 3; attempt++) {
-        await Future<void>.delayed(const Duration(milliseconds: 350));
-        id = await _kodiActivePlayer();
-      }
-      if (id == null) {
-        _log('Kodi play/pause: no active player was reported.');
-        error = 'Kodi has not started the video yet. Wait a moment and try again.';
-      } else {
-        await _rpc(d.host, port, 'Player.PlayPause', {'playerid': id, 'play': wantPlaying});
-        tvPlaying = wantPlaying;
-        BackgroundPlayback.setPlaying(wantPlaying, fromCast: true);
-        _log(wantPlaying ? 'Kodi playback resumed.' : 'Kodi playback paused.');
-      }
+      final id = await _kodiActivePlayer();
+      if (id == null) return;
+      await _rpc(d.host, port, 'Player.PlayPause', {'playerid': id, 'play': wantPlaying});
+      tvPlaying = wantPlaying;
+      BackgroundPlayback.setPlaying(wantPlaying, fromCast: true);
     } catch (e) {
       _log('Kodi play/pause failed: $e');
-      error = 'Could not control Kodi playback: $e';
     }
     notifyListeners();
   }
@@ -1026,17 +1005,6 @@ class CastService extends ChangeNotifier {
         if (id != null) {
           _everPlayed = true;
           _stoppedPolls = 0;
-          try {
-            final props = await _rpc(d.host, _kodiPort!, 'Player.GetProperties',
-                {'playerid': id, 'properties': ['speed']});
-            final speed = props is Map ? props['speed'] : null;
-            final playing = speed is num ? speed != 0 : true;
-            if (tvPlaying != playing) {
-              tvPlaying = playing;
-              BackgroundPlayback.setPlaying(playing, fromCast: true);
-              notifyListeners();
-            }
-          } catch (_) {}
         } else if (_everPlayed) {
           if (++_stoppedPolls >= 2) _finish('Kodi stopped playing.');
         } else if (++_stoppedPolls >= 3) {
