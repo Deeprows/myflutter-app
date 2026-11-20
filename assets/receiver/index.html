@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark"><meta name="theme-color" content="#080b12">
+  <title>Deeprowss TV</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#080b12;color:#f7f8fb;--gold:#ffc629;--muted:#a7afbd;--line:#293141}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(ellipse at 50% -20%,#263044 0,transparent 55%),#080b12}
+    body{min-height:100vh;padding:clamp(14px,3vw,34px);display:grid;place-items:center}.shell{width:min(100%,980px)}
+    .brand{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 20px}.logo{font-size:clamp(22px,4vw,32px);font-weight:950;letter-spacing:.1em}.tag{color:var(--muted);font-size:12px}
+    .panel{background:linear-gradient(145deg,#171d29,#10151e);border:1px solid var(--line);border-radius:24px;padding:clamp(18px,3vw,30px);box-shadow:0 24px 80px #0007}
+    h1,h2,p{margin-top:0}h1{font-size:clamp(21px,4vw,30px);margin-bottom:8px}p{color:var(--muted);line-height:1.55}
+    input{display:block;width:100%;padding:15px 16px;border:1px solid #3a465a;border-radius:13px;background:#090e17;color:white;font-size:17px;outline:none;margin:12px 0}input:focus{border-color:var(--gold)}
+    button{border:0;border-radius:13px;padding:13px 18px;background:var(--gold);color:#17130a;font-weight:850;font-size:15px;cursor:pointer}button:disabled{opacity:.5;cursor:default}.secondary{background:#202938;color:#f7f8fb;border:1px solid #39465a}
+    #status{min-height:22px;color:var(--muted);font-size:13px;margin-top:14px}.hint{font-size:12px;color:#8792a4;margin-top:14px}
+    .player{display:none}.player-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.title{font-weight:850;font-size:clamp(17px,3vw,22px);overflow-wrap:anywhere}.live{border:1px solid #315f43;color:#78d99a;border-radius:999px;padding:6px 10px;font-size:11px;white-space:nowrap}
+    .stage{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:17px;overflow:hidden;border:1px solid #303848}.stage video,.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;object-fit:contain;display:none}.controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;margin-top:15px}.controls button{min-width:82px}.progress{display:flex;gap:12px;align-items:center;margin-top:14px;color:var(--muted);font-size:12px}.progress input{margin:0;padding:0;accent-color:var(--gold)}.volume{max-width:180px}.foot{color:#7f899a;font-size:11px;text-align:center;margin-top:17px}
+    @media(max-width:520px){body{padding:12px}.panel{border-radius:18px}.brand{align-items:flex-start}.controls button{flex:1;min-width:65px;padding:12px 8px}.progress{flex-wrap:wrap}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="brand"><div><div class="logo">DEEProWSS</div><div class="tag">SMART TV RECEIVER</div></div><div class="tag" id="connectionBadge">NOT CONNECTED</div></header>
+    <section class="panel" id="join">
+      <h1>Connect your TV</h1><p>Open the same receiver address shown in Deeprowss, then enter the current six-digit PIN.</p>
+      <input id="host" inputmode="url" autocomplete="url" aria-label="Phone address" placeholder="Phone address · 192.168.1.20:12345">
+      <input id="pin" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" aria-label="Six digit PIN" placeholder="6-digit PIN">
+      <button id="connect">Connect receiver</button><div id="statusJoin" role="status">Ready to connect on your Wi-Fi network.</div>
+      <div class="hint">Keep this page open while receiving media. The receiver address stays the same; only the pairing PIN changes for a new session.</div>
+    </section>
+    <section class="panel player" id="playerPanel">
+      <div class="player-head"><div class="title" id="mediaTitle">Ready to play</div><span class="live" id="playState">CONNECTED</span></div>
+      <div class="stage"><video id="screen" playsinline autoplay controls></video><iframe id="movieFrame" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope" allowfullscreen referrerpolicy="no-referrer-when-downgrade" title="Deeprowss movie embed"></iframe></div>
+      <div class="controls"><button class="secondary" id="rewind">−10 sec</button><button id="play">▶ Play</button><button class="secondary" id="pause">Ⅱ Pause</button><button class="secondary" id="forward">+10 sec</button><button class="secondary" id="fullscreen">⛶ Fullscreen</button><button class="secondary" id="stop">■ Stop</button></div>
+      <div class="progress"><span id="currentTime">00:00</span><input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek"><span id="totalTime">LIVE</span><label>Vol <input class="volume" id="volume" type="range" min="0" max="100" value="100" aria-label="Volume"></label></div>
+      <div id="statusPlayer" role="status">Connected.</div>
+      <div class="foot">Movie iframe controls depend on the source provider. Some sites disable embedding or remote control.</div>
+    </section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js"></script>
+  <script>
+  (() => {
+    const $ = id => document.getElementById(id);
+    const pinInput=$('pin'),hostInput=$('host'),video=$('screen'),frame=$('movieFrame'),join=$('join'),panel=$('playerPanel');
+    let socket,peer,hls,dash,urlPlaying=false,iframePlaying=false,currentTitle='';const pendingCandidates=[];
+    const params=new URLSearchParams(location.search);if(/^\d{6}$/.test(params.get('pin')||''))pinInput.value=params.get('pin');hostInput.value=params.get('host')||location.host;
+    const say=value=>{$('statusJoin').textContent=value;$('statusPlayer').textContent=value;};
+    const send=value=>{if(socket&&socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify(value));};
+    const report=value=>send({type:'receiver-status',message:value});
+    const clock=v=>{if(!Number.isFinite(v))return '00:00';const n=Math.floor(v);return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');};
+    function clearMedia(){urlPlaying=false;iframePlaying=false;if(hls){try{hls.destroy();}catch(_){}hls=null;}if(dash){try{dash.reset();}catch(_){}dash=null;}video.pause();video.removeAttribute('src');video.srcObject=null;frame.src='about:blank';video.style.display='none';frame.style.display='none';$('seek').value=0;$('currentTime').textContent='00:00';$('totalTime').textContent='LIVE';}
+    function showJoin(msg){clearMedia();panel.style.display='none';join.style.display='block';say(msg);}
+    function safeUrl(raw){try{const u=new URL(raw);return ['http:','https:'].includes(u.protocol)?u.href:null;}catch(_){return null;}}
+    function playEmbed(raw,title){const url=safeUrl(raw);if(!url){say('This movie embed URL is invalid.');return;}clearMedia();iframePlaying=true;currentTitle=title||'Movie';$('mediaTitle').textContent=currentTitle;$('playState').textContent='EMBED';panel.style.display='block';join.style.display='none';
+      const u=new URL(url);if(/(^|\.)youtube\.com$/.test(u.hostname)&&u.pathname.includes('/embed/')){u.searchParams.set('enablejsapi','1');u.searchParams.set('origin',location.origin);}frame.src=u.href;frame.style.display='block';say('Movie embed loaded. Use the controls below; provider support varies.');report('Movie embed loaded: '+currentTitle);}
+    function playUrl(raw,kind,title){const url=safeUrl(raw);if(!url){say('The media URL is invalid.');return;}if(kind==='embed'){playEmbed(url,title);return;}clearMedia();urlPlaying=true;currentTitle=title||'Media';$('mediaTitle').textContent=currentTitle;$('playState').textContent='PLAYING';panel.style.display='block';join.style.display='none';video.srcObject=null;video.muted=false;video.volume=Number($('volume').value)/100;video.style.display='block';
+      const start=()=>video.play().then(()=>{say('Playing '+currentTitle);report('Playing '+currentTitle);}).catch(()=>say('Playback is ready. Press Play on the receiver or phone.'));
+      if(kind==='dash'||/\.mpd(\?|$)/i.test(url)){if(!window.dashjs){say('DASH playback library is unavailable.');return;}dash=dashjs.MediaPlayer().create();dash.initialize(video,url,true);dash.on(dashjs.MediaPlayer.events.ERROR,e=>{say('DASH playback failed. This source may require provider authorization or a supported codec.');report('DASH playback failed: '+(e.error||'unknown'));});return;}
+      const isHls=kind==='hls'||/\.m3u8(\?|$)/i.test(url);
+      if(isHls&&!video.canPlayType('application/vnd.apple.mpegurl')){if(!window.Hls||!Hls.isSupported()){say('This browser cannot play HLS.');return;}hls=new Hls({enableWorker:true,lowLatencyMode:true});hls.on(Hls.Events.MANIFEST_PARSED,start);hls.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal){say('HLS error: '+d.details+'. This source may require provider headers or authorization.');report('HLS playback failed: '+d.details);}});hls.loadSource(url);hls.attachMedia(video);}else{video.src=url;video.onerror=()=>{say('Could not play this direct stream. The provider may require headers, cookies, DRM or a supported codec.');report('Direct media playback failed.');};start();}}
+    function iframeCommand(command,value){if(!frame.contentWindow)return;
+      // YouTube's documented iframe API message shape, plus common embed
+      // player conventions. Cross-origin providers may ignore these messages.
+      const yt={event:'command',func:({play:'playVideo',pause:'pauseVideo',stop:'stopVideo',mute:'mute',unmute:'unMute',volume:'setVolume',rewind:'seekTo',forward:'seekTo'})[command],args:[]};
+      if(command==='volume')yt.args=[Number(value)||0];
+      if(command==='rewind'||command==='forward'){yt.func='seekTo';yt.args=[command==='rewind'?-10:10,true];}
+      try{frame.contentWindow.postMessage(JSON.stringify(yt),'*');frame.contentWindow.postMessage({type:'player:command',command,value},'*');frame.contentWindow.postMessage({method:command==='stop'?'unload':command,value},'*');frame.contentWindow.postMessage({command,value},'*');}catch(_){}
+      say('Remote command sent. This provider may limit external playback controls.');}
+    function remote(command,value){if(iframePlaying){if(command==='fullscreen'){frame.requestFullscreen?.().catch?.(()=>{});return;}iframeCommand(command,value);return;}if(!urlPlaying)return;
+      if(command==='play')video.play().catch(()=>{});else if(command==='pause')video.pause();else if(command==='stop'){clearMedia();say('Playback stopped.');report('Playback stopped.');return;}else if(command==='rewind')video.currentTime=Math.max(0,video.currentTime-10);else if(command==='forward')video.currentTime=Math.min(video.duration||Infinity,video.currentTime+10);else if(command==='mute')video.muted=!video.muted;else if(command==='volume'){video.volume=Math.max(0,Math.min(1,Number(value)/100));video.muted=video.volume===0;}else if(command==='seek'&&Number.isFinite(Number(value)))video.currentTime=Number(value);else if(command==='fullscreen')video.requestFullscreen?.().catch?.(()=>{});}
+    async function connect(){video.muted=false;video.volume=1;if(socket&&socket.readyState===WebSocket.OPEN)return;pendingCandidates.length=0;if(peer){peer.close();peer=null;}const pin=pinInput.value.trim();let host=hostInput.value.trim();if(host.startsWith('http://')||host.startsWith('https://')){try{host=new URL(host).host;}catch(_){host='';}}if(!host||!/^\d{6}$/.test(pin)){say('Enter the phone address and six-digit PIN.');return;}
+      $('connect').disabled=true;say('Connecting to Deeprowss…');socket=new WebSocket(`ws://${host}/ws?pin=${encodeURIComponent(pin)}`);
+      socket.onopen=()=>{$('connectionBadge').textContent='CONNECTED';say('Connected. Waiting for media…');send({type:'ready'});};
+      socket.onerror=()=>{say('Could not connect. Check Wi-Fi, address and PIN.');$('connect').disabled=false;$('connectionBadge').textContent='OFFLINE';};
+      socket.onclose=()=>{$('connectionBadge').textContent='DISCONNECTED';$('connect').disabled=false;if(urlPlaying||iframePlaying){say('Phone disconnected. Current media remains on the receiver.');return;}showJoin('Connection closed. Re-enter the current PIN to reconnect.');if(peer){peer.close();peer=null;}};
+      socket.onmessage=async event=>{try{const msg=JSON.parse(event.data);if(msg.type==='play'&&typeof msg.url==='string'){if(peer){peer.close();peer=null;}playUrl(msg.url,msg.kind||'video',msg.title||'Deeprowss media');}
+        else if(msg.type==='remote'){remote(msg.command,msg.value);}
+        else if(msg.type==='offer'){clearMedia();peer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]});peer.ontrack=e=>{video.srcObject=e.streams[0];video.style.display='block';frame.style.display='none';panel.style.display='block';join.style.display='none';video.muted=false;video.play().catch(()=>{video.muted=true;video.play().catch(()=>{});say('Mirroring video. Browser autoplay blocked audio; tap the player to enable sound.');});};peer.onicecandidate=e=>{if(e.candidate)send({type:'candidate',candidate:e.candidate.toJSON()});};peer.onconnectionstatechange=()=>{if(peer.connectionState==='connected'){say('Screen mirroring connected');report('Screen mirroring connected');}if(['failed','disconnected'].includes(peer.connectionState))say('Video connection interrupted');};await peer.setRemoteDescription({type:msg.sdpType||'offer',sdp:msg.sdp});while(pendingCandidates.length)await peer.addIceCandidate(pendingCandidates.shift());const answer=await peer.createAnswer();await peer.setLocalDescription(answer);send({type:'answer',sdp:answer.sdp,sdpType:answer.type});}
+        else if(msg.type==='candidate'){if(peer&&peer.remoteDescription)await peer.addIceCandidate(msg.candidate);else pendingCandidates.push(msg.candidate);}}
+        catch(e){say('Receiver error: '+e.message);}};
+    }
+    $('connect').addEventListener('click',connect);pinInput.addEventListener('keydown',e=>{if(e.key==='Enter')connect();});
+    $('play').onclick=()=>remote('play');$('pause').onclick=()=>remote('pause');$('stop').onclick=()=>remote('stop');$('rewind').onclick=()=>remote('rewind');$('forward').onclick=()=>remote('forward');$('fullscreen').onclick=()=>remote('fullscreen');
+    $('volume').oninput=e=>remote('volume',e.target.value);$('seek').oninput=e=>{if(urlPlaying&&Number.isFinite(video.duration))remote('seek',Number(e.target.value)/1000*video.duration);};
+    video.addEventListener('timeupdate',()=>{if(!urlPlaying||!Number.isFinite(video.duration)||video.duration<=0)return;$('seek').value=Math.round(video.currentTime/video.duration*1000);$('currentTime').textContent=clock(video.currentTime);$('totalTime').textContent=clock(video.duration);});
+    video.addEventListener('play',()=>{$('playState').textContent='PLAYING';report('Playing '+currentTitle);});video.addEventListener('pause',()=>{$('playState').textContent='PAUSED';report('Paused '+currentTitle);});
+    if(hostInput.value&&pinInput.value)setTimeout(connect,400);
+  })();
+  </script>
+</body>
+</html>
