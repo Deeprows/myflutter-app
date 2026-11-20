@@ -436,6 +436,9 @@ jobs:
           mkdir -p site/cast
           cp receiver/deeprowss-mirror-receiver/index.html site/index.html
           cp receiver/deeprowss-cast-receiver/index.html site/cast/index.html
+          cp receiver/deeprowss-mirror-receiver/manifest.webmanifest site/manifest.webmanifest
+          cp receiver/deeprowss-mirror-receiver/sw.js site/sw.js
+          cp -R receiver/deeprowss-mirror-receiver/icons site/icons
           touch site/.nojekyll
 
       - name: Upload receiver website
