@@ -91,7 +91,7 @@ class DecoderMirrorPage extends StatelessWidget {
                 onChanged: m.running ? null : m.setAlternateCapture,
                 title: Text('Alternate capture (for sound)', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)),
                 subtitle: Text(
-                  'Try this if the TV shows video but has no sound. Takes effect the next time you start mirroring.',
+                  'Uses Android display capture with an audio track when the phone supports it. Some Android versions, apps and DRM-protected video block audio capture. Takes effect the next time you start mirroring.',
                   style: TextStyle(color: Ui.muted, fontSize: 12),
                 ),
               ),
