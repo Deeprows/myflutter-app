@@ -227,23 +227,36 @@ class _DecoderChannelsPageState extends State<DecoderChannelsPage> {
               Expanded(
                 child: shown.isEmpty
                     ? Center(child: Text('No channels here.', style: TextStyle(color: Ui.muted)))
-                    : ListView.builder(
-                        itemCount: shown.length,
-                        itemBuilder: (context, i) {
-                          final c = shown[i];
-                          return ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Ui.panel,
-                              backgroundImage: (c.logo ?? '').isEmpty ? null : NetworkImage(c.logo!),
-                              onBackgroundImageError: (c.logo ?? '').isEmpty ? null : (_, _) {},
-                              child: (c.logo ?? '').isEmpty ? Icon(c.category.icon, size: 18, color: Ui.muted) : null,
-                            ),
-                            title: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            subtitle: Text(c.category.label, style: TextStyle(color: Ui.muted, fontSize: 11)),
-                            trailing: _badge(_info[c.url]),
-                            onTap: () => _open(c),
-                          );
-                        },
+                    : ListView(
+                        children: [
+                          for (final category in ChannelCategory.values)
+                            if (shown.any((c) => c.category == category))
+                              Theme(
+                                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                                child: ExpansionTile(
+                                  initiallyExpanded: _query.isNotEmpty || category == ChannelCategory.sports,
+                                  leading: Icon(category.icon, color: Ui.red),
+                                  title: Text(category.label,
+                                      style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900)),
+                                  trailing: Text('${shown.where((c) => c.category == category).length}',
+                                      style: TextStyle(color: Ui.muted, fontWeight: FontWeight.w700)),
+                                  children: [
+                                    for (final c in shown.where((c) => c.category == category))
+                                      ListTile(
+                                        leading: CircleAvatar(
+                                          backgroundColor: Ui.panel,
+                                          backgroundImage: (c.logo ?? '').isEmpty ? null : NetworkImage(c.logo!),
+                                          onBackgroundImageError: (c.logo ?? '').isEmpty ? null : (_, _) {},
+                                          child: (c.logo ?? '').isEmpty ? Icon(c.category.icon, size: 18, color: Ui.muted) : null,
+                                        ),
+                                        title: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                        trailing: _badge(_info[c.url]),
+                                        onTap: () => _open(c),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                        ],
                       ),
               ),
             ]),
