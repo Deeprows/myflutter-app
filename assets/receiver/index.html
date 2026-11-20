@@ -5,19 +5,19 @@
   <meta name="color-scheme" content="dark"><meta name="theme-color" content="#080b12">
   <title>Deeprowss TV</title>
   <style>
-    :root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#000;color:#fff;--gold:#ffc629;--muted:#c1c7d0}
+    :root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#05080e;color:#fff;--gold:#ffc629;--muted:#c1c7d0}
     *{box-sizing:border-box}
     html,body{width:100%;height:100%;min-height:100%;margin:0;padding:0;overflow:hidden;background:#000}
-    body{display:block}
+    body{display:block;background:radial-gradient(ellipse at 50% 42%,#17263b 0%,#080d17 48%,#030509 100%)}
     .shell{width:100vw;height:100dvh;max-width:none;margin:0;padding:0}
     .brand{position:fixed;z-index:5;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:linear-gradient(#000b,transparent);transition:opacity .25s}
-    .logo{font-size:clamp(16px,2vw,24px);font-weight:950;letter-spacing:.1em}.tag{color:#ddd;font-size:12px}
+    .logo{font-size:clamp(16px,2vw,24px);font-weight:950;letter-spacing:.1em;color:#ffc629;text-shadow:0 2px 20px #ffc62944}.tag{color:#ddd;font-size:12px}
     .panel{background:#000;border:0;border-radius:0;padding:0;box-shadow:none}
     h1,h2,p{margin-top:0}h1{font-size:clamp(21px,4vw,30px);margin-bottom:8px}p{color:var(--muted);line-height:1.55}
     input{display:block;width:100%;padding:15px 16px;border:1px solid #3a465a;border-radius:13px;background:#090e17;color:white;font-size:17px;outline:none;margin:12px 0}input:focus{border-color:var(--gold)}
-    button{border:0;border-radius:12px;padding:12px 18px;background:var(--gold);color:#17130a;font-weight:850;font-size:15px;cursor:pointer}button:disabled{opacity:.5;cursor:default}.secondary{background:#202938;color:#f7f8fb;border:1px solid #39465a}
+    button{border:0;border-radius:12px;padding:12px 18px;background:linear-gradient(135deg,#ffd45a,#f4ad13);color:#17130a;font-weight:850;font-size:15px;cursor:pointer;box-shadow:0 5px 18px #ffc62922}button:disabled{opacity:.5;cursor:default}.secondary{background:#202938;color:#f7f8fb;border:1px solid #39465a}
     .join-actions{display:grid;grid-template-columns:1fr 1.3fr;gap:10px}.join-actions button{min-height:48px}#scanner{margin-top:14px;text-align:center}#scanner[hidden]{display:none}#qrVideo{width:100%;max-height:260px;object-fit:cover;border-radius:12px;background:#000}#statusJoin{min-height:22px;color:var(--muted);font-size:13px;margin-top:14px}.hint{font-size:12px;color:#8792a4;margin-top:14px}
-    #join{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92vw,520px);padding:24px;border-radius:18px;background:#111923;border:1px solid #303848}
+    #join{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92vw,560px);padding:clamp(24px,4vw,42px);border-radius:22px;background:linear-gradient(145deg,rgba(24,36,54,.97),rgba(8,13,22,.98));border:1px solid #35445b;box-shadow:0 28px 90px #000b,0 0 60px #1b355522}
     .player{display:none;position:fixed;inset:0;width:100vw;height:100dvh;overflow:hidden;z-index:2}
     .player-head{position:absolute;z-index:4;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:18px 22px;background:linear-gradient(#000c,transparent);transition:opacity .25s}
     .title{font-weight:850;font-size:clamp(16px,2.2vw,24px);overflow-wrap:anywhere}.live{border:1px solid #315f43;color:#78d99a;border-radius:999px;padding:6px 10px;font-size:11px;white-space:nowrap}
@@ -135,7 +135,7 @@
 
     $('volume').oninput=e=>remote('volume',e.target.value);$('seek').oninput=e=>{if(urlPlaying&&Number.isFinite(video.duration))remote('seek',Number(e.target.value)/1000*video.duration);};
     video.addEventListener('timeupdate',()=>{if(!urlPlaying||!Number.isFinite(video.duration)||video.duration<=0)return;$('seek').value=Math.round(video.currentTime/video.duration*1000);$('currentTime').textContent=clock(video.currentTime);$('totalTime').textContent=clock(video.duration);});
-    video.addEventListener('play',()=>{if(video.muted){video.muted=false;video.volume=1;}$('playState').textContent='PLAYING';report('Playing '+currentTitle);});video.addEventListener('pause',()=>{$('playState').textContent='PAUSED';report('Paused '+currentTitle);});
+    video.addEventListener('volumechange',()=>{if(video.muted){video.muted=false;video.defaultMuted=false;video.volume=1;}});video.addEventListener('play',()=>{if(video.muted){video.muted=false;video.volume=1;}$('playState').textContent='PLAYING';report('Playing '+currentTitle);});video.addEventListener('pause',()=>{$('playState').textContent='PAUSED';report('Paused '+currentTitle);});
     if(hostInput.value&&pinInput.value)setTimeout(connect,400);
   })();
   </script>
