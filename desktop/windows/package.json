@@ -1,0 +1,53 @@
+{
+  "name": "deeprowss-tv-receiver",
+  "version": "1.0.0",
+  "description": "Deeprowss Smart TV Receiver for Windows",
+  "main": "main.cjs",
+  "author": "Deeprowss",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis portable --x64"
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.deeprows.receiver.windows",
+    "productName": "Deeprowss TV Receiver",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.cjs",
+      "package.json"
+    ],
+    "win": {
+      "icon": "assets/deeprowss.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Deeprowss TV Receiver"
+    },
+    "artifactName": "Deeprowss-Windows-${target}.${ext}"
+  }
+}
