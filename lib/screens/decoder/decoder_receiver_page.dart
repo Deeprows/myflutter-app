@@ -32,7 +32,7 @@ class DecoderReceiverPage extends StatelessWidget {
               Icon(Icons.circle, color: m.connected ? Colors.green : Ui.muted, size: 10),
             ]),
             const SizedBox(height: 10),
-            Text("The TV plays the selected media directly. Send movies from the movie player's Cast button and choose 'Send to receiver page'. Your phone then works as the remote and can be locked.",
+            Text("Open the connection address on your TV or browser. When you send a movie, football stream or TV channel, it opens directly in the receiver's dedicated player — no video-scanning step on your phone. Keep this dashboard as your remote.",
                 style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.45)),
             const SizedBox(height: 14),
             if (!m.running)
@@ -85,25 +85,28 @@ class DecoderReceiverPage extends StatelessWidget {
               maxLines: 2, overflow: TextOverflow.ellipsis,
               style: TextStyle(color: Ui.text, fontWeight: FontWeight.w700)),
             const SizedBox(height: 3),
-            Text(m.nowPlayingKind == 'embed' ? 'Embedded movie player' : 'Direct media player',
+            Text(m.nowPlayingKind == 'embed' ? 'Web player · provider controls may vary' : 'Direct stream player',
               style: TextStyle(color: Ui.muted, fontSize: 11)),
             const SizedBox(height: 14),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-              _RemoteButton(icon: Icons.replay_10_rounded, label: '−10 sec', onTap: () => m.sendRemoteCommand('rewind')),
-              _RemoteButton(icon: Icons.play_arrow_rounded, label: 'Play', onTap: () => m.sendRemoteCommand('play'), primary: true),
-              _RemoteButton(icon: Icons.pause_rounded, label: 'Pause', onTap: () => m.sendRemoteCommand('pause')),
-              _RemoteButton(icon: Icons.forward_10_rounded, label: '+10 sec', onTap: () => m.sendRemoteCommand('forward')),
+            Row(children: [
+              Expanded(child: _RemoteButton(icon: Icons.replay_10_rounded, label: '−10 sec', onTap: () => m.sendRemoteCommand('rewind'))),
+              const SizedBox(width: 8),
+              Expanded(child: _RemoteButton(icon: Icons.play_arrow_rounded, label: 'Play', onTap: () => m.sendRemoteCommand('play'), primary: true)),
+              const SizedBox(width: 8),
+              Expanded(child: _RemoteButton(icon: Icons.pause_rounded, label: 'Pause', onTap: () => m.sendRemoteCommand('pause'))),
+              const SizedBox(width: 8),
+              Expanded(child: _RemoteButton(icon: Icons.forward_10_rounded, label: '+10 sec', onTap: () => m.sendRemoteCommand('forward'))),
             ]),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Row(children: [
               Expanded(child: OutlinedButton.icon(onPressed: () => m.sendRemoteCommand('mute'),
-                icon: const Icon(Icons.volume_off_rounded), label: const Text('Mute'))),
-              const SizedBox(width: 10),
+                icon: const Icon(Icons.volume_off_rounded, size: 18), label: const FittedBox(child: Text('Mute')))),
+              const SizedBox(width: 8),
               Expanded(child: OutlinedButton.icon(onPressed: () => m.sendRemoteCommand('fullscreen'),
-                icon: const Icon(Icons.fullscreen_rounded), label: const Text('Fullscreen'))),
-              const SizedBox(width: 10),
+                icon: const Icon(Icons.fullscreen_rounded, size: 18), label: const FittedBox(child: Text('Full screen')))),
+              const SizedBox(width: 8),
               Expanded(child: FilledButton.tonalIcon(onPressed: () => m.sendRemoteCommand('stop'),
-                icon: const Icon(Icons.stop_rounded), label: const Text('Stop'))),
+                icon: const Icon(Icons.stop_rounded, size: 18), label: const FittedBox(child: Text('Stop')))),
             ]),
             Row(children: [
               const Icon(Icons.volume_down_rounded),
@@ -131,10 +134,11 @@ class _RemoteButton extends StatelessWidget {
   const _RemoteButton({required this.icon, required this.label, required this.onTap, this.primary = false});
   @override
   Widget build(BuildContext context) => InkWell(onTap: onTap, borderRadius: BorderRadius.circular(14), child: Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+    constraints: const BoxConstraints(minHeight: 76),
     decoration: BoxDecoration(color: primary ? Ui.red.withValues(alpha: .18) : Ui.card,
       borderRadius: BorderRadius.circular(14), border: Border.all(color: primary ? Ui.red : Ui.line)),
-    child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: primary ? Ui.red : Ui.text, size: 25),
-      const SizedBox(height: 3), Text(label, style: TextStyle(color: Ui.muted, fontSize: 10))]),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: primary ? Ui.red : Ui.text, size: 24),
+      const SizedBox(height: 5), FittedBox(fit: BoxFit.scaleDown, child: Text(label, maxLines: 1, style: TextStyle(color: Ui.muted, fontSize: 10)))]),
   ));
 }
