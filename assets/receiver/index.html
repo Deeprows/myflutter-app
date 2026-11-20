@@ -88,7 +88,7 @@
       if(!frame.contentWindow)return;
       const origin='*';
       // VidSrc/vsembed supports this documented parent-to-player command protocol.
-      if(/^vsembed\\.su$/i.test((()=>{try{return new URL(frame.src).hostname;}catch(_){return '';}})())){try{frame.contentWindow.postMessage({player:true,action:command==='volume'?'volume':command,value},origin);}catch(_){}if(command==='rewind')try{frame.contentWindow.postMessage({player:true,action:'seek-10'},origin);}catch(_){}if(command==='forward')try{frame.contentWindow.postMessage({player:true,action:'seek+10'},origin);}catch(_){}if(command==='stop')try{frame.contentWindow.postMessage({player:true,action:'pause'},origin);}catch(_){}if(command==='volume')try{frame.contentWindow.postMessage({player:true,action:'volume',value:Math.max(0,Math.min(1,(Number(value)||0)/100))},origin);}catch(_){}say('Vsembed remote command sent.');return;}
+      if(/^vsembed\\.su$/i.test((()=>{try{return new URL(frame.src).hostname;}catch(_){return '';}})())){const action=command==='rewind'?'seek-10':command==='forward'?'seek+10':command==='volume'?(Number(value)<=0?'mute':'unmute'):command;try{frame.contentWindow.postMessage({player:true,action},origin);}catch(_){}say('Vsembed remote command sent.');return;}
       // YouTube IFrame Player API.
       const ytMap={play:'playVideo',pause:'pauseVideo',stop:'stopVideo',mute:'mute',unmute:'unMute',volume:'setVolume'};
       if(ytMap[command]){const msg={event:'command',func:ytMap[command],args:command==='volume'?[Number(value)||0]:[]};try{frame.contentWindow.postMessage(JSON.stringify(msg),origin);}catch(_){}}
