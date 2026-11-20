@@ -4,6 +4,17 @@ import '../../services/cast_service.dart';
 import '../../services/app_memory.dart';
 import '../../theme/app_theme.dart';
 
+/// Remembers which Decoder page was open so reopening the app returns there.
+/// Page ids: hub, cast, mirror, receiver, remote, channels.
+class DecoderMemory {
+  static const _key = 'decoder_last_page';
+
+  static String? get lastPage => AppMemory.getString(_key);
+
+  /// Saves the open page; null or an empty id forgets it.
+  static void save(String? pageId) => AppMemory.setString(_key, pageId ?? '');
+}
+
 /// Short message that disappears by itself (replaces on-screen logs).
 void decoderToast(BuildContext context, String message) {
   if (!context.mounted) return;
@@ -160,7 +171,8 @@ Future<bool> decoderKodiLogin(BuildContext context) async {
 /// Push a Decoder subpage while remembering both the current page and the
 /// destination. When the user returns, restore the page underneath it.
 Future<T?> pushDecoderPage<T>(BuildContext context, Widget page, String pageId) async {
-  final previous = DecoderMemory.lastPage ?? 'hub';
+  final saved = DecoderMemory.lastPage;
+  final previous = (saved == null || saved.isEmpty) ? 'hub' : saved;
   DecoderMemory.save(pageId);
   final result = await Navigator.of(context).push<T>(
     MaterialPageRoute<T>(builder: (_) => page),
