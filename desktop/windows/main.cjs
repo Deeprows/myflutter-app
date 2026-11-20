@@ -1,6 +1,6 @@
 const { app, BrowserWindow, session } = require('electron');
 const path = require('path');
-const RECEIVER_URL = 'https://deeprows.github.io/myflutter-app/';
+const RECEIVER_URL = 'https://deeprows.github.io/myflutter-app/assets/receiver/';
 const ALLOWED_HOSTS = new Set(['deeprows.github.io']);
 function createWindow() {
   const win = new BrowserWindow({
@@ -8,7 +8,7 @@ function createWindow() {
     show: false, autoHideMenuBar: true, backgroundColor: '#080b12',
     icon: path.join(__dirname, 'assets', 'deeprowss.ico'),
     fullscreen: true,
-    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, autoplayPolicy: 'no-user-gesture-required' }
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, allowRunningInsecureContent: true, autoplayPolicy: 'no-user-gesture-required' }
   });
   win.once('ready-to-show', () => win.show());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
