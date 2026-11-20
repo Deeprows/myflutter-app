@@ -22,6 +22,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
 
   HttpServer? _server;
   WebSocket? _socket;
+  Completer<void>? _stopAck;
   RTCPeerConnection? _peerConnection;
   final List<RTCIceCandidate> _pendingRemoteCandidates = [];
   bool _creatingPeer = false;
@@ -316,6 +317,9 @@ class DeeprowssMirrorService extends ChangeNotifier {
           if (detail is String && detail.isNotEmpty) status = detail;
           notifyListeners();
           break;
+        case 'stop-complete':
+          if (!(_stopAck?.isCompleted ?? true)) _stopAck!.complete();
+          break;
         case 'stop':
           await stop();
           break;
@@ -438,6 +442,36 @@ class DeeprowssMirrorService extends ChangeNotifier {
     return true;
   }
 
+  /// Stops the media on the receiver without ending the pairing session.
+  /// Wait briefly for the browser to clear its video/iframe before changing
+  /// the connection state or closing the socket.
+  Future<void> stopPlayback() async {
+    final socket = _socket;
+    if (socket == null || socket.readyState != WebSocket.open) {
+      nowPlayingTitle = '';
+      nowPlayingKind = '';
+      notifyListeners();
+      return;
+    }
+    final ack = Completer<void>();
+    _stopAck = ack;
+    _send({'type': 'remote', 'command': 'stop'});
+    try {
+      await ack.future.timeout(const Duration(milliseconds: 650));
+    } catch (_) {
+      // The stop command has already been sent; do not keep the UI blocked.
+    } finally {
+      if (identical(_stopAck, ack)) _stopAck = null;
+    }
+    nowPlayingTitle = '';
+    nowPlayingKind = '';
+    BackgroundPlayback.castHook = null;
+    BackgroundPlayback.castActive = false;
+    unawaited(BackgroundPlayback.stopCasting());
+    status = 'Playback stopped on receiver';
+    notifyListeners();
+  }
+
   /// Sends a remote command to the connected browser receiver. Embed providers
   /// may expose different control APIs; the receiver reports unsupported commands.
   void setReceiverVolume(double value) {
@@ -492,6 +526,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
     if (_stopping || (!running && _server == null && _screenStream == null)) return;
     _stopping = true;
     status = 'Stopping mirroring…';
+    await stopPlayback();
     notifyListeners();
     running = false;
     try { await WakelockPlus.disable(); } catch (_) {}
