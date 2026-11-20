@@ -602,7 +602,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     final st = _stream;
     return CastTarget(
       title: widget.title,
-      url: st.usesHtmlPlayer ? st.url : null,
+      url: st.kind == StreamKind.invalid ? null : st.url,
       kind: st.kind,
       referer: _referers[_srcIdx],
       userAgent: _agents[_srcIdx],
