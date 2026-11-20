@@ -433,12 +433,13 @@ jobs:
             exit 1
           }
 
-          mkdir -p site/cast
+          mkdir -p site/cast site/receiver site/downloads
           cp receiver/deeprowss-mirror-receiver/index.html site/index.html
           cp receiver/deeprowss-cast-receiver/index.html site/cast/index.html
-          cp receiver/deeprowss-mirror-receiver/manifest.webmanifest site/manifest.webmanifest
-          cp receiver/deeprowss-mirror-receiver/sw.js site/sw.js
-          cp -R receiver/deeprowss-mirror-receiver/icons site/icons
+
+          # Publish the installable PWA receiver and the public app download centre.
+          cp -R assets/receiver/. site/receiver/
+          cp downloads/index.html site/downloads/index.html
           touch site/.nojekyll
 
       - name: Upload receiver website
