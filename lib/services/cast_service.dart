@@ -505,6 +505,23 @@ class CastService extends ChangeNotifier {
     return null;
   }
 
+  /// Quick search for the real stream inside a link or web page (no web
+  /// view). Returns null when the page hides it; the app then opens its
+  /// in-app stream finder.
+  Future<({String url, StreamKind kind, String? referer})?> resolveStream(
+    String page, {
+    String? referer,
+    String? userAgent,
+  }) async {
+    try {
+      return await _resolveLink(page, referer: referer, userAgent: userAgent)
+          .timeout(const Duration(seconds: 20));
+    } catch (e) {
+      _log('Quick search failed: $e');
+      return null;
+    }
+  }
+
   /// Opens the stream from the phone once, with the same headers the TV will
   /// use, so a dead / geo-blocked / HTML-error stream is reported here with a
   /// clear message instead of as a vague "Playback failed" on the TV.
