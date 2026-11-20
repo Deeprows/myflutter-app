@@ -1,7 +1,7 @@
 {
-  "name": "deeprowss-tv-receiver",
-  "version": "1.0.0",
-  "description": "Deeprowss Smart TV Receiver for Windows",
+  "name": "deeprowss-cinema",
+  "version": "1.1.0",
+  "description": "Deeprowss Movies and Live Channel Cast for Windows",
   "main": "main.cjs",
   "author": "Deeprowss",
   "license": "UNLICENSED",
@@ -14,39 +14,34 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "com.deeprows.receiver.windows",
-    "productName": "Deeprowss TV Receiver",
+    "appId": "com.deeprows.cinema.windows",
+    "productName": "Deeprowss Cinema",
     "directories": {
       "output": "dist",
       "buildResources": "assets"
     },
     "files": [
       "main.cjs",
+      "desktop.html",
       "package.json"
     ],
     "win": {
       "icon": "assets/deeprowss.ico",
       "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        },
-        {
-          "target": "portable",
-          "arch": ["x64"]
-        }
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
       ]
     },
     "nsis": {
-      "artifactName": "Deeprowss-Windows-Installer-${version}.${ext}",
+      "artifactName": "Deeprowss-Cinema-Installer-${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Deeprowss TV Receiver"
+      "shortcutName": "Deeprowss Cinema"
     },
     "portable": {
-      "artifactName": "Deeprowss-Windows-Portable-${version}.${ext}"
+      "artifactName": "Deeprowss-Cinema-Portable-${version}.${ext}"
     }
   }
 }
