@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 
 import '../models/fan_post_link.dart';
 import '../models/fixture.dart';
+import '../models/movie.dart';
 import '../services/dailymotion_check.dart';
 import '../services/embed_info.dart';
 import '../services/stream_resolver.dart';
@@ -16,6 +17,7 @@ import '../utils/post_links.dart';
 import '../widgets/fan_post_video.dart';
 import '../services/auth_service.dart';
 import '../services/fan_zone_service.dart';
+import '../services/feed_service.dart';
 import '../services/app_memory.dart';
 import '../services/content_sync.dart';
 import '../theme/app_theme.dart';
@@ -31,6 +33,8 @@ const _labels = {
   'betslip': 'Bet Slips',
   'banter': 'Banter',
   'video': 'Videos',
+  'movie': 'Movies',
+  'general': 'World gist',
 };
 const _filterIcons = {
   'all': Icons.dashboard_rounded,
@@ -38,6 +42,8 @@ const _filterIcons = {
   'betslip': Icons.receipt_long_rounded,
   'banter': Icons.forum_rounded,
   'video': Icons.smart_display_rounded,
+  'movie': Icons.movie_creation_outlined,
+  'general': Icons.public_rounded,
 };
 String _error(Object e) => safeErrorMessage(e);
 
@@ -762,6 +768,8 @@ EmbedInfo? _supportedVideo(String raw) {
 
 class _ComposePostState extends State<_ComposePost> {
   Fixture? _taggedMatch;
+  Movie? _taggedMovie;
+  List<Movie> _movieChoices = const [];
   final _text = TextEditingController();
   final _url = TextEditingController();
   final _title = TextEditingController();
@@ -784,7 +792,7 @@ class _ComposePostState extends State<_ComposePost> {
     168: '7 days',
   };
 
-  bool get _pollAllowed => _kind == 'banter' || _kind == 'prediction';
+  bool get _pollAllowed => _kind == 'banter' || _kind == 'prediction' || _kind == 'general';
 
   void _togglePoll() {
     if (_busy) return;
@@ -826,14 +834,18 @@ class _ComposePostState extends State<_ComposePost> {
     'betslip': 'Add a caption for your slip (optional)…',
     'banter': 'What is your take on the football today?',
     'video': 'Say something about this video (optional)…',
+    'movie': 'Write a recommendation, review, rating or movie gist…',
+    'general': 'What is happening around the world? Share your take…',
   };
 
-  static const _kinds = ['prediction', 'betslip', 'banter', 'video'];
+  static const _kinds = ['prediction', 'betslip', 'banter', 'video', 'movie', 'general'];
   static const _blurbs = {
     'prediction': 'Call a score or a player moment before kick-off.',
     'betslip': 'Show your slip. Crop out account details first.',
     'banter': 'Share a hot take with the community.',
     'video': 'Share a video from YouTube, Vimeo, Dailymotion, Filemoon, a stream link (m3u8, mp4, mpd) or any embed page.',
+    'movie': 'Tag a movie from Deeprowss, then recommend it, rate it or write a review.',
+    'general': 'Share news, entertainment, culture, trends and everyday gist from anywhere.',
   };
 
   @override
@@ -847,6 +859,16 @@ class _ComposePostState extends State<_ComposePost> {
     super.dispose();
   }
 
+  @override
+  void initState() {
+    super.initState();
+    if (_kind == 'movie') {
+      FeedService().loadMovies().then((items) {
+        if (mounted) setState(() => _movieChoices = items);
+      }).catchError((_) {});
+    }
+  }
+
   void _notice(String value) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -854,6 +876,35 @@ class _ComposePostState extends State<_ComposePost> {
       ..showSnackBar(
         SnackBar(behavior: SnackBarBehavior.floating, content: Text(value)),
       );
+  }
+
+  Future<void> _tagMovie() async {
+    if (_movieChoices.isEmpty) {
+      try {
+        final items = await FeedService().loadMovies();
+        if (mounted) setState(() => _movieChoices = items);
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    final selected = await showModalBottomSheet<Movie>(
+      context: context, showDragHandle: true, isScrollControlled: true,
+      backgroundColor: Ui.panel,
+      builder: (ctx) => SafeArea(child: SizedBox(
+        height: MediaQuery.of(ctx).size.height * .72,
+        child: _movieChoices.isEmpty
+          ? const Center(child: Text('No movies are available in the library yet.'))
+          : ListView(padding: const EdgeInsets.all(12), children: [
+              const Padding(padding: EdgeInsets.all(8), child: Text('Tag a movie', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+              for (final movie in _movieChoices.take(150)) ListTile(
+                leading: movie.image.isEmpty ? const Icon(Icons.movie_outlined) : ClipRRect(borderRadius: BorderRadius.circular(5), child: Image.network(movie.image, width: 42, height: 58, fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.movie_outlined))),
+                title: Text(movie.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+                subtitle: Text([if (movie.date != null) movie.date!.year.toString(), if (movie.rating != null) '★ ${movie.rating}'].join(' · ')),
+                onTap: () => Navigator.pop(ctx, movie),
+              ),
+            ]),
+      )),
+    );
+    if (selected != null && mounted) setState(() => _taggedMovie = selected);
   }
 
   Future<void> _tagMatch() async {
@@ -1034,11 +1085,19 @@ class _ComposePostState extends State<_ComposePost> {
       _notice('Attach your bet-slip image.');
       return;
     }
+    if (_kind == 'movie' && _taggedMovie == null) {
+      _notice('Choose a movie to tag in your post.');
+      return;
+    }
+    if (_kind == 'movie' && _text.text.trim().length > 4900) {
+      _notice('Keep your movie review under 4,900 characters.');
+      return;
+    }
     if (_kind == 'prediction' && _text.text.trim().isEmpty) {
       _notice('Write your prediction first.');
       return;
     }
-    if (_image == null && _text.text.trim().isEmpty) {
+    if (_image == null && _text.text.trim().isEmpty && !(_kind == 'movie' && _taggedMovie != null)) {
       _notice('Write something or attach an image.');
       return;
     }
@@ -1048,10 +1107,13 @@ class _ComposePostState extends State<_ComposePost> {
     if (!mounted) return;
     setState(() => _busy = true);
     try {
+      final postText = _kind == 'movie' && _taggedMovie != null
+          ? '🎬 Movie: ${_taggedMovie!.name}${_taggedMovie!.date == null ? '' : ' (${_taggedMovie!.date!.year})'}\n\n${_text.text.trim()}'
+          : _text.text;
       await FanZoneService.publish(
         kind: _kind,
         isAd: _asAd,
-        text: _text.text,
+        text: postText,
         image: _image,
         pollOptions: pollOptions,
         pollHours: _pollHours,
@@ -1488,6 +1550,10 @@ class _ComposePostState extends State<_ComposePost> {
       decoration: fanBox(border: k.color.withValues(alpha: .4)),
       child: Column(
         children: [
+          if (_kind == 'movie') ...[
+            OutlinedButton.icon(onPressed: _busy ? null : _tagMovie, icon: const Icon(Icons.movie_filter_outlined), label: Text(_taggedMovie == null ? 'Tag a movie from Deeprowss' : 'Movie: ${_taggedMovie!.name}')) ,
+            if (_taggedMovie != null) Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: _busy ? null : () => setState(() => _taggedMovie = null), icon: const Icon(Icons.close, size: 16), label: const Text('Remove movie tag'))),
+          ],
           TextField(
             controller: _text,
             enabled: !_busy,
