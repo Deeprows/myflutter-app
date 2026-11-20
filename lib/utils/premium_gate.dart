@@ -29,6 +29,17 @@ class PremiumGate {
       SubscriptionService.instance.enabled &&
       !SubscriptionService.instance.isPremium;
 
+  /// Decoder, casting, receiver and mirroring are Premium-only. Unlike movie
+  /// playback, there is no ad-based temporary unlock for these features.
+  static Future<bool> allowDecoder(BuildContext context) => _gate(
+        context,
+        isLocked: () => SubscriptionService.instance.enabled &&
+            !SubscriptionService.instance.isPremium,
+        title: 'Deeprowss Decoder is for Premium members',
+        body: 'Upgrade to Premium to use casting, Kodi, screen mirroring, the receiver and TV remote features.',
+        allowAd: false,
+      );
+
   /// Download button: true only for Premium members (or right after they
   /// upgrade). Everyone else sees the upgrade sheet, with no ad option.
   static Future<bool> allowDownload(BuildContext context) => _gate(
