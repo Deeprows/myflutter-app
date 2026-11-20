@@ -10,6 +10,7 @@ import 'decoder_channels_page.dart';
 import 'decoder_common.dart';
 import 'decoder_flows.dart';
 import 'decoder_mirror_page.dart';
+import 'decoder_movies_page.dart';
 import 'decoder_receiver_page.dart';
 import 'decoder_remote_page.dart';
 
@@ -118,7 +119,8 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
           _tile(Icons.screen_share_rounded, 'Screen mirroring', 'Show your phone screen', () => _open(const DecoderMirrorPage())),
           _tile(Icons.web_rounded, 'Send to receiver page', 'Play channels in a laptop or TV browser', () => _open(const DecoderReceiverPage())),
           _tile(Icons.gamepad_rounded, 'TV remote', 'Roku, LG, Samsung and playback controls', () => _open(const DecoderRemotePage())),
-          _tile(Icons.live_tv_rounded, 'Supported channels', 'See what works, then pick how to watch', () => _open(const DecoderChannelsPage())),
+          _tile(Icons.live_tv_rounded, 'Supported channels', 'Browse channels grouped by category', () => _open(const DecoderChannelsPage())),
+          _tile(Icons.movie_rounded, 'Movies & series', 'Browse and send movies to Kodi or the receiver', () => _open(const DecoderMoviesPage())),
           _tile(Icons.workspace_premium_rounded, 'Membership', 'Manage your Deeprowss plan', () => _open(const PlansScreen())),
         ]),
       ),
