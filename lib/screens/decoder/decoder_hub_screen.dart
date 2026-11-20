@@ -18,7 +18,10 @@ class DecoderHubScreen extends StatefulWidget {
   /// The channel / video the user came from (cast button in a player).
   final CastTarget? target;
   final VoidCallback? onCastStarted;
-  const DecoderHubScreen({super.key, this.target, this.onCastStarted});
+
+  /// Decoder subpage to reopen straight away (cast, mirror, receiver, remote, channels).
+  final String? initialPage;
+  const DecoderHubScreen({super.key, this.target, this.onCastStarted, this.initialPage});
 
   @override
   State<DecoderHubScreen> createState() => _DecoderHubScreenState();
@@ -39,11 +42,41 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
         Navigator.of(context).maybePop();
       } else {
         setState(() => _premiumChecked = true);
+        DecoderMemory.save('hub');
+        final restore = _pageFor(widget.initialPage);
+        if (restore != null) _open(restore.$1, restore.$2);
       }
     });
   }
 
-  void _open(Widget page) => Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => page));
+  @override
+  void dispose() {
+    // Leaving the Decoder altogether: nothing to restore next time.
+    DecoderMemory.save(null);
+    super.dispose();
+  }
+
+  (Widget, String)? _pageFor(String? id) {
+    switch (id) {
+      case 'cast':
+        return (const DecoderCastPage(), 'cast');
+      case 'mirror':
+        return (const DecoderMirrorPage(), 'mirror');
+      case 'receiver':
+        return (const DecoderReceiverPage(), 'receiver');
+      case 'remote':
+        return (const DecoderRemotePage(), 'remote');
+      case 'channels':
+        return (const DecoderChannelsPage(), 'channels');
+    }
+    return null;
+  }
+
+  Future<void> _open(Widget page, String id) async {
+    DecoderMemory.save(id);
+    await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => page));
+    DecoderMemory.save('hub');
+  }
 
   Widget _tile(IconData icon, String title, String subtitle, VoidCallback onTap) => Container(
         margin: const EdgeInsets.only(bottom: 10),
@@ -132,11 +165,11 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
               ]),
             ])),
           decoderHeading('Connect', 'Pick how you want to use your TV or laptop.'),
-          _tile(Icons.cast_rounded, 'Cast to TV / Kodi', 'Smart TVs and Kodi on your Wi-Fi', () => _open(const DecoderCastPage())),
-          _tile(Icons.screen_share_rounded, 'Screen mirroring', 'Show your phone screen', () => _open(const DecoderMirrorPage())),
-          _tile(Icons.web_rounded, 'Send to receiver page', 'Play channels in a laptop or TV browser', () => _open(const DecoderReceiverPage())),
-          _tile(Icons.gamepad_rounded, 'TV remote', 'Roku, LG, Samsung and playback controls', () => _open(const DecoderRemotePage())),
-          _tile(Icons.live_tv_rounded, 'Supported channels', 'See what works, then pick how to watch', () => _open(const DecoderChannelsPage())),
+          _tile(Icons.cast_rounded, 'Cast to TV / Kodi', 'Smart TVs and Kodi on your Wi-Fi', () => _open(const DecoderCastPage(), 'cast')),
+          _tile(Icons.screen_share_rounded, 'Screen mirroring', 'Show your phone screen', () => _open(const DecoderMirrorPage(), 'mirror')),
+          _tile(Icons.web_rounded, 'Send to receiver page', 'Play channels in a laptop or TV browser', () => _open(const DecoderReceiverPage(), 'receiver')),
+          _tile(Icons.gamepad_rounded, 'TV remote', 'Roku, LG, Samsung and playback controls', () => _open(const DecoderRemotePage(), 'remote')),
+          _tile(Icons.live_tv_rounded, 'Supported channels', 'See what works, then pick how to watch', () => _open(const DecoderChannelsPage(), 'channels')),
         ]),
       ),
     );
