@@ -1052,7 +1052,7 @@ class _FanPostCardState extends State<FanPostCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (kindKey == 'prediction' || kindKey == 'betslip')
+        if (kindKey == 'prediction' || kindKey == 'betslip' || kindKey == 'movie' || kindKey == 'general')
           Padding(
             padding: const EdgeInsets.only(top: 5, bottom: 4),
             child: FanPill(
