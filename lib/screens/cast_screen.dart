@@ -8,9 +8,10 @@ import 'decoder/decoder_hub_screen.dart';
 class CastScreen extends StatelessWidget {
   final CastTarget? target;
   final VoidCallback? onCastStarted;
-  const CastScreen({super.key, this.target, this.onCastStarted});
+  final String? initialPage;
+  const CastScreen({super.key, this.target, this.onCastStarted, this.initialPage});
 
   @override
   Widget build(BuildContext context) =>
-      DecoderHubScreen(target: target, onCastStarted: onCastStarted);
+      DecoderHubScreen(target: target, onCastStarted: onCastStarted, initialPage: initialPage);
 }
