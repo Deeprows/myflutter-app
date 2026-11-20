@@ -47,6 +47,15 @@ class DeeprowssMirrorService extends ChangeNotifier {
   bool mutePhone = true;
   double? _savedVolume;
 
+  /// Experimental: capture through flutter_webrtc itself, which can include
+  /// the phone's sound on some phones where the screen-share plugin cannot.
+  bool alternateCapture = false;
+
+  void setAlternateCapture(bool value) {
+    alternateCapture = value;
+    notifyListeners();
+  }
+
   Future<void> setMutePhone(bool value) async {
     mutePhone = value;
     if (running && audioShared) {
@@ -130,8 +139,25 @@ class DeeprowssMirrorService extends ChangeNotifier {
               ),
               onStopped: () => unawaited(stop()),
             );
+        if (alternateCapture) {
+          try {
+            final s = await navigator.mediaDevices.getDisplayMedia({
+              'video': {'frameRate': 20},
+              'audio': true,
+            });
+            if (s.getVideoTracks().isNotEmpty) {
+              _screenStream = s;
+              for (final track in s.getVideoTracks()) {
+                track.onEnded = () => unawaited(stop());
+              }
+            }
+          } catch (e) {
+            _screenStream = null;
+            audioNote = 'Alternate capture is not available on this phone, using the standard capture.';
+          }
+        }
         try {
-          _screenStream = await capture(wantAudio);
+          _screenStream ??= await capture(wantAudio);
         } catch (e) {
           final m = e.toString().toLowerCase();
           final refused = m.contains('permission') || m.contains('denied') || m.contains('cancel');
