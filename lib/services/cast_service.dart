@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/cast_target.dart';
 import 'background_playback.dart';
 import 'stream_resolver.dart';
 
@@ -81,6 +82,10 @@ class CastService extends ChangeNotifier {
   Timer? _sleepTimer;
   DateTime? sleepEndsAt;
   String? error;
+
+  /// The last channel / video that could be cast. The Decoder keeps it so
+  /// opening the Decoder again (or from another page) still knows what to play.
+  CastTarget? lastTarget;
 
   // ------------------------------------------------------------ cast log
   /// Everything the cast engine does, newest last. Shown on the Devices tab
@@ -376,6 +381,26 @@ class CastService extends ChangeNotifier {
     String? referer,
     String? userAgent,
   }) async {
+    // 0. Work out what the link really is. Links without a file extension and
+    //    web pages that hide the real stream cannot be sent as they are:
+    //    find the actual video address first.
+    if (kind == null || kind == StreamKind.embed || kind == StreamKind.invalid) {
+      try {
+        final found = await _resolveLink(url, referer: referer, userAgent: userAgent);
+        if (found == null) {
+          error = 'This link is a web page that hides its video, so it cannot be sent to Kodi / the TV as a stream. Use the Mirror tab to show it on the screen instead.';
+          _log('Could not find a stream inside ${_short(url)}');
+          notifyListeners();
+          return false;
+        }
+        _log('Real stream: ${_short(found.url)} (${found.kind.name})');
+        url = found.url;
+        kind = found.kind;
+        referer = found.referer;
+      } catch (e) {
+        _log('Link check failed: $e');
+      }
+    }
     final headers = <String, String>{
       if ((userAgent ?? '').trim().isNotEmpty) 'User-Agent': userAgent!.trim(),
       if ((referer ?? '').trim().isNotEmpty) 'Referer': referer!.trim(),
@@ -421,6 +446,63 @@ class CastService extends ChangeNotifier {
       unawaited(Future<void>.delayed(Duration(seconds: ok ? 8 : 1), () => fetchKodiLog(d)));
     }
     return ok;
+  }
+
+  static const _browserUa =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
+
+  /// Finds the real media address behind [page]: the link itself when it is
+  /// already a stream (even without a file extension), otherwise the first
+  /// .m3u8 / .mpd / .mp4 address written in the page or in its iframes.
+  Future<({String url, StreamKind kind, String? referer})?> _resolveLink(
+    String page, {
+    String? referer,
+    String? userAgent,
+    int depth = 0,
+  }) async {
+    final direct = StreamResolver.resolve(page);
+    if (direct.usesHtmlPlayer) {
+      return (url: direct.url, kind: direct.kind, referer: referer);
+    }
+    final sniffed = await StreamResolver.sniff(page, referer: referer, userAgent: userAgent);
+    if (sniffed != null) return (url: page, kind: sniffed, referer: referer);
+    if (depth > 2) return null;
+
+    final res = await http.get(Uri.parse(page), headers: {
+      'User-Agent': (userAgent ?? '').trim().isEmpty ? _browserUa : userAgent!.trim(),
+      if ((referer ?? '').trim().isNotEmpty) 'Referer': referer!.trim(),
+    }).timeout(const Duration(seconds: 10));
+    if (res.statusCode >= 400) return null;
+    var text = utf8.decode(res.bodyBytes, allowMalformed: true);
+    if (text.length > 1500000) text = text.substring(0, 1500000);
+    text = text
+        .replaceAll(r'\/', '/')
+        .replaceAll('&amp;', '&')
+        .replaceAll(r'\u0026', '&')
+        .replaceAll(r'\u002F', '/');
+    final base = Uri.parse(page);
+
+    for (final entry in const [
+      (r'\.m3u8', StreamKind.hls),
+      (r'\.mpd', StreamKind.dash),
+      (r'\.(?:mp4|webm|mkv)', StreamKind.video),
+    ]) {
+      final m = RegExp('https?://[^\\s"\'<>\\\\)]+?${entry.$1}(?:\\?[^\\s"\'<>\\\\)]*)?',
+              caseSensitive: false)
+          .firstMatch(text);
+      if (m != null) {
+        return (url: m.group(0)!, kind: entry.$2, referer: page);
+      }
+    }
+    for (final m in RegExp(r'''<iframe[^>]+(?:data-)?src\s*=\s*["']([^"']+)["']''', caseSensitive: false)
+        .allMatches(text)) {
+      var src = m.group(1)!.trim();
+      if (src.startsWith('about:') || src.startsWith('javascript:')) continue;
+      final abs = base.resolve(src.startsWith('//') ? 'https:$src' : src).toString();
+      final inner = await _resolveLink(abs, referer: page, userAgent: userAgent, depth: depth + 1);
+      if (inner != null) return inner;
+    }
+    return null;
   }
 
   /// Opens the stream from the phone once, with the same headers the TV will
@@ -1088,8 +1170,11 @@ class CastService extends ChangeNotifier {
     up.followRedirects = true;
     up.maxRedirects = 6;
     _upHeaders.forEach((k, v) => up.headers.set(k, v));
+    // Kodi asks for "Range: bytes=0-" even on playlists. A playlist must come
+    // back whole (and rewritten), so only forward Range for media files.
     final range = req.headers.value('range');
-    if (range != null) up.headers.set('range', range);
+    final looksPlaylist = upstream.toLowerCase().contains('.m3u8');
+    if (range != null && !looksPlaylist) up.headers.set('range', range);
     final r = await up.close();
     final res = req.response;
     if (r.statusCode >= 400 || _relayHits++ < 4) {
@@ -1105,7 +1190,7 @@ class CastService extends ChangeNotifier {
         upstream.toLowerCase().contains('.m3u8') ||
         ct.contains('mpegurl');
 
-    if (isPlaylist && r.statusCode == 200) {
+    if (isPlaylist && (r.statusCode == 200 || r.statusCode == 206)) {
       final bytes = await r.fold<List<int>>(<int>[], (a, b) => a..addAll(b));
       final text = utf8.decode(bytes, allowMalformed: true);
       if (text.trimLeft().startsWith('#EXTM3U')) {
@@ -1114,6 +1199,7 @@ class CastService extends ChangeNotifier {
         res.statusCode = 200;
         res.headers.set('content-type', 'application/vnd.apple.mpegurl');
         res.headers.set('cache-control', 'no-cache');
+        res.headers.set('accept-ranges', 'none');
         res.contentLength = out.length;
         res.add(out);
         await res.close();
