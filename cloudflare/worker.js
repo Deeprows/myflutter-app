@@ -2689,7 +2689,7 @@ async function fanPosts(request,env,url,user,id,ctx) {
   const fail=(error,status=400)=>json({error},status);
   if(request.method==='GET' && url.pathname==='/fan/posts') {
     const kind=url.searchParams.get('kind') || 'all';
-    if(!['all','prediction','betslip','banter','video'].includes(kind))return fail('Invalid post filter');
+    if(!['all','prediction','betslip','banter','video','movie','general'].includes(kind))return fail('Invalid post filter');
     const author=url.searchParams.get('author') || '';
     const scope=url.searchParams.get('scope') || 'all';
     if((author && !/^[a-f0-9]{64}$/.test(author)) || !['all','following'].includes(scope))return fail('Invalid feed');
@@ -2714,7 +2714,7 @@ async function fanPosts(request,env,url,user,id,ctx) {
     if(!form)return fail('Invalid upload or image exceeds 4 MB.',413);
     const kind=String(form.get('kind') || 'banter');
     const text=String(form.get('text') || '').trim();
-    if(!['prediction','betslip','banter','video'].includes(kind) || text.length>5000)return fail('Choose a post type and keep text within 5,000 characters');
+    if(!['prediction','betslip','banter','video','movie','general'].includes(kind) || text.length>5000)return fail('Choose a post type and keep text within 5,000 characters');
     const tagged=String(form.get('match_key') || '');
     let taggedFixture=null;
     const rawMatchFixture=String(form.get('match_fixture') || '');
@@ -5473,7 +5473,7 @@ export function parseSportsNewsRss(xml,source,now=Date.now()) {
     const publishedAt=Date.parse(sportsNewsText(tag(item,'pubDate')));
     if(!title || !url || !Number.isFinite(publishedAt) || publishedAt>now+300000 || publishedAt<now-7*86400000)continue;
     const imageMatch=/<(?:media:thumbnail|media:content|enclosure)\b[^>]*\burl\s*=\s*["']([^"']+)["']/i.exec(item);
-    const image=imageMatch?sportsNewsUrl(sportsNewsText(imageMatch[1]),['ichef.bbci.co.uk','bbci.co.uk','365dm.com']):null;
+    const image=imageMatch?sportsNewsUrl(sportsNewsText(imageMatch[1]),['ichef.bbci.co.uk','bbci.co.uk','365dm.com','aljazeera.com','static.aljazeera.net','cdn.cnn.com']):null;
     articles.push({id:url,title,url,image,source:source.name,published_at:publishedAt});
     if(articles.length>=100)break;
   }
@@ -5499,6 +5499,10 @@ async function sportsNews(request,env,url,ctx) {
   if(running.has(category))return json(await running.get(category));
   const task=(async()=>{
     const sources=[{name:'BBC Sport',url:`https://feeds.bbci.co.uk/sport/${SPORTS_NEWS_CATEGORIES[category]}rss.xml`,hosts:['bbc.co.uk','bbc.com']}];
+    if(category==='all')sources.push(
+      {name:'BBC World News',url:'https://feeds.bbci.co.uk/news/world/rss.xml',hosts:['bbc.co.uk','bbc.com']},
+      {name:'Al Jazeera',url:'https://www.aljazeera.com/xml/rss/all.xml',hosts:['aljazeera.com']},
+    );
     if(category==='all' || category==='football')sources.push({name:'Sky Sports',url:'https://www.skysports.com/rss/12040',hosts:['skysports.com']});
     const results=await Promise.allSettled(sources.map(async source=>{
       const response=await fetch(source.url,{headers:{accept:'application/rss+xml,application/xml,text/xml'},signal:AbortSignal.timeout(6500)});
