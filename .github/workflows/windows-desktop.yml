@@ -1,0 +1,39 @@
+name: Build Deeprowss Cinema for Windows
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/windows/**'
+      - 'assets/data/movies.json'
+      - 'assets/receiver/**'
+      - '.github/workflows/windows-desktop.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Build Windows installer and portable app
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/windows/package.json
+      - name: Install dependencies
+        working-directory: desktop/windows
+        run: npm install
+      - name: Build installer and portable EXE
+        working-directory: desktop/windows
+        run: npm run dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deeprowss-cinema-windows
+          path: |
+            desktop/windows/dist/*.exe
+          if-no-files-found: error
+          retention-days: 30
