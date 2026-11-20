@@ -104,6 +104,9 @@ jobs:
       - name: Patch plugin compileSdk (Android API 36)
         run: python3 tool/patch_compile_sdk.py
 
+      - name: Patch flutter_inappwebview Gradle file
+        run: python3 tool/patch_inappwebview_gradle.py
+
       - name: Configure Kotlin and Java JVM targets
         run: |
           {
