@@ -77,9 +77,9 @@
       const u=new URL(url);
       if(/(^|\.)youtube(-nocookie)?\.com$/.test(u.hostname)&&u.pathname.includes('/embed/')){u.searchParams.set('enablejsapi','1');u.searchParams.set('origin',location.origin);u.searchParams.set('autoplay','1');u.searchParams.set('mute','0');}
       if(/(^|\.)player\.vimeo\.com$/.test(u.hostname)){u.searchParams.set('autoplay','1');u.searchParams.set('muted','0');}
-      frame.onload=()=>{for(let i=0;i<5;i++)setTimeout(()=>{iframeCommand('unmute');iframeCommand('play');},i*900);showControls();};
+      frame.onload=()=>{for(let i=0;i<8;i++)setTimeout(()=>{iframeCommand('unmute');iframeCommand('play');},i*900);showControls();};
       frame.src=u.href;frame.style.display='block';showControls();say('Embed opened. Sound and remote controls are requested; provider restrictions may apply.');report('Movie embed loaded: '+currentTitle);}
-    function playUrl(raw,kind,title){const url=safeUrl(raw);if(!url){say('The media URL is invalid.');return;}if(kind==='embed'){playEmbed(url,title);return;}clearMedia();urlPlaying=true;currentTitle=title||'Media';$('mediaTitle').textContent=currentTitle;$('playState').textContent='PLAYING';panel.style.display='block';join.style.display='none';showControls();video.srcObject=null;video.muted=false;video.defaultMuted=false;video.volume=Number($('volume').value)/100;video.style.display='block';
+    function playUrl(raw,kind,title){const url=safeUrl(raw);if(!url){say('The media URL is invalid.');return;}const parsedUrl=new URL(url);const isVsembedMovie=/^vsembed\\.su$/i.test(parsedUrl.hostname)&&/^\\/embed\\/(movie|tv)(\\/|$)/i.test(parsedUrl.pathname);if(kind==='embed'||isVsembedMovie){playEmbed(url,title);return;}clearMedia();urlPlaying=true;currentTitle=title||'Media';$('mediaTitle').textContent=currentTitle;$('playState').textContent='PLAYING';panel.style.display='block';join.style.display='none';showControls();video.srcObject=null;video.muted=false;video.defaultMuted=false;video.volume=Number($('volume').value)/100;video.style.display='block';
       const start=()=>{video.muted=false;video.defaultMuted=false;video.volume=1;return video.play().then(()=>{video.muted=false;video.volume=1;say('Playing '+currentTitle);report('Playing '+currentTitle);}).catch(()=>say('Playback is ready. Press Play on the receiver or phone.'));};
       if(kind==='dash'||/\.mpd(\?|$)/i.test(url)){if(!window.dashjs){say('DASH playback library is unavailable.');return;}dash=dashjs.MediaPlayer().create();dash.initialize(video,url,true);dash.on(dashjs.MediaPlayer.events.ERROR,e=>{say('DASH playback failed. This source may require provider authorization or a supported codec.');report('DASH playback failed: '+(e.error||'unknown'));});return;}
       const isHls=kind==='hls'||/\.m3u8(\?|$)/i.test(url);
@@ -87,6 +87,8 @@
     function iframeCommand(command,value){
       if(!frame.contentWindow)return;
       const origin='*';
+      // VidSrc/vsembed supports this documented parent-to-player command protocol.
+      if(/^vsembed\\.su$/i.test((()=>{try{return new URL(frame.src).hostname;}catch(_){return '';}})())){try{frame.contentWindow.postMessage({player:true,action:command==='volume'?'volume':command,value},origin);}catch(_){}if(command==='rewind')try{frame.contentWindow.postMessage({player:true,action:'seek-10'},origin);}catch(_){}if(command==='forward')try{frame.contentWindow.postMessage({player:true,action:'seek+10'},origin);}catch(_){}if(command==='stop')try{frame.contentWindow.postMessage({player:true,action:'pause'},origin);}catch(_){}if(command==='volume')try{frame.contentWindow.postMessage({player:true,action:'volume',value:Math.max(0,Math.min(1,(Number(value)||0)/100))},origin);}catch(_){}say('Vsembed remote command sent.');return;}
       // YouTube IFrame Player API.
       const ytMap={play:'playVideo',pause:'pauseVideo',stop:'stopVideo',mute:'mute',unmute:'unMute',volume:'setVolume'};
       if(ytMap[command]){const msg={event:'command',func:ytMap[command],args:command==='volume'?[Number(value)||0]:[]};try{frame.contentWindow.postMessage(JSON.stringify(msg),origin);}catch(_){}}
