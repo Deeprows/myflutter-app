@@ -206,6 +206,10 @@ class FanKind {
         );
       case 'prediction':
         return FanKind('Prediction', Icons.sports_soccer_rounded, Ui.green);
+      case 'movie':
+        return const FanKind('Movie', Icons.movie_creation_outlined, Color(0xFFB58CFF));
+      case 'general':
+        return const FanKind('World gist', Icons.public_rounded, Color(0xFF35B8A5));
       case 'video':
         return const FanKind(
           'Embed video',
