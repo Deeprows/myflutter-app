@@ -4,6 +4,7 @@ import '../../models/cast_target.dart';
 import '../../services/cast_service.dart';
 import '../../services/webrtc_mirror_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/premium_gate.dart';
 import 'decoder_cast_page.dart';
 import 'decoder_channels_page.dart';
 import 'decoder_common.dart';
@@ -26,6 +27,21 @@ class DecoderHubScreen extends StatefulWidget {
 class _DecoderHubScreenState extends State<DecoderHubScreen> {
   final CastService svc = CastService.instance;
   final DeeprowssMirrorService mirror = DeeprowssMirrorService.instance;
+  bool _premiumChecked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final allowed = await PremiumGate.allowDecoder(context);
+      if (!mounted) return;
+      if (!allowed) {
+        Navigator.of(context).maybePop();
+      } else {
+        setState(() => _premiumChecked = true);
+      }
+    });
+  }
 
   void _open(Widget page) => Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => page));
 
@@ -53,6 +69,9 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_premiumChecked) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     final t = widget.target;
     return Scaffold(
       backgroundColor: Ui.bg,
