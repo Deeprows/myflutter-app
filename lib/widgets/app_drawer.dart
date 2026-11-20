@@ -6,6 +6,7 @@ import '../config.dart';
 import '../screens/app_lock_screen.dart';
 import '../screens/auth_screen.dart';
 import '../screens/bookmarks_screen.dart';
+import '../screens/cast_screen.dart';
 import '../screens/browser_screen.dart';
 import '../screens/fan_profile_screen.dart';
 import '../screens/fan_widgets.dart';
@@ -502,6 +503,11 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
                           ),
                         );
                       },
+                    ),
+                    _row(
+                      Icons.cast_connected_rounded,
+                      'TV Decoder'.tr,
+                      (c) => _push(c, const CastScreen()),
                     ),
                     _row(
                       Icons.movie_outlined,
