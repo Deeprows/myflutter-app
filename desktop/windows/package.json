@@ -29,25 +29,24 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         },
         {
           "target": "portable",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ]
     },
     "nsis": {
+      "artifactName": "Deeprowss-Windows-Installer-${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Deeprowss TV Receiver"
     },
-    "artifactName": "Deeprowss-Windows-${target}.${ext}"
+    "portable": {
+      "artifactName": "Deeprowss-Windows-Portable-${version}.${ext}"
+    }
   }
 }
