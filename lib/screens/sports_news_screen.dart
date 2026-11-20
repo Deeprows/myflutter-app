@@ -410,7 +410,7 @@ class _SportsNewsScreenState extends State<SportsNewsScreen>
     return Column(
         children: [
           XTabBar(
-            labels: const ['All sports', 'Reels', 'Football', 'Cricket', 'F1'],
+            labels: const ['All Trends', 'Reels', 'Football', 'Cricket', 'F1'],
             index: _tab,
             onTap: (i) {
               setState(() => _tab = i);
