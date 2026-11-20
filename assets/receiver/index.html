@@ -3,14 +3,6 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="dark"><meta name="theme-color" content="#080b12">
-  <meta name="description" content="Deeprowss Smart TV Receiver — receive and play video from your Deeprowss device.">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Deeprowss TV">
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
-  <link rel="apple-touch-icon" href="./icons/icon-192.png">
   <title>Deeprowss TV</title>
   <style>
     :root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#000;color:#fff;--gold:#ffc629;--muted:#c2c8d2}
@@ -21,7 +13,7 @@
     #join{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;margin:auto;width:min(100%,620px);height:max-content;min-height:100%;padding:clamp(22px,5vw,56px)}
     h1{font-size:clamp(24px,4vw,38px);margin:0 0 12px}p{color:var(--muted);line-height:1.55}
     input{display:block;width:100%;padding:15px 16px;border:1px solid #3a465a;border-radius:13px;background:#090e17;color:white;font-size:17px;outline:none;margin:12px 0}input:focus{border-color:var(--gold)}
-    button{border:0;border-radius:13px;padding:13px 18px;background:var(--gold);color:#17130a;font-weight:850;font-size:15px;cursor:pointer}button:disabled{opacity:.5;cursor:default}button[hidden]{display:none!important}.secondary{background:#202938;color:#f7f8fb;border:1px solid #39465a}
+    button{border:0;border-radius:13px;padding:13px 18px;background:var(--gold);color:#17130a;font-weight:850;font-size:15px;cursor:pointer}button:disabled{opacity:.5;cursor:default}.secondary{background:#202938;color:#f7f8fb;border:1px solid #39465a}
     #statusJoin,#statusPlayer{min-height:20px;color:var(--muted);font-size:13px;margin-top:10px}.hint,.foot{display:none}
     .player{display:none;position:fixed;inset:0;width:100vw;height:100dvh;padding:0;background:#000;z-index:10;overflow:hidden}
     .player-head{position:absolute;z-index:4;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:clamp(12px,2vw,24px);background:linear-gradient(#000b,transparent);transition:opacity .35s}
@@ -47,7 +39,7 @@
       <h1>Connect your TV</h1><p>Open the same receiver address shown in Deeprowss, then enter the current six-digit PIN.</p>
       <input id="host" inputmode="url" autocomplete="url" aria-label="Phone address" placeholder="Phone address · 192.168.1.20:12345">
       <input id="pin" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" aria-label="Six digit PIN" placeholder="6-digit PIN">
-      <button id="connect">Connect receiver</button><button class="secondary" id="installApp" type="button" hidden>＋ Install Deeprowss TV</button><div id="statusJoin" role="status">Ready to connect on your Wi-Fi network.</div>
+      <button id="connect">Connect receiver</button><div id="statusJoin" role="status">Ready to connect on your Wi-Fi network.</div>
       <div class="hint">Keep this page open while receiving media. The receiver address stays the same; only the pairing PIN changes for a new session.</div>
     </section>
     <section class="panel player" id="playerPanel">
@@ -130,34 +122,5 @@
     if(hostInput.value&&pinInput.value)setTimeout(connect,400);
   })();
   </script>
-
-  <script>
-  (() => {
-    const installButton = document.getElementById('installApp');
-    let installPrompt = null;
-    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-    if (standalone && installButton) installButton.hidden = true;
-    window.addEventListener('beforeinstallprompt', event => {
-      event.preventDefault();
-      installPrompt = event;
-      if (installButton && !standalone) installButton.hidden = false;
-    });
-    installButton?.addEventListener('click', async () => {
-      if (!installPrompt) return;
-      installPrompt.prompt();
-      try { await installPrompt.userChoice; } catch (_) {}
-      installPrompt = null;
-      installButton.hidden = true;
-    });
-    window.addEventListener('appinstalled', () => {
-      installPrompt = null;
-      if (installButton) installButton.hidden = true;
-    });
-    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js', {scope: './'}).catch(() => {}));
-    }
-  })();
-  </script>
-
 </body>
 </html>
