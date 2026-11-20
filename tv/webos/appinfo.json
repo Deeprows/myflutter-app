@@ -1,0 +1,11 @@
+{
+  "id": "com.deeprows.receiver",
+  "version": "1.0.0",
+  "vendor": "Deeprowss",
+  "type": "web",
+  "main": "index.html",
+  "title": "Deeprowss TV Receiver",
+  "icon": "icon.png",
+  "largeIcon": "icon.png",
+  "resolution": "1920x1080"
+}
