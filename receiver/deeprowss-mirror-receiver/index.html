@@ -1,160 +1,123 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <meta name="color-scheme" content="dark">
-  <title>Deeprowss TV Receiver</title>
-  <style>
-    :root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#07090e;color:#fff}
-    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#07090e}
-    body{display:grid;place-items:center}.shell{width:min(92vw,680px);padding:32px;text-align:center}
-    .logo{font-size:clamp(25px,5vw,46px);font-weight:950;letter-spacing:.12em}.sub{color:#aab4c4;margin:10px 0 28px}
-    .panel{background:#111722;border:1px solid #293345;border-radius:22px;padding:26px;box-shadow:0 24px 80px #0008}
-    input{width:min(100%,320px);padding:16px;border-radius:12px;border:1px solid #46536a;background:#080d15;color:white;text-align:center;font-size:24px;letter-spacing:.3em}
-    button{display:block;margin:16px auto 0;padding:14px 26px;border:0;border-radius:12px;background:#e32636;color:#fff;font-weight:800;font-size:16px;cursor:pointer}
-    #status{margin-top:18px;color:#aab4c4;min-height:24px}.hint{font-size:13px;color:#8290a4;margin-top:18px}
-    video{position:fixed;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none}
-    .pill{display:inline-block;border:1px solid #334155;border-radius:999px;padding:6px 12px;color:#9caec4;font-size:12px;margin-top:12px}
-  </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deeprowss TV</title>
+<style>
+:root{color-scheme:dark;--bg:#07090d;--panel:#141820;--line:#29303c;--gold:#ffc629;--muted:#aab2c0}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% -15%,#242b38 0,#090c12 55%,#050609 100%);color:#f7f8fb;font:16px Inter,system-ui,Arial;min-height:100vh}
+.shell{min-height:100vh;display:grid;place-items:center;padding:24px}.wrap{width:min(100%,620px)}.brand{display:flex;align-items:center;gap:12px;margin:0 0 22px}.mark{width:46px;height:46px;border-radius:15px;background:var(--gold);color:#17120a;display:grid;place-items:center;font-size:23px;font-weight:900}.brand strong{font-size:20px;letter-spacing:.04em}.brand small{display:block;color:var(--muted);margin-top:3px}
+.panel{background:linear-gradient(145deg,#191e27,#10141b);border:1px solid var(--line);border-radius:25px;padding:clamp(20px,5vw,34px);box-shadow:0 24px 80px #0008}.eyebrow{font-size:11px;letter-spacing:.17em;color:var(--gold);font-weight:800;text-transform:uppercase}h1{font-size:clamp(25px,5vw,34px);margin:10px 0}p{color:var(--muted);line-height:1.55}.fields{display:grid;gap:12px;margin-top:24px}input{width:100%;padding:16px;border-radius:14px;border:1px solid #3a4351;background:#090d14;color:white;font-size:17px;outline:none}input:focus{border-color:var(--gold)}#pin{letter-spacing:.42em;text-align:center;font-size:24px;font-weight:800}
+button{border:0;border-radius:14px;padding:14px 18px;background:var(--gold);color:#16120a;font-weight:850;font-size:16px;cursor:pointer}button:disabled{opacity:.45;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-offset:3px}.outline{background:transparent;border:1px solid #657080;color:#f6f7fa}.status{display:flex;align-items:center;gap:9px;margin-top:18px;color:var(--muted);font-size:14px}.dot{width:9px;height:9px;border-radius:50%;background:#727b88}.dot.on{background:#42c66a;box-shadow:0 0 14px #42c66a77}
+.hint{font-size:12px;color:#8791a0;margin-top:18px}.video-shell{position:fixed;inset:0;background:#000;display:none}.video-shell video{width:100%;height:100%;object-fit:contain}.controls{position:absolute;left:0;right:0;bottom:0;padding:20px max(18px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom));background:linear-gradient(transparent,#000d 45%);opacity:1;transition:opacity .2s}.control-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.now-title{font-weight:800;text-shadow:0 2px 8px #000}.control-row{display:flex;align-items:center;justify-content:center;gap:16px}.control-row button{width:48px;height:48px;border-radius:50%;padding:0;font-size:20px}.control-row .primary{width:58px;height:58px;font-size:25px}.seek{width:100%;accent-color:var(--gold);margin:12px 0}.volume{width:110px;accent-color:var(--gold)}.small{font-size:12px;color:#c4cad4}.hidden{display:none!important}
+@media(max-width:520px){.shell{padding:14px}.panel{border-radius:20px}.volume{width:75px}.controls{padding:14px}}
+</style>
 </head>
 <body>
-  <video id="screen" autoplay playsinline></video>
-  <main class="shell" id="join">
-    <div class="logo">DEEProWSS</div>
-    <div class="sub">Deeprowss TV Screen Receiver</div>
-    <section class="panel">
-      <h2>Connect your phone</h2>
-      <p class="sub">Enter the phone address and six-digit code shown in the Deeprowss app.</p>
-      <input id="host" inputmode="url" autocomplete="url" aria-label="Phone address" placeholder="192.168.1.20:12345" style="width:min(100%,420px);font-size:18px;letter-spacing:0;margin-bottom:12px">
-      <input id="pin" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" aria-label="Six digit pairing code">
-      <button id="connect">Connect phone</button>
-      <div id="status" role="status">Ready to receive a screen stream</div>
-      <div class="pill">Same Wi-Fi network required</div>
-      <div class="hint">Keep this screen open while Deeprowss is mirroring.</div>
-    </section>
-  </main>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
-  <script>
-  (() => {
-    const pinInput = document.getElementById('pin');
-    const hostInput = document.getElementById('host');
-    const status = document.getElementById('status');
-    const video = document.getElementById('screen');
-    const join = document.getElementById('join');
-    let socket, peer, hls, urlPlaying = false;
-    const pendingCandidates = [];
-    const params = new URLSearchParams(location.search);
-    if (/^\d{6}$/.test(params.get('pin') || '')) pinInput.value = params.get('pin');
-    if (params.get('host')) hostInput.value = params.get('host');
-    const say = (value) => { status.textContent = value; };
-    const send = (value) => { if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(value)); };
-    function stopUrl() {
-      urlPlaying = false;
-      if (hls) { try { hls.destroy(); } catch (_) {} hls = null; }
-      video.removeAttribute('src');
-    }
-    function showJoin(msg) {
-      video.pause(); video.style.display = 'none'; join.style.display = 'grid'; say(msg);
-    }
-    function playUrl(url, kind) {
-      stopUrl();
-      urlPlaying = true;
-      video.srcObject = null;
-      video.muted = false; video.volume = 1;
-      video.style.display = 'block';
-      join.style.display = 'none';
-      const isHls = kind === 'hls' || /\.m3u8(\?|$)/i.test(url);
-      const start = () => video.play().catch(() => {
-        video.muted = true; video.play().catch(() => {});
-        const unmute = () => { video.muted = false; video.play().catch(() => {}); document.removeEventListener('click', unmute); document.removeEventListener('keydown', unmute); };
-        document.addEventListener('click', unmute); document.addEventListener('keydown', unmute);
-      });
-      if (kind === 'dash' || /\.mpd(\?|$)/i.test(url)) { showJoin('This browser receiver cannot play DASH (.mpd) streams yet.'); urlPlaying = false; return; }
-      if (isHls && !video.canPlayType('application/vnd.apple.mpegurl')) {
-        if (!window.Hls || !Hls.isSupported()) { showJoin('This browser cannot play HLS streams.'); urlPlaying = false; return; }
-        hls = new Hls({ lowLatencyMode: true });
-        hls.on(Hls.Events.MANIFEST_PARSED, start);
-        hls.on(Hls.Events.ERROR, (_, d) => {
-          if (d.fatal) showJoin('Could not play this channel in the browser (' + (d.details || 'error') + '). Some streams need special headers or block other sites.');
-        });
-        hls.loadSource(url);
-        hls.attachMedia(video);
-      } else {
-        video.src = url;
-        video.onerror = () => showJoin('Could not play this video in the browser. The stream may block other sites or need special headers.');
-        start();
-      }
-    }
-    async function connect() {
-      // The click on "Connect phone" is the user gesture that lets the page play sound.
-      video.muted = false; video.volume = 1;
-      if (socket && socket.readyState === WebSocket.OPEN) return;
-      pendingCandidates.length = 0;
-      if (peer) { peer.close(); peer = null; }
-      const pin = pinInput.value.trim();
-      let host = hostInput.value.trim();
-      if (host.startsWith('http://') || host.startsWith('https://')) {
-        try { host = new URL(host).host; } catch (_) { host = ''; }
-      }
-      if (!host || !/^\d{6}$/.test(pin)) { say('Enter the phone address and six-digit code from Deeprowss.'); return; }
-      document.getElementById('connect').disabled = true;
-      say('Connecting to your phone…');
-      socket = new WebSocket(`ws://${host}/ws?pin=${encodeURIComponent(pin)}`);
-      socket.onopen = () => { say('Connected. Waiting for the phone screen…'); send({type:'ready'}); };
-      socket.onerror = () => { say('Could not connect. Check the address, code and Wi-Fi.'); document.getElementById('connect').disabled = false; };
-      socket.onclose = () => {
-        say('Connection closed. Re-enter the code to reconnect.');
-        document.getElementById('connect').disabled = false;
-        if (urlPlaying) { say('Phone disconnected. The channel keeps playing here.'); return; }
-        video.pause(); video.srcObject = null; video.style.display = 'none'; join.style.display = 'grid';
-        if (peer) { peer.close(); peer = null; }
-      };
-      socket.onmessage = async (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          if (message.type === 'play' && typeof message.url === 'string') {
-            if (peer) { peer.close(); peer = null; }
-            playUrl(message.url, message.kind);
-          } else if (message.type === 'offer') {
-            stopUrl();
-            peer = new RTCPeerConnection({iceServers:[
-              {urls:'stun:stun.l.google.com:19302'},
-              {urls:'stun:stun1.l.google.com:19302'}
-            ]});
-            peer.ontrack = (e) => {
-              video.srcObject = e.streams[0];
-              video.style.display = 'block';
-              join.style.display = 'none';
-              video.muted = false;
-              video.play().catch(() => {
-                // Browser blocked sound: start muted, show a tap-to-unmute hint.
-                video.muted = true; video.play().catch(() => {});
-                const unmute = () => { video.muted = false; video.play().catch(() => {}); document.removeEventListener('click', unmute); document.removeEventListener('keydown', unmute); };
-                document.addEventListener('click', unmute); document.addEventListener('keydown', unmute);
-              });
-            };
-            peer.onicecandidate = (e) => { if (e.candidate) send({type:'candidate',candidate:e.candidate.toJSON()}); };
-            peer.onconnectionstatechange = () => {
-              if (peer.connectionState === 'connected') say('Mirroring is live');
-              if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') say('Video connection interrupted');
-            };
-            await peer.setRemoteDescription({type:message.sdpType || 'offer',sdp:message.sdp});
-            while (pendingCandidates.length) await peer.addIceCandidate(pendingCandidates.shift());
-            const answer = await peer.createAnswer();
-            await peer.setLocalDescription(answer);
-            send({type:'answer',sdp:answer.sdp,sdpType:answer.type});
-          } else if (message.type === 'candidate') {
-            if (peer && peer.remoteDescription) await peer.addIceCandidate(message.candidate);
-            else pendingCandidates.push(message.candidate);
-          }
-        } catch (e) { say('Receiver error: ' + e.message); }
-      };
-    }
-    document.getElementById('connect').addEventListener('click', connect);
-    pinInput.addEventListener('keydown', e => { if (e.key === 'Enter') connect(); });
-    if (hostInput.value && pinInput.value) setTimeout(connect, 450);
-  })();
-  </script>
-</body>
-</html>
+<main class="shell" id="join"><div class="wrap">
+  <div class="brand"><div class="mark">D</div><div><strong>DEEProWSS TV</strong><small>Wireless screen & video receiver</small></div></div>
+  <section class="panel">
+    <div class="eyebrow">Secure local connection</div><h1>Connect your device</h1>
+    <p>Enter the phone's local address and the six-digit pairing code shown in Deeprowss. Both devices must be on the same Wi-Fi.</p>
+    <div class="fields">
+      <input id="host" inputmode="url" autocomplete="url" placeholder="Phone address · 192.168.1.20:42385" aria-label="Phone address">
+      <input id="pin" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="••••••" aria-label="Six digit pairing code">
+      <button id="connect">Connect to Deeprowss</button>
+    </div>
+    <div class="status"><span class="dot" id="dot"></span><span id="status">Ready to connect</span></div>
+    <div class="hint">Your video is sent over your local network. No account or cloud video upload is required.</div>
+  </section>
+</div></main>
+<section class="video-shell" id="player">
+  <video id="screen" playsinline autoplay></video>
+  <div class="controls">
+    <div class="control-top"><div><div class="eyebrow">Now playing</div><div class="now-title" id="nowTitle">Deeprowss video</div></div><button class="outline" id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div>
+    <input class="seek" id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek">
+    <div class="control-row">
+      <button class="outline" id="back" aria-label="Back 10 seconds">↶</button>
+      <button class="primary" id="toggle" aria-label="Pause">Ⅱ</button>
+      <button class="outline" id="forward" aria-label="Forward 10 seconds">↷</button>
+      <span class="small" id="clock">LIVE</span>
+      <span class="small">🔊</span><input class="volume" id="volume" type="range" min="0" max="1" step=".05" value="1" aria-label="Volume">
+    </div>
+    <div class="control-top" style="margin:14px 0 0"><span class="small" id="playStatus">Connected</span><button class="outline" id="disconnect">Disconnect</button></div>
+  </div>
+</section>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js"></script>
+<script>
+(()=> {
+ const $=id=>document.getElementById(id), video=$('screen'), join=$('join'), player=$('player');
+ let socket=null,peer=null,hls=null,dash=null,activeUrl=false,dragging=false;
+ const params=new URLSearchParams(location.search);
+ if(/^\d{6}$/.test(params.get('pin')||''))$('pin').value=params.get('pin');
+ if(params.get('host'))$('host').value=params.get('host');
+ function status(text,on=false){$('status').textContent=text;$('dot').classList.toggle('on',on)}
+ function send(v){if(socket&&socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify(v))}
+ function destroyEngines(){if(hls){hls.destroy();hls=null}if(dash){dash.reset();dash=null}}
+ function showPlayer(title){join.classList.add('hidden');player.style.display='block';$('nowTitle').textContent=title||'Deeprowss video'}
+ function showJoin(msg){video.pause();player.style.display='none';join.classList.remove('hidden');status(msg)}
+ function playUrl(url,kind,title){
+   destroyEngines();activeUrl=true;video.srcObject=null;video.removeAttribute('src');video.load();video.muted=false;video.volume=Number($('volume').value);showPlayer(title);
+   const start=()=>video.play().then(()=>{$('playStatus').textContent='Playing';send({type:'receiver_status',playing:true,title})}).catch(()=>{$('playStatus').textContent='Tap Play to start audio';$('toggle').textContent='▶'});
+   if(kind==='dash'||/\.mpd(\?|$)/i.test(url)){
+     if(!window.dashjs){$('playStatus').textContent='DASH player library unavailable';return}
+     dash=dashjs.MediaPlayer().create();dash.initialize(video,url,true);dash.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED,start);dash.on(dashjs.MediaPlayer.events.ERROR,e=>$('playStatus').textContent='DASH error: '+(e.error||'stream unavailable'));return;
+   }
+   const isHls=kind==='hls'||/\.m3u8(\?|$)/i.test(url);
+   if(isHls&&!video.canPlayType('application/vnd.apple.mpegurl')){
+     if(!window.Hls||!Hls.isSupported()){$('playStatus').textContent='This browser does not support HLS';return}
+     hls=new Hls({enableWorker:true,lowLatencyMode:true,backBufferLength:30});
+     hls.on(Hls.Events.MANIFEST_PARSED,start);
+     hls.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal)$('playStatus').textContent='Stream error: '+d.details+' · source may require headers or block browser playback'});
+     hls.loadSource(url);hls.attachMedia(video);
+   }else{video.src=url;video.onerror=()=>$('playStatus').textContent='Playback blocked by source/CORS or required headers';video.addEventListener('loadedmetadata',start,{once:true});}
+ }
+ async function connect(){
+   let host=$('host').value.trim(),pin=$('pin').value.trim();
+   if(/^https?:\/\//i.test(host)){try{host=new URL(host).host}catch(_){host=''}}
+   if(!host||!/^\d{6}$/.test(pin)){status('Enter the phone address and six-digit code');return}
+   if(socket&&socket.readyState===WebSocket.OPEN)return;
+   if(peer){peer.close();peer=null}
+   $('connect').disabled=true;status('Connecting to your phone…');
+   socket=new WebSocket('ws://'+host+'/ws?pin='+encodeURIComponent(pin));
+   socket.onopen=()=>{status('Connected · waiting for video',true);send({type:'ready'})};
+   socket.onerror=()=>{status('Could not connect. Check address, PIN and Wi-Fi');$('connect').disabled=false};
+   socket.onclose=()=>{$('connect').disabled=false;if(!activeUrl)showJoin('Connection closed · reconnect with the same PIN');else $('playStatus').textContent='Phone disconnected · playback continues'};
+   socket.onmessage=async ev=>{
+     try{const m=JSON.parse(ev.data);
+       if(m.type==='play'){if(peer){peer.close();peer=null}playUrl(m.url,m.kind,m.title)}
+       if(m.type==='offer'){
+         destroyEngines();activeUrl=false;peer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]});
+         peer.ontrack=e=>{video.srcObject=e.streams[0];showPlayer('Phone screen');const hasAudio=e.streams[0].getAudioTracks().length>0;$('playStatus').textContent=hasAudio?'Mirroring with audio track':'Mirroring · sender did not provide an audio track';video.play().catch(()=>{$('playStatus').textContent+=' · tap Play for sound'})};
+         peer.onicecandidate=e=>{if(e.candidate)send({type:'candidate',candidate:e.candidate.toJSON()})};
+         await peer.setRemoteDescription({type:m.sdpType||'offer',sdp:m.sdp});
+         const answer=await peer.createAnswer();await peer.setLocalDescription(answer);send({type:'answer',sdp:answer.sdp,sdpType:answer.type});
+       }
+       if(m.type==='candidate'&&peer&&m.candidate)await peer.addIceCandidate(m.candidate);
+     }catch(e){status('Receiver error: '+e.message)}
+   };
+ }
+ $('connect').addEventListener('click',connect);$('pin').addEventListener('keydown',e=>{if(e.key==='Enter')connect()});
+ $('toggle').onclick=()=>{if(video.paused)video.play().then(()=>send({type:'receiver_status',playing:true,title:$('nowTitle').textContent})).catch(()=>{});else{video.pause();send({type:'receiver_status',playing:false,title:$('nowTitle').textContent})}};
+ video.addEventListener('play',()=>$('toggle').textContent='Ⅱ');video.addEventListener('pause',()=>$('toggle').textContent='▶');
+ $('volume').oninput=()=>video.volume=Number($('volume').value);
+ $('seek').onpointerdown=()=>dragging=true;$('seek').onpointerup=()=>dragging=false;
+ $('seek').oninput=()=>{if(video.duration&&isFinite(video.duration))video.currentTime=video.duration*Number($('seek').value)/1000};
+ video.addEventListener('timeupdate',()=>{if(video.duration&&isFinite(video.duration)){if(!dragging)$('seek').value=String(Math.round(video.currentTime/video.duration*1000));$('clock').textContent=Math.floor(video.currentTime/60)+':'+String(Math.floor(video.currentTime%60)).padStart(2,'0')+' / '+Math.floor(video.duration/60)+':'+String(Math.floor(video.duration%60)).padStart(2,'0')}});
+ $('back').onclick=()=>{if(isFinite(video.duration))video.currentTime=Math.max(0,video.currentTime-10)};
+ $('forward').onclick=()=>{if(isFinite(video.duration))video.currentTime=Math.min(video.duration,video.currentTime+10)};
+ $('fullscreen').onclick=()=>{if(!document.fullscreenElement)player.requestFullscreen?.();else document.exitFullscreen?.()};
+ document.addEventListener('keydown',e=>{
+   if(join.classList.contains('hidden')===false)return;
+   if(e.target&&['INPUT','BUTTON'].includes(e.target.tagName))return;
+   if(e.code==='Space'){e.preventDefault();$('toggle').click()}
+   if(e.code==='ArrowLeft'){e.preventDefault();$('back').click()}
+   if(e.code==='ArrowRight'){e.preventDefault();$('forward').click()}
+   if(e.code==='KeyF')$('fullscreen').click();
+ });
+ $('disconnect').onclick=()=>{send({type:'stop'});if(socket)socket.close();if(peer)peer.close();destroyEngines();activeUrl=false;showJoin('Disconnected')};
+ if($('host').value&&$('pin').value)setTimeout(connect,350);
+})();
+</script>
+</body></html>
