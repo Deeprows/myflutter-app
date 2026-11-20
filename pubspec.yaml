@@ -13,6 +13,7 @@ dependencies:
     sdk: flutter
   webview_flutter: ^4.10.0
   webview_flutter_android: ^4.5.0
+  flutter_inappwebview: ^6.1.5
   wakelock_plus: ^1.2.10
   video_player: ^2.9.2
   google_sign_in: ^6.2.2
