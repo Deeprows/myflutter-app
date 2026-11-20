@@ -5,6 +5,7 @@ import '../../services/cast_service.dart';
 import '../../services/stream_resolver.dart';
 import '../../services/webrtc_mirror_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/premium_gate.dart';
 import 'decoder_cast_page.dart';
 import 'decoder_common.dart';
 import 'decoder_receiver_page.dart';
@@ -116,24 +117,15 @@ Future<void> chooseConnectivity(BuildContext context, CastTarget target) async {
 }
 
 Future<void> castToTv(BuildContext context, CastTarget target) async {
+  if (!await PremiumGate.allowDecoder(context) || !context.mounted) return;
   final ready = await prepareTarget(context, target);
   if (ready == null || !context.mounted) return;
-  await pushDecoderPage<void>(context, DecoderCastPage(target: ready), 'cast');
+  await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => DecoderCastPage(target: ready)));
 }
 
 Future<void> sendToReceiver(BuildContext context, CastTarget target) async {
-  final rawUrl = (target.url ?? '').trim();
-  if (rawUrl.isEmpty) {
-    decoderToast(context, 'There is no video link to send.');
-    return;
-  }
-  // A web embed is intentionally kept as a page URL for the receiver's
-  // dedicated iframe. Trying to resolve every movie page into a direct stream
-  // first often loses provider playback logic, cookies and player scripts.
-  final detected = target.kind ?? StreamResolver.resolve(rawUrl).kind;
-  final CastTarget? ready = detected == StreamKind.embed
-      ? target
-      : await prepareTarget(context, target);
+  if (!await PremiumGate.allowDecoder(context) || !context.mounted) return;
+  final ready = await prepareTarget(context, target);
   if (ready == null || !context.mounted) return;
   final url = ready.url;
   if (url == null || url.isEmpty) {
@@ -141,17 +133,11 @@ Future<void> sendToReceiver(BuildContext context, CastTarget target) async {
     return;
   }
   final mirror = DeeprowssMirrorService.instance;
-  final ok = await mirror.sendChannel(
-    url: url,
-    title: ready.title,
-    kind: ready.kind ?? detected,
-    referer: ready.referer,
-    userAgent: ready.userAgent,
-  );
+  final ok = await mirror.sendChannel(url: url, title: ready.title, kind: ready.kind);
   if (!context.mounted) return;
   if (!ok) {
     decoderToast(context, mirror.error ?? 'Could not start the receiver session.');
     return;
   }
-  await pushDecoderPage<void>(context, const DecoderReceiverPage(), 'receiver');
+  await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => const DecoderReceiverPage()));
 }
