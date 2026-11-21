@@ -206,6 +206,7 @@
     $('detailMeta').innerHTML = ''; $('detailCredits').textContent = 'Loading cast and crew…';
     $('detailTrailerWrap').hidden = true; $('detailTrailer').src = 'about:blank'; $('detailSimilar').innerHTML = '';
     $('detailSave').textContent = isSaved(movie) ? '✓ Saved' : '＋ Watch later';
+    $('detailAlt').hidden = true;
     const dl = movie.downloadUrl || movie.download_url || '';
     $('detailDownload').hidden = !safeUrl(dl);
     $('detailDownload').onclick = () => window.open(safeUrl(dl),'_blank','noopener');
@@ -230,6 +231,8 @@
       if (vids[0]) { $('detailTrailerWrap').hidden = false; $('detailTrailer').src = 'https://www.youtube.com/embed/' + encodeURIComponent(vids[0].key); }
       (d.similar?.results || []).map(x => fromTmdb(x,type)).filter(Boolean).slice(0,12).forEach(x => $('detailSimilar').append(movieCard(x)));
       if (!movie.tmdbId) { movie.tmdbId = target.id; movie.type = type; movie.url = movie.url || embedBase + '/' + type + '/' + target.id; movie.downloadUrl = movie.downloadUrl || downloadBase + '/' + type + '/' + target.id; }
+      $('detailAlt').hidden = false;
+      $('detailAlt').onclick = () => { $('movieDetails').classList.remove('open'); const alt = altEmbedBase + '/' + type + '/' + target.id + (target.tv ? '/1/1' : ''); window.deeprowssPlay(alt,'embed',title(movie) + ' · Alternate Player'); };
     } catch (e) {
       $('detailCredits').textContent = 'Movie information unavailable: ' + e.message;
       $('detailOverview').textContent = movie.overview || 'This title can still be played using its configured player.';
@@ -298,6 +301,32 @@
   $('refreshChannels').onclick = loadChannels;
   $('libSearch').addEventListener('keydown',e => { if (e.key === 'Escape') { $('libSearch').value = ''; query = ''; renderMovies(); renderChannels(); } });
   async function refreshAll() { await loadConfig(); await Promise.all([loadMovies(),loadChannels()]); await loadTrends(); renderMovies(); }
+
+  // The mobile app's saved-title and history shortcuts are available here too.
+  const quickLists = document.createElement('div');
+  quickLists.className = 'detail-actions';
+  quickLists.style.margin = '0 0 18px';
+  quickLists.innerHTML = '<button type="button" class="secondary" id="showWatchLater">▣ Watch Later</button><button type="button" class="secondary" id="showWatchHistory">◷ Watch History</button>';
+  $('libHero').after(quickLists);
+  const savedPanel = document.createElement('section');
+  savedPanel.className = 'libsection';
+  savedPanel.id = 'savedMoviesPanel';
+  savedPanel.hidden = true;
+  savedPanel.innerHTML = '<div class="libsection-head"><h3 id="savedMoviesTitle">Your Library</h3><button id="closeSavedMovies" class="secondary" type="button">Close</button></div><div class="libgrid" id="savedMoviesGrid"></div>';
+  quickLists.after(savedPanel);
+  function showSavedList(key,label) {
+    let rows = []; try { rows = JSON.parse(localStorage.getItem(key) || '[]'); } catch (_) {}
+    $('savedMoviesTitle').textContent = label;
+    $('savedMoviesGrid').innerHTML = '';
+    if (!rows.length) $('savedMoviesGrid').innerHTML = '<div class="libempty">Nothing here yet.</div>';
+    else rows.forEach(m => $('savedMoviesGrid').append(movieCard(m)));
+    savedPanel.hidden = false;
+    savedPanel.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  $('showWatchLater').onclick = () => showSavedList('deeprowss_watch_later','Watch Later');
+  $('showWatchHistory').onclick = () => showSavedList('deeprowss_watch_history','Watch History');
+  $('closeSavedMovies').onclick = () => { savedPanel.hidden = true; };
+
   window.deeprowssShowLibrary();
   refreshAll();
   remoteConfigTimer = setInterval(async () => { await loadConfig(); await loadTrends(); }, 5 * 60 * 1000);
