@@ -28,6 +28,13 @@ jobs:
           cache-dependency-path: desktop/windows/package.json
       - name: Validate receiver library JavaScript
         run: node --check assets/receiver/library.js
+      - name: Bundle receiver and remote data for offline fallback
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force desktop/windows/receiver | Out-Null
+          New-Item -ItemType Directory -Force desktop/windows/data | Out-Null
+          Copy-Item -Path assets/receiver/* -Destination desktop/windows/receiver -Recurse -Force
+          Copy-Item -Path assets/data/* -Destination desktop/windows/data -Recurse -Force
       - name: Install dependencies
         working-directory: desktop/windows
         run: npm install
