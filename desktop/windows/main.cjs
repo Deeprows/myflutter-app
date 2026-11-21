@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, shell, dialog, ipcMain, Menu, Notification } = require('electron');
+const { app, BrowserWindow, session, shell, dialog, ipcMain, Menu, Notification, powerSaveBlocker } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
@@ -72,10 +72,37 @@ async function startServer() {
 /* ------------------------------------------------------------------ */
 let streamHeaders = null; // { referer, userAgent } for the channel that is playing
 const SERVICE_HOSTS = /(^|\.)(themoviedb\.org|tmdb\.org|githubusercontent\.com|github\.io|workers\.dev|youtube\.com|ytimg\.com|googleapis\.com|gstatic\.com|jsdelivr\.net|cdnjs\.cloudflare\.com)$/i;
+/* Ad / pop-under networks (receiver/adblock.json can add more hosts or set enabled:false). */
+const adHosts = new Set(['doubleclick.net', 'googlesyndication.com', 'googleadservices.com', 'adservice.google.com', 'popads.net', 'popcash.net', 'propellerads.com', 'exoclick.com', 'exosrv.com', 'juicyads.com', 'adsterra.com', 'adcash.com', 'clickadu.com', 'hilltopads.net', 'trafficjunky.com', 'admaven.com', 'monetag.com', 'a-ads.com', 'adnxs.com', 'taboola.com', 'outbrain.com']);
+let adBlockOn = true;
+function loadAdBlock() {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(RECEIVER_DIR, 'adblock.json'), 'utf8'));
+    if (j.enabled === false) adBlockOn = false;
+    (Array.isArray(j.hosts) ? j.hosts : []).forEach((h) => { h = String(h).toLowerCase().trim(); if (/^[a-z0-9.-]{3,100}$/.test(h)) adHosts.add(h); });
+  } catch (_) {}
+}
+function isAdHost(host) {
+  let h = String(host || '').toLowerCase();
+  while (adBlockOn && h) {
+    if (adHosts.has(h)) return true;
+    const i = h.indexOf('.');
+    if (i < 0) break;
+    h = h.slice(i + 1);
+  }
+  return false;
+}
 const hostOf = (u) => { try { return new URL(u).hostname; } catch (_) { return ''; } };
+// The Deeprowss pairing relay (phone remote / cast) sends correct CORS headers itself and needs POST.
+const RELAY_HOST = /^deeprowss-feed\.deeprows\.workers\.dev$/i;
 const fromApp = (details) => !!origin && String(details.referrer || '').startsWith(origin);
 
 function configureNetwork(ses) {
+  // Ads, pop-unders and click-redirect scripts of the embedded players never load.
+  ses.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+    callback({ cancel: !(origin && details.url.startsWith(origin)) && isAdHost(hostOf(details.url)) });
+  });
+
   ses.webRequest.onBeforeSendHeaders({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
     const headers = details.requestHeaders;
     if (streamHeaders && !details.url.startsWith(origin) && !SERVICE_HOSTS.test(hostOf(details.url)) && fromApp(details)) {
@@ -101,7 +128,7 @@ function configureNetwork(ses) {
           headers[k] = headers[k].map((v) => v.replace(/frame-ancestors[^;]*;?/gi, ''));
         }
       });
-    } else if (fromApp(details) && !details.url.startsWith(origin)) {
+    } else if (fromApp(details) && !details.url.startsWith(origin) && !RELAY_HOST.test(hostOf(details.url))) {
       // The app's own player (hls.js / dash.js / sniffing) may read any live stream, like the Android native player.
       drop(['access-control-allow-origin', 'access-control-allow-headers', 'access-control-allow-methods', 'access-control-expose-headers', 'access-control-allow-credentials']);
       headers['Access-Control-Allow-Origin'] = ['*'];
@@ -125,6 +152,55 @@ ipcMain.on('stream:headers', (event, headers) => {
   const referer = String((headers && headers.referer) || '').slice(0, 2000);
   const userAgent = String((headers && headers.userAgent) || '').slice(0, 500);
   streamHeaders = (referer || userAgent) ? { referer: /^https?:\/\//i.test(referer) ? referer : '', userAgent } : null;
+});
+
+/* ------------------------------------------------------------------ */
+/* Phone remote support: window fullscreen, bring-to-front, keep-awake */
+/* (Chromium refuses element.requestFullscreen() without a mouse click, */
+/* so a fullscreen request from the phone goes through the window.)     */
+/* ------------------------------------------------------------------ */
+let awakeId = null;
+function setKeepAwake(on) {
+  try {
+    if (on && awakeId === null) awakeId = powerSaveBlocker.start('prevent-display-sleep');
+    else if (!on && awakeId !== null) { powerSaveBlocker.stop(awakeId); awakeId = null; }
+  } catch (_) { awakeId = null; }
+}
+ipcMain.on('power:awake', (event, on) => { if (trusted(event)) setKeepAwake(!!on); });
+ipcMain.handle('win:state', (event) => ({ fullscreen: !!(trusted(event) && mainWin && !mainWin.isDestroyed() && mainWin.isFullScreen()) }));
+ipcMain.handle('win:fullscreen', (event, mode) => {
+  if (!trusted(event) || !mainWin || mainWin.isDestroyed()) return { fullscreen: false };
+  const want = mode === 'on' ? true : mode === 'off' ? false : !mainWin.isFullScreen();
+  mainWin.setFullScreen(want);
+  return { fullscreen: want };
+});
+// Phone remote: a real mouse click inside the embedded player (cross-origin pages cannot be clicked from JS).
+let lastTap = 0;
+ipcMain.handle('embed:tap', (event, fx, fy) => {
+  if (!trusted(event) || !mainWin || mainWin.isDestroyed()) return false;
+  const now = Date.now();
+  if (now - lastTap < 250) return false;
+  lastTap = now;
+  fx = Number(fx); fy = Number(fy);
+  if (!Number.isFinite(fx) || !Number.isFinite(fy)) return false;
+  const [w, h] = mainWin.getContentSize();
+  const x = Math.round(Math.min(1, Math.max(0, fx)) * w), y = Math.round(Math.min(1, Math.max(0, fy)) * h);
+  const wc = mainWin.webContents;
+  wc.sendInputEvent({ type: 'mouseMove', x, y });
+  wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+  setTimeout(() => { if (!wc.isDestroyed()) wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 }); }, 50);
+  return true;
+});
+ipcMain.on('win:focus', (event, raise) => {
+  if (!trusted(event) || !mainWin || mainWin.isDestroyed()) return;
+  if (mainWin.isMinimized()) mainWin.restore();
+  if (!mainWin.isVisible()) mainWin.show();
+  if (raise && !mainWin.isFocused()) {
+    // Windows only lets a background app take focus with this always-on-top toggle.
+    mainWin.setAlwaysOnTop(true);
+    mainWin.focus();
+    mainWin.setAlwaysOnTop(false);
+  }
 });
 
 /* ------------------------------------------------------------------ */
@@ -255,12 +331,16 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false, contextIsolation: true, sandbox: true,
-      autoplayPolicy: 'no-user-gesture-required'
+      autoplayPolicy: 'no-user-gesture-required',
+      backgroundThrottling: false // the phone remote must keep working while the window is minimised or covered
     }
   });
   mainWin = win;
   win.once('ready-to-show', () => win.show());
-  win.on('closed', () => { mainWin = null; });
+  win.on('closed', () => { mainWin = null; setKeepAwake(false); });
+  const sendFullscreen = () => { if (!win.isDestroyed()) win.webContents.send('win:fullscreen', win.isFullScreen()); };
+  win.on('enter-full-screen', sendFullscreen);
+  win.on('leave-full-screen', sendFullscreen);
   win.on('page-title-updated', (event) => event.preventDefault());
   win.webContents.on('enter-html-full-screen', () => { htmlFullscreen = true; });
   win.webContents.on('leave-html-full-screen', () => { htmlFullscreen = false; });
@@ -317,6 +397,7 @@ if (!app.requestSingleInstanceLock()) {
       return;
     }
     loadDownloads();
+    loadAdBlock();
     configureNetwork(session.defaultSession);
     configureDownloads(session.defaultSession);
     configureAutoUpdates();
