@@ -103,7 +103,7 @@
       <div class="hint">Keep this page open while receiving media. The receiver address stays the same; only the pairing PIN changes for a new session.</div><button id="backBrowse" class="secondary" type="button">← Back to Movies & TV</button>
     </section>
     <section class="panel player" id="playerPanel" tabindex="0" aria-label="Video receiver player">
-      <div class="player-head"><div class="title" id="mediaTitle">Ready to play</div><span class="live" id="playState">CONNECTED</span></div>
+      <div class="player-head"><div class="title" id="mediaTitle">Ready to play</div><div style="display:flex;align-items:center;gap:10px"><span class="live" id="playState">CONNECTED</span><button id="backLibrary" class="secondary" type="button">Browse</button></div></div>
       <div class="stage"><video id="screen" playsinline autoplay></video><iframe id="movieFrame" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope; clipboard-write; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="Deeprowss movie embed"></iframe></div>
       <div class="controls"><button class="secondary" id="rewind">−10 sec</button><button id="play">▶ Play</button><button class="secondary" id="pause">Ⅱ Pause</button><button class="secondary" id="forward">+10 sec</button><button class="secondary" id="fullscreen">⛶ Fullscreen</button><button class="secondary" id="stop">■ Stop</button></div>
       <div class="progress"><span id="currentTime">00:00</span><input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek"><span id="totalTime">LIVE</span><label>Vol <input class="volume" id="volume" type="range" min="0" max="100" value="100" aria-label="Volume"></label></div>
@@ -192,6 +192,7 @@
         catch(e){say('Receiver error: '+e.message);}};
     }
     $('connect').addEventListener('click',connect);pinInput.addEventListener('keydown',e=>{if(e.key==='Enter')connect();});
+    $('backLibrary').onclick=()=>window.deeprowssShowLibrary();
     $('play').onclick=()=>remote('play');$('pause').onclick=()=>remote('pause');$('stop').onclick=()=>remote('stop');$('rewind').onclick=()=>remote('rewind');$('forward').onclick=()=>remote('forward');$('fullscreen').onclick=()=>remote('fullscreen');
     document.addEventListener('keydown',e=>{if(!urlPlaying&&!iframePlaying)return;const key=e.key.toLowerCase();const map={space:'play',' ':'play',enter:'play',k:'play',p:'pause',arrowleft:'rewind',arrowright:'forward',m:'unmute',f:'fullscreen',escape:'controls'};const action=map[key];if(action){e.preventDefault();if(action==='controls')showControls();else remote(action);}});
     document.addEventListener('fullscreenchange',()=>{if(document.fullscreenElement)showControls();});
