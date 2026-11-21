@@ -1,7 +1,7 @@
 {
   "name": "deeprowss-cinema",
-  "version": "1.2.5",
-  "description": "Deeprowss Cinema with live receiver, TMDB library and bundled offline receiver fallback",
+  "version": "1.3.0",
+  "description": "Deeprowss Cinema: Kodi-style Movies, live TV channels and phone Connect receiver for Windows",
   "main": "main.cjs",
   "author": "Deeprowss",
   "license": "UNLICENSED",
@@ -22,6 +22,7 @@
     },
     "files": [
       "main.cjs",
+      "preload.cjs",
       "desktop.html",
       "package.json",
       "receiver/**/*",
