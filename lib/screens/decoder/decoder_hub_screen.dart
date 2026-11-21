@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../models/cast_target.dart';
 import '../../services/cast_service.dart';
+import '../../services/decoder_number.dart';
 import '../../services/webrtc_mirror_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/premium_gate.dart';
@@ -30,19 +32,20 @@ class DecoderHubScreen extends StatefulWidget {
 class _DecoderHubScreenState extends State<DecoderHubScreen> {
   final CastService svc = CastService.instance;
   final DeeprowssMirrorService mirror = DeeprowssMirrorService.instance;
-  bool _premiumChecked = false;
+  String? _number;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final allowed = await PremiumGate.allowDecoder(context);
+    DecoderNumber.get().then((n) {
+      if (mounted) setState(() => _number = n);
+    });
+    // Everyone can open the Smart Decoder page. Tapping an item asks non-Premium
+    // visitors to upgrade (see _open and the Ready-to-watch buttons).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (!allowed) {
-        Navigator.of(context).maybePop();
-      } else {
-        setState(() => _premiumChecked = true);
-        DecoderMemory.save('hub');
+      DecoderMemory.save('hub');
+      if (!PremiumGate.decoderLocked) {
         final restore = _pageFor(widget.initialPage);
         if (restore != null) _open(restore.$1, restore.$2);
       }
@@ -73,6 +76,8 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
   }
 
   Future<void> _open(Widget page, String id) async {
+    // Non-Premium visitors see the upgrade sheet instead of the page.
+    if (!await PremiumGate.allowDecoder(context) || !mounted) return;
     DecoderMemory.save(id);
     await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => page));
     DecoderMemory.save('hub');
@@ -100,11 +105,83 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
         ),
       );
 
+  void _copyNumber() {
+    final n = _number;
+    if (n == null) return;
+    Clipboard.setData(ClipboardData(text: n));
+    HapticFeedback.selectionClick();
+    decoderToast(context, 'Decoder number copied.');
+  }
+
+  void _explainNumber() => showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: Ui.card,
+          title: Text('Your Decoder number', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900)),
+          content: Text(
+            'This is your personal access code for the Deeprowss Windows app and the receiver page. '
+            'Enter it on their home screen to unlock movies and live TV there.',
+            style: TextStyle(color: Ui.muted, height: 1.4),
+          ),
+          actions: [
+            TextButton(onPressed: _copyNumber, child: const Text('Copy')),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK')),
+          ],
+        ),
+      );
+
+  /// Header strip under the title: the unique Decoder number (tap to copy).
+  Widget _numberPill() {
+    final n = _number;
+    return Material(
+      color: Colors.transparent,
+      child: Ink(
+        decoration: BoxDecoration(
+          color: Ui.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Ui.red.withValues(alpha: .7), width: 1.2),
+        ),
+        child: InkWell(
+          onTap: _copyNumber,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 2, 0),
+            child: Row(children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(color: Ui.red.withValues(alpha: .16), borderRadius: BorderRadius.circular(10)),
+                child: Icon(Icons.key_rounded, color: Ui.redSoft, size: 19),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text('DECODER NUMBER · TAP TO COPY',
+                      style: TextStyle(color: Ui.muted, fontSize: 9.5, letterSpacing: .8, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 1),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(n == null ? '···' : DecoderNumber.format(n),
+                        style: TextStyle(color: Ui.text, fontSize: 21, letterSpacing: 2.4, fontWeight: FontWeight.w900)),
+                  ),
+                ]),
+              ),
+              IconButton(
+                tooltip: 'What is this?',
+                visualDensity: VisualDensity.compact,
+                onPressed: _explainNumber,
+                icon: Icon(Icons.info_outline_rounded, color: Ui.muted, size: 20),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (!_premiumChecked) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
     final t = widget.target;
     return Scaffold(
       backgroundColor: Ui.bg,
@@ -114,6 +191,13 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
           Text('Deeprowss Decoder', style: TextStyle(fontWeight: FontWeight.w900)),
           Text('Watch on a bigger screen', style: TextStyle(fontSize: 11, color: Colors.white60)),
         ]),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(64),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: SizedBox(height: 50, child: _numberPill()),
+          ),
+        ),
       ),
       body: ListenableBuilder(
         listenable: Listenable.merge([svc, mirror]),
