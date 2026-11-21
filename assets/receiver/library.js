@@ -165,15 +165,25 @@
   }
   async function renderMovies() {
     renderFilters();
-    const q = query.toLowerCase();
-    let list = movies.filter(m => (mediaType === 'all' || isTv(m) === (mediaType === 'tv')) && (genre === 'All' || (m.genre || m.genres?.join(',') || '').toLowerCase().includes(genre.toLowerCase())) && (!q || (title(m) + ' ' + (m.genre || '')).toLowerCase().includes(q)));
+    const requestedQuery = query, requestedGenre = genre, requestedType = mediaType;
+    const q = requestedQuery.toLowerCase();
+    const typeMatches = m => requestedType === 'all' || isTv(m) === (requestedType === 'tv');
+    const genreMatches = m => requestedGenre === 'All' || (m.genre || m.genres?.join(',') || '').toLowerCase().includes(requestedGenre.toLowerCase());
+    let list = movies.filter(m => typeMatches(m) && genreMatches(m) && (!q || (title(m) + ' ' + (m.genre || '')).toLowerCase().includes(q)));
     if (q.length >= 2) {
-      const extra = await searchTmdb(query), seen = new Set(list.map(m => String(idOf(m) || m.url)));
-      extra.forEach(m => { const k = String(idOf(m) || m.url); if (!seen.has(k) && (mediaType === 'all' || isTv(m) === (mediaType === 'tv'))) { list.push(m); seen.add(k); } });
-    } else if (genre !== 'All') {
-      try { const extra = await discoverGenre(genre), seen = new Set(list.map(m => String(idOf(m) || m.url))); extra.forEach(m => { const k = String(idOf(m) || m.url); if (!seen.has(k)) { list.push(m); seen.add(k); } }); } catch (_) {}
+      const extra = await searchTmdb(requestedQuery);
+      if (query !== requestedQuery || genre !== requestedGenre || mediaType !== requestedType) return;
+      const seen = new Set(list.map(m => String(idOf(m) || m.url)));
+      extra.forEach(m => { const k = String(idOf(m) || m.url); if (!seen.has(k) && typeMatches(m) && genreMatches(m)) { list.push(m); seen.add(k); } });
+    } else if (requestedGenre !== 'All') {
+      try {
+        const extra = await discoverGenre(requestedGenre);
+        if (query !== requestedQuery || genre !== requestedGenre || mediaType !== requestedType) return;
+        const seen = new Set(list.map(m => String(idOf(m) || m.url)));
+        extra.forEach(m => { const k = String(idOf(m) || m.url); if (!seen.has(k) && typeMatches(m) && genreMatches(m)) { list.push(m); seen.add(k); } });
+      } catch (_) {}
     }
-    $('libCatalogTitle').textContent = q ? 'Search Results' : genre !== 'All' ? genre : mediaType === 'tv' ? 'TV Series' : mediaType === 'movie' ? 'Movies' : 'All Movies & Series';
+    $('libCatalogTitle').textContent = q ? 'Search Results' : requestedGenre !== 'All' ? requestedGenre : requestedType === 'tv' ? 'TV Series' : requestedType === 'movie' ? 'Movies' : 'All Movies & Series';
     $('libCount').textContent = list.length + ' titles';
     const grid = $('libMovieGrid'); grid.innerHTML = '';
     if (!list.length) { grid.innerHTML = '<div class="libempty">No titles found.</div>'; return; }
