@@ -94,6 +94,14 @@ class DeeprowssMirrorService extends ChangeNotifier {
   String nowPlayingTitle = '';
   String nowPlayingKind = '';
   int receiverVolume = 100;
+  // Live state reported by the receiver page / Android TV app.
+  bool receiverPlaying = true;
+  bool receiverMuted = false;
+  bool receiverPlayerOpen = false;
+  bool receiverFullscreen = false;
+  String receiverMode = 'idle'; // idle | media | iframe | mirror
+  String receiverView = 'landing'; // landing | movies | connect
+  DateTime _volumeSetAt = DateTime.fromMillisecondsSinceEpoch(0);
   String status = 'Not running';
   String? error;
 
@@ -195,6 +203,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
       if (usingQrPairing) {
         _relayTimer?.cancel();
         _relayTimer = Timer.periodic(const Duration(milliseconds: 650), (_) => unawaited(_pollRelay()));
+        unawaited(_relaySend({'type': 'hello'}));
         if (_screenStream != null) await _createPeerConnection();
       } else if (_socket != null) await _createPeerConnection();
     } catch (e) {
@@ -296,6 +305,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
       final message = jsonDecode(raw as String) as Map<String, dynamic>;
       switch (message['type']) {
         case 'ready':
+          requestReceiverState();
           _flushPending();
           if (_screenStream != null) await _createPeerConnection();
           break;
@@ -330,6 +340,24 @@ class DeeprowssMirrorService extends ChangeNotifier {
         case 'receiver-status':
           final detail = message['message'];
           if (detail is String && detail.isNotEmpty) status = detail;
+          notifyListeners();
+          break;
+        case 'receiver-state':
+          connected = true;
+          receiverMode = (message['mode'] as String?) ?? 'idle';
+          receiverView = (message['view'] as String?) ?? receiverView;
+          receiverPlayerOpen = message['playerOpen'] == true;
+          receiverPlaying = message['playing'] != false;
+          receiverMuted = message['muted'] == true;
+          receiverFullscreen = message['fullscreen'] == true;
+          final vol = (message['volume'] as num?)?.round();
+          // Do not fight the slider while the user is dragging it.
+          if (vol != null && DateTime.now().difference(_volumeSetAt).inMilliseconds > 1500) {
+            receiverVolume = vol.clamp(0, 100).toInt();
+          }
+          final title = message['title'];
+          if (title is String && title.isNotEmpty && receiverPlayerOpen) nowPlayingTitle = title;
+          if (running && status.startsWith('Paired')) status = 'Receiver connected';
           notifyListeners();
           break;
         case 'stop-complete':
@@ -462,6 +490,18 @@ class DeeprowssMirrorService extends ChangeNotifier {
   /// the connection state or closing the socket.
   Future<void> stopPlayback() async {
     final socket = _socket;
+    if ((socket == null || socket.readyState != WebSocket.open) && usingQrPairing && running) {
+      _send({'type': 'remote', 'command': 'stop'});
+      nowPlayingTitle = '';
+      nowPlayingKind = '';
+      receiverPlayerOpen = false;
+      BackgroundPlayback.castHook = null;
+      BackgroundPlayback.castActive = false;
+      unawaited(BackgroundPlayback.stopCasting());
+      status = 'Playback stopped on receiver';
+      notifyListeners();
+      return;
+    }
     if (socket == null || socket.readyState != WebSocket.open) {
       nowPlayingTitle = '';
       nowPlayingKind = '';
@@ -491,12 +531,46 @@ class DeeprowssMirrorService extends ChangeNotifier {
   /// may expose different control APIs; the receiver reports unsupported commands.
   void setReceiverVolume(double value) {
     receiverVolume = value.round().clamp(0, 100).toInt();
+    _volumeSetAt = DateTime.now();
+    if (receiverVolume > 0) receiverMuted = false;
     sendRemoteCommand('volume', value: receiverVolume.toDouble());
     notifyListeners();
   }
 
+  /// Toggles mute on the receiver and updates the button immediately; the
+  /// receiver then confirms the real state.
+  bool toggleReceiverMute() {
+    final ok = sendRemoteCommand(receiverMuted ? 'unmute' : 'mute');
+    if (ok) {
+      receiverMuted = !receiverMuted;
+      notifyListeners();
+    }
+    return ok;
+  }
+
+  /// Toggles play / pause on the receiver.
+  bool toggleReceiverPlay() {
+    final ok = sendRemoteCommand(receiverPlaying ? 'pause' : 'play');
+    if (ok) {
+      receiverPlaying = !receiverPlaying;
+      notifyListeners();
+    }
+    return ok;
+  }
+
+  /// Volume step in percent (positive or negative).
+  void nudgeReceiverVolume(int delta) => setReceiverVolume((receiverVolume + delta).toDouble());
+
+  /// TV-style navigation: up, down, left, right, enter, back, home.
+  bool sendRemoteKey(String key) => sendRemoteCommand(key);
+
+  /// Asks the receiver to report its current state (used right after pairing).
+  void requestReceiverState() => sendRemoteCommand('hello');
+
   bool sendRemoteCommand(String command, {double? value}) {
-    if (_socket == null || _socket!.readyState != WebSocket.open) return false;
+    final direct = _socket != null && _socket!.readyState == WebSocket.open;
+    // QR pairing has no direct socket: commands travel through the pairing relay.
+    if (!direct && !(usingQrPairing && running)) return false;
     _send({'type': 'remote', 'command': command, if (value != null) 'value': value});
     return true;
   }
@@ -610,6 +684,11 @@ class DeeprowssMirrorService extends ChangeNotifier {
     unawaited(BackgroundPlayback.stopCasting());
     nowPlayingTitle = '';
     nowPlayingKind = '';
+    receiverPlaying = true;
+    receiverMuted = false;
+    receiverPlayerOpen = false;
+    receiverMode = 'idle';
+    receiverView = 'landing';
     status = 'Mirroring stopped';
     _stopping = false;
     notifyListeners();
