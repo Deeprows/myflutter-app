@@ -12,7 +12,7 @@
   let config = {}, apiKey = FALLBACK_KEY, language = 'en-US';
   let embedBase = 'https://vsembed.su/embed', altEmbedBase = 'https://web.nxsha.app/embed', downloadBase = 'https://web.nxsha.app/dl';
   let movies = [], channels = [], trending = [], top10 = [], trendingMovies = [], trailers = [];
-  let genre = 'All', mediaType = 'all', channelCategory = 'All', query = '', activeMovie = null;
+  let genre = 'All', mediaType = 'all', channelCategory = 'All', channelCountry = 'All', favoritesOnly = false, query = '', activeMovie = null;
   let searchTimer, remoteConfigTimer;
   const genreNames = {28:'Action',12:'Adventure',16:'Animation',35:'Comedy',80:'Crime',99:'Documentary',18:'Drama',10751:'Family',14:'Fantasy',36:'History',27:'Horror',10402:'Music',9648:'Mystery',10749:'Romance',878:'Sci-Fi',10770:'TV Movie',53:'Thriller',10752:'War',37:'Western',10759:'Action & Adventure',10762:'Kids',10763:'News',10764:'Reality',10765:'Sci-Fi & Fantasy',10766:'Soap',10767:'Talk',10768:'War & Politics'};
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -299,20 +299,26 @@
       const d = await getJson(NEXUS_URL), rows = Array.isArray(d) ? d : d.channels || [];
       extra = rows.filter(c => c && c.name && Array.isArray(c.streams)).map(c => {
         const streams = c.streams.filter(s => s?.url && (!s.health || s.health.status === 'online')).sort((a,b) => (b.rank || 0) - (a.rank || 0));
-        const s = streams[0]; return s ? {name:c.name,url:s.url,category:(c.categories || [])[0] || 'other',logo:c.logo,country:c.country,quality:s.quality || c.best_quality} : null;
+        const s = streams[0], backup = streams[1]; return s ? {name:c.name,url:s.url,altUrl:backup?.url || '',category:(c.categories || [])[0] || 'other',logo:c.logo,country:c.country,quality:s.quality || c.best_quality} : null;
       }).filter(Boolean);
     } catch (_) {}
     const map = new Map();
     [...own,...extra].forEach(c => { if (!c?.name || !c?.url) return; const key = c.name.toLowerCase(); if (!map.has(key)) map.set(key,{...c,url:safeUrl(c.url,'https://footbolive.online/')}); });
     channels = [...map.values()].filter(c => c.url); renderChannels();
   }
+  function channelKey(c){return String(c.name||'').toLowerCase()+'|'+String(c.url||'');}
+  function isChannelSaved(c){try{return (JSON.parse(localStorage.getItem('deeprowss_channel_favorites')||'[]')).includes(channelKey(c));}catch(_){return false;}}
+  function toggleChannelSaved(c){let rows=[];try{rows=JSON.parse(localStorage.getItem('deeprowss_channel_favorites')||'[]');}catch(_){}const k=channelKey(c);rows=rows.includes(k)?rows.filter(x=>x!==k):[...rows,k];localStorage.setItem('deeprowss_channel_favorites',JSON.stringify(rows));}
   function renderChannels() {
     const q = query.toLowerCase();
-    const list = channels.filter(c => (channelCategory === 'All' || channelCategoryName(c) === channelCategory) && (!q || (c.name + ' ' + channelCategoryName(c) + ' ' + (c.country || '')).toLowerCase().includes(q)));
+    const list = channels.filter(c => (channelCategory === 'All' || channelCategoryName(c) === channelCategory) && (channelCountry === 'All' || String(c.country || '').toUpperCase() === channelCountry) && (!favoritesOnly || isChannelSaved(c)) && (!q || (c.name + ' ' + channelCategoryName(c) + ' ' + (c.country || '')).toLowerCase().includes(q)));
     $('channelCount').textContent = list.length + ' channels available';
     const categories = ['All',...new Set(channels.map(channelCategoryName).sort())];
     $('channelFilters').innerHTML = '';
+    const fav = document.createElement('button'); fav.className = 'libchip' + (favoritesOnly ? ' active' : ''); fav.textContent = '★ Favorites'; fav.onclick = () => { favoritesOnly = !favoritesOnly; renderChannels(); }; $('channelFilters').append(fav);
     categories.forEach(cat => { const b = document.createElement('button'); b.className = 'libchip' + (channelCategory === cat ? ' active' : ''); b.textContent = cat; b.onclick = () => { channelCategory = cat; renderChannels(); }; $('channelFilters').append(b); });
+    const countries = [...new Set(channels.map(c => String(c.country || '').toUpperCase()).filter(Boolean))].sort();
+    if(countries.length){const sep=document.createElement('span');sep.className='libmuted';sep.textContent='COUNTRY';sep.style.alignSelf='center';$('channelFilters').append(sep);['All',...countries].forEach(country=>{const b=document.createElement('button');b.className='libchip'+(channelCountry===country?' active':'');b.textContent=country;b.onclick=()=>{channelCountry=country;renderChannels();};$('channelFilters').append(b);});}
     const groups = $('channelGroups'); groups.innerHTML = '';
     const buckets = new Map();
     list.forEach(c => { const cat = channelCategoryName(c); if (!buckets.has(cat)) buckets.set(cat,[]); buckets.get(cat).push(c); });
@@ -321,14 +327,18 @@
       section.innerHTML = '<div class="libsection-head"><h3>' + esc(cat) + '</h3><span class="libmuted">' + items.length + ' channels</span></div><div class="libchannel-grid"></div>';
       const grid = section.querySelector('.libchannel-grid');
       items.forEach(c => {
-        const b = document.createElement('button'); b.className = 'libchannel';
+        const wrap = document.createElement('div'); wrap.style.display='flex'; wrap.style.gap='5px'; wrap.style.minWidth='0';
+        const b = document.createElement('button'); b.className = 'libchannel'; b.style.flex='1';
         const logo = c.logo ? safeUrl(c.logo) : '';
         b.innerHTML = (logo ? '<img loading="lazy" src="' + esc(logo) + '" alt="">' : '<span style="width:42px;height:42px;display:grid;place-items:center;background:#0a101a;border-radius:8px">TV</span>') + '<span><b>' + esc(c.name) + '</b><small>' + esc([c.country,c.quality].filter(Boolean).join(' · ') || cat) + '</small></span>';
         b.onclick = () => {
           const url = safeUrl(c.url), kind = /\.m3u8(\?|$)/i.test(url) ? 'hls' : /\.mpd(\?|$)/i.test(url) ? 'dash' : /\.(mp4|webm)(\?|$)/i.test(url) ? 'video' : 'embed';
           window.deeprowssPlay(url,kind,c.name);
         };
-        grid.append(b);
+        const star=document.createElement('button');star.type='button';star.className='secondary';star.style.padding='8px';star.style.minWidth='38px';star.title='Add or remove favourite';star.textContent=isChannelSaved(c)?'★':'☆';star.onclick=()=>{toggleChannelSaved(c);star.textContent=isChannelSaved(c)?'★':'☆';};
+        wrap.append(b,star);
+        if(c.altUrl){const alt=document.createElement('button');alt.type='button';alt.className='secondary';alt.style.padding='8px';alt.style.minWidth='38px';alt.title='Play backup stream';alt.textContent='↻';alt.onclick=()=>{const u=safeUrl(c.altUrl);if(u)window.deeprowssPlay(u,/\.m3u8(\?|$)/i.test(u)?'hls':/\.mpd(\?|$)/i.test(u)?'dash':/\.(mp4|webm)(\?|$)/i.test(u)?'video':'embed',c.name+' · Backup');};wrap.append(alt);}
+        grid.append(wrap);
       });
       groups.append(section);
     }
