@@ -168,12 +168,12 @@ export default {
 async function castRelay(request, env, url) {
   if (!env.DB) return json({ ok:false, error:"pairing service database is not configured" }, 503);
   try {
-    await env.DB.batch([
-      env.DB.prepare("CREATE TABLE IF NOT EXISTS cast_rooms (room TEXT PRIMARY KEY, token TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)"),
-      env.DB.prepare("CREATE TABLE IF NOT EXISTS cast_signals (id INTEGER PRIMARY KEY AUTOINCREMENT, room TEXT NOT NULL, sender TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL)")
-    ]);
     const now = Math.floor(Date.now()/1000);
     if (url.pathname === "/cast/create" && request.method === "POST") {
+      await env.DB.batch([
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS cast_rooms (room TEXT PRIMARY KEY, token TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS cast_signals (id INTEGER PRIMARY KEY AUTOINCREMENT, room TEXT NOT NULL, sender TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL)")
+      ]);
       await env.DB.prepare("DELETE FROM cast_rooms WHERE expires_at < ?").bind(now).run();
       await env.DB.prepare("DELETE FROM cast_signals WHERE created_at < ?").bind(now-900).run();
       const room = crypto.randomUUID().replace(/-/g,"").slice(0,16).toUpperCase();
