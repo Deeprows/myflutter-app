@@ -1,0 +1,28 @@
+{
+  "_note": "Ad / pop-under networks blocked in the Windows app and the Android TV app. Add hosts here (subdomains are included). Set enabled to false to turn blocking off.",
+  "version": 1,
+  "enabled": true,
+  "hosts": [
+    "doubleclick.net",
+    "googlesyndication.com",
+    "googleadservices.com",
+    "adservice.google.com",
+    "popads.net",
+    "popcash.net",
+    "propellerads.com",
+    "exoclick.com",
+    "exosrv.com",
+    "juicyads.com",
+    "adsterra.com",
+    "adcash.com",
+    "clickadu.com",
+    "hilltopads.net",
+    "trafficjunky.com",
+    "admaven.com",
+    "monetag.com",
+    "a-ads.com",
+    "adnxs.com",
+    "taboola.com",
+    "outbrain.com"
+  ]
+}
