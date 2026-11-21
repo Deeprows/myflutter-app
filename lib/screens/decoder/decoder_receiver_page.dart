@@ -62,13 +62,14 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     if (m.receiverPlayerOpen) {
       return m.nowPlayingTitle.isEmpty ? 'Playing on receiver' : m.nowPlayingTitle;
     }
+    final pc = m.receiverIsDesktop;
     switch (m.receiverView) {
       case 'movies':
-        return 'Browsing movies on the TV';
+        return pc ? 'Browsing movies on the PC' : 'Browsing movies on the TV';
       case 'connect':
         return 'Receiver is waiting for a video';
       default:
-        return 'TV home screen';
+        return pc ? 'Windows app home screen' : 'TV home screen';
     }
   }
 
@@ -76,6 +77,7 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     final playing = m.receiverPlayerOpen;
     final mirror = m.receiverMode == 'mirror';
     final canPlay = playing && !mirror;
+    final pc = m.receiverIsDesktop;
     return decoderPanel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         Icon(playing ? Icons.play_circle_fill : Icons.settings_remote_rounded, color: Ui.red),
@@ -107,7 +109,7 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
         Expanded(child: _RemoteButton(
           icon: m.receiverFullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
           label: m.receiverFullscreen ? 'Exit full' : 'Full screen',
-          onTap: canPlay || mirror ? () => _key('fullscreen') : null)),
+          onTap: (canPlay || mirror || pc) && !m.receiverIsTv ? () => _key('fullscreen') : null)),
       ]),
       const SizedBox(height: 8),
       Row(children: [
@@ -147,9 +149,15 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
           onChanged: playing ? m.setReceiverVolume : null)),
         Text((m.receiverMuted ? 0 : m.receiverVolume).toString() + '%', style: TextStyle(color: Ui.muted, fontSize: 11)),
       ]),
-      Text(playing
+      Text(pc
+          ? (playing
+              ? 'Windows app: OK / Play taps the player. If an ad eats the first tap, press it again. Full screen fills the PC screen (F11 or Esc leaves it).'
+              : 'Windows app: arrows and OK move around the app. Full screen, Back and Home work too.')
+        : playing
           ? (m.receiverMode == 'iframe'
-              ? 'Embedded providers may ignore some buttons (seek, volume). Back and Home always work.'
+              ? (m.receiverIsTv
+                  ? 'OK / Play taps the player. If an ad eats the first tap, press it again. Embedded providers may ignore seek and volume.'
+                  : 'Embedded providers may ignore some buttons (seek, volume). Back and Home always work.')
               : 'Arrows seek ±10 s and change volume while a video is open. OK toggles play / pause.')
           : 'Use the arrows and OK to browse movies on the TV. Back and Home work like the TV remote.',
         style: TextStyle(color: Ui.muted, fontSize: 11, height: 1.35)),
@@ -172,7 +180,7 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
             Icon(Icons.circle, size: 10, color: m.connected ? Colors.green : Ui.muted),
           ]),
           const SizedBox(height: 10),
-          Text('On your TV or laptop, open the Deeprowss Receiver page. Scan the QR code shown there with your phone to connect.',
+          Text('On your TV or laptop, open the Deeprowss Receiver page, or open the Deeprowss Cinema Windows app and choose Cast from Phone. Scan the QR code shown there with your phone to connect.',
             style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5)),
           const SizedBox(height: 16),
           SizedBox(width: double.infinity, child: FilledButton.icon(
