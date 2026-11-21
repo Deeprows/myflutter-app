@@ -105,7 +105,7 @@
     <section class="panel player" id="playerPanel" tabindex="0" aria-label="Video receiver player">
       <div class="player-head"><div class="title" id="mediaTitle">Ready to play</div><div style="display:flex;align-items:center;gap:10px"><span class="live" id="playState">CONNECTED</span><button id="backLibrary" class="secondary" type="button">Browse</button></div></div>
       <div class="stage"><video id="screen" playsinline autoplay></video><iframe id="movieFrame" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope; clipboard-write; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="Deeprowss movie embed"></iframe></div>
-      <div class="controls"><button class="secondary" id="rewind">−10 sec</button><button id="play">▶ Play</button><button class="secondary" id="pause">Ⅱ Pause</button><button class="secondary" id="forward">+10 sec</button><button class="secondary" id="fullscreen">⛶ Fullscreen</button><button class="secondary" id="stop">■ Stop</button></div>
+      <div class="controls"><button class="secondary" id="rewind">−10 sec</button><button id="play">▶ Play</button><button class="secondary" id="pause">Ⅱ Pause</button><button class="secondary" id="forward">+10 sec</button><button class="secondary" id="mute" aria-pressed="false">🔇 Mute</button><button class="secondary" id="fullscreen">⛶ Fullscreen</button><button class="secondary" id="stop">■ Stop</button></div>
       <div class="progress"><span id="currentTime">00:00</span><input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek"><span id="totalTime">LIVE</span><label>Vol <input class="volume" id="volume" type="range" min="0" max="100" value="100" aria-label="Volume"></label></div>
       <div id="statusPlayer" role="status">Connected.</div>
       <div class="foot">Movie iframe controls depend on the source provider. Some sites disable embedding or remote control.</div>
@@ -120,7 +120,7 @@
     let socket,peer,hls,dash,qrStream=null,qrFrame=0,urlPlaying=false,iframePlaying=false,currentTitle='',reconnectAttempts=0,reconnectTimer,hideControlsTimer;const pendingCandidates=[];
     const showControls=()=>{document.body.classList.add('playing');panel.classList.remove('controls-hidden');clearTimeout(hideControlsTimer);hideControlsTimer=setTimeout(()=>{if(urlPlaying||iframePlaying)panel.classList.add('controls-hidden');},4200);};
     ['pointermove','pointerdown','mousemove','touchstart','keydown'].forEach(type=>document.addEventListener(type,showControls,{passive:true}));
-    const enterFullscreen=()=>{const el=panel;if(document.fullscreenElement)return;try{const p=el.requestFullscreen?.();if(p&&p.catch)p.catch(()=>{});}catch(_){}};
+    const enterFullscreen=()=>{if(document.fullscreenElement){document.exitFullscreen?.().catch?.(()=>{});return;}const target=iframePlaying?frame:(urlPlaying?video:panel);try{const p=target.requestFullscreen?.()||panel.requestFullscreen?.();if(p&&p.catch)p.catch(()=>{try{const q=panel.requestFullscreen?.();if(q&&q.catch)q.catch(()=>{});}catch(_){}});}catch(_){try{panel.requestFullscreen?.().catch?.(()=>{});}catch(__){}}};
 
     const params=new URLSearchParams(location.search);const savedHost=localStorage.getItem('deeprowss_receiver_host')||'';const savedPin=localStorage.getItem('deeprowss_receiver_pin')||'';if(/^\d{6}$/.test(params.get('pin')||''))pinInput.value=params.get('pin');else if(/^\d{6}$/.test(savedPin))pinInput.value=savedPin;hostInput.value=params.get('host')||savedHost||'';
     const say=value=>{$('statusJoin').textContent=value;$('statusPlayer').textContent=value;};
@@ -140,7 +140,7 @@
       frame.onload=()=>{for(let i=0;i<8;i++)setTimeout(()=>{iframeCommand('unmute');iframeCommand('play');},i*900);showControls();};
       frame.src=u.href;frame.style.display='block';showControls();say('Embed opened. Sound and remote controls are requested; provider restrictions may apply.');report('Movie embed loaded: '+currentTitle);}
     function playUrl(raw,kind,title){const url=safeUrl(raw);if(!url){say('The media URL is invalid.');return;}const parsedUrl=new URL(url);const isVsembedMovie=/^vsembed\\.su$/i.test(parsedUrl.hostname)&&/^\\/embed\\/(movie|tv)(\\/|$)/i.test(parsedUrl.pathname);if(kind==='embed'||isVsembedMovie){playEmbed(url,title);return;}clearMedia();urlPlaying=true;currentTitle=title||'Media';$('mediaTitle').textContent=currentTitle;$('playState').textContent='PLAYING';panel.style.display='block';join.style.display='none';showControls();video.srcObject=null;video.muted=false;video.defaultMuted=false;video.volume=Number($('volume').value)/100;video.style.display='block';
-      const start=()=>{video.muted=false;video.defaultMuted=false;video.volume=1;return video.play().then(()=>{video.muted=false;video.volume=1;say('Playing '+currentTitle);report('Playing '+currentTitle);}).catch(()=>say('Playback is ready. Press Play on the receiver or phone.'));};
+      const start=()=>{video.muted=false;video.defaultMuted=false;video.volume=Math.max(.01,Number($('volume').value)/100);return video.play().then(()=>{say('Playing '+currentTitle);report('Playing '+currentTitle);}).catch(()=>say('Playback is ready. Press Play on the receiver or phone.'));};
       if(kind==='dash'||/\.mpd(\?|$)/i.test(url)){if(!window.dashjs){say('DASH playback library is unavailable.');return;}dash=dashjs.MediaPlayer().create();dash.initialize(video,url,true);dash.on(dashjs.MediaPlayer.events.ERROR,e=>{say('DASH playback failed. This source may require provider authorization or a supported codec.');report('DASH playback failed: '+(e.error||'unknown'));});return;}
       const isHls=kind==='hls'||/\.m3u8(\?|$)/i.test(url);
       if(isHls&&!video.canPlayType('application/vnd.apple.mpegurl')){if(!window.Hls||!Hls.isSupported()){say('This browser cannot play HLS.');return;}hls=new Hls({enableWorker:true,lowLatencyMode:true});hls.on(Hls.Events.MANIFEST_PARSED,start);hls.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal){say('HLS error: '+d.details+'. This source may require provider headers or authorization.');report('HLS playback failed: '+d.details);}});hls.loadSource(url);hls.attachMedia(video);}else{video.src=url;video.addEventListener('loadedmetadata',()=>{video.muted=false;video.defaultMuted=false;video.volume=1;},{once:true});video.addEventListener('canplay',()=>{video.muted=false;video.defaultMuted=false;video.volume=1;},{once:true});video.onerror=()=>{say('Could not play this direct stream. The provider may require headers, cookies, DRM or a supported codec.');report('Direct media playback failed.');};start();}}
@@ -169,13 +169,13 @@
       if(command==='stop'){clearMedia();say('Playback stopped.');report('Playback stopped.');send({type:'stop-complete'});return;}
       if(iframePlaying){if(command==='fullscreen'){enterFullscreen();return;}iframeCommand(command,value);return;}
       if(!urlPlaying)return;
-      if(command==='play'){video.muted=false;video.volume=Math.max(video.volume,Number($('volume').value)/100);video.play().catch(()=>say('Press Play on the receiver to allow playback with sound.'));}
+      if(command==='play'){video.play().catch(()=>say('Press Play on the receiver to allow playback with sound.'));}
       else if(command==='pause')video.pause();
       else if(command==='rewind')video.currentTime=Math.max(0,video.currentTime-10);
       else if(command==='forward')video.currentTime=Math.min(video.duration||Infinity,video.currentTime+10);
-      else if(command==='mute'){video.muted=false;video.volume=1;$('volume').value=100;}
-      else if(command==='unmute'){video.muted=false;video.volume=1;$('volume').value=100;}
-      else if(command==='volume'){video.volume=Math.max(0,Math.min(1,Number(value)/100));video.muted=false;}
+      else if(command==='mute'){video.muted=true;$('mute').textContent='🔊 Unmute';$('mute').setAttribute('aria-pressed','true');}
+      else if(command==='unmute'){video.muted=false;if(video.volume===0)video.volume=Math.max(.01,Number($('volume').value)/100);$('mute').textContent='🔇 Mute';$('mute').setAttribute('aria-pressed','false');}
+      else if(command==='volume'){video.volume=Math.max(0,Math.min(1,Number(value)/100));video.muted=Number(value)<=0;}
       else if(command==='seek'&&Number.isFinite(Number(value)))video.currentTime=Number(value);
       else if(command==='fullscreen')enterFullscreen();
       showControls();
@@ -193,13 +193,13 @@
     }
     $('connect').addEventListener('click',connect);pinInput.addEventListener('keydown',e=>{if(e.key==='Enter')connect();});
     $('backLibrary').onclick=()=>window.deeprowssShowLibrary();
-    $('play').onclick=()=>remote('play');$('pause').onclick=()=>remote('pause');$('stop').onclick=()=>remote('stop');$('rewind').onclick=()=>remote('rewind');$('forward').onclick=()=>remote('forward');$('fullscreen').onclick=()=>remote('fullscreen');
+    $('play').onclick=()=>remote('play');$('pause').onclick=()=>remote('pause');$('stop').onclick=()=>remote('stop');$('rewind').onclick=()=>remote('rewind');$('forward').onclick=()=>remote('forward');$('mute').onclick=()=>remote(video.muted?'unmute':'mute');$('fullscreen').onclick=()=>remote('fullscreen');
     document.addEventListener('keydown',e=>{if(!urlPlaying&&!iframePlaying)return;const key=e.key.toLowerCase();const map={space:'play',' ':'play',enter:'play',k:'play',p:'pause',arrowleft:'rewind',arrowright:'forward',m:'unmute',f:'fullscreen',escape:'controls'};const action=map[key];if(action){e.preventDefault();if(action==='controls')showControls();else remote(action);}});
     document.addEventListener('fullscreenchange',()=>{if(document.fullscreenElement)showControls();});
 
-    $('volume').oninput=e=>remote('volume',e.target.value);$('seek').oninput=e=>{if(urlPlaying&&Number.isFinite(video.duration))remote('seek',Number(e.target.value)/1000*video.duration);};
+    $('volume').oninput=e=>{remote('volume',e.target.value);if(Number(e.target.value)>0){$('mute').textContent='🔇 Mute';$('mute').setAttribute('aria-pressed','false');}};$('seek').oninput=e=>{if(urlPlaying&&Number.isFinite(video.duration))remote('seek',Number(e.target.value)/1000*video.duration);};
     video.addEventListener('timeupdate',()=>{if(!urlPlaying||!Number.isFinite(video.duration)||video.duration<=0)return;$('seek').value=Math.round(video.currentTime/video.duration*1000);$('currentTime').textContent=clock(video.currentTime);$('totalTime').textContent=clock(video.duration);});
-    video.addEventListener('volumechange',()=>{if(video.muted){video.muted=false;video.defaultMuted=false;video.volume=1;}});video.addEventListener('play',()=>{if(video.muted){video.muted=false;video.volume=1;}$('playState').textContent='PLAYING';report('Playing '+currentTitle);});video.addEventListener('pause',()=>{$('playState').textContent='PAUSED';report('Paused '+currentTitle);});
+    video.addEventListener('volumechange',()=>{$('mute').textContent=video.muted?'🔊 Unmute':'🔇 Mute';$('mute').setAttribute('aria-pressed',video.muted?'true':'false');});video.addEventListener('play',()=>{$('playState').textContent='PLAYING';report('Playing '+currentTitle);});video.addEventListener('pause',()=>{$('playState').textContent='PAUSED';report('Paused '+currentTitle);});
     if(hostInput.value&&pinInput.value)setTimeout(connect,400);
   })();
   </script>
