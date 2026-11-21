@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/cast_target.dart';
 import '../../services/webrtc_mirror_service.dart';
+import '../../services/stream_resolver.dart' show StreamKind;
 import '../../theme/app_theme.dart';
 import 'decoder_common.dart';
 import 'decoder_qr_scan_page.dart';
@@ -27,7 +28,8 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
       await m.start(captureScreen: false, relayRoom: pair['room'], relayToken: pair['token']);
       final target = widget.target;
       if (target != null && (target.url ?? '').trim().isNotEmpty) {
-        await m.sendChannel(url: target.url!, title: target.title, kind: target.kind,
+        await m.sendChannel(url: target.url!, title: target.title,
+          kind: target.kind == StreamKind.invalid ? StreamKind.embed : target.kind,
           referer: target.referer, userAgent: target.userAgent);
       }
       if (mounted) decoderToast(context, target == null ? 'Paired with receiver. Choose a video or channel to send.' : 'Sending ' + target.title + ' to your receiver.');
