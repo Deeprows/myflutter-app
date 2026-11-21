@@ -1,4 +1,5 @@
-const { app, BrowserWindow, session, shell } = require('electron');
+const { app, BrowserWindow, session, shell, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 
 function createWindow() {
@@ -60,7 +61,32 @@ function createWindow() {
   });
 }
 
+function configureAutoUpdates() {
+  // Auto-update the installed NSIS build. Portable builds cannot safely
+  // replace their running executable, so they remain manual-download builds.
+  if (!app.isPackaged || process.env.PORTABLE_EXECUTABLE_DIR) return;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('update-downloaded', async () => {
+    const choice = await dialog.showMessageBox({
+      type: 'info',
+      buttons: ['Restart and install', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Deeprowss Cinema update ready',
+      message: 'A new version has been downloaded.',
+      detail: 'Restart Deeprowss Cinema to install the update.'
+    });
+    if (choice.response === 0) autoUpdater.quitAndInstall();
+  });
+  autoUpdater.on('error', (error) => console.error('Deeprowss auto-update error:', error));
+  setTimeout(() => autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+    console.error('Deeprowss update check failed:', error);
+  }), 8000);
+}
+
 app.whenReady().then(() => {
+  configureAutoUpdates();
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(['media', 'fullscreen', 'notifications'].includes(permission));
   });
