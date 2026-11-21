@@ -1,15 +1,27 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../services/cast_service.dart';
 import '../../services/webrtc_mirror_service.dart';
 import '../../theme/app_theme.dart';
 import 'decoder_common.dart';
+import 'decoder_qr_scan_page.dart';
 
 /// Screen mirroring: shows the phone screen on a laptop / TV browser.
 class DecoderMirrorPage extends StatelessWidget {
   const DecoderMirrorPage({super.key});
+
+  Future<void> _scanAndMirror(BuildContext context, DeeprowssMirrorService m) async {
+    final pair = await Navigator.of(context).push<Map<String, String>>(
+      MaterialPageRoute(builder: (_) => const DecoderQrScanPage()),
+    );
+    if (!context.mounted || pair == null) return;
+    try {
+      await m.start(captureScreen: true, relayRoom: pair['room'], relayToken: pair['token']);
+      if (context.mounted) decoderToast(context, 'Screen mirroring started on your TV.');
+    } catch (_) {
+      if (context.mounted) decoderToast(context, m.error ?? 'Could not start screen mirroring.');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,12 +58,7 @@ class DecoderMirrorPage extends StatelessWidget {
                 width: double.infinity,
                 child: FilledButton.icon(
                   onPressed: () async {
-                    try {
-                      await m.start();
-                      if (context.mounted) decoderToast(context, 'Screen capture started. Connect your TV with the code below.');
-                    } catch (e) {
-                      if (context.mounted) decoderToast(context, m.error ?? 'Could not start screen mirroring.');
-                    }
+                    await _scanAndMirror(context, m);
                   },
                   icon: const Icon(Icons.cast_connected),
                   label: const Text('Start mirroring'),
@@ -122,41 +129,4 @@ class DecoderMirrorPage extends StatelessWidget {
     );
   }
 
-  Widget _pairing(BuildContext context, DeeprowssMirrorService m) => decoderPanel(Column(children: [
-        Text('Connect your TV', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900, fontSize: 17)),
-        const SizedBox(height: 12),
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.all(12),
-          child: QrImageView(
-            data: m.pairingUrl!,
-            size: 190,
-            backgroundColor: Colors.white,
-            errorCorrectionLevel: QrErrorCorrectLevel.M,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text('Scan the code, or open the address below on the TV / laptop browser.',
-            textAlign: TextAlign.center, style: TextStyle(color: Ui.muted, fontSize: 12)),
-        const SizedBox(height: 10),
-        SelectableText(m.pairingUrl!,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Ui.text, fontWeight: FontWeight.w700, fontSize: 12)),
-        const SizedBox(height: 10),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text('CODE', style: TextStyle(color: Ui.muted, fontSize: 11, letterSpacing: 1.4)),
-          const SizedBox(width: 12),
-          SelectableText(m.pin ?? '',
-              style: TextStyle(color: Ui.red, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: 5)),
-        ]),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: '${m.pairingUrl}\nPhone: ${m.url}\nCode: ${m.pin}'));
-            if (context.mounted) decoderToast(context, 'Copied.');
-          },
-          icon: const Icon(Icons.copy),
-          label: const Text('Copy details'),
-        ),
-      ]));
 }
