@@ -125,22 +125,17 @@ Future<void> castToTv(BuildContext context, CastTarget target) async {
 
 Future<void> sendToReceiver(BuildContext context, CastTarget target) async {
   if (!await PremiumGate.allowDecoder(context) || !context.mounted) return;
-  // Receiver mode deliberately does NOT run StreamResolver / StreamFinder.
-  // Send the original page URL immediately: the receiver owns the iframe and
-  // lets the provider initialise its own scripts, cookies and player.
   final url = (target.url ?? '').trim();
   if (url.isEmpty || !url.startsWith(RegExp(r'https?://', caseSensitive: false))) {
     decoderToast(context, 'This item has no valid web address to send.');
     return;
   }
   final mirror = DeeprowssMirrorService.instance;
-  final kind = target.kind == StreamKind.invalid ? StreamKind.embed : target.kind;
-  final ok = await mirror.sendChannel(url: url, title: target.title, kind: kind,
-      referer: target.referer, userAgent: target.userAgent);
+  // QR mode is the preferred TV-first flow. Stop an old phone-hosted session
+  // before opening the scanner so it cannot block the new pairing.
+  if (mirror.running && !mirror.usingQrPairing) await mirror.stop();
   if (!context.mounted) return;
-  if (!ok) {
-    decoderToast(context, mirror.error ?? 'Could not start the receiver session.');
-    return;
-  }
-  await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => const DecoderReceiverPage()));
+  await Navigator.of(context).push<void>(MaterialPageRoute(
+    builder: (_) => DecoderReceiverPage(target: target),
+  ));
 }
