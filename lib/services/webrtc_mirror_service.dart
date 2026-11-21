@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -26,6 +27,13 @@ class DeeprowssMirrorService extends ChangeNotifier {
   RTCPeerConnection? _peerConnection;
   final List<RTCIceCandidate> _pendingRemoteCandidates = [];
   bool _creatingPeer = false;
+  String? _relayRoom;
+  String? _relayToken;
+  int _relayCursor = 0;
+  bool _relayPolling = false;
+  Timer? _relayTimer;
+  static const String _relayBase = 'https://deeprowss-feed.deeprows.workers.dev';
+  bool get usingQrPairing => _relayRoom != null && _relayToken != null;
   bool _stopping = false;
   int _failedPairAttempts = 0;
   MediaStream? _screenStream;
@@ -98,26 +106,31 @@ class DeeprowssMirrorService extends ChangeNotifier {
       ? null
       : Uri.parse('https://deeprows.github.io/myflutter-app/assets/receiver/').replace(queryParameters: {'host': Uri.parse(_url!).host + ':' + Uri.parse(_url!).port.toString(), 'pin': _pin!}).toString();
 
-  Future<void> start({bool captureScreen = true}) async {
+  Future<void> start({bool captureScreen = true, String? relayRoom, String? relayToken}) async {
     if (running || _starting) return;
     _starting = true;
     error = null;
     urlMode = !captureScreen;
-    status = 'Preparing local mirroring session…';
+    _relayRoom = relayRoom;
+    _relayToken = relayToken;
+    _relayCursor = 0;
+    status = usingQrPairing ? 'Connecting to the TV…' : 'Preparing local mirroring session…';
     notifyListeners();
     try {
       _pin = (Random.secure().nextInt(900000) + 100000).toString();
       _failedPairAttempts = 0;
-      final localNetworkAllowed = await BackgroundPlayback.requestLocalNetwork();
-      if (!localNetworkAllowed) {
-        throw StateError('Allow Deeprowss to access devices on your local network, then try again.');
+      if (usingQrPairing) {
+        _url = null;
+        _pin = null;
+      } else {
+        final localNetworkAllowed = await BackgroundPlayback.requestLocalNetwork();
+        if (!localNetworkAllowed) throw StateError('Allow Deeprowss to access devices on your local network, then try again.');
+        final ip = await _findLanAddress();
+        if (ip == null) throw StateError('Could not find your Wi-Fi IP address. Connect to the same Wi-Fi as your TV.');
+        _server = await HttpServer.bind(InternetAddress(ip), 37027, shared: true);
+        unawaited(_serve(_server!));
+        _url = 'http://' + ip + ':' + _server!.port.toString();
       }
-      final ip = await _findLanAddress();
-      if (ip == null) throw StateError('Could not find your Wi-Fi IP address. Connect to the same Wi-Fi as your TV.');
-      // Bind only to the selected LAN interface rather than every phone network.
-      _server = await HttpServer.bind(InternetAddress(ip), 37027, shared: true);
-      unawaited(_serve(_server!));
-      _url = 'http://$ip:${_server!.port}';
 
       if (captureScreen) {
         // Phone audio (games, videos, music) is captured with Android's
@@ -177,11 +190,13 @@ class DeeprowssMirrorService extends ChangeNotifier {
         if (audioShared && mutePhone) await _applyPhoneMute();
       }
       running = true;
-      status = captureScreen
-          ? 'Waiting for your TV to connect…'
-          : 'Open the receiver page and connect to start the channel';
+      status = usingQrPairing ? 'Paired with TV · preparing video…' : (captureScreen ? 'Waiting for your TV to connect…' : 'Open the receiver page and connect to start the channel');
       notifyListeners();
-      if (_socket != null) await _createPeerConnection();
+      if (usingQrPairing) {
+        _relayTimer?.cancel();
+        _relayTimer = Timer.periodic(const Duration(milliseconds: 650), (_) => unawaited(_pollRelay()));
+        if (_screenStream != null) await _createPeerConnection();
+      } else if (_socket != null) await _createPeerConnection();
     } catch (e) {
       error = _friendlyError(e);
       status = 'Could not start mirroring';
@@ -331,7 +346,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
   }
 
   Future<void> _createPeerConnection() async {
-    if (_peerConnection != null || _creatingPeer || _socket == null || _screenStream == null) return;
+    if (_peerConnection != null || _creatingPeer || (_socket == null && !usingQrPairing) || _screenStream == null) return;
     _creatingPeer = true;
     try {
       final pc = await createPeerConnection({
@@ -433,7 +448,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
       }
     };
     unawaited(BackgroundPlayback.startCasting(title, 'Playing on Deeprowss receiver'));
-    if (_socket != null) {
+    if (_socket != null || usingQrPairing) {
       _flushPending();
     } else {
       status = 'Open the receiver page and connect to start the channel';
@@ -488,7 +503,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
 
   void _flushPending() {
     final play = _pendingPlay;
-    if (play == null || _socket == null) return;
+    if (play == null || (_socket == null && !usingQrPairing)) return;
     _send(play);
     connected = true;
     status = 'Playing "${play['title']}" on the receiver page';
@@ -497,8 +512,61 @@ class DeeprowssMirrorService extends ChangeNotifier {
 
   void _send(Map<String, dynamic> value) {
     final socket = _socket;
-    if (socket == null || socket.readyState != WebSocket.open) return;
-    socket.add(jsonEncode(value));
+    if (socket != null && socket.readyState == WebSocket.open) {
+      socket.add(jsonEncode(value));
+      return;
+    }
+    if (usingQrPairing) unawaited(_relaySend(value));
+  }
+
+  Future<void> _relaySend(Map<String, dynamic> value) async {
+    final room = _relayRoom, token = _relayToken;
+    if (room == null || token == null) return;
+    try {
+      final uri = Uri.parse(_relayBase + '/cast/send').replace(queryParameters: {'room':room,'token':token});
+      final response = await http.post(uri, headers: {'content-type':'application/json'},
+        body: jsonEncode({'sender':'phone','payload':value})).timeout(const Duration(seconds:8));
+      if (response.statusCode != 200) {
+        error = 'TV pairing relay rejected the message. Scan a fresh QR code.';
+        notifyListeners();
+      }
+    } catch (_) {
+      error = 'Could not reach the TV pairing service. Check your internet connection.';
+      notifyListeners();
+    }
+  }
+
+  Future<void> _pollRelay() async {
+    if (!usingQrPairing || _relayPolling || !running) return;
+    _relayPolling = true;
+    try {
+      final uri = Uri.parse(_relayBase + '/cast/poll').replace(queryParameters: {
+        'room':_relayRoom!, 'token':_relayToken!, 'role':'phone', 'after':_relayCursor.toString()
+      });
+      final response = await http.get(uri).timeout(const Duration(seconds:8));
+      final data = jsonDecode(response.body) as Map<String,dynamic>;
+      if (response.statusCode != 200 || data['ok'] != true) {
+        throw StateError(data['error']?.toString() ?? 'Pairing expired');
+      }
+      final messages = data['messages'] as List? ?? const [];
+      for (final item in messages) {
+        if (item is! Map) continue;
+        final id = (item['id'] as num?)?.toInt() ?? 0;
+        if (id > _relayCursor) _relayCursor = id;
+        final payload = item['payload'];
+        if (payload is Map) await _onSignal(jsonEncode(payload));
+      }
+    } catch (e) {
+      if (e.toString().contains('expired')) {
+        error = 'TV pairing expired. Scan the new QR code on your TV.';
+        status = 'Pairing expired';
+      } else {
+        error = 'Connection to TV pairing service was interrupted.';
+      }
+      notifyListeners();
+    } finally {
+      _relayPolling = false;
+    }
   }
 
   void _receiverDisconnected() {
@@ -548,6 +616,11 @@ class DeeprowssMirrorService extends ChangeNotifier {
   }
 
   Future<void> _releaseResources({required bool stopCapture}) async {
+    _relayTimer?.cancel();
+    _relayTimer = null;
+    _relayRoom = null;
+    _relayToken = null;
+    _relayCursor = 0;
     final socket = _socket;
     _socket = null;
     try { await socket?.close(WebSocketStatus.normalClosure, 'Deeprowss stopped'); } catch (_) {}
