@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../models/cast_target.dart';
 import '../../services/webrtc_mirror_service.dart';
@@ -52,6 +53,109 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     }
   }
 
+  void _key(String command) {
+    HapticFeedback.selectionClick();
+    if (!m.sendRemoteKey(command) && mounted) decoderToast(context, 'Receiver is not connected yet.');
+  }
+
+  String get _screenLabel {
+    if (m.receiverPlayerOpen) {
+      return m.nowPlayingTitle.isEmpty ? 'Playing on receiver' : m.nowPlayingTitle;
+    }
+    switch (m.receiverView) {
+      case 'movies':
+        return 'Browsing movies on the TV';
+      case 'connect':
+        return 'Receiver is waiting for a video';
+      default:
+        return 'TV home screen';
+    }
+  }
+
+  Widget _remotePanel() {
+    final playing = m.receiverPlayerOpen;
+    final mirror = m.receiverMode == 'mirror';
+    final canPlay = playing && !mirror;
+    return decoderPanel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Icon(playing ? Icons.play_circle_fill : Icons.settings_remote_rounded, color: Ui.red),
+        const SizedBox(width: 8),
+        Expanded(child: Text(_screenLabel, maxLines: 2, overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900, fontSize: 15))),
+      ]),
+      const SizedBox(height: 14),
+      // Navigation pad: moves around the TV screens and acts as seek / volume while a video plays.
+      Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        _RemoteButton(icon: Icons.keyboard_arrow_up_rounded, label: 'Up', onTap: () => _key('up'), width: 84),
+        const SizedBox(height: 8),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          _RemoteButton(icon: Icons.keyboard_arrow_left_rounded, label: 'Left', onTap: () => _key('left'), width: 84),
+          const SizedBox(width: 8),
+          _RemoteButton(icon: Icons.radio_button_checked_rounded, label: 'OK', onTap: () => _key('enter'), primary: true, width: 84),
+          const SizedBox(width: 8),
+          _RemoteButton(icon: Icons.keyboard_arrow_right_rounded, label: 'Right', onTap: () => _key('right'), width: 84),
+        ]),
+        const SizedBox(height: 8),
+        _RemoteButton(icon: Icons.keyboard_arrow_down_rounded, label: 'Down', onTap: () => _key('down'), width: 84),
+      ])),
+      const SizedBox(height: 12),
+      Row(children: [
+        Expanded(child: _RemoteButton(icon: Icons.arrow_back_rounded, label: 'Back', onTap: () => _key('back'))),
+        const SizedBox(width: 8),
+        Expanded(child: _RemoteButton(icon: Icons.home_rounded, label: 'Home', onTap: () => _key('home'))),
+        const SizedBox(width: 8),
+        Expanded(child: _RemoteButton(
+          icon: m.receiverFullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+          label: m.receiverFullscreen ? 'Exit full' : 'Full screen',
+          onTap: canPlay || mirror ? () => _key('fullscreen') : null)),
+      ]),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(child: _RemoteButton(icon: Icons.replay_10_rounded, label: '−10 sec',
+          onTap: canPlay ? () => _key('rewind') : null)),
+        const SizedBox(width: 8),
+        Expanded(child: _RemoteButton(
+          icon: m.receiverPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+          label: m.receiverPlaying ? 'Pause' : 'Play',
+          primary: true,
+          onTap: canPlay ? () { HapticFeedback.selectionClick(); m.toggleReceiverPlay(); } : null)),
+        const SizedBox(width: 8),
+        Expanded(child: _RemoteButton(icon: Icons.forward_10_rounded, label: '+10 sec',
+          onTap: canPlay ? () => _key('forward') : null)),
+        const SizedBox(width: 8),
+        Expanded(child: _RemoteButton(icon: Icons.stop_rounded, label: 'Stop',
+          onTap: playing ? () => m.stopPlayback() : null)),
+      ]),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(child: _RemoteButton(
+          icon: m.receiverMuted ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+          label: m.receiverMuted ? 'Unmute' : 'Mute',
+          onTap: playing ? () { HapticFeedback.selectionClick(); m.toggleReceiverMute(); } : null)),
+        const SizedBox(width: 8),
+        Expanded(child: _RemoteButton(icon: Icons.volume_down_rounded, label: 'Vol −',
+          onTap: playing ? () => m.nudgeReceiverVolume(-10) : null)),
+        const SizedBox(width: 8),
+        Expanded(child: _RemoteButton(icon: Icons.volume_up_rounded, label: 'Vol +',
+          onTap: playing ? () => m.nudgeReceiverVolume(10) : null)),
+      ]),
+      Row(children: [
+        Icon(m.receiverMuted ? Icons.volume_off_rounded : Icons.volume_down_rounded, color: Ui.muted),
+        Expanded(child: Slider(
+          value: (m.receiverMuted ? 0 : m.receiverVolume).toDouble().clamp(0.0, 100.0).toDouble(),
+          min: 0, max: 100,
+          onChanged: playing ? m.setReceiverVolume : null)),
+        Text((m.receiverMuted ? 0 : m.receiverVolume).toString() + '%', style: TextStyle(color: Ui.muted, fontSize: 11)),
+      ]),
+      Text(playing
+          ? (m.receiverMode == 'iframe'
+              ? 'Embedded providers may ignore some buttons (seek, volume). Back and Home always work.'
+              : 'Arrows seek ±10 s and change volume while a video is open. OK toggles play / pause.')
+          : 'Use the arrows and OK to browse movies on the TV. Back and Home work like the TV remote.',
+        style: TextStyle(color: Ui.muted, fontSize: 11, height: 1.35)),
+    ]));
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Ui.bg,
@@ -90,41 +194,7 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
           if (m.error != null) Padding(padding: const EdgeInsets.only(top:10),
             child: Text(m.error!, style: TextStyle(color: Ui.red, fontSize:12))),
         ])),
-        if (m.running && m.connected) decoderPanel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [Icon(Icons.play_circle_fill,color:Ui.red),const SizedBox(width:8),
-            Text('Now playing',style:TextStyle(color:Ui.text,fontWeight:FontWeight.w900,fontSize:17))]),
-          const SizedBox(height:6),
-          Text(m.nowPlayingTitle.isEmpty?'Waiting for media':m.nowPlayingTitle,maxLines:2,overflow:TextOverflow.ellipsis,
-            style:TextStyle(color:Ui.text,fontWeight:FontWeight.w700)),
-          const SizedBox(height:12),
-          Row(children:[
-            Expanded(child:_RemoteButton(icon:Icons.replay_10_rounded,label:'−10 sec',onTap:()=>m.sendRemoteCommand('rewind'))),
-            const SizedBox(width:8),
-            Expanded(child:_RemoteButton(icon:Icons.play_arrow_rounded,label:'Play',onTap:()=>m.sendRemoteCommand('play'),primary:true)),
-            const SizedBox(width:8),
-            Expanded(child:_RemoteButton(icon:Icons.pause_rounded,label:'Pause',onTap:()=>m.sendRemoteCommand('pause'))),
-            const SizedBox(width:8),
-            Expanded(child:_RemoteButton(icon:Icons.forward_10_rounded,label:'+10 sec',onTap:()=>m.sendRemoteCommand('forward'))),
-          ]),
-          const SizedBox(height:12),
-          Row(children:[
-            Expanded(child:OutlinedButton.icon(onPressed:()=>m.sendRemoteCommand('unmute'),
-              icon:const Icon(Icons.volume_up_rounded,size:18),label:const FittedBox(child:Text('Unmute')))),
-            const SizedBox(width:8),
-            Expanded(child:OutlinedButton.icon(onPressed:()=>m.sendRemoteCommand('fullscreen'),
-              icon:const Icon(Icons.fullscreen_rounded,size:18),label:const FittedBox(child:Text('Full screen')))),
-            const SizedBox(width:8),
-            Expanded(child:FilledButton.tonalIcon(onPressed:()=>m.stopPlayback(),
-              icon:const Icon(Icons.stop_rounded,size:18),label:const FittedBox(child:Text('Stop')))),
-          ]),
-          Row(children:[
-            const Icon(Icons.volume_down_rounded),
-            Expanded(child:Slider(value:m.receiverVolume.toDouble(),min:0,max:100,onChanged:m.setReceiverVolume)),
-            Text(m.receiverVolume.toString()+'%',style:TextStyle(color:Ui.muted,fontSize:11)),
-          ]),
-          Text('Direct streams support remote controls. Embedded providers may restrict external control.',
-            style:TextStyle(color:Ui.muted,fontSize:11,height:1.35)),
-        ])),
+        if (m.running) _remotePanel(),
         decoderPanel(Text('The QR code pairs your phone with the TV. Video and audio travel directly between devices using WebRTC; the pairing service only relays connection messages.',
           style:TextStyle(color:Ui.muted,fontSize:12,height:1.5))),
       ])),
@@ -134,17 +204,34 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
 class _RemoteButton extends StatelessWidget {
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool primary;
-  const _RemoteButton({required this.icon,required this.label,required this.onTap,this.primary=false});
+  final double? width;
+  const _RemoteButton({required this.icon, required this.label, required this.onTap, this.primary = false, this.width});
   @override
-  Widget build(BuildContext context)=>InkWell(onTap:onTap,borderRadius:BorderRadius.circular(14),
-    child:Container(padding:const EdgeInsets.symmetric(horizontal:4,vertical:12),
-      constraints:const BoxConstraints(minHeight:76),
-      decoration:BoxDecoration(color:primary?Ui.red.withValues(alpha:.18):Ui.card,
-        borderRadius:BorderRadius.circular(14),border:Border.all(color:primary?Ui.red:Ui.line)),
-      child:Column(mainAxisSize:MainAxisSize.min,children:[
-        Icon(icon,color:primary?Ui.red:Ui.text,size:24),const SizedBox(height:5),
-        FittedBox(fit:BoxFit.scaleDown,child:Text(label,maxLines:1,style:TextStyle(color:Ui.muted,fontSize:10))),
-      ])));
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Opacity(
+      opacity: enabled ? 1 : .38,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: width,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+          constraints: const BoxConstraints(minHeight: 64),
+          decoration: BoxDecoration(
+            color: primary ? Ui.red.withValues(alpha: .18) : Ui.card,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: primary ? Ui.red : Ui.line),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, color: primary ? Ui.red : Ui.text, size: 24),
+            const SizedBox(height: 4),
+            FittedBox(fit: BoxFit.scaleDown, child: Text(label, maxLines: 1, style: TextStyle(color: Ui.muted, fontSize: 10))),
+          ]),
+        ),
+      ),
+    );
+  }
 }
