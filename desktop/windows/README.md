@@ -1,11 +1,26 @@
 # Deeprowss Cinema for Windows
 
-The Windows desktop app focuses on two Deeprowss features only:
+The Windows desktop app now opens the same Deeprowss receiver URL experience used by the hosted receiver page. It includes movie discovery, live TV browsing and phone-to-PC casting.
 
-- **Movies & Series:** loads the current catalogue from `assets/data/movies.json` on the Deeprowss GitHub repository, with search, movie/series filters, posters and provider iframe playback.
-- **Cast Live Channels:** embeds the existing Deeprowss TV receiver. Start the receiver in Smart Decoder on the mobile app, pair using the displayed address and six-digit PIN, then select a live channel on the phone to play it on the PC.
+## Movies & Series
 
-The desktop shell is Kodi-inspired, with a dark media-centre layout. It does not port unrelated football, predictions, social, betting or account screens.
+- Trending Now (TMDB weekly trending movies and series).
+- Top 10 (TMDB top-rated movies).
+- Trending Movies.
+- Latest official YouTube trailers.
+- Search across the local Deeprowss catalogue and TMDB.
+- Movie / series and genre filters.
+- Full movie details: overview, poster/backdrop, rating, release year, runtime, genres, director/creator, cast, trailer and similar titles.
+- Play, alternate player, download link, Watch Later and Watch History.
+
+The receiver reads the live movies.json, tv.json and app_config.json files from the repository. TMDB recommendations and details are refreshed from TMDB; receiver settings are reloaded from app_config.json every five minutes. Set tmdb.enabled, tmdb.apiKey and tmdb.language there without rebuilding the EXE. Leave apiKey empty to use the receiver's built-in TMDB key.
+
+## Live TV and casting
+
+- Lists all channels from the Deeprowss tv.json catalogue, grouped by category.
+- Merges the IPTV Nexus online-channel feed and refreshes it periodically.
+- Plays supported HLS, DASH, direct video and embed channel links where the provider/browser allows it.
+- Retains phone-to-PC pairing: open Cast from Phone, scan the QR code or enter the phone address and six-digit PIN, then choose a channel in Smart Decoder on your phone to cast it here.
 
 ## Build locally
 
@@ -16,10 +31,10 @@ npm run start
 npm run dist
 ```
 
-Outputs are written to `desktop/windows/dist/`:
-- `Deeprowss-Cinema-Installer-1.1.0.exe`
-- `Deeprowss-Cinema-Portable-1.1.0.exe`
+Outputs are written to desktop/windows/dist/:
+- Deeprowss-Cinema-Installer-1.1.0.exe
+- Deeprowss-Cinema-Portable-1.1.0.exe
 
-Movies use their configured embed URLs (including Vsembed). Playback depends on the provider allowing iframe embedding and on its own availability, codecs and autoplay policy. The live-channel receiver uses the existing phone-to-PC WebSocket/WebRTC pairing flow; both devices should be on the same Wi-Fi/LAN. Some network/firewall configurations may require allowing Deeprowss through Windows Firewall.
+Playback depends on third-party providers, their embed policies, stream availability, codecs, autoplay rules and network access. Phone-to-PC casting requires both devices on the same Wi-Fi/LAN and may require allowing Deeprowss through Windows Firewall.
 
 The GitHub Actions workflow builds both Windows packages. EXE files are not Authenticode-signed by default; Windows SmartScreen may show a warning.
