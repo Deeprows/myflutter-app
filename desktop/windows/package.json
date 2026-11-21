@@ -1,6 +1,6 @@
 {
   "name": "deeprowss-cinema",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Deeprowss Cinema with locally bundled receiver and live online catalogue",
   "main": "main.cjs",
   "author": "Deeprowss",
@@ -23,23 +23,7 @@
     "files": [
       "main.cjs",
       "desktop.html",
-      "package.json",
-      {
-        "from": "../../assets/receiver",
-        "to": "assets/receiver",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "../../assets/data",
-        "to": "assets/data",
-        "filter": [
-          "app_config.json",
-          "movies.json",
-          "tv.json"
-        ]
-      }
+      "package.json"
     ],
     "win": {
       "icon": "assets/deeprowss.ico",
