@@ -236,7 +236,18 @@
     $('detailDownload').hidden = !downloadUrl;
     $('detailDownload').onclick = () => { if (downloadUrl) window.open(downloadUrl,'_blank','noopener'); };
     $('detailPlay').onclick = () => { $('movieDetails').classList.remove('open'); playMovie(movie); };
-    $('detailSave').onclick = () => { saveList('deeprowss_watch_later',movie); $('detailSave').textContent = '✓ Saved'; };
+    $('detailSave').onclick = () => {
+      let rows = []; try { rows = JSON.parse(localStorage.getItem('deeprowss_watch_later') || '[]'); } catch (_) {}
+      const key = String(idOf(movie) || movie.url);
+      if (rows.some(x => String(x.tmdbId || x.url) === key)) {
+        rows = rows.filter(x => String(x.tmdbId || x.url) !== key);
+        localStorage.setItem('deeprowss_watch_later',JSON.stringify(rows));
+        $('detailSave').textContent = '＋ Watch later';
+      } else {
+        saveList('deeprowss_watch_later',movie);
+        $('detailSave').textContent = '✓ Saved';
+      }
+    };
     try {
       if (!apiKey) throw Error('TMDB is disabled');
       const target = await resolveTmdb(movie); if (!target) throw Error('No TMDB match found');
@@ -344,7 +355,19 @@
     $('savedMoviesTitle').textContent = label;
     $('savedMoviesGrid').innerHTML = '';
     if (!rows.length) $('savedMoviesGrid').innerHTML = '<div class="libempty">Nothing here yet.</div>';
-    else rows.forEach(m => $('savedMoviesGrid').append(movieCard(m)));
+    else rows.forEach(m => {
+      const item = movieCard(m);
+      const remove = document.createElement('button');
+      remove.type = 'button'; remove.className = 'secondary'; remove.textContent = 'Remove';
+      remove.style.cssText = 'width:100%;margin-top:6px;padding:7px;font-size:11px';
+      remove.onclick = event => {
+        event.stopPropagation();
+        const next = rows.filter(x => String(x.tmdbId || x.url) !== String(idOf(m) || m.url));
+        localStorage.setItem(key,JSON.stringify(next));
+        showSavedList(key,label);
+      };
+      item.append(remove); $('savedMoviesGrid').append(item);
+    });
     savedPanel.hidden = false;
     savedPanel.scrollIntoView({behavior:'smooth',block:'start'});
   }
