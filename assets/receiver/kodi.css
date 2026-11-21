@@ -179,6 +179,43 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .tv-empty{grid-column:1/-1;padding:60px 20px;text-align:center;color:var(--muted);line-height:1.8}
 @media(max-width:860px){.tv-side{width:190px}.cat{padding:10px}.sel{display:none}}
 
+/* ---------- TV channels · mobile (phones, up to 700px wide) ----------
+   Header: back + title + country on row 1, full-width search on row 2.
+   Categories become a swipeable chip strip; channels show as a 2-column grid. */
+@media(max-width:700px){
+  #tvView .bar{flex-wrap:wrap;gap:8px;padding:max(10px,env(safe-area-inset-top)) 12px 10px}
+  #tvView .bar h2{flex:1;min-width:0;margin:0;font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #tvView .bar .sel{display:block;order:2;flex:none;width:auto;max-width:132px;height:40px;padding:0 8px;font-size:13px}
+  #tvView .bar #tvRefresh{order:2}
+  #tvView .tvsearch{order:3;flex:1 1 100%;min-width:0;max-width:none;width:100%;height:44px;margin:0}
+  .tv-body{flex-direction:column}
+  .tv-side{display:flex;flex-direction:row;align-items:center;width:100%;overflow-x:auto;overflow-y:hidden;padding:10px 12px;gap:8px;border-right:0;border-bottom:1px solid #ffffff14;background:#070d14f2;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tv-side::-webkit-scrollbar{display:none}
+  .tv-side h4{display:none}
+  .cat{flex:none;width:auto;margin:0;gap:7px;padding:0 14px;height:38px;white-space:nowrap;border-radius:999px;background:#13202d;border:1px solid #27394d;font-size:13.5px}
+  .cat .ci{width:auto;font-size:14px}
+  .cat .n{margin-left:2px;padding:1px 7px;border-radius:99px;background:#ffffff14;font-size:11px;color:#9fb2c6}
+  .cat.on{background:var(--accent);border-color:var(--accent);color:var(--ink);box-shadow:none}
+  .cat.on .n{background:#03121b26;color:var(--ink)}
+  .cat:focus-visible{box-shadow:0 0 0 2px var(--accent2)}
+  .tv-main{padding-bottom:env(safe-area-inset-bottom)}
+  .tv-head{padding:14px 16px 2px}
+  .tv-head h3{font-size:21px}
+  .tv-head span{font-size:12.5px}
+  .tv-status{padding:2px 16px 8px}
+  .chgrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:4px 12px 12px}
+  .ch{border-radius:12px}
+  .ch:hover,.ch:focus-visible{transform:none;box-shadow:none}
+  .ch:active{transform:scale(.97)}
+  .ch .lg .ini{font-size:24px}
+  .ch .lv{left:6px;top:6px;padding:1px 6px;font-size:9px}
+  .ch .bd{display:block;padding:9px 10px 11px}
+  .ch .nm{font-size:13px;height:2.5em}
+  .ch .mt{gap:4px;margin-top:6px;max-height:19px;overflow:hidden}
+  .p2{padding:2px 6px;font-size:9.5px}
+  .fav{right:6px;top:6px;width:34px;height:34px;font-size:16px}
+}
+
 /* ---------- player ---------- */
 .tvonly{display:none}
 body[data-mode=tv] .tvonly{display:inline-block}
