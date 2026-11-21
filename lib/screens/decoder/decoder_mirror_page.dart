@@ -82,7 +82,9 @@ class DecoderMirrorPage extends StatelessWidget {
                 child: Text(m.error!, style: TextStyle(color: Ui.red, fontSize: 12)),
               ),
           ])),
-          if (m.running && m.pairingUrl != null) _pairing(context, m),
+          if (m.running && m.usingQrPairing)
+            decoderPanel(Text('Connected to the TV receiver. Keep this screen open while mirroring.',
+              style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.4))),
           if (!m.urlMode)
             decoderPanel(Column(children: [
               SwitchListTile(
