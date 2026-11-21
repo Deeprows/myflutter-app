@@ -1,7 +1,7 @@
 {
   "name": "deeprowss-cinema",
-  "version": "1.1.0",
-  "description": "Deeprowss Movies and Live Channel Cast for Windows",
+  "version": "1.2.0",
+  "description": "Deeprowss TMDB Cinema, Live TV and Phone Casting for Windows",
   "main": "main.cjs",
   "author": "Deeprowss",
   "license": "UNLICENSED",
@@ -28,8 +28,18 @@
     "win": {
       "icon": "assets/deeprowss.ico",
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
