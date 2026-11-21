@@ -293,7 +293,7 @@
     window.deeprowssPlay(r.url, kind, c.name + (cur.alt ? ' · Backup stream' : ''));
     const ps = $('playState'); if (ps) ps.textContent = kind === 'embed' ? 'LIVE · WEB' : 'LIVE';
     $('altStream').classList.toggle('noalt', !c.altUrl);
-    $('altStream').textContent = cur.alt ? '⇄ Main stream' : '⇄ Backup stream';
+    { const l = $('altStream').querySelector('.lbl'); if (l) l.textContent = cur.alt ? 'Main stream' : 'Backup stream'; }
     if (!$('tvView').classList.contains('active')) return;
     renderSide();
   }
