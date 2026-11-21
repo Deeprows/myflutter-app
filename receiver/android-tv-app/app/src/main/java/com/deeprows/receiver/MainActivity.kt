@@ -40,7 +40,7 @@ import java.net.URL
  */
 class MainActivity : Activity() {
     companion object {
-        private const val RECEIVER_PAGE = "https://deeprows.github.io/myflutter-app/"
+        private const val RECEIVER_PAGE = "https://deeprows.github.io/myflutter-app/receiver/"
 
         // Ad / pop-under networks that embedded players must not reach (extended from receiver/adblock.json).
         @Volatile private var adHosts: Set<String> = setOf(
@@ -157,7 +157,7 @@ class MainActivity : Activity() {
     private fun refreshAdBlockList() {
         Thread {
             try {
-                val json = JSONObject(URL(RECEIVER_PAGE + "receiver/adblock.json").readText())
+                val json = JSONObject(URL(RECEIVER_PAGE + "adblock.json").readText())
                 adBlockOn = json.optBoolean("enabled", true)
                 val list = json.optJSONArray("hosts") ?: return@Thread
                 val merged = adHosts.toMutableSet()
