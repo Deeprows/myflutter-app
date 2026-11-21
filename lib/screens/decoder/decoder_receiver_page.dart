@@ -1,123 +1,125 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../services/webrtc_mirror_service.dart';
 import '../../theme/app_theme.dart';
 import 'decoder_common.dart';
+import 'decoder_qr_scan_page.dart';
 
-/// Dashboard for the browser receiver and its remote controls.
-class DecoderReceiverPage extends StatelessWidget {
+class DecoderReceiverPage extends StatefulWidget {
   const DecoderReceiverPage({super.key});
+  @override
+  State<DecoderReceiverPage> createState() => _DecoderReceiverPageState();
+}
+
+class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
+  final m = DeeprowssMirrorService.instance;
+  bool _busy = false;
+
+  Future<void> _scanAndConnect() async {
+    final pair = await Navigator.of(context).push<Map<String, String>>(
+      MaterialPageRoute(builder: (_) => const DecoderQrScanPage()),
+    );
+    if (!mounted || pair == null) return;
+    setState(() => _busy = true);
+    try {
+      await m.start(captureScreen: false, relayRoom: pair['room'], relayToken: pair['token']);
+      if (mounted) decoderToast(context, 'Paired with receiver. Choose a video or channel to send.');
+    } catch (_) {
+      if (mounted) decoderToast(context, m.error ?? 'Could not connect to receiver.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _startLegacy() async {
+    setState(() => _busy = true);
+    try {
+      await m.start(captureScreen: false);
+      if (mounted) decoderToast(context, 'Manual receiver session started.');
+    } catch (_) {
+      if (mounted) decoderToast(context, m.error ?? 'Could not start receiver.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   @override
-  Widget build(BuildContext context) {
-    final m = DeeprowssMirrorService.instance;
-    return Scaffold(
-      backgroundColor: Ui.bg,
-      appBar: AppBar(
-        backgroundColor: Ui.panel,
-        title: const Text('Receiver dashboard', style: TextStyle(fontWeight: FontWeight.w900)),
-      ),
-      body: ListenableBuilder(
-        listenable: m,
-        builder: (context, _) => ListView(padding: const EdgeInsets.all(16), children: [
-          decoderPanel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Icon(Icons.connected_tv_rounded, size: 30, color: Ui.red),
-              const SizedBox(width: 12),
-              Expanded(child: Text(m.running ? m.status : 'Receiver is offline',
-                  style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800))),
-              Icon(Icons.circle, color: m.connected ? Colors.green : Ui.muted, size: 10),
-            ]),
-            const SizedBox(height: 10),
-            Text("Start the receiver, then connect your laptop or TV browser using the connection details below. Videos sent from your phone play directly on the receiver.",
-                style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.45)),
-            const SizedBox(height: 14),
-            if (!m.running)
-              SizedBox(width: double.infinity, child: FilledButton.icon(
-                onPressed: () async {
-                  try { await m.start(captureScreen: false); }
-                  catch (_) { if (context.mounted) decoderToast(context, m.error ?? 'Could not start receiver.'); }
-                }, icon: const Icon(Icons.power_settings_new), label: const Text('Start receiver'),
-              ))
-            else ...[
-              SizedBox(width: double.infinity, child: OutlinedButton.icon(
-                onPressed: () async { await m.stop(); if (context.mounted) decoderToast(context, 'Receiver stopped.'); },
-                icon: const Icon(Icons.stop_circle_outlined), label: const Text('Stop receiver session'),
-              )),
-            ],
-            if (m.error != null) Padding(padding: const EdgeInsets.only(top: 10),
-              child: Text(m.error!, style: TextStyle(color: Ui.red, fontSize: 12))),
-          ])),
-          if (m.running && m.pairingUrl != null)
-            decoderPanel(Column(children: [
-              Text('Connect your TV or browser', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900, fontSize: 17)),
-              const SizedBox(height: 12),
-              Container(color: Colors.white, padding: const EdgeInsets.all(12), child: QrImageView(
-                data: m.pairingUrl!, size: 190, backgroundColor: Colors.white, errorCorrectionLevel: QrErrorCorrectLevel.M)),
-              const SizedBox(height: 12),
-              SelectableText(m.pairingUrl!, textAlign: TextAlign.center,
-                style: TextStyle(color: Ui.text, fontWeight: FontWeight.w700, fontSize: 12)),
-              const SizedBox(height: 10),
-              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text('PIN', style: TextStyle(color: Ui.muted, fontSize: 11, letterSpacing: 1.4)),
-                const SizedBox(width: 12),
-                SelectableText(m.pin ?? '', style: TextStyle(color: Ui.red, fontSize: 27, fontWeight: FontWeight.w900, letterSpacing: 5)),
-              ]),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: '${m.pairingUrl}\nPIN: ${m.pin}'));
-                if (context.mounted) decoderToast(context, 'Receiver details copied.');
-              }, icon: const Icon(Icons.copy), label: const Text('Copy connection details')),
-            ])),
-          if (m.running && m.connected) decoderPanel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [Icon(Icons.play_circle_fill, color: Ui.red), const SizedBox(width: 8),
-              Text('Now playing', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900, fontSize: 17))]),
-            const SizedBox(height: 6),
-            Text(m.nowPlayingTitle.isEmpty ? 'Waiting for media' : m.nowPlayingTitle,
-              maxLines: 2, overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Ui.text, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 3),
-            Text(m.nowPlayingKind == 'embed' ? 'Web player · provider controls may vary' : 'Direct stream player',
-              style: TextStyle(color: Ui.muted, fontSize: 11)),
-            const SizedBox(height: 14),
-            Row(children: [
-              Expanded(child: _RemoteButton(icon: Icons.replay_10_rounded, label: '−10 sec', onTap: () => m.sendRemoteCommand('rewind'))),
-              const SizedBox(width: 8),
-              Expanded(child: _RemoteButton(icon: Icons.play_arrow_rounded, label: 'Play', onTap: () => m.sendRemoteCommand('play'), primary: true)),
-              const SizedBox(width: 8),
-              Expanded(child: _RemoteButton(icon: Icons.pause_rounded, label: 'Pause', onTap: () => m.sendRemoteCommand('pause'))),
-              const SizedBox(width: 8),
-              Expanded(child: _RemoteButton(icon: Icons.forward_10_rounded, label: '+10 sec', onTap: () => m.sendRemoteCommand('forward'))),
-            ]),
-            const SizedBox(height: 12),
-            Row(children: [
-              Expanded(child: OutlinedButton.icon(onPressed: () => m.sendRemoteCommand('unmute'),
-                icon: const Icon(Icons.volume_up_rounded, size: 18), label: const FittedBox(child: Text('Unmute')))),
-              const SizedBox(width: 8),
-              Expanded(child: OutlinedButton.icon(onPressed: () => m.sendRemoteCommand('fullscreen'),
-                icon: const Icon(Icons.fullscreen_rounded, size: 18), label: const FittedBox(child: Text('Full screen')))),
-              const SizedBox(width: 8),
-              Expanded(child: FilledButton.tonalIcon(onPressed: () => m.stopPlayback(),
-                icon: const Icon(Icons.stop_rounded, size: 18), label: const FittedBox(child: Text('Stop')))),
-            ]),
-            Row(children: [
-              const Icon(Icons.volume_down_rounded),
-              Expanded(child: Slider(value: m.receiverVolume.toDouble(), min: 0, max: 100,
-                onChanged: m.setReceiverVolume)),
-              Text('${m.receiverVolume}%', style: TextStyle(color: Ui.muted, fontSize: 11)),
-            ]),
-            const SizedBox(height: 4),
-            Text('Direct streams support remote playback controls. Embedded providers may restrict external control, autoplay or audio.',
-              style: TextStyle(color: Ui.muted, fontSize: 11, height: 1.35)),
-          ])),
-          decoderPanel(Text('Movie pages are loaded in a dedicated receiver iframe so the provider player can run its own scripts. Kodi cannot play an HTML iframe: Kodi still requires a direct media stream or a Kodi-compatible add-on.',
-            style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.45))),
-        ]),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Ui.bg,
+    appBar: AppBar(backgroundColor: Ui.panel,
+      title: const Text('Connect to receiver', style: TextStyle(fontWeight: FontWeight.w900))),
+    body: ListenableBuilder(listenable: m, builder: (context, _) => ListView(
+      padding: const EdgeInsets.all(16), children: [
+        decoderPanel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.connected_tv_rounded, size: 29, color: Ui.red),
+            const SizedBox(width: 11),
+            Expanded(child: Text(m.running ? m.status : 'No receiver connected',
+              style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900))),
+            Icon(Icons.circle, size: 10, color: m.connected ? Colors.green : Ui.muted),
+          ]),
+          const SizedBox(height: 10),
+          Text('On your TV or laptop, open the Deeprowss Receiver page. Scan the QR code shown there with your phone to connect.',
+            style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5)),
+          const SizedBox(height: 16),
+          SizedBox(width: double.infinity, child: FilledButton.icon(
+            onPressed: _busy || m.running ? null : _scanAndConnect,
+            icon: _busy ? const SizedBox(width: 17,height: 17,child:CircularProgressIndicator(strokeWidth:2))
+              : const Icon(Icons.qr_code_scanner_rounded),
+            label: Text(_busy ? 'Connecting…' : 'Scan TV QR code'))),
+          if (!m.running) ...[
+            const SizedBox(height: 8),
+            SizedBox(width: double.infinity, child: OutlinedButton.icon(
+              onPressed: _busy ? null : _startLegacy,
+              icon: const Icon(Icons.pin_outlined), label: const Text('Use legacy PIN connection'))),
+          ] else ...[
+            const SizedBox(height: 8),
+            SizedBox(width: double.infinity, child: OutlinedButton.icon(
+              onPressed: () async { await m.stop(); },
+              icon: const Icon(Icons.stop_circle_outlined), label: const Text('Disconnect receiver'))),
+          ],
+          if (m.error != null) Padding(padding: const EdgeInsets.only(top:10),
+            child: Text(m.error!, style: TextStyle(color: Ui.red, fontSize:12))),
+        ])),
+        if (m.running && m.connected) decoderPanel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [Icon(Icons.play_circle_fill,color:Ui.red),const SizedBox(width:8),
+            Text('Now playing',style:TextStyle(color:Ui.text,fontWeight:FontWeight.w900,fontSize:17))]),
+          const SizedBox(height:6),
+          Text(m.nowPlayingTitle.isEmpty?'Waiting for media':m.nowPlayingTitle,maxLines:2,overflow:TextOverflow.ellipsis,
+            style:TextStyle(color:Ui.text,fontWeight:FontWeight.w700)),
+          const SizedBox(height:12),
+          Row(children:[
+            Expanded(child:_RemoteButton(icon:Icons.replay_10_rounded,label:'−10 sec',onTap:()=>m.sendRemoteCommand('rewind'))),
+            const SizedBox(width:8),
+            Expanded(child:_RemoteButton(icon:Icons.play_arrow_rounded,label:'Play',onTap:()=>m.sendRemoteCommand('play'),primary:true)),
+            const SizedBox(width:8),
+            Expanded(child:_RemoteButton(icon:Icons.pause_rounded,label:'Pause',onTap:()=>m.sendRemoteCommand('pause'))),
+            const SizedBox(width:8),
+            Expanded(child:_RemoteButton(icon:Icons.forward_10_rounded,label:'+10 sec',onTap:()=>m.sendRemoteCommand('forward'))),
+          ]),
+          const SizedBox(height:12),
+          Row(children:[
+            Expanded(child:OutlinedButton.icon(onPressed:()=>m.sendRemoteCommand('unmute'),
+              icon:const Icon(Icons.volume_up_rounded,size:18),label:const FittedBox(child:Text('Unmute')))),
+            const SizedBox(width:8),
+            Expanded(child:OutlinedButton.icon(onPressed:()=>m.sendRemoteCommand('fullscreen'),
+              icon:const Icon(Icons.fullscreen_rounded,size:18),label:const FittedBox(child:Text('Full screen')))),
+            const SizedBox(width:8),
+            Expanded(child:FilledButton.tonalIcon(onPressed:()=>m.stopPlayback(),
+              icon:const Icon(Icons.stop_rounded,size:18),label:const FittedBox(child:Text('Stop')))),
+          ]),
+          Row(children:[
+            const Icon(Icons.volume_down_rounded),
+            Expanded(child:Slider(value:m.receiverVolume.toDouble(),min:0,max:100,onChanged:m.setReceiverVolume)),
+            Text(m.receiverVolume.toString()+'%',style:TextStyle(color:Ui.muted,fontSize:11)),
+          ]),
+          Text('Direct streams support remote controls. Embedded providers may restrict external control.',
+            style:TextStyle(color:Ui.muted,fontSize:11,height:1.35)),
+        ])),
+        decoderPanel(Text('The QR code pairs your phone with the TV. Video and audio travel directly between devices using WebRTC; the pairing service only relays connection messages.',
+          style:TextStyle(color:Ui.muted,fontSize:12,height:1.5))),
+      ])),
+  );
 }
 
 class _RemoteButton extends StatelessWidget {
@@ -125,14 +127,15 @@ class _RemoteButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final bool primary;
-  const _RemoteButton({required this.icon, required this.label, required this.onTap, this.primary = false});
+  const _RemoteButton({required this.icon,required this.label,required this.onTap,this.primary=false});
   @override
-  Widget build(BuildContext context) => InkWell(onTap: onTap, borderRadius: BorderRadius.circular(14), child: Container(
-    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
-    constraints: const BoxConstraints(minHeight: 76),
-    decoration: BoxDecoration(color: primary ? Ui.red.withValues(alpha: .18) : Ui.card,
-      borderRadius: BorderRadius.circular(14), border: Border.all(color: primary ? Ui.red : Ui.line)),
-    child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: primary ? Ui.red : Ui.text, size: 24),
-      const SizedBox(height: 5), FittedBox(fit: BoxFit.scaleDown, child: Text(label, maxLines: 1, style: TextStyle(color: Ui.muted, fontSize: 10)))]),
-  ));
+  Widget build(BuildContext context)=>InkWell(onTap:onTap,borderRadius:BorderRadius.circular(14),
+    child:Container(padding:const EdgeInsets.symmetric(horizontal:4,vertical:12),
+      constraints:const BoxConstraints(minHeight:76),
+      decoration:BoxDecoration(color:primary?Ui.red.withValues(alpha:.18):Ui.card,
+        borderRadius:BorderRadius.circular(14),border:Border.all(color:primary?Ui.red:Ui.line)),
+      child:Column(mainAxisSize:MainAxisSize.min,children:[
+        Icon(icon,color:primary?Ui.red:Ui.text,size:24),const SizedBox(height:5),
+        FittedBox(fit:BoxFit.scaleDown,child:Text(label,maxLines:1,style:TextStyle(color:Ui.muted,fontSize:10))),
+      ])));
 }
