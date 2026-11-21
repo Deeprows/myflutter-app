@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../models/cast_target.dart';
 import '../../services/webrtc_mirror_service.dart';
 import '../../theme/app_theme.dart';
 import 'decoder_common.dart';
 import 'decoder_qr_scan_page.dart';
 
 class DecoderReceiverPage extends StatefulWidget {
-  const DecoderReceiverPage({super.key});
+  final CastTarget? target;
+  const DecoderReceiverPage({super.key, this.target});
   @override
   State<DecoderReceiverPage> createState() => _DecoderReceiverPageState();
 }
@@ -23,7 +25,12 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     setState(() => _busy = true);
     try {
       await m.start(captureScreen: false, relayRoom: pair['room'], relayToken: pair['token']);
-      if (mounted) decoderToast(context, 'Paired with receiver. Choose a video or channel to send.');
+      final target = widget.target;
+      if (target != null && (target.url ?? '').trim().isNotEmpty) {
+        await m.sendChannel(url: target.url!, title: target.title, kind: target.kind,
+          referer: target.referer, userAgent: target.userAgent);
+      }
+      if (mounted) decoderToast(context, target == null ? 'Paired with receiver. Choose a video or channel to send.' : 'Sending ' + target.title + ' to your receiver.');
     } catch (_) {
       if (mounted) decoderToast(context, m.error ?? 'Could not connect to receiver.');
     } finally {
