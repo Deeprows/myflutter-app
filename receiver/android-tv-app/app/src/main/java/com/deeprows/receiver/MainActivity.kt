@@ -5,6 +5,9 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
+import android.view.MotionEvent
+import android.webkit.JavascriptInterface
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -12,6 +15,8 @@ import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
+import android.webkit.WebResourceResponse
+import java.io.ByteArrayInputStream
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -21,6 +26,8 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import org.json.JSONObject
+import java.net.URL
 
 /**
  * Deeprowss TV: opens the hosted Deeprowss site full screen.
@@ -34,6 +41,26 @@ import android.widget.TextView
 class MainActivity : Activity() {
     companion object {
         private const val RECEIVER_PAGE = "https://deeprows.github.io/myflutter-app/"
+
+        // Ad / pop-under networks that embedded players must not reach (extended from receiver/adblock.json).
+        @Volatile private var adHosts: Set<String> = setOf(
+            "doubleclick.net", "googlesyndication.com", "googleadservices.com", "adservice.google.com", "popads.net",
+            "popcash.net", "propellerads.com", "exoclick.com", "exosrv.com", "juicyads.com", "adsterra.com", "adcash.com",
+            "clickadu.com", "hilltopads.net", "trafficjunky.com", "admaven.com", "monetag.com", "a-ads.com", "adnxs.com",
+            "taboola.com", "outbrain.com"
+        )
+        @Volatile private var adBlockOn = true
+
+        private fun isAdHost(host: String?): Boolean {
+            var h = host?.lowercase() ?: return false
+            while (adBlockOn && h.isNotEmpty()) {
+                if (adHosts.contains(h)) return true
+                val i = h.indexOf('.')
+                if (i < 0) break
+                h = h.substring(i + 1)
+            }
+            return false
+        }
     }
 
     private var webView: WebView? = null
@@ -44,6 +71,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        refreshAdBlockList()
         container = FrameLayout(this).apply { setBackgroundColor(Color.rgb(7, 8, 10)) }
         setContentView(container)
         openSite(null, null)
@@ -70,6 +98,8 @@ class MainActivity : Activity() {
             settings.loadsImagesAutomatically = true
             settings.javaScriptCanOpenWindowsAutomatically = false
             settings.setSupportMultipleWindows(false)
+            // Phone remote: lets the receiver page tap the embedded player (cross-origin frames cannot be clicked from JS).
+            addJavascriptInterface(TapBridge(), "DeeprowssTv")
             webChromeClient = object : WebChromeClient() {
                 // Lets embedded players (iframes) go full screen.
                 override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
@@ -99,6 +129,13 @@ class MainActivity : Activity() {
                     return req.isForMainFrame && req.url.host != allowedHost
                 }
 
+                override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                    if (isAdHost(request?.url?.host)) {
+                        return WebResourceResponse("text/plain", "utf-8", 204, "No Content", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+                    }
+                    return super.shouldInterceptRequest(view, request)
+                }
+
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                     if (request?.isForMainFrame == true) showOfflineScreen()
                 }
@@ -114,6 +151,50 @@ class MainActivity : Activity() {
         )
         view.loadUrl(url)
         view.requestFocus()
+    }
+
+    /** Updates the ad-host list from the hosted receiver/adblock.json without needing a new APK. */
+    private fun refreshAdBlockList() {
+        Thread {
+            try {
+                val json = JSONObject(URL(RECEIVER_PAGE + "receiver/adblock.json").readText())
+                adBlockOn = json.optBoolean("enabled", true)
+                val list = json.optJSONArray("hosts") ?: return@Thread
+                val merged = adHosts.toMutableSet()
+                for (i in 0 until list.length()) {
+                    val h = list.optString(i).lowercase().trim()
+                    if (Regex("[a-z0-9.-]{3,100}").matches(h)) merged.add(h)
+                }
+                adHosts = merged
+            } catch (_: Exception) {
+            }
+        }.start()
+    }
+
+    /** JavaScript bridge used by the receiver page: tap at a fraction of the screen. */
+    inner class TapBridge {
+        private var last = 0L
+
+        @JavascriptInterface
+        fun tap(fx: Double, fy: Double) {
+            val now = SystemClock.uptimeMillis()
+            if (now - last < 250 || fx.isNaN() || fy.isNaN()) return
+            last = now
+            runOnUiThread {
+                val view = webView ?: return@runOnUiThread
+                val x = (fx.coerceIn(0.0, 1.0) * view.width).toFloat()
+                val y = (fy.coerceIn(0.0, 1.0) * view.height).toFloat()
+                val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0)
+                view.dispatchTouchEvent(down)
+                down.recycle()
+                view.postDelayed({
+                    val t = SystemClock.uptimeMillis()
+                    val up = MotionEvent.obtain(now, t, MotionEvent.ACTION_UP, x, y, 0)
+                    view.dispatchTouchEvent(up)
+                    up.recycle()
+                }, 60)
+            }
+        }
     }
 
     private fun hideCustomView() {
