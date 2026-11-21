@@ -20,7 +20,7 @@
   const image = m => m?.image || m?.poster || m?.posterUrl || (m?.poster_path ? IMG + 'w500' + m.poster_path : '');
   const isTv = m => m?.type === 'tv' || m?.mediaType === 'tv' || m?.media_type === 'tv' || /\/tv\//i.test(m?.url || '') || /series|season|episode/i.test(title(m));
   const idOf = m => Number(m?.tmdbId || m?.tmdb_id || m?.id) || null;
-  const safeUrl = (raw, base) => { try { const u = new URL(raw, base || 'https://deeprows.github.io/myflutter-app/'); return ['http:','https:'].includes(u.protocol) ? u.href : ''; } catch (_) { return ''; } };
+  const safeUrl = (raw, base) => { if (!raw) return ''; try { const u = new URL(raw, base || 'https://deeprows.github.io/myflutter-app/'); return ['http:','https:'].includes(u.protocol) ? u.href : ''; } catch (_) { return ''; } };
   const fresh = url => url + (url.includes('?') ? '&' : '?') + '_refresh=' + Date.now();
   async function getJson(url) { const r = await fetch(fresh(url), {cache:'no-store'}); if (!r.ok) throw Error('HTTP ' + r.status); return r.json(); }
   async function loadConfig() {
@@ -207,8 +207,9 @@
     $('detailSave').textContent = isSaved(movie) ? '✓ Saved' : '＋ Watch later';
     $('detailAlt').hidden = true;
     const dl = movie.downloadUrl || movie.download_url || '';
-    $('detailDownload').hidden = !safeUrl(dl);
-    $('detailDownload').onclick = () => window.open(safeUrl(dl),'_blank','noopener');
+    const downloadUrl = dl ? safeUrl(dl) : '';
+    $('detailDownload').hidden = !downloadUrl;
+    $('detailDownload').onclick = () => { if (downloadUrl) window.open(downloadUrl,'_blank','noopener'); };
     $('detailPlay').onclick = () => { $('movieDetails').classList.remove('open'); playMovie(movie); };
     $('detailSave').onclick = () => { saveList('deeprowss_watch_later',movie); $('detailSave').textContent = '✓ Saved'; };
     try {
@@ -285,7 +286,7 @@
       const grid = section.querySelector('.libchannel-grid');
       items.forEach(c => {
         const b = document.createElement('button'); b.className = 'libchannel';
-        const logo = safeUrl(c.logo || '');
+        const logo = c.logo ? safeUrl(c.logo) : '';
         b.innerHTML = (logo ? '<img loading="lazy" src="' + esc(logo) + '" alt="">' : '<span style="width:42px;height:42px;display:grid;place-items:center;background:#0a101a;border-radius:8px">TV</span>') + '<span><b>' + esc(c.name) + '</b><small>' + esc([c.country,c.quality].filter(Boolean).join(' · ') || cat) + '</small></span>';
         b.onclick = () => {
           const url = safeUrl(c.url), kind = /\.m3u8(\?|$)/i.test(url) ? 'hls' : /\.mpd(\?|$)/i.test(url) ? 'dash' : /\.(mp4|webm)(\?|$)/i.test(url) ? 'video' : 'embed';
