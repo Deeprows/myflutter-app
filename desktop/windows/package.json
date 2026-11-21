@@ -1,6 +1,6 @@
 {
   "name": "deeprowss-cinema",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Deeprowss TMDB Cinema, Live TV and Phone Casting for Windows",
   "main": "main.cjs",
   "author": "Deeprowss",
@@ -11,8 +11,7 @@
   },
   "devDependencies": {
     "electron": "^34.0.0",
-    "electron-builder": "^25.1.8",
-    "electron-updater": "^6.6.2"
+    "electron-builder": "^25.1.8"
   },
   "build": {
     "appId": "com.deeprows.cinema.windows",
@@ -60,5 +59,8 @@
       "repo": "myflutter-app",
       "releaseType": "release"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
   }
 }
