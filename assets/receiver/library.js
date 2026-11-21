@@ -266,7 +266,7 @@
       }).filter(Boolean);
     } catch (_) {}
     const map = new Map();
-    [...own,...extra].forEach(c => { if (!c?.name || !c?.url) return; const key = c.name.toLowerCase(); if (!map.has(key)) map.set(key,{...c,url:safeUrl(c.url)}); });
+    [...own,...extra].forEach(c => { if (!c?.name || !c?.url) return; const key = c.name.toLowerCase(); if (!map.has(key)) map.set(key,{...c,url:safeUrl(c.url,'https://footbolive.online/')}); });
     channels = [...map.values()].filter(c => c.url); renderChannels();
   }
   function renderChannels() {
