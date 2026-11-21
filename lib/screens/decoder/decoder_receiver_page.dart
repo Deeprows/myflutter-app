@@ -4,7 +4,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../services/webrtc_mirror_service.dart';
 import '../../theme/app_theme.dart';
-import 'decoder_channels_page.dart';
 import 'decoder_common.dart';
 
 /// Dashboard for the browser receiver and its remote controls.
@@ -32,7 +31,7 @@ class DecoderReceiverPage extends StatelessWidget {
               Icon(Icons.circle, color: m.connected ? Colors.green : Ui.muted, size: 10),
             ]),
             const SizedBox(height: 10),
-            Text("Open the connection address on your TV or browser. When you send a movie, football stream or TV channel, it opens directly in the receiver's dedicated player — no video-scanning step on your phone. Keep this dashboard as your remote.",
+            Text("Start the receiver, then connect your laptop or TV browser using the connection details below. Videos sent from your phone play directly on the receiver.",
                 style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.45)),
             const SizedBox(height: 14),
             if (!m.running)
@@ -43,11 +42,6 @@ class DecoderReceiverPage extends StatelessWidget {
                 }, icon: const Icon(Icons.power_settings_new), label: const Text('Start receiver'),
               ))
             else ...[
-              SizedBox(width: double.infinity, child: FilledButton.icon(
-                onPressed: () => pushDecoderPage<void>(context, const DecoderChannelsPage(only: 'receiver'), 'channels'),
-                icon: const Icon(Icons.video_library_outlined), label: const Text('Choose a TV channel'),
-              )),
-              const SizedBox(height: 8),
               SizedBox(width: double.infinity, child: OutlinedButton.icon(
                 onPressed: () async { await m.stop(); if (context.mounted) decoderToast(context, 'Receiver stopped.'); },
                 icon: const Icon(Icons.stop_circle_outlined), label: const Text('Stop receiver session'),
