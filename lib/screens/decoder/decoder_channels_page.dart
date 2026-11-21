@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../models/cast_target.dart';
@@ -9,6 +11,9 @@ import '../../theme/app_theme.dart';
 import 'decoder_common.dart';
 import 'decoder_flows.dart';
 import 'stream_finder_page.dart';
+
+const _cardHeight = 40.0;
+const _rowCardWidth = 140.0;
 
 enum _Filter { all, direct, page, ready }
 
@@ -156,23 +161,32 @@ class _DecoderChannelsPageState extends State<DecoderChannelsPage> {
     );
   }
 
-  Widget _channelCard(Channel c, {bool compact = false}) => Material(
-    color: Ui.card, borderRadius: BorderRadius.circular(18),
-    child: InkWell(onTap: () => _open(c), borderRadius: BorderRadius.circular(18),
-      child: Container(constraints: BoxConstraints(minHeight: compact ? 70 : 78),
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFC99F25), width: 1.5)),
-        child: Row(children: [
-          CircleAvatar(radius: compact ? 20 : 22, backgroundColor: const Color(0xFF30270D),
-            backgroundImage: (c.logo ?? '').isEmpty ? null : NetworkImage(c.logo!),
-            onBackgroundImageError: (c.logo ?? '').isEmpty ? null : (_, _) {},
-            child: (c.logo ?? '').isEmpty ? Icon(c.category.icon, size: 21, color: const Color(0xFFFFD34C)) : null),
-          const SizedBox(width: 9),
-          Expanded(child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: Ui.text, fontSize: compact ? 14 : 15, fontWeight: FontWeight.w900))),
-          Icon(Icons.play_circle_outline_rounded, color: Ui.redSoft, size: 21),
-        ]))));
+  // Same compact card as the TV Channels page: round logo, scrolling name.
+  Widget _channelCard(Channel c, {bool compact = false}) => SizedBox(
+    height: _cardHeight,
+    child: Material(
+      color: Colors.transparent,
+      child: Ink(
+        decoration: BoxDecoration(
+          color: Ui.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Ui.red.withValues(alpha: .8), width: 1.2),
+        ),
+        child: InkWell(
+          onTap: () => _open(c),
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(6, 0, 6, 0),
+            child: Row(children: [
+              _DecoderLogo(channel: c),
+              const SizedBox(width: 5),
+              Expanded(child: _MarqueeText(c.name)),
+            ]),
+          ),
+        ),
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -246,14 +260,14 @@ class _DecoderChannelsPageState extends State<DecoderChannelsPage> {
                     child:GridView.builder(shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
                       itemCount:items.length,
                       gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount:2,mainAxisSpacing:11,crossAxisSpacing:10,mainAxisExtent:72),
+                        crossAxisCount:2,mainAxisSpacing:10,crossAxisSpacing:10,mainAxisExtent:_cardHeight),
                       itemBuilder:(_,index)=>_channelCard(items[index])));
                 return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-                  SizedBox(height:76,child:ListView.separated(scrollDirection:Axis.horizontal,
+                  SizedBox(height:_cardHeight,child:ListView.separated(scrollDirection:Axis.horizontal,
                     padding:const EdgeInsets.symmetric(horizontal:16),
                     itemCount:items.length>_previewLimit?_previewLimit:items.length,
                     separatorBuilder:(_,__)=>const SizedBox(width:10),
-                    itemBuilder:(_,index)=>SizedBox(width:250,
+                    itemBuilder:(_,index)=>SizedBox(width:_rowCardWidth,
                       child:_channelCard(items[index],compact:true)))),
                   if(items.length>_previewLimit)
                     Align(alignment:Alignment.centerRight,
@@ -266,5 +280,137 @@ class _DecoderChannelsPageState extends State<DecoderChannelsPage> {
             ],
           ])),
       ]));
+  }
+}
+
+
+/// Round channel logo with an accent ring (same as the TV Channels page), or
+/// the category icon when there is no logo or it fails to load.
+class _DecoderLogo extends StatelessWidget {
+  final Channel channel;
+  const _DecoderLogo({required this.channel});
+
+  static const _size = 27.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = channel.logo ?? '';
+    final icon = Icon(channel.category.icon, color: Ui.redSoft, size: 15);
+    return Container(
+      width: _size,
+      height: _size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: url.isEmpty ? Ui.red.withValues(alpha: .16) : Colors.white,
+        border: Border.all(color: Ui.red, width: 1.3),
+      ),
+      child: url.isEmpty
+          ? Center(child: icon)
+          : ClipOval(
+              child: Padding(
+                padding: const EdgeInsets.all(2.5),
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  cacheWidth: 120,
+                  filterQuality: FilterQuality.medium,
+                  errorBuilder: (_, __, ___) => Center(child: icon),
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+/// Channel name, centred; a long name slowly scrolls sideways so it can be
+/// read in full (same behaviour as the TV Channels page).
+class _MarqueeText extends StatefulWidget {
+  final String text;
+  const _MarqueeText(this.text);
+
+  @override
+  State<_MarqueeText> createState() => _MarqueeTextState();
+}
+
+class _MarqueeTextState extends State<_MarqueeText> {
+  static const _style =
+      TextStyle(fontSize: 12.5, height: 1.1, fontWeight: FontWeight.w800);
+
+  final _scroll = ScrollController();
+  bool _alive = true;
+  bool _running = false;
+
+  @override
+  void dispose() {
+    _alive = false;
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loop() async {
+    if (_running) return;
+    _running = true;
+    while (_alive) {
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      if (!_alive || !_scroll.hasClients) break;
+      final max = _scroll.position.maxScrollExtent;
+      if (max <= 0) break;
+      await _scroll.animateTo(
+        max,
+        duration: Duration(milliseconds: (max * 28).round().clamp(900, 9000)),
+        curve: Curves.linear,
+      );
+      if (!_alive || !_scroll.hasClients) break;
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      if (!_alive || !_scroll.hasClients) break;
+      _scroll.jumpTo(0);
+    }
+    _running = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        final painter = TextPainter(
+          text: TextSpan(text: widget.text, style: _style),
+          maxLines: 1,
+          textDirection: TextDirection.ltr,
+        )..layout();
+        final overflows = painter.width > box.maxWidth;
+        if (!overflows) {
+          return Center(
+            child: Text(widget.text, maxLines: 1, softWrap: false, style: _style),
+          );
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_loop());
+        });
+        return ShaderMask(
+          shaderCallback: (r) => const LinearGradient(
+            colors: [
+              Color(0x00FFFFFF),
+              Colors.white,
+              Colors.white,
+              Color(0x00FFFFFF),
+            ],
+            stops: [0, .08, .92, 1],
+          ).createShader(r),
+          blendMode: BlendMode.dstIn,
+          child: SingleChildScrollView(
+            controller: _scroll,
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Center(
+                heightFactor: 1,
+                child: Text(widget.text, maxLines: 1, softWrap: false, style: _style),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
