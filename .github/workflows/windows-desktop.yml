@@ -6,6 +6,8 @@ on:
     paths:
       - 'desktop/windows/**'
       - 'assets/data/movies.json'
+      - 'assets/data/tv.json'
+      - 'assets/data/app_config.json'
       - 'assets/receiver/**'
       - '.github/workflows/windows-desktop.yml'
   workflow_dispatch:
