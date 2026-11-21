@@ -42,8 +42,8 @@ const _categoryOrder = [
 ];
 
 const _rowPreview = 14; // cards per category row before "See all"
-const _cardHeight = 46.0; // wide pill buttons: round logo + channel name
-const _rowCardWidth = 160.0;
+const _cardHeight = 40.0; // compact channel cards for preview rows and category grid
+const _rowCardWidth = 140.0;
 
 class TvScreen extends StatefulWidget {
   const TvScreen({super.key});
@@ -756,19 +756,19 @@ class _ChannelCard extends StatelessWidget {
             onTap: onTap,
             borderRadius: BorderRadius.circular(14),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(7, 0, 2, 0),
+              padding: const EdgeInsets.fromLTRB(6, 0, 2, 0),
               child: Row(
                 children: [
                   _Logo(channel: channel),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 5),
                   Expanded(child: _MarqueeText(channel.name)),
                   // Star: bookmark / un-bookmark this channel.
                   SizedBox(
-                    width: 30,
-                    height: 30,
+                    width: 26,
+                    height: 26,
                     child: IconButton(
                       padding: EdgeInsets.zero,
-                      iconSize: 20,
+                      iconSize: 18,
                       splashRadius: 16,
                       tooltip: fav
                           ? 'Remove from favourites'.tr
@@ -796,12 +796,12 @@ class _Logo extends StatelessWidget {
   final Channel channel;
   const _Logo({required this.channel});
 
-  static const _size = 32.0;
+  static const _size = 27.0;
 
   @override
   Widget build(BuildContext context) {
     final url = channel.logo ?? '';
-    final icon = Icon(channel.category.icon, color: Ui.redSoft, size: 17);
+    final icon = Icon(channel.category.icon, color: Ui.redSoft, size: 15);
     return Container(
       width: _size,
       height: _size,
@@ -840,7 +840,7 @@ class _MarqueeText extends StatefulWidget {
 
 class _MarqueeTextState extends State<_MarqueeText> {
   static const _style =
-      TextStyle(fontSize: 13.5, height: 1.1, fontWeight: FontWeight.w800);
+      TextStyle(fontSize: 12.5, height: 1.1, fontWeight: FontWeight.w800);
 
   final _scroll = ScrollController();
   bool _alive = true;
