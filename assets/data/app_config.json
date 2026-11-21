@@ -1,5 +1,5 @@
 {
-  "_help": "Edit this file on GitHub (pencil icon > Commit). Phones pick it up next time the app opens or comes back to the screen. A missing key = the app's built-in default. Keep it valid JSON (check commas and quotes).",
+  "_help": "Edit this file on GitHub (pencil icon > Commit). Phones and the receiver page refresh it regularly. A missing key = the built-in default. Keep it valid JSON (check commas and quotes).",
   "ads": {
     "enabled": true,
     "supportUrl": "https://www.profitableratecpmnetwork.com/iqv44jk21?key=c2752cc0c9c553ac66e4fb16cdb95f60",
@@ -45,5 +45,10 @@
   "streamHint": {
     "enabled": true,
     "text": "Not working? Try another stream number.\nDouble Tap. Click 🔳 on player to bypass ads"
+  },
+  "tmdb": {
+    "enabled": true,
+    "apiKey": "",
+    "language": "en-US"
   }
 }
