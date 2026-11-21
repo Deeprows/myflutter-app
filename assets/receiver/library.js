@@ -27,9 +27,8 @@
     try {
       config = await getJson(CONFIG_URL);
       const t = config.tmdb || {};
-      if (t.apiKey || t.key) apiKey = t.apiKey || t.key;
+      apiKey = t.enabled === false ? '' : (t.apiKey || t.key || FALLBACK_KEY);
       if (t.language) language = t.language;
-      if (t.enabled === false) apiKey = '';
       const m = config.movies || {};
       embedBase = (m.embedBase || embedBase).replace(/\/+$/, '');
       altEmbedBase = (m.altEmbedBase || altEmbedBase).replace(/\/+$/, '');
