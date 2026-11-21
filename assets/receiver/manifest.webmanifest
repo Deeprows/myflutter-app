@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Deeprowss TV Receiver",
-  "short_name": "Deeprowss TV",
+  "name": "Deeprowss Cinema & Live TV",
+  "short_name": "Deeprowss",
   "description": "Deeprowss Smart TV receiver",
   "start_url": "./",
   "scope": "./",
