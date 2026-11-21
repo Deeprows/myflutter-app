@@ -14,7 +14,7 @@ body{background:radial-gradient(ellipse at 50% 0%,#17202c 0,#080b10 55%,#030406 
 h1{font-size:clamp(26px,5vw,38px);margin:0 0 12px;font-weight:950}p{color:var(--muted);line-height:1.6;margin:0 0 18px}
 input{display:block;width:100%;padding:16px;border:1px solid #394657;border-radius:13px;background:#080d14;color:#fff;font-size:16px;outline:none;margin:12px 0}input:focus{border-color:var(--accent)}
 button{border:0;border-radius:12px;padding:13px 18px;background:var(--accent);color:#fff;font-weight:850;font-size:15px;cursor:pointer}button:disabled{opacity:.5}.secondary{background:#202a38;border:1px solid #3b485a;color:#fff}
-#connect{width:100%;margin-top:4px;min-height:50px}#statusJoin,#statusPlayer{font-size:13px;color:#c1cad6;min-height:22px;margin-top:14px}.hint{font-size:12px;color:#8792a2;margin-top:18px}
+#connect{width:100%;margin-top:4px;min-height:50px}#statusJoin,#statusPlayer{font-size:13px;color:#c1cad6;min-height:22px;margin-top:14px}.hint{font-size:12px;color:#8792a2;margin-top:18px}details summary{cursor:pointer;text-align:center;padding:8px}#pairQr img{max-width:190px!important;max-height:190px!important}
 .player{display:none;position:fixed;inset:0;width:100vw;height:100dvh;z-index:2;background:#000}
 .player-head{position:absolute;z-index:4;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:18px 22px;background:linear-gradient(#000d,transparent)}
 .title{font-weight:850;font-size:clamp(16px,2.2vw,24px);overflow-wrap:anywhere}.live{border:1px solid #315f43;color:#78d99a;border-radius:999px;padding:6px 10px;font-size:11px}
@@ -29,13 +29,18 @@ button{border:0;border-radius:12px;padding:13px 18px;background:var(--accent);co
 <header class="brand"><div><div class="logo">DEEProWSS</div><div class="tag">VIDEO RECEIVER</div></div><div class="badge" id="connectionBadge">NOT CONNECTED</div></header>
 <main>
 <section id="join">
-<h1>Connect to Deeprowss</h1>
-<p>Enter the phone's local network address and the six-digit PIN shown in the Deeprowss app. Keep both devices on the same Wi-Fi network.</p>
+<h1>Connect your phone</h1>
+<p>Open Smart Decoder on your phone, choose <b>Scan to Connect</b>, and scan this QR code. Your video will play here.</p>
+<div id="pairQr" style="width:210px;height:210px;margin:18px auto;padding:10px;background:#fff;border-radius:14px;display:grid;place-items:center"></div>
+<div style="text-align:center"><div class="tag">PAIRING CODE</div><div id="pairCode" style="font-size:25px;font-weight:950;letter-spacing:4px;margin:8px 0">Preparing…</div></div>
+<div id="statusJoin" role="status" style="text-align:center">Creating a secure connection…</div>
+<button id="newPair" class="secondary" style="width:100%;margin-top:12px">Generate new QR code</button>
+<details style="margin-top:18px;color:#aab2bf"><summary>Use manual connection (legacy)</summary>
 <input id="host" type="text" inputmode="url" autocomplete="off" placeholder="Phone address (e.g. 192.168.1.5:37027)" aria-label="Phone address">
 <input id="pin" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="Six-digit PIN" aria-label="Six-digit PIN">
-<button id="connect">Connect receiver</button>
-<div id="statusJoin" role="status">Ready to connect on your Wi-Fi network.</div>
-<div class="hint">Once connected, videos sent from your phone will play here. This page is only a receiver; it does not contain movies, TV channels or a catalogue.</div>
+<button id="connect" class="secondary" style="width:100%">Connect with PIN</button>
+</details>
+<div class="hint" style="text-align:center">Private pairing · WebRTC video is sent directly between devices. The pairing service only carries connection messages.</div>
 </section>
 <section class="player" id="playerPanel" tabindex="0" aria-label="Video receiver player">
 <div class="player-head"><div class="title" id="mediaTitle">Ready to play</div><span class="live" id="playState">CONNECTED</span></div>
@@ -47,6 +52,7 @@ button{border:0;border-radius:12px;padding:13px 18px;background:var(--accent);co
 </main>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script>
   (() => {
     const $ = id => document.getElementById(id);
@@ -58,7 +64,12 @@ button{border:0;border-radius:12px;padding:13px 18px;background:var(--accent);co
 
     const params=new URLSearchParams(location.search);const savedHost=localStorage.getItem('deeprowss_receiver_host')||'';const savedPin=localStorage.getItem('deeprowss_receiver_pin')||'';if(/^\d{6}$/.test(params.get('pin')||''))pinInput.value=params.get('pin');else if(/^\d{6}$/.test(savedPin))pinInput.value=savedPin;hostInput.value=params.get('host')||savedHost||'';
     const say=value=>{$('statusJoin').textContent=value;$('statusPlayer').textContent=value;};
-    const send=value=>{if(socket&&socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify(value));};
+    const RELAY='https://deeprowss-feed.deeprows.workers.dev';
+    let relayRoom='',relayToken='',relayCursor=0,relayActive=false,relayBusy=false;
+    const relaySend=async value=>{if(!relayActive)return;try{await fetch(RELAY+'/cast/send?room='+encodeURIComponent(relayRoom)+'&token='+encodeURIComponent(relayToken),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sender:'receiver',payload:value})});}catch(e){say('Pairing relay temporarily unavailable.');}};
+    const send=value=>{if(socket&&socket.readyState===WebSocket.OPEN){socket.send(JSON.stringify(value));return;}if(relayActive)void relaySend(value);};
+    async function pollRelay(){if(!relayActive||relayBusy)return;relayBusy=true;try{const u=RELAY+'/cast/poll?room='+encodeURIComponent(relayRoom)+'&token='+encodeURIComponent(relayToken)+'&role=receiver&after='+relayCursor;const r=await fetch(u,{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Pairing expired');for(const item of d.messages||[]){relayCursor=Math.max(relayCursor,Number(item.id)||0);await processSignal(item.payload);}if((d.messages||[]).length){$('connectionBadge').textContent='CONNECTED';say('Phone connected. Waiting for video…');}}catch(e){say(e.message||'Pairing connection lost.');if(String(e.message).includes('expired')){relayActive=false;$('pairCode').textContent='Expired';}}finally{relayBusy=false;}}
+    async function createPairing(){relayActive=false;relayRoom='';relayToken='';relayCursor=0;$('pairQr').innerHTML='';$('pairCode').textContent='Preparing…';say('Creating a secure connection…');try{const r=await fetch(RELAY+'/cast/create',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Pairing service unavailable');relayRoom=d.room;relayToken=d.token;const payload=JSON.stringify({app:'deeprowss',v:1,room:relayRoom,token:relayToken});new QRCode($('pairQr'),{text:payload,width:190,height:190,colorDark:'#080b10',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});$('pairCode').textContent=relayRoom.match(/.{1,4}/g).join(' ');relayActive=true;$('connectionBadge').textContent='READY TO PAIR';say('Ready. Scan this QR code with Smart Decoder.');}catch(e){$('pairCode').textContent='Unavailable';say(e.message||'Could not create pairing code.');}}
     const report=value=>send({type:'receiver-status',message:value});
     const clock=v=>{if(!Number.isFinite(v))return '00:00';const n=Math.floor(v);return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');};
     function clearMedia(){urlPlaying=false;iframePlaying=false;document.body.classList.remove('playing');clearTimeout(hideControlsTimer);panel.classList.remove('controls-hidden');if(hls){try{hls.destroy();}catch(_){}hls=null;}if(dash){try{dash.reset();}catch(_){}dash=null;}video.pause();video.removeAttribute('src');video.srcObject=null;frame.src='about:blank';video.style.display='none';frame.style.display='none';$('seek').value=0;$('currentTime').textContent='00:00';$('totalTime').textContent='LIVE';}
@@ -116,13 +127,15 @@ button{border:0;border-radius:12px;padding:13px 18px;background:var(--accent);co
       socket.onopen=()=>{reconnectAttempts=0;localStorage.setItem('deeprowss_receiver_host',host);localStorage.setItem('deeprowss_receiver_pin',pin);$('connectionBadge').textContent='CONNECTED';say('Connected. Waiting for media…');send({type:'ready'});};
       socket.onerror=()=>{say('Could not connect. Check Wi-Fi, address and PIN.');$('connect').disabled=false;$('connectionBadge').textContent='OFFLINE';};
       socket.onclose=()=>{$('connectionBadge').textContent='DISCONNECTED';$('connect').disabled=false;if(urlPlaying||iframePlaying){clearMedia();say('Receiver session ended. Playback stopped.');return;}showJoin('Connection closed. Reconnecting automatically…');if(reconnectAttempts<5){reconnectAttempts++;clearTimeout(reconnectTimer);reconnectTimer=setTimeout(()=>{if(hostInput.value&&pinInput.value&&(!socket||socket.readyState===WebSocket.CLOSED))connect();},Math.min(1200*reconnectAttempts,6000));}else say('Reconnect attempts stopped. Tap Connect to retry.');if(peer){peer.close();peer=null;}};
-      socket.onmessage=async event=>{try{const msg=JSON.parse(event.data);if(msg.type==='play'&&typeof msg.url==='string'){if(peer){peer.close();peer=null;}playUrl(msg.url,msg.kind||'video',msg.title||'Deeprowss media');}
-        else if(msg.type==='remote'){remote(msg.command,msg.value);}
-        else if(msg.type==='offer'){clearMedia();peer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]});peer.ontrack=e=>{video.srcObject=e.streams[0];video.muted=false;video.defaultMuted=false;video.volume=1;video.style.display='block';frame.style.display='none';panel.style.display='block';join.style.display='none';video.muted=false;video.muted=false;video.volume=1;video.play().catch(()=>say('Mirroring video. Press Play once on the receiver to enable audio autoplay.'));showControls();};peer.onicecandidate=e=>{if(e.candidate)send({type:'candidate',candidate:e.candidate.toJSON()});};peer.onconnectionstatechange=()=>{if(peer.connectionState==='connected'){say('Screen mirroring connected');report('Screen mirroring connected');}if(['failed','disconnected'].includes(peer.connectionState))say('Video connection interrupted');};await peer.setRemoteDescription({type:msg.sdpType||'offer',sdp:msg.sdp});while(pendingCandidates.length)await peer.addIceCandidate(pendingCandidates.shift());const answer=await peer.createAnswer();await peer.setLocalDescription(answer);send({type:'answer',sdp:answer.sdp,sdpType:answer.type});}
-        else if(msg.type==='candidate'){if(peer&&peer.remoteDescription)await peer.addIceCandidate(msg.candidate);else pendingCandidates.push(msg.candidate);}}
-        catch(e){say('Receiver error: '+e.message);}};
+      socket.onmessage=async event=>{try{await processSignal(JSON.parse(event.data));}catch(e){say('Receiver error: '+e.message);}};
     }
+    async function processSignal(msg){try{if(msg.type==='play'&&typeof msg.url==='string'){if(peer){peer.close();peer=null;}playUrl(msg.url,msg.kind||'video',msg.title||'Deeprowss media');}
+      else if(msg.type==='remote')remote(msg.command,msg.value);
+      else if(msg.type==='offer'){clearMedia();peer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]});peer.ontrack=e=>{video.srcObject=e.streams[0];video.muted=false;video.defaultMuted=false;video.volume=1;video.style.display='block';frame.style.display='none';panel.style.display='block';join.style.display='none';video.play().catch(()=>say('Mirroring video. Press Play once on the receiver to enable audio autoplay.'));showControls();};peer.onicecandidate=e=>{if(e.candidate)send({type:'candidate',candidate:e.candidate.toJSON()});};peer.onconnectionstatechange=()=>{if(peer.connectionState==='connected'){say('Screen mirroring connected');report('Screen mirroring connected');}if(['failed','disconnected'].includes(peer.connectionState))say('Video connection interrupted');};await peer.setRemoteDescription({type:msg.sdpType||'offer',sdp:msg.sdp});while(pendingCandidates.length)await peer.addIceCandidate(pendingCandidates.shift());const answer=await peer.createAnswer();await peer.setLocalDescription(answer);send({type:'answer',sdp:answer.sdp,sdpType:answer.type});}
+      else if(msg.type==='candidate'){if(peer&&peer.remoteDescription)await peer.addIceCandidate(msg.candidate);else pendingCandidates.push(msg.candidate);}}
+      catch(e){say('Receiver error: '+e.message);}}
     $('connect').addEventListener('click',connect);pinInput.addEventListener('keydown',e=>{if(e.key==='Enter')connect();});
+    $('newPair').addEventListener('click',createPairing);
     $('play').onclick=()=>remote('play');$('pause').onclick=()=>remote('pause');$('stop').onclick=()=>remote('stop');$('rewind').onclick=()=>remote('rewind');$('forward').onclick=()=>remote('forward');$('mute').onclick=()=>remote(video.muted?'unmute':'mute');$('fullscreen').onclick=()=>remote('fullscreen');
     document.addEventListener('keydown',e=>{if(!urlPlaying&&!iframePlaying)return;const key=e.key.toLowerCase();const map={space:'play',' ':'play',enter:'play',k:'play',p:'pause',arrowleft:'rewind',arrowright:'forward',m:'unmute',f:'fullscreen',escape:'controls'};const action=map[key];if(action){e.preventDefault();if(action==='controls')showControls();else remote(action);}});
     document.addEventListener('fullscreenchange',()=>{if(document.fullscreenElement)showControls();});
@@ -130,6 +143,7 @@ button{border:0;border-radius:12px;padding:13px 18px;background:var(--accent);co
     $('volume').oninput=e=>{remote('volume',e.target.value);if(Number(e.target.value)>0){$('mute').textContent='🔇 Mute';$('mute').setAttribute('aria-pressed','false');}};$('seek').oninput=e=>{if(urlPlaying&&Number.isFinite(video.duration))remote('seek',Number(e.target.value)/1000*video.duration);};
     video.addEventListener('timeupdate',()=>{if(!urlPlaying||!Number.isFinite(video.duration)||video.duration<=0)return;$('seek').value=Math.round(video.currentTime/video.duration*1000);$('currentTime').textContent=clock(video.currentTime);$('totalTime').textContent=clock(video.duration);});
     video.addEventListener('volumechange',()=>{$('mute').textContent=video.muted?'🔊 Unmute':'🔇 Mute';$('mute').setAttribute('aria-pressed',video.muted?'true':'false');});video.addEventListener('play',()=>{$('playState').textContent='PLAYING';report('Playing '+currentTitle);});video.addEventListener('pause',()=>{$('playState').textContent='PAUSED';report('Paused '+currentTitle);});
+    createPairing();setInterval(pollRelay,850);
     if(hostInput.value&&pinInput.value)setTimeout(connect,400);
   })();
   </script>
