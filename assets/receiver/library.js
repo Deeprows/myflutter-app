@@ -317,41 +317,82 @@
     $('channelCount').textContent = list.length + ' channels available';
     const categories = ['All',...new Set(channels.map(channelCategoryName).sort())];
     $('channelFilters').innerHTML = '';
-    const fav = document.createElement('button'); fav.className = 'libchip' + (favoritesOnly ? ' active' : ''); fav.textContent = '★ Favorites'; fav.onclick = () => { favoritesOnly = !favoritesOnly; expandedChannelCategory = null; renderChannels(); }; $('channelFilters').append(fav);
-    categories.forEach(cat => { const b = document.createElement('button'); b.className = 'libchip' + (channelCategory === cat ? ' active' : ''); b.textContent = cat; b.onclick = () => { channelCategory = cat; expandedChannelCategory = cat === 'All' ? null : cat; renderChannels(); }; $('channelFilters').append(b); });
+    const fav = document.createElement('button');
+    fav.className = 'libchip' + (favoritesOnly ? ' active' : '');
+    fav.textContent = '★ Favorites';
+    fav.onclick = () => { favoritesOnly = !favoritesOnly; channelCategory = 'All'; expandedChannelCategory = null; renderChannels(); };
+    $('channelFilters').append(fav);
+    categories.forEach(cat => {
+      const b = document.createElement('button');
+      b.className = 'libchip' + ((expandedChannelCategory === cat || (!expandedChannelCategory && channelCategory === cat)) ? ' active' : '');
+      b.textContent = cat;
+      b.onclick = () => { channelCategory = cat; expandedChannelCategory = cat === 'All' ? null : cat; renderChannels(); };
+      $('channelFilters').append(b);
+    });
     const countries = [...new Set(channels.map(c => String(c.country || '').toUpperCase()).filter(Boolean))].sort();
-    if(countries.length){const sep=document.createElement('span');sep.className='libmuted';sep.textContent='COUNTRY';sep.style.alignSelf='center';$('channelFilters').append(sep);['All',...countries].forEach(country=>{const b=document.createElement('button');b.className='libchip'+(channelCountry===country?' active':'');b.textContent=country;b.onclick=()=>{channelCountry=country;expandedChannelCategory=null;renderChannels();};$('channelFilters').append(b);});}
-    const groups = $('channelGroups'); groups.innerHTML = '';
-    if (expandedChannelCategory) {
-      const back = document.createElement('button'); back.type='button'; back.className='secondary'; back.textContent='← All channel categories'; back.style.margin='4px 0 14px'; back.onclick=()=>{expandedChannelCategory=null;channelCategory='All';renderChannels();}; groups.append(back);
+    if (countries.length) {
+      const sep = document.createElement('span'); sep.className = 'libmuted'; sep.textContent = 'COUNTRY'; sep.style.alignSelf = 'center'; $('channelFilters').append(sep);
+      ['All',...countries].forEach(country => {
+        const b = document.createElement('button'); b.className = 'libchip' + (channelCountry === country ? ' active' : ''); b.textContent = country;
+        b.onclick = () => { channelCountry = country; expandedChannelCategory = null; channelCategory = 'All'; renderChannels(); };
+        $('channelFilters').append(b);
+      });
     }
+    const groups = $('channelGroups'); groups.innerHTML = '';
     const buckets = new Map();
-    list.forEach(c => { const cat = channelCategoryName(c); if (!buckets.has(cat)) buckets.set(cat,[]); buckets.get(cat).push(c); });
-    function makeChannel(c,cat) {
-      const wrap = document.createElement('div'); wrap.style.display='flex'; wrap.style.gap='5px'; wrap.style.minWidth='0';
-      const b = document.createElement('button'); b.className = 'libchannel'; b.style.flex='1';
+    list.forEach(c => { const cat = channelCategoryName(c); if (!buckets.has(cat)) buckets.set(cat, []); buckets.get(cat).push(c); });
+    const icons = {sports:'⚽',sport:'⚽',news:'▤',movies:'▣',movie:'▣',entertainment:'🎭',music:'♫',kids:'🧸',documentary:'▧',religion:'✦',general:'▦'};
+    const categoryIcon = cat => {
+      const key = String(cat).toLowerCase();
+      const found = Object.keys(icons).find(k => key.includes(k));
+      return icons[found] || '▦';
+    };
+    function makeChannel(c, cat) {
+      const wrap = document.createElement('div'); wrap.className = 'libchannel-wrap';
+      const b = document.createElement('button'); b.className = 'libchannel';
       const logo = c.logo ? safeUrl(c.logo) : '';
-      b.innerHTML = (logo ? '<img loading="lazy" src="' + esc(logo) + '" alt="">' : '<span class="libchannel-fallback">TV</span>') + '<span><b>' + esc(c.name) + '</b><small>' + esc([c.country,c.quality].filter(Boolean).join(' · ') || cat) + '</small></span>';
-      b.onclick = () => { const url=safeUrl(c.url),kind=/\\.m3u8(\\?|$)/i.test(url)?'hls':/\\.mpd(\\?|$)/i.test(url)?'dash':/\\.(mp4|webm)(\\?|$)/i.test(url)?'video':'embed'; window.deeprowssPlay(url,kind,c.name); };
-      const star=document.createElement('button');star.type='button';star.className='secondary';star.style.padding='8px';star.style.minWidth='38px';star.title='Add or remove favourite';star.textContent=isChannelSaved(c)?'★':'☆';star.onclick=()=>{toggleChannelSaved(c);star.textContent=isChannelSaved(c)?'★':'☆';};wrap.append(b,star);
-      if(c.altUrl){const alt=document.createElement('button');alt.type='button';alt.className='secondary';alt.style.padding='8px';alt.style.minWidth='38px';alt.title='Play backup stream';alt.textContent='↻';alt.onclick=()=>{const u=safeUrl(c.altUrl);if(u)window.deeprowssPlay(u,/\\.m3u8(\\?|$)/i.test(u)?'hls':/\\.mpd(\\?|$)/i.test(u)?'dash':/\\.(mp4|webm)(\\?|$)/i.test(u)?'video':'embed',c.name+' · Backup');};wrap.append(alt);}
+      b.innerHTML = (logo ? '<img loading="lazy" src="' + esc(logo) + '" alt="">' : '<span class="libchannel-fallback">' + categoryIcon(cat) + '</span>') +
+        '<span class="libchannel-name"><b>' + esc(c.name) + '</b></span>';
+      b.title = c.name;
+      b.onclick = () => { const url=safeUrl(c.url),kind=/\.m3u8(\?|$)/i.test(url)?'hls':/\.mpd(\?|$)/i.test(url)?'dash':/\.(mp4|webm)(\?|$)/i.test(url)?'video':'embed'; window.deeprowssPlay(url,kind,c.name); };
+      const star=document.createElement('button'); star.type='button'; star.className='libchannel-star'; star.title='Add or remove favourite'; star.textContent=isChannelSaved(c)?'★':'☆';
+      star.onclick=()=>{toggleChannelSaved(c);star.textContent=isChannelSaved(c)?'★':'☆';};
+      wrap.append(b,star);
+      if(c.altUrl) {
+        const alt=document.createElement('button'); alt.type='button'; alt.className='libchannel-alt'; alt.title='Play backup stream'; alt.textContent='↻';
+        alt.onclick=()=>{const u=safeUrl(c.altUrl);if(u)window.deeprowssPlay(u,/\.m3u8(\?|$)/i.test(u)?'hls':/\.mpd(\?|$)/i.test(u)?'dash':/\.(mp4|webm)(\?|$)/i.test(u)?'video':'embed',c.name+' · Backup');};
+        wrap.append(alt);
+      }
       return wrap;
     }
+    const onlyCategory = !!expandedChannelCategory;
     for (const [cat,items] of buckets) {
-      const expanded = expandedChannelCategory === cat || channelCategory === cat;
-      const shown = expanded ? items : items.slice(0,CHANNEL_PREVIEW_LIMIT);
-      const section=document.createElement('section');section.className='libchannel-row';
-      const head=document.createElement('div');head.className='libsection-head';
-      const heading=document.createElement('h3');heading.textContent=cat;
-      const count=document.createElement('span');count.className='libmuted';count.textContent=items.length+' channels';
-      head.append(heading,count);section.append(head);
-      const grid=document.createElement('div');grid.className='libchannel-grid';shown.forEach(c=>grid.append(makeChannel(c,cat)));section.append(grid);
-      if(!expanded && items.length>CHANNEL_PREVIEW_LIMIT){
-        const more=document.createElement('button');more.type='button';more.className='secondary libchannel-more';more.textContent='View all '+items.length+' channels  →';more.onclick=()=>{channelCategory=cat;expandedChannelCategory=cat;renderChannels();groups.scrollIntoView({behavior:'smooth',block:'start'});};section.append(more);
+      const expanded = onlyCategory && expandedChannelCategory === cat;
+      const section=document.createElement('section'); section.className='libchannel-row' + (expanded ? ' is-expanded' : '');
+      const head=document.createElement('button'); head.type='button'; head.className='libchannel-section-head';
+      head.innerHTML='<span class="libchannel-category-icon">'+categoryIcon(cat)+'</span><strong>'+esc(cat)+'</strong><span class="libchannel-category-count">'+items.length+'</span><span class="libchannel-chevron">›</span>';
+      head.onclick=()=>{channelCategory=cat;expandedChannelCategory=cat;renderChannels();groups.scrollIntoView({behavior:'smooth',block:'start'});};
+      if (onlyCategory && !expanded) continue;
+      section.append(head);
+      const shown = expanded ? items : items.slice(0, CHANNEL_PREVIEW_LIMIT);
+      const grid=document.createElement('div'); grid.className='libchannel-grid' + (expanded ? ' is-expanded' : ' is-preview');
+      shown.forEach(c=>grid.append(makeChannel(c,cat))); section.append(grid);
+      if(!expanded && items.length>CHANNEL_PREVIEW_LIMIT) {
+        const more=document.createElement('button'); more.type='button'; more.className='libchannel-more';
+        more.textContent='View all '+items.length+' channels  →';
+        more.onclick=()=>{channelCategory=cat;expandedChannelCategory=cat;renderChannels();groups.scrollIntoView({behavior:'smooth',block:'start'});};
+        section.append(more);
       }
       groups.append(section);
     }
-    if (!list.length) groups.innerHTML += '<div class="libempty">No channels found.</div>';
+    if (!list.length) groups.innerHTML = '<div class="libempty">No channels found.</div>';
+    if (onlyCategory && !buckets.size) {
+      const back=document.createElement('button'); back.type='button'; back.className='libchannel-back'; back.textContent='← All channel categories';
+      back.onclick=()=>{expandedChannelCategory=null;channelCategory='All';renderChannels();}; groups.prepend(back);
+    } else if (onlyCategory) {
+      const back=document.createElement('button'); back.type='button'; back.className='libchannel-back'; back.textContent='← All channel categories';
+      back.onclick=()=>{expandedChannelCategory=null;channelCategory='All';renderChannels();}; groups.prepend(back);
+    }
   }
   $('refreshChannels').onclick = loadChannels;
   $('libSearch').addEventListener('keydown',e => { if (e.key === 'Escape') { $('libSearch').value = ''; query = ''; renderMovies(); renderChannels(); } });
