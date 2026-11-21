@@ -1,7 +1,7 @@
 {
   "name": "deeprowss-cinema",
-  "version": "1.2.2",
-  "description": "Deeprowss TMDB Cinema, Live TV and Phone Casting for Windows",
+  "version": "1.2.3",
+  "description": "Deeprowss Cinema with locally bundled receiver and live online catalogue",
   "main": "main.cjs",
   "author": "Deeprowss",
   "license": "UNLICENSED",
@@ -23,7 +23,23 @@
     "files": [
       "main.cjs",
       "desktop.html",
-      "package.json"
+      "package.json",
+      {
+        "from": "../../assets/receiver",
+        "to": "assets/receiver",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../../assets/data",
+        "to": "assets/data",
+        "filter": [
+          "app_config.json",
+          "movies.json",
+          "tv.json"
+        ]
+      }
     ],
     "win": {
       "icon": "assets/deeprowss.ico",
