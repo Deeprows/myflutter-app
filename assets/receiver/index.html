@@ -132,6 +132,13 @@ input{display:block;width:100%;padding:16px;border:1px solid #394657;border-radi
 body[data-mode=movies] .controls,body[data-mode=movies] .progress,body[data-mode=movies] .live,body[data-mode=movies] .title{display:none}
 body[data-mode=movies] .player-head{background:none;pointer-events:none}body[data-mode=movies] .pback{pointer-events:auto;background:#000a;backdrop-filter:blur(8px);border:1px solid #ffffff40;color:#fff}
 @media(max-width:600px){.controls{gap:6px;padding:12px 8px max(12px,env(safe-area-inset-bottom))}.controls button{flex:1;min-width:58px;padding:11px 6px;font-size:12px}.progress{bottom:70px;padding:0 12px}.volume{max-width:85px}.player-head{padding-left:12px;padding-right:12px}}
+html.tv .card.p,html.tv .skel{width:190px}html.tv .card.h{width:360px}html.tv .grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:26px 18px}
+html.tv .sec-head h3,html.tv .res-head h3{font-size:30px}html.tv .card .ct{font-size:17px}html.tv .card .cm{font-size:14px}html.tv .chip{font-size:19px;padding:13px 26px}
+html.tv .tcard{width:320px}html.tv .hero h1{font-size:clamp(40px,5vw,64px)}html.tv .bigbtn{min-height:92px}html.tv .bigbtn b{font-size:22px}html.tv .bigbtn small{font-size:15px}html.tv .land{width:min(92vw,560px)}
+html.tv .arrow{display:none!important}html.tv .actions button{min-height:60px;font-size:18px}
+.card,.chip{scroll-margin:96px 24px}
+html.tv button:focus,html.tv input:focus,html.tv select:focus,html.tv summary:focus{outline:4px solid #fff;outline-offset:3px}
+html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{box-shadow:0 0 0 4px var(--amber)}
 @keyframes sh{to{background-position:-200% 0}}@keyframes fade{from{opacity:0}}@keyframes up{from{transform:translateY(30px);opacity:0}}@keyframes drift{to{transform:rotate(-8deg) scale(1.1) translateY(-8%)}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -348,7 +355,39 @@ body[data-mode=movies] .player-head{background:none;pointer-events:none}body[dat
     document.addEventListener('keydown',e=>{if((e.key==='Escape'||e.key==='Backspace')&&panel.style.display==='block'&&document.body.dataset.mode==='movies'&&!/input|textarea|select/i.test(e.target.tagName)){e.preventDefault();closePlayer();}});
     window.deeprowssGo=go;window.deeprowssShowJoin=()=>go('connect');window.deeprowssShowLibrary=()=>go('movies');
     if(params.get('host')||params.get('pin')||params.get('mode')==='connect')history.replaceState(null,'','#connect');
+    /* ---- TV / remote-control support ---- */
+    const isTv=params.get('tv')==='1'||/Android TV|AFTT|BRAVIA|SMART-TV|SmartTV|Tizen|Web0S|WebOS|CrKey|GoogleTV/i.test(navigator.userAgent);
+    if(isTv)document.documentElement.classList.add('tv');
+    window.deeprowssHandleBack=()=>{
+      if(panel.style.display==='block'){closePlayer();return true;}
+      if($('movieDetails').classList.contains('open')){$('detailClose').click();return true;}
+      const v=document.body.dataset.view;
+      if(v==='movies'){$('movBack').click();return true;}
+      if(v==='connect'){go('landing');return true;}
+      return false;
+    };
+    const focusables='button:not([hidden]):not([disabled]),input:not([type=hidden]):not([disabled]),select:not([disabled]),summary,[tabindex="0"]';
+    function visible(e){const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden';}
+    function focusFirst(){const root=document.querySelector('.sheet.open')||document.querySelector('.view.active');if(!root)return;const el=root.querySelector('#goMovies')||root.querySelector('#libFilters .chip')||[...root.querySelectorAll(focusables)].find(e=>visible(e)&&!e.closest('.bar')&&e.tagName!=='INPUT');if(el&&visible(el))el.focus({preventScroll:true});}
+    function spatial(dir){
+      const root=document.querySelector('.sheet.open')||document.querySelector('.view.active');if(!root)return false;
+      const list=[...root.querySelectorAll(focusables)].filter(visible);if(!list.length)return false;
+      let cur=document.activeElement;if(!cur||!root.contains(cur)||!visible(cur)){list[0].focus();return true;}
+      const c=cur.getBoundingClientRect(),cx=c.left+c.width/2,cy=c.top+c.height/2;let best=null,bs=1e12;
+      for(const e of list){if(e===cur)continue;const r=e.getBoundingClientRect(),dx=r.left+r.width/2-cx,dy=r.top+r.height/2-cy;
+        if((dir==='right'&&dx<=2)||(dir==='left'&&dx>=-2)||(dir==='down'&&dy<=2)||(dir==='up'&&dy>=-2))continue;
+        const horiz=dir==='left'||dir==='right',prim=Math.abs(horiz?dx:dy),sec=Math.abs(horiz?dy:dx);const score=prim+sec*(horiz?4:2.2);
+        if(score<bs){bs=score;best=e;}}
+      if(!best)return false;best.focus({preventScroll:true});best.scrollIntoView({block:'nearest',inline:'nearest'});return true;
+    }
+    if(isTv)document.addEventListener('keydown',e=>{
+      const map={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'},dir=map[e.key];
+      const tag=e.target.tagName;if(!dir||panel.style.display==='block'||/^(textarea|select)$/i.test(tag)||(tag==='INPUT'&&(dir==='left'||dir==='right')))return;
+      if(spatial(dir))e.preventDefault();
+    });
+    window.addEventListener('hashchange',()=>setTimeout(focusFirst,60));
     route();
+    if(isTv)setTimeout(focusFirst,120);
     setInterval(pollRelay,850);
     if(hostInput.value&&pinInput.value)setTimeout(connect,400);
   })();
