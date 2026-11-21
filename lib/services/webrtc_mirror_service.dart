@@ -101,6 +101,9 @@ class DeeprowssMirrorService extends ChangeNotifier {
   bool receiverFullscreen = false;
   String receiverMode = 'idle'; // idle | media | iframe | mirror
   String receiverView = 'landing'; // landing | movies | connect
+  String receiverPlatform = 'web'; // web | windows (the Deeprowss Cinema exe) | tv
+  bool get receiverIsDesktop => receiverPlatform == 'windows';
+  bool get receiverIsTv => receiverPlatform == 'tv'; // Android TV / Tizen / webOS: player is always full screen
   DateTime _volumeSetAt = DateTime.fromMillisecondsSinceEpoch(0);
   String status = 'Not running';
   String? error;
@@ -346,6 +349,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
           connected = true;
           receiverMode = (message['mode'] as String?) ?? 'idle';
           receiverView = (message['view'] as String?) ?? receiverView;
+          receiverPlatform = (message['platform'] as String?) ?? receiverPlatform;
           receiverPlayerOpen = message['playerOpen'] == true;
           receiverPlaying = message['playing'] != false;
           receiverMuted = message['muted'] == true;
@@ -689,6 +693,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
     receiverPlayerOpen = false;
     receiverMode = 'idle';
     receiverView = 'landing';
+    receiverPlatform = 'web';
     status = 'Mirroring stopped';
     _stopping = false;
     notifyListeners();
