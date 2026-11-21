@@ -39,6 +39,8 @@ class _DecoderChannelsPageState extends State<DecoderChannelsPage> {
   int _toScan = 0;
   String _query = '';
   _Filter _filter = _Filter.all;
+  ChannelCategory? _expandedCategory;
+  static const int _previewLimit = 3;
 
   @override
   void initState() {
@@ -154,183 +156,115 @@ class _DecoderChannelsPageState extends State<DecoderChannelsPage> {
     );
   }
 
+  Widget _channelCard(Channel c, {bool compact = false}) => Material(
+    color: Ui.card, borderRadius: BorderRadius.circular(18),
+    child: InkWell(onTap: () => _open(c), borderRadius: BorderRadius.circular(18),
+      child: Container(constraints: BoxConstraints(minHeight: compact ? 70 : 78),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFC99F25), width: 1.5)),
+        child: Row(children: [
+          CircleAvatar(radius: compact ? 20 : 22, backgroundColor: const Color(0xFF30270D),
+            backgroundImage: (c.logo ?? '').isEmpty ? null : NetworkImage(c.logo!),
+            onBackgroundImageError: (c.logo ?? '').isEmpty ? null : (_, _) {},
+            child: (c.logo ?? '').isEmpty ? Icon(c.category.icon, size: 21, color: const Color(0xFFFFD34C)) : null),
+          const SizedBox(width: 9),
+          Expanded(child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: Ui.text, fontSize: compact ? 14 : 15, fontWeight: FontWeight.w900))),
+          Icon(Icons.play_circle_outline_rounded, color: Ui.redSoft, size: 21),
+        ]))));
+
   @override
   Widget build(BuildContext context) {
     final shown = _all.where(_matches).toList();
     final direct = _all.where((c) => _info[c.url]?.direct ?? false).length;
     final ready = _all.where((c) => !(_info[c.url]?.direct ?? false) && _info[c.url]?.found == true).length;
-    return Scaffold(
-      backgroundColor: Ui.bg,
-      appBar: AppBar(
-        backgroundColor: Ui.panel,
-        title: const Text('Supported channels', style: TextStyle(fontWeight: FontWeight.w900)),
-        actions: [
-          IconButton(
-            tooltip: 'Scan channels',
-            onPressed: _scanning || _loading ? null : _scan,
-            icon: const Icon(Icons.radar),
-          ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-                child: TextField(
-                  onChanged: (v) => setState(() => _query = v.trim()),
-                  decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search channels'),
-                ),
-              ),
-              SizedBox(
-                height: 46,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  children: [
-                    for (final e in const {
-                      _Filter.all: 'All',
-                      _Filter.direct: 'Direct',
-                      _Filter.page: 'Web page',
-                      _Filter.ready: 'Ready',
-                    }.entries)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                        child: ChoiceChip(
-                          label: Text(e.value),
-                          selected: _filter == e.key,
-                          onSelected: (_) => setState(() => _filter = e.key),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
-                child: Row(children: [
-                  Expanded(
-                    child: Text(
-                      _scanning
-                          ? 'Scanning web pages… $_scanned / $_toScan'
-                          : '$direct direct · $ready checked ready · ${_all.length} total',
-                      style: TextStyle(color: Ui.muted, fontSize: 12),
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: _scanning ? null : _scan,
-                    icon: const Icon(Icons.radar, size: 18),
-                    label: const Text('Scan'),
-                  ),
-                ]),
-              ),
-              if (_scanning) LinearProgressIndicator(value: _toScan == 0 ? null : _scanned / _toScan, minHeight: 2),
-              Expanded(
-                child: shown.isEmpty
-                    ? Center(child: Text('No channels here.', style: TextStyle(color: Ui.muted)))
-                    : ListView(
-                        padding: const EdgeInsets.only(bottom: 20),
-                        children: [
-                          for (final category in const [
-                            ChannelCategory.sports,
-                            ChannelCategory.news,
-                            ChannelCategory.movies,
-                            ChannelCategory.entertainment,
-                            ChannelCategory.music,
-                            ChannelCategory.kids,
-                            ChannelCategory.documentary,
-                            ChannelCategory.lifestyle,
-                            ChannelCategory.religious,
-                            ChannelCategory.general,
-                            ChannelCategory.other,
-                          ])
-                            if (shown.any((c) => c.category == category)) ...[
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 14, 16, 9),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 30,
-                                      height: 30,
-                                      decoration: BoxDecoration(
-                                        color: Ui.red.withValues(alpha: .14),
-                                        borderRadius: BorderRadius.circular(9),
-                                      ),
-                                      child: Icon(category.icon, color: Ui.red, size: 17),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(category.label,
-                                        style: TextStyle(color: Ui.text, fontSize: 16,
-                                          fontWeight: FontWeight.w900)),
-                                    ),
-                                    Text('${shown.where((c) => c.category == category).length}',
-                                      style: TextStyle(color: Ui.muted, fontSize: 12,
-                                        fontWeight: FontWeight.w800)),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(
-                                height: 78,
-                                child: ListView.separated(
-                                  scrollDirection: Axis.horizontal,
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                                  itemCount: shown.where((c) => c.category == category).length,
-                                  separatorBuilder: (_, __) => const SizedBox(width: 9),
-                                  itemBuilder: (context, index) {
-                                    final channels = shown.where((c) => c.category == category).toList();
-                                    final c = channels[index];
-                                    return SizedBox(
-                                      width: 230,
-                                      child: Material(
-                                        color: Ui.card,
-                                        borderRadius: BorderRadius.circular(14),
-                                        child: InkWell(
-                                          borderRadius: BorderRadius.circular(14),
-                                          onTap: () => _open(c),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                            child: Row(
-                                              children: [
-                                                CircleAvatar(
-                                                  radius: 19,
-                                                  backgroundColor: Ui.panel,
-                                                  backgroundImage: (c.logo ?? '').isEmpty ? null : NetworkImage(c.logo!),
-                                                  onBackgroundImageError: (c.logo ?? '').isEmpty ? null : (_, _) {},
-                                                  child: (c.logo ?? '').isEmpty
-                                                    ? Icon(c.category.icon, size: 18, color: Ui.muted)
-                                                    : null,
-                                                ),
-                                                const SizedBox(width: 9),
-                                                Expanded(
-                                                  child: Column(
-                                                    mainAxisAlignment: MainAxisAlignment.center,
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Text(c.name, maxLines: 2, overflow: TextOverflow.ellipsis,
-                                                        style: TextStyle(color: Ui.text, fontSize: 12.5,
-                                                          fontWeight: FontWeight.w800)),
-                                                      const SizedBox(height: 4),
-                                                      _badge(_info[c.url]),
-                                                    ],
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Icon(Icons.play_circle_outline_rounded,
-                                                  color: Ui.redSoft, size: 21),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                        ],
-                      ),
-              ),
-            ]),
-    );
+    const categories = [ChannelCategory.sports,ChannelCategory.news,ChannelCategory.movies,
+      ChannelCategory.entertainment,ChannelCategory.music,ChannelCategory.kids,
+      ChannelCategory.documentary,ChannelCategory.lifestyle,ChannelCategory.religious,
+      ChannelCategory.general,ChannelCategory.other];
+    final visibleCategories = categories.where((c) =>
+      shown.any((channel) => channel.category == c) &&
+      (_expandedCategory == null || _expandedCategory == c)).toList();
+
+    return Scaffold(backgroundColor: Ui.bg,
+      appBar: AppBar(backgroundColor: Ui.panel,
+        title: Text(_expandedCategory == null ? 'TV Channels' : _expandedCategory!.label,
+          style: const TextStyle(fontWeight: FontWeight.w900)),
+        leading: _expandedCategory == null ? null : IconButton(icon: const Icon(Icons.arrow_back),
+          onPressed: () => setState(() => _expandedCategory = null)),
+        actions: [IconButton(tooltip: 'Scan channels',
+          onPressed: _scanning || _loading ? null : _scan, icon: const Icon(Icons.radar))]),
+      body: _loading ? const Center(child: CircularProgressIndicator()) : Column(children: [
+        Padding(padding: const EdgeInsets.fromLTRB(16,12,16,6),
+          child: TextField(onChanged: (v) => setState(() => _query = v.trim()),
+            decoration: const InputDecoration(prefixIcon: Icon(Icons.search),hintText:'Search channels'))),
+        if (_expandedCategory == null)
+          SizedBox(height:46,child:ListView(scrollDirection:Axis.horizontal,
+            padding:const EdgeInsets.symmetric(horizontal:12),children:[
+              for(final e in const {_Filter.all:'All',_Filter.direct:'Direct',_Filter.page:'Web page',_Filter.ready:'Ready'}.entries)
+                Padding(padding:const EdgeInsets.symmetric(horizontal:4,vertical:6),
+                  child:ChoiceChip(label:Text(e.value),selected:_filter==e.key,
+                    onSelected:(_) => setState(()=>_filter=e.key))),
+            ])),
+        Padding(padding:const EdgeInsets.fromLTRB(16,2,16,6),child:Row(children:[
+          Expanded(child:Text(_scanning ? 'Scanning web pages… $_scanned / $_toScan' :
+            '$direct direct · $ready checked ready · ' + shown.length.toString() + ' shown',
+            style:TextStyle(color:Ui.muted,fontSize:12))),
+          TextButton.icon(onPressed:_scanning?null:_scan,
+            icon:const Icon(Icons.radar,size:18),label:const Text('Scan')),
+        ])),
+        if(_scanning) LinearProgressIndicator(value:_toScan==0?null:_scanned/_toScan,minHeight:2),
+        Expanded(child:shown.isEmpty ? Center(child:Text('No channels here.',style:TextStyle(color:Ui.muted)))
+          : ListView(padding:const EdgeInsets.only(bottom:24),children:[
+            if(_expandedCategory!=null)
+              Padding(padding:const EdgeInsets.fromLTRB(16,10,16,8),
+                child:Align(alignment:Alignment.centerLeft,child:TextButton.icon(
+                  onPressed:()=>setState(()=>_expandedCategory=null),
+                  icon:const Icon(Icons.arrow_back),label:const Text('All channel categories')))),
+            for(final category in visibleCategories)...[
+              Padding(padding:const EdgeInsets.fromLTRB(16,15,16,10),
+                child:InkWell(onTap:()=>setState(()=>
+                  _expandedCategory=_expandedCategory==category?null:category),
+                  borderRadius:BorderRadius.circular(14),child:Row(children:[
+                    Container(width:42,height:42,decoration:BoxDecoration(
+                      color:const Color(0xFF30270D),borderRadius:BorderRadius.circular(13)),
+                      child:Icon(category.icon,color:const Color(0xFFFFD34C),size:22)),
+                    const SizedBox(width:12),
+                    Expanded(child:Text(category.label,style:TextStyle(
+                      color:Ui.text,fontSize:20,fontWeight:FontWeight.w900))),
+                    Text(shown.where((c)=>c.category==category).length.toString(),
+                      style:TextStyle(color:Ui.muted,fontSize:15,fontWeight:FontWeight.w800)),
+                    const SizedBox(width:7),
+                    Icon(_expandedCategory==category?Icons.expand_less:Icons.chevron_right,
+                      color:Ui.muted,size:28),
+                  ]))),
+              Builder(builder:(context){
+                final items=shown.where((c)=>c.category==category).toList();
+                if(_expandedCategory==category)
+                  return Padding(padding:const EdgeInsets.symmetric(horizontal:16),
+                    child:GridView.builder(shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
+                      itemCount:items.length,
+                      gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount:2,mainAxisSpacing:11,crossAxisSpacing:10,mainAxisExtent:72),
+                      itemBuilder:(_,index)=>_channelCard(items[index])));
+                return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+                  SizedBox(height:76,child:ListView.separated(scrollDirection:Axis.horizontal,
+                    padding:const EdgeInsets.symmetric(horizontal:16),
+                    itemCount:items.length>_previewLimit?_previewLimit:items.length,
+                    separatorBuilder:(_,__)=>const SizedBox(width:10),
+                    itemBuilder:(_,index)=>SizedBox(width:250,
+                      child:_channelCard(items[index],compact:true)))),
+                  if(items.length>_previewLimit)
+                    Align(alignment:Alignment.centerRight,
+                      child:Padding(padding:const EdgeInsets.only(right:16,top:5),
+                        child:TextButton(onPressed:()=>setState(()=>_expandedCategory=category),
+                          child:Text('View all '+items.length.toString()+' channels  →',
+                            style:const TextStyle(color:Color(0xFFFFD34C),fontWeight:FontWeight.w900))))),
+                ]);
+              }),
+            ],
+          ])),
+      ]));
   }
 }
