@@ -2,63 +2,253 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#080b10"><meta name="color-scheme" content="dark">
-<title>Deeprowss Receiver</title>
+<meta name="theme-color" content="#07080a"><meta name="color-scheme" content="dark">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Deeprowss · Movies &amp; Connect</title>
 <style>
-:root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#080b10;color:#fff;--accent:#e11d48;--muted:#aab2bf}
-*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#05070b}
-body{background:radial-gradient(ellipse at 50% 0%,#17202c 0,#080b10 55%,#030406 100%)}
-.brand{position:fixed;z-index:5;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:16px 22px;background:linear-gradient(#000b,transparent)}
-.logo{font-weight:950;letter-spacing:.12em;color:#fff;font-size:19px}.tag{font-size:12px;color:#aeb7c4}.badge{padding:7px 11px;border:1px solid #384353;border-radius:30px;font-size:11px;color:#aeb7c4}
-#join{display:block;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92vw,520px);padding:clamp(24px,5vw,42px);border-radius:24px;background:linear-gradient(145deg,#151e2b,#0a0e15);border:1px solid #344052;box-shadow:0 28px 90px #000b}
-h1{font-size:clamp(26px,5vw,38px);margin:0 0 12px;font-weight:950}p{color:var(--muted);line-height:1.6;margin:0 0 18px}
-input{display:block;width:100%;padding:16px;border:1px solid #394657;border-radius:13px;background:#080d14;color:#fff;font-size:16px;outline:none;margin:12px 0}input:focus{border-color:var(--accent)}
-button{border:0;border-radius:12px;padding:13px 18px;background:var(--accent);color:#fff;font-weight:850;font-size:15px;cursor:pointer}button:disabled{opacity:.5}.secondary{background:#202a38;border:1px solid #3b485a;color:#fff}
+:root{color-scheme:dark;--bg:#07080a;--s1:#121316;--line:#2c2f36;--amber:#ffc42e;--ink:#1a1300;--text:#fff;--muted:#9aa1ad;--accent:var(--amber);font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--text)}
+[hidden]{display:none!important}
+button{font:inherit;border:0;border-radius:12px;padding:13px 18px;background:var(--amber);color:var(--ink);font-weight:850;font-size:15px;cursor:pointer}
+button:disabled{opacity:.5}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.secondary{background:#23262c;border:1px solid #3a3e46;color:#fff}
+p{color:var(--muted);line-height:1.6;margin:0 0 18px}
+input{display:block;width:100%;padding:16px;border:1px solid #394657;border-radius:13px;background:#080d14;color:#fff;font:inherit;font-size:16px;outline:none;margin:12px 0}input:focus{border-color:var(--amber)}
+.view{position:absolute;inset:0;display:none;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin}
+.view.active{display:block}
+.tag{font-size:12px;color:#aeb7c4}.logo{font-weight:950;letter-spacing:.14em;font-size:19px}
+.ibtn{width:44px;height:44px;padding:0;border-radius:50%;background:transparent;color:#fff;display:grid;place-items:center;flex:none}
+.ibtn svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ibtn.on{color:var(--amber);background:#ffc42e1f}
+
+/* ---- landing ---- */
+#landing.active{display:flex;align-items:center;justify-content:center;text-align:center;isolation:isolate;padding:24px}
+.mosaic{position:absolute;inset:-12%;z-index:-2;display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px;align-content:start;transform:rotate(-8deg) scale(1.1);opacity:.36;animation:drift 70s linear infinite alternate}
+.mosaic img{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:12px;animation:fade .9s both}
+#landing::before{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(ellipse at 50% 40%,#07080a40 0,#07080ad9 55%,#07080a 100%)}
+.land{width:min(92vw,440px)}
+.land .logo{font-size:15px;color:var(--amber);margin-bottom:18px}
+.land h1{font-size:clamp(32px,8vw,48px);line-height:1.06;margin:0 0 14px;font-weight:950;letter-spacing:-.02em}
+.land p{margin:0 0 34px;font-size:16px}
+.bigbtn{display:flex;align-items:center;gap:16px;width:100%;margin-top:14px;padding:16px 20px;border-radius:20px;text-align:left;min-height:76px}
+.bigbtn .ico{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-size:20px}
+.bigbtn b{display:block;font-size:18px;font-weight:900}.bigbtn small{display:block;margin-top:2px;font-size:13px;font-weight:600;opacity:.75}
+.bigbtn.primary{background:var(--amber);color:var(--ink);box-shadow:0 14px 44px #ffc42e40}.bigbtn.primary .ico{background:#1a130022}
+.bigbtn.ghost{background:#15161ab8;color:#fff;border:1px solid #3a3e46;backdrop-filter:blur(10px)}.bigbtn.ghost .ico{background:#ffffff14;color:var(--amber)}
+.bigbtn:hover,.bigbtn:focus-visible{transform:translateY(-2px)}.bigbtn{transition:transform .15s}
+.land .foot{margin-top:26px;font-size:12px;color:#7e8693}
+
+/* ---- top bars ---- */
+.bar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:6px;padding:max(10px,env(safe-area-inset-top)) 12px 10px;background:#050607d9;backdrop-filter:blur(14px)}
+.bar h2{flex:1;margin:0 0 0 4px;font-size:22px;font-weight:600}
+.badge{padding:7px 11px;border:1px solid #384353;border-radius:30px;font-size:11px;color:#aeb7c4;white-space:nowrap}
+
+/* ---- movies ---- */
+.wrap{max-width:1500px;margin:0 auto}
+.hero{position:relative;padding:14px 18px 6px;overflow:hidden}
+.hero-bg{position:absolute;inset:0;background-size:cover;background-position:center 25%;opacity:.3;-webkit-mask-image:linear-gradient(#000 35%,transparent);mask-image:linear-gradient(#000 35%,transparent);transition:opacity .6s}
+.hero>*{position:relative}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border:1px solid #8a6a12;border-radius:999px;color:var(--amber);font-weight:900;letter-spacing:.1em;font-size:13px;background:#ffc42e12}
+.hero h1{font-size:clamp(34px,6vw,56px);line-height:1.06;margin:18px 0 12px;font-weight:950;letter-spacing:-.02em;max-width:14em}
+.hero .sub{display:flex;align-items:center;gap:10px;color:#eceef2;font-size:18px;font-weight:500}.hero .sub i{width:28px;height:28px;border-radius:50%;background:var(--amber);color:var(--ink);display:grid;place-items:center;font-size:12px;font-style:normal}
+.search{display:flex;align-items:center;gap:12px;margin:20px 0 6px;padding:0 8px 0 18px;height:58px;max-width:780px;border-radius:18px;background:#131417d9;border:1px solid #363a42;transition:border-color .15s,box-shadow .15s}
+.search:focus-within{border-color:var(--amber);box-shadow:0 0 0 3px #ffc42e26}
+.search svg{width:22px;height:22px;flex:none;stroke:#aeb4bf;fill:none;stroke-width:2;stroke-linecap:round}
+.search input{margin:0;padding:0;border:0;background:transparent;height:100%;font-size:17px;flex:1;min-width:0}
+.search .x{width:40px;height:40px;padding:0;background:transparent;color:#aeb4bf;border-radius:50%;font-size:18px}
+.chips{display:flex;gap:10px;overflow-x:auto;padding:12px 18px 8px;scrollbar-width:none}.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;padding:11px 22px;border-radius:999px;background:#17181b;border:1px solid #363a42;color:#e8eaee;font-weight:750;font-size:16px}
+.chip.on{background:var(--amber);color:var(--ink);border-color:var(--amber)}
+.sec{padding:16px 0 4px}.sec-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:0 18px 12px}
+.sec-head h3{margin:0;font-size:25px;font-weight:850}.sec-head span{font-size:13px;letter-spacing:.05em;color:var(--muted);font-weight:750}
+.railwrap{position:relative}
+.rail{display:flex;gap:14px;overflow-x:auto;padding:2px 18px 14px;scroll-snap-type:x proximity;scrollbar-width:none}.rail::-webkit-scrollbar{display:none}.rail>*{scroll-snap-align:start;flex:none}
+.arrow{display:none;position:absolute;top:calc(50% - 34px);z-index:3;width:42px;height:68px;padding:0;border-radius:12px;background:#000c;color:#fff;font-size:30px;place-items:center}.arrow.prev{left:4px}.arrow.next{right:4px}
+@media(hover:hover) and (min-width:900px){.railwrap:hover .arrow{display:grid}}
+.card{position:relative;display:block;text-align:left;background:none;border:0;padding:0;color:#fff;border-radius:16px;font-weight:inherit;transition:transform .18s}
+.card:hover,.card:focus-visible{transform:translateY(-4px) scale(1.02)}
+.card.p{width:136px}
+.card .poster{position:relative;display:block;aspect-ratio:2/3;border-radius:16px;overflow:hidden;background:#1a1c20;border:1px solid #ffffff14}
+.card img{width:100%;height:100%;object-fit:cover;display:block}.card .noimg{display:grid;place-items:center;height:100%;color:#667}
+.card .ct{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:8px;font-weight:750;font-size:14px;line-height:1.25}
+.card .cm{display:block;margin-top:3px;font-size:12px;color:var(--muted);font-weight:500}
+.star{position:absolute;right:8px;top:8px;padding:3px 8px;border-radius:999px;background:#000b;font-size:11px;font-weight:850;color:var(--amber)}
+.rank{position:absolute;left:8px;top:8px;min-width:30px;height:30px;padding:0 8px;border-radius:10px;background:var(--amber);color:var(--ink);font-weight:950;font-size:16px;display:grid;place-items:center}
+.card.h{width:min(78vw,300px)}.card.h .poster{aspect-ratio:4/4.7;border-radius:26px}
+.card.h .over{position:absolute;inset:auto 0 0 0;padding:70px 18px 18px;background:linear-gradient(transparent,#000e)}
+.badge-t{display:inline-block;padding:6px 12px;border-radius:999px;background:var(--amber);color:var(--ink);font-weight:850;font-size:12px}
+.card.h .ct{font-size:25px;margin:10px 0 4px;-webkit-line-clamp:2}.card.h .cm{font-size:15px;color:#d5d8de}
+.tcard{display:block;width:250px;padding:0;background:none;color:#fff;text-align:left;border-radius:16px}
+.thumb,.trailer-thumb{position:relative;display:block;aspect-ratio:16/9;border-radius:16px;overflow:hidden;background:#1a1c20}.thumb img,.trailer-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.playicon{position:absolute;inset:0;display:grid;place-items:center;font-size:26px;color:#fff;background:#0004;text-shadow:0 2px 12px #000}
+.tcard .ct{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;margin-top:8px;font-weight:750;font-size:14px}
+.skel{width:136px;flex:none;aspect-ratio:2/3;border-radius:16px;background:linear-gradient(90deg,#15161a,#1f2126,#15161a);background-size:200% 100%;animation:sh 1.2s infinite}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:18px 14px;padding:6px 18px 20px}
+.grid .card.p,.grid .skel{width:auto}
+.empty{grid-column:1/-1;padding:40px 18px;text-align:center;color:var(--muted);line-height:1.7}.empty .chip{margin-top:14px}
+.more{display:block;margin:0 auto 50px;min-width:180px;background:#23262c;color:#fff;border:1px solid #3a3e46}
+.res-head{display:flex;justify-content:space-between;align-items:baseline;padding:18px 18px 8px}.res-head h3{margin:0;font-size:25px}.res-head span{color:var(--muted);font-size:14px}
+.savedItem .rm{width:100%;margin-top:8px;padding:8px;font-size:12px;background:#23262c;color:#fff;border:1px solid #3a3e46}
+.pad{height:46px}
+
+/* ---- details sheet ---- */
+.sheet{position:fixed;inset:0;z-index:50;display:none;background:#000b;backdrop-filter:blur(6px);align-items:flex-end;justify-content:center}.sheet.open{display:flex}
+.sheet-card{position:relative;width:min(100%,880px);max-height:94dvh;overflow-y:auto;background:#101114;border:1px solid #2a2d33;border-radius:28px 28px 0 0;animation:up .25s ease both;scrollbar-width:thin}
+@media(min-width:760px){.sheet{align-items:center}.sheet-card{border-radius:28px;max-height:90dvh}}
+.sheet-close{position:sticky;top:10px;float:right;margin:10px 10px 0 0;z-index:5;width:40px;height:40px;padding:0;border-radius:50%;background:#000b;color:#fff;font-size:16px}
+.sheet-bg{height:210px;margin-bottom:-120px;background:linear-gradient(#1a1c22,#101114);position:relative;overflow:hidden}
+.sheet-bg img{width:100%;height:100%;object-fit:cover;opacity:.55}.sheet-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(transparent 30%,#101114)}
+.sheet-body{position:relative;padding:0 20px 28px}
+.sheet-top{display:flex;gap:16px;align-items:flex-end}
+.sheet-top img{width:112px;aspect-ratio:2/3;object-fit:cover;border-radius:14px;border:1px solid #ffffff22;background:#1a1c20;flex:none}
+.sheet-top h2{margin:0 0 10px;font-size:clamp(22px,5vw,32px);line-height:1.12;font-weight:900}
+.meta{display:flex;flex-wrap:wrap;gap:6px}.meta span{padding:5px 10px;border-radius:999px;background:#ffffff14;font-size:12px;font-weight:700;color:#e4e7ec}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0 6px}.actions button{flex:1 1 140px;min-height:50px;border-radius:14px}
+.actions #detailPlay{flex-basis:100%;font-size:17px;min-height:54px}
+.episodes{display:flex;gap:10px;margin:14px 0 0}.episodes label{flex:1;font-size:12px;color:var(--muted);font-weight:700}
+.episodes select{display:block;width:100%;margin-top:6px;padding:13px;border-radius:12px;background:#17181b;color:#fff;border:1px solid #363a42;font:inherit;font-size:15px}
+.overview{color:#cfd3da;line-height:1.65;margin:18px 0}
+.sheet h4{margin:22px 0 10px;font-size:17px}
+.cast{display:flex;gap:12px;overflow-x:auto;scrollbar-width:none}.cast::-webkit-scrollbar{display:none}
+.person{flex:none;width:78px;text-align:center}.person img,.person .av{width:64px;height:64px;border-radius:50%;object-fit:cover;margin:0 auto 6px;background:#23262c;display:grid;place-items:center;font-weight:900;font-size:22px}
+.person b{display:block;font-size:12px;line-height:1.2}.person small{display:block;font-size:11px;color:var(--muted);margin-top:2px;line-height:1.2}
+#detailTrailer iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:16px;background:#000}.trailer-thumb{width:100%;padding:0;background:#000}
+
+/* ---- connect (QR) page: unchanged card ---- */
+#join{display:block;position:relative;width:min(92vw,520px);margin:14px auto 40px;padding:clamp(24px,5vw,42px);border-radius:24px;background:linear-gradient(145deg,#151e2b,#0a0e15);border:1px solid #344052;box-shadow:0 28px 90px #000b}
+#join h1{font-size:clamp(26px,5vw,38px);margin:0 0 12px;font-weight:950}
 #connect{width:100%;margin-top:4px;min-height:50px}#statusJoin,#statusPlayer{font-size:13px;color:#c1cad6;min-height:22px;margin-top:14px}.hint{font-size:12px;color:#8792a2;margin-top:18px}details summary{cursor:pointer;text-align:center;padding:8px}#pairQr img{max-width:190px!important;max-height:190px!important}
-.player{display:none;position:fixed;inset:0;width:100vw;height:100dvh;z-index:2;background:#000}
-.player-head{position:absolute;z-index:4;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:18px 22px;background:linear-gradient(#000d,transparent)}
-.title{font-weight:850;font-size:clamp(16px,2.2vw,24px);overflow-wrap:anywhere}.live{border:1px solid #315f43;color:#78d99a;border-radius:999px;padding:6px 10px;font-size:11px}
+
+/* ---- player ---- */
+.player{display:none;position:fixed;inset:0;width:100vw;height:100dvh;z-index:60;background:#000}
+.player-head{position:absolute;z-index:4;top:0;left:0;right:0;display:flex;align-items:center;gap:12px;padding:max(14px,env(safe-area-inset-top)) 18px 14px;background:linear-gradient(#000d,transparent)}
+.pback{padding:10px 16px}.title{flex:1;font-weight:850;font-size:clamp(16px,2.2vw,24px);overflow-wrap:anywhere}.live{border:1px solid #315f43;color:#78d99a;border-radius:999px;padding:6px 10px;font-size:11px}
 .stage{position:absolute;inset:0;background:#000;overflow:hidden}.stage video,.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;object-fit:contain;display:none}
 .controls{position:absolute;z-index:4;left:0;right:0;bottom:0;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:9px;padding:18px 18px max(18px,env(safe-area-inset-bottom));background:linear-gradient(transparent,#000d)}
-.controls button{min-width:76px}.progress{position:absolute;z-index:4;left:0;right:0;bottom:78px;display:flex;gap:12px;align-items:center;padding:0 22px;color:#eee;font-size:12px}.progress input{margin:0;padding:0;accent-color:var(--accent)}.volume{max-width:140px}
+.controls button{min-width:76px}.progress{position:absolute;z-index:4;left:0;right:0;bottom:78px;display:flex;gap:12px;align-items:center;padding:0 22px;color:#eee;font-size:12px}.progress input{margin:0;padding:0;accent-color:var(--amber)}.volume{max-width:140px}
 .player.controls-hidden .player-head,.player.controls-hidden .controls,.player.controls-hidden .progress{opacity:0;pointer-events:none}
-@media(max-width:600px){.controls{gap:6px;padding:12px 8px max(12px,env(safe-area-inset-bottom))}.controls button{flex:1;min-width:58px;padding:11px 6px;font-size:12px}.progress{bottom:70px;padding:0 12px}.volume{max-width:85px}.player-head{padding:12px}}
+#statusPlayer{position:absolute;left:-9999px}
+body[data-mode=movies] .controls,body[data-mode=movies] .progress,body[data-mode=movies] .live,body[data-mode=movies] .title{display:none}
+body[data-mode=movies] .player-head{background:none;pointer-events:none}body[data-mode=movies] .pback{pointer-events:auto;background:#000a;backdrop-filter:blur(8px);border:1px solid #ffffff40;color:#fff}
+@media(max-width:600px){.controls{gap:6px;padding:12px 8px max(12px,env(safe-area-inset-bottom))}.controls button{flex:1;min-width:58px;padding:11px 6px;font-size:12px}.progress{bottom:70px;padding:0 12px}.volume{max-width:85px}.player-head{padding-left:12px;padding-right:12px}}
+@keyframes sh{to{background-position:-200% 0}}@keyframes fade{from{opacity:0}}@keyframes up{from{transform:translateY(30px);opacity:0}}@keyframes drift{to{transform:rotate(-8deg) scale(1.1) translateY(-8%)}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
-<body>
-<header class="brand"><div><div class="logo">DEEProWSS</div><div class="tag">VIDEO RECEIVER</div></div><div class="badge" id="connectionBadge">NOT CONNECTED</div></header>
-<main>
-<section id="join">
-<h1>Connect your phone</h1>
-<p>Open Smart Decoder on your phone, choose <b>Scan to Connect</b>, and scan this QR code. Your video will play here.</p>
-<div id="pairQr" style="width:210px;height:210px;margin:18px auto;padding:10px;background:#fff;border-radius:14px;display:grid;place-items:center"></div>
-<div style="text-align:center"><div class="tag">PAIRING CODE</div><div id="pairCode" style="font-size:25px;font-weight:950;letter-spacing:4px;margin:8px 0">Preparing…</div></div>
-<div id="statusJoin" role="status" style="text-align:center">Creating a secure connection…</div>
-<button id="newPair" class="secondary" style="width:100%;margin-top:12px">Generate new QR code</button>
-<details style="margin-top:18px;color:#aab2bf"><summary>Use manual connection (legacy)</summary>
-<input id="host" type="text" inputmode="url" autocomplete="off" placeholder="Phone address (e.g. 192.168.1.5:37027)" aria-label="Phone address">
-<input id="pin" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="Six-digit PIN" aria-label="Six-digit PIN">
-<button id="connect" class="secondary" style="width:100%">Connect with PIN</button>
-</details>
-<div class="hint" style="text-align:center">Private pairing · WebRTC video is sent directly between devices. The pairing service only carries connection messages.</div>
-</section>
-<section class="player" id="playerPanel" tabindex="0" aria-label="Video receiver player">
-<div class="player-head"><div class="title" id="mediaTitle">Ready to play</div><span class="live" id="playState">CONNECTED</span></div>
-<div class="stage"><video id="screen" playsinline autoplay></video><iframe id="movieFrame" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope; clipboard-write; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="Deeprowss receiver video"></iframe></div>
-<div class="controls"><button class="secondary" id="rewind">−10 sec</button><button id="play">▶ Play</button><button class="secondary" id="pause">Ⅱ Pause</button><button class="secondary" id="forward">+10 sec</button><button class="secondary" id="mute" aria-pressed="false">🔇 Mute</button><button class="secondary" id="fullscreen">⛶ Fullscreen</button><button class="secondary" id="stop">■ Stop</button></div>
-<div class="progress"><span id="currentTime">00:00</span><input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek"><span id="totalTime">LIVE</span><label>Vol <input class="volume" id="volume" type="range" min="0" max="100" value="100" aria-label="Volume"></label></div>
-<div id="statusPlayer" role="status">Connected.</div>
-</section>
+<body data-view="landing" data-mode="connect">
+
+<!-- 1. FRONT PAGE -->
+<main class="view active" id="landing">
+  <div class="mosaic" id="mosaic" aria-hidden="true"></div>
+  <div class="land">
+    <div class="logo">DEEPROWSS</div>
+    <h1>Movies. Series. Your big screen.</h1>
+    <p>Browse what’s trending, watch instantly, or connect your phone to play on this screen.</p>
+    <button class="bigbtn primary" id="goMovies" type="button" data-go="movies" autofocus><span class="ico">▶</span><span><b>Watch Movies</b><small>Trending, Top 10, series &amp; more</small></span></button>
+    <button class="bigbtn ghost" id="goConnect" type="button" data-go="connect"><span class="ico">▣</span><span><b>Connect with App</b><small>Scan the QR code with your phone</small></span></button>
+    <div class="foot">Powered by TMDB data</div>
+  </div>
 </main>
+
+<!-- 2. MOVIES -->
+<section class="view" id="moviesView" aria-label="Movies">
+  <header class="bar">
+    <button class="ibtn" id="movBack" type="button" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button>
+    <h2 id="movTitle">Movies</h2>
+    <button class="ibtn" id="btnLater" type="button" aria-label="Watch later"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z" style="fill:currentColor"/></svg></button>
+    <button class="ibtn" id="btnHistory" type="button" aria-label="Watch history"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"/></svg></button>
+  </header>
+  <div class="wrap">
+    <div id="heroBlock">
+      <div class="hero">
+        <div class="hero-bg" id="heroBg"></div>
+        <span class="pill">🔥 TRENDING NOW</span>
+        <h1>Top Movies &amp; Series Database</h1>
+        <div class="sub"><i>▶</i> Search any movie and watch.</div>
+        <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="libSearch" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search any movie or series…" aria-label="Search movies and series"><button class="x" id="clearSearch" type="button" hidden aria-label="Clear search">✕</button></label>
+      </div>
+      <div class="chips" id="libFilters"></div>
+    </div>
+    <div id="homeRails"></div>
+    <div id="resultsWrap" hidden>
+      <div class="res-head"><h3 id="resTitle">Results</h3><span id="resCount"></span></div>
+      <div class="grid" id="resGrid"></div>
+      <button class="more" id="loadMore" type="button" hidden>Load more</button>
+    </div>
+    <div id="savedWrap" hidden>
+      <div class="res-head"><span id="savedHint"></span><button class="secondary" id="clearSaved" type="button" hidden style="padding:8px 14px;font-size:13px">Clear history</button></div>
+      <div class="grid" id="savedGrid"></div>
+    </div>
+    <div class="pad"></div>
+  </div>
+</section>
+
+<!-- 3. CONNECT WITH APP (QR code) -->
+<section class="view" id="connectView" aria-label="Connect with app">
+  <header class="bar">
+    <button class="ibtn" type="button" data-go="landing" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button>
+    <div style="flex:1"><div class="logo">DEEProWSS</div><div class="tag">VIDEO RECEIVER</div></div>
+    <div class="badge" id="connectionBadge">NOT CONNECTED</div>
+  </header>
+  <section id="join">
+    <h1>Connect your phone</h1>
+    <p>Open Smart Decoder on your phone, choose <b>Scan to Connect</b>, and scan this QR code. Your video will play here.</p>
+    <div id="pairQr" style="width:210px;height:210px;margin:18px auto;padding:10px;background:#fff;border-radius:14px;display:grid;place-items:center"></div>
+    <div style="text-align:center"><div class="tag">PAIRING CODE</div><div id="pairCode" style="font-size:25px;font-weight:950;letter-spacing:4px;margin:8px 0">Preparing…</div></div>
+    <div id="statusJoin" role="status" style="text-align:center">Creating a secure connection…</div>
+    <button id="newPair" class="secondary" style="width:100%;margin-top:12px">Generate new QR code</button>
+    <details style="margin-top:18px;color:#aab2bf"><summary>Use manual connection (legacy)</summary>
+    <input id="host" type="text" inputmode="url" autocomplete="off" placeholder="Phone address (e.g. 192.168.1.5:37027)" aria-label="Phone address">
+    <input id="pin" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="Six-digit PIN" aria-label="Six-digit PIN">
+    <button id="connect" class="secondary" style="width:100%">Connect with PIN</button>
+    </details>
+    <div class="hint" style="text-align:center">Private pairing · WebRTC video is sent directly between devices. The pairing service only carries connection messages.</div>
+  </section>
+</section>
+
+<!-- movie details -->
+<div class="sheet" id="movieDetails" role="dialog" aria-modal="true" aria-label="Movie details">
+  <div class="sheet-card" id="sheetCard">
+    <button class="sheet-close" id="detailClose" type="button" aria-label="Close">✕</button>
+    <div class="sheet-bg"><img id="detailBackdrop" alt="" hidden></div>
+    <div class="sheet-body">
+      <div class="sheet-top"><img id="detailPoster" alt=""><div><h2 id="detailTitle"></h2><div class="meta" id="detailMeta"></div></div></div>
+      <div class="actions">
+        <button id="detailPlay" type="button">▶ Play</button>
+        <button class="secondary" id="detailSave" type="button">＋ Watch later</button>
+        <button class="secondary" id="detailDownload" type="button" hidden>⬇ Download</button>
+        <button class="secondary" id="detailAlt" type="button" hidden>Alternate player</button>
+      </div>
+      <div class="episodes" id="detailEpisodes" hidden><label>Season<select id="detailSeason"></select></label><label>Episode<select id="detailEpisode"></select></label></div>
+      <p class="overview" id="detailOverview"></p>
+      <div class="cast" id="detailCast"></div>
+      <div id="detailTrailerWrap" hidden><h4>Trailer</h4><div id="detailTrailer"></div></div>
+      <h4 id="similarHead" hidden>More like this</h4>
+      <div class="rail" id="detailSimilar" style="padding-left:0;padding-right:0"></div>
+    </div>
+  </div>
+</div>
+
+<!-- player (movies + phone casting) -->
+<section class="player" id="playerPanel" tabindex="0" aria-label="Video player">
+  <div class="player-head"><button class="secondary pback" id="playerBack" type="button">← Back</button><div class="title" id="mediaTitle">Ready to play</div><span class="live" id="playState">CONNECTED</span></div>
+  <div class="stage"><video id="screen" playsinline autoplay></video><iframe id="movieFrame" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope; clipboard-write; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="Deeprowss video"></iframe></div>
+  <div class="controls"><button class="secondary" id="rewind">−10 sec</button><button id="play">▶ Play</button><button class="secondary" id="pause">Ⅱ Pause</button><button class="secondary" id="forward">+10 sec</button><button class="secondary" id="mute" aria-pressed="false">🔇 Mute</button><button class="secondary" id="fullscreen">⛶ Fullscreen</button><button class="secondary" id="stop">■ Stop</button></div>
+  <div class="progress"><span id="currentTime">00:00</span><input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek"><span id="totalTime">LIVE</span><label>Vol <input class="volume" id="volume" type="range" min="0" max="100" value="100" aria-label="Volume"></label></div>
+  <div id="statusPlayer" role="status">Connected.</div>
+</section>
+
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script>
+<script>
   (() => {
     const $ = id => document.getElementById(id);
+    const views={landing:$('landing'),movies:$('moviesView'),connect:$('connectView')};const markMode=()=>{document.body.dataset.mode=views.movies.classList.contains('active')?'movies':'connect';};
     const pinInput=$('pin'),hostInput=$('host'),video=$('screen'),frame=$('movieFrame'),join=$('join'),panel=$('playerPanel');
     let socket,peer,hls,dash,urlPlaying=false,iframePlaying=false,currentTitle='',reconnectAttempts=0,reconnectTimer,hideControlsTimer;const pendingCandidates=[];
-    const showControls=()=>{document.body.classList.add('playing');panel.classList.remove('controls-hidden');clearTimeout(hideControlsTimer);hideControlsTimer=setTimeout(()=>{if(urlPlaying||iframePlaying)panel.classList.add('controls-hidden');},4200);};
+    const showControls=()=>{document.body.classList.add('playing');panel.classList.remove('controls-hidden');clearTimeout(hideControlsTimer);hideControlsTimer=setTimeout(()=>{if((urlPlaying||iframePlaying)&&document.body.dataset.mode!=='movies')panel.classList.add('controls-hidden');},4200);};
     ['pointermove','pointerdown','mousemove','touchstart','keydown'].forEach(type=>document.addEventListener(type,showControls,{passive:true}));
     const enterFullscreen=()=>{if(document.fullscreenElement){document.exitFullscreen?.().catch?.(()=>{});return;}const target=iframePlaying?frame:(urlPlaying?video:panel);try{const p=target.requestFullscreen?.()||panel.requestFullscreen?.();if(p&&p.catch)p.catch(()=>{try{const q=panel.requestFullscreen?.();if(q&&q.catch)q.catch(()=>{});}catch(_){}});}catch(_){try{panel.requestFullscreen?.().catch?.(()=>{});}catch(__){}}};
 
@@ -75,13 +265,13 @@ button{border:0;border-radius:12px;padding:13px 18px;background:var(--accent);co
     function clearMedia(){urlPlaying=false;iframePlaying=false;document.body.classList.remove('playing');clearTimeout(hideControlsTimer);panel.classList.remove('controls-hidden');if(hls){try{hls.destroy();}catch(_){}hls=null;}if(dash){try{dash.reset();}catch(_){}dash=null;}video.pause();video.removeAttribute('src');video.srcObject=null;frame.src='about:blank';video.style.display='none';frame.style.display='none';$('seek').value=0;$('currentTime').textContent='00:00';$('totalTime').textContent='LIVE';}
     function showJoin(msg){clearMedia();panel.style.display='none';join.style.display='block';say(msg);}
     function safeUrl(raw){try{const u=new URL(raw);if(!['http:','https:'].includes(u.protocol))return null;if(u.hostname.toLowerCase()==='vsembed.ru')u.hostname='vsembed.su';return u.href;}catch(_){return null;}}
-    function playEmbed(raw,title){const url=safeUrl(raw);if(!url){say('This movie embed URL is invalid.');return;}clearMedia();iframePlaying=true;currentTitle=title||'Movie';$('mediaTitle').textContent=currentTitle;$('playState').textContent='EMBED';panel.style.display='block';join.style.display='none';
+    function playEmbed(raw,title){const url=safeUrl(raw);if(!url){say('This movie embed URL is invalid.');return;}clearMedia();iframePlaying=true;currentTitle=title||'Movie';$('mediaTitle').textContent=currentTitle;$('playState').textContent='EMBED';panel.style.display='block';join.style.display='none';markMode();
       const u=new URL(url);
       if(/(^|\.)youtube(-nocookie)?\.com$/.test(u.hostname)&&u.pathname.includes('/embed/')){u.searchParams.set('enablejsapi','1');u.searchParams.set('origin',location.origin);u.searchParams.set('autoplay','1');u.searchParams.set('mute','0');}
       if(/(^|\.)player\.vimeo\.com$/.test(u.hostname)){u.searchParams.set('autoplay','1');u.searchParams.set('muted','0');}
-      frame.onload=()=>{for(let i=0;i<8;i++)setTimeout(()=>{iframeCommand('unmute');iframeCommand('play');},i*900);showControls();};
+      frame.onload=()=>{for(let i=0;i<8;i++)setTimeout(()=>{if(!iframePlaying)return;iframeCommand('unmute');iframeCommand('play');},i*900);showControls();};
       frame.src=u.href;frame.style.display='block';showControls();say('Embed opened. Sound and remote controls are requested; provider restrictions may apply.');report('Movie embed loaded: '+currentTitle);}
-    function playUrl(raw,kind,title){const url=safeUrl(raw);if(!url){say('The media URL is invalid.');return;}const parsedUrl=new URL(url);const isVsembedMovie=/^vsembed\.su$/i.test(parsedUrl.hostname)&&/^\/embed\/(movie|tv)(\/|$)/i.test(parsedUrl.pathname);if(kind==='embed'||isVsembedMovie){playEmbed(url,title);return;}clearMedia();urlPlaying=true;currentTitle=title||'Media';$('mediaTitle').textContent=currentTitle;$('playState').textContent='PLAYING';panel.style.display='block';join.style.display='none';showControls();video.srcObject=null;video.muted=false;video.defaultMuted=false;video.volume=Number($('volume').value)/100;video.style.display='block';
+    function playUrl(raw,kind,title){const url=safeUrl(raw);if(!url){say('The media URL is invalid.');return;}const parsedUrl=new URL(url);const isVsembedMovie=/^vsembed\.su$/i.test(parsedUrl.hostname)&&/^\/embed\/(movie|tv)(\/|$)/i.test(parsedUrl.pathname);if(kind==='embed'||isVsembedMovie){playEmbed(url,title);return;}clearMedia();urlPlaying=true;currentTitle=title||'Media';$('mediaTitle').textContent=currentTitle;$('playState').textContent='PLAYING';panel.style.display='block';join.style.display='none';markMode();showControls();video.srcObject=null;video.muted=false;video.defaultMuted=false;video.volume=Number($('volume').value)/100;video.style.display='block';
       const start=()=>{video.muted=false;video.defaultMuted=false;video.volume=Math.max(.01,Number($('volume').value)/100);return video.play().then(()=>{say('Playing '+currentTitle);report('Playing '+currentTitle);}).catch(()=>say('Playback is ready. Press Play on the receiver or phone.'));};
       if(kind==='dash'||/\.mpd(\?|$)/i.test(url)){if(!window.dashjs){say('DASH playback library is unavailable.');return;}dash=dashjs.MediaPlayer().create();dash.initialize(video,url,true);dash.on(dashjs.MediaPlayer.events.ERROR,e=>{say('DASH playback failed. This source may require provider authorization or a supported codec.');report('DASH playback failed: '+(e.error||'unknown'));});return;}
       const isHls=kind==='hls'||/\.m3u8(\?|$)/i.test(url);
@@ -131,7 +321,7 @@ button{border:0;border-radius:12px;padding:13px 18px;background:var(--accent);co
     }
     async function processSignal(msg){try{if(msg.type==='play'&&typeof msg.url==='string'){if(peer){peer.close();peer=null;}playUrl(msg.url,msg.kind||'video',msg.title||'Deeprowss media');}
       else if(msg.type==='remote')remote(msg.command,msg.value);
-      else if(msg.type==='offer'){clearMedia();peer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]});peer.ontrack=e=>{video.srcObject=e.streams[0];video.muted=false;video.defaultMuted=false;video.volume=1;video.style.display='block';frame.style.display='none';panel.style.display='block';join.style.display='none';video.play().catch(()=>say('Mirroring video. Press Play once on the receiver to enable audio autoplay.'));showControls();};peer.onicecandidate=e=>{if(e.candidate)send({type:'candidate',candidate:e.candidate.toJSON()});};peer.onconnectionstatechange=()=>{if(peer.connectionState==='connected'){say('Screen mirroring connected');report('Screen mirroring connected');}if(['failed','disconnected'].includes(peer.connectionState))say('Video connection interrupted');};await peer.setRemoteDescription({type:msg.sdpType||'offer',sdp:msg.sdp});while(pendingCandidates.length)await peer.addIceCandidate(pendingCandidates.shift());const answer=await peer.createAnswer();await peer.setLocalDescription(answer);send({type:'answer',sdp:answer.sdp,sdpType:answer.type});}
+      else if(msg.type==='offer'){clearMedia();peer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]});peer.ontrack=e=>{video.srcObject=e.streams[0];video.muted=false;video.defaultMuted=false;video.volume=1;video.style.display='block';frame.style.display='none';panel.style.display='block';join.style.display='none';markMode();video.play().catch(()=>say('Mirroring video. Press Play once on the receiver to enable audio autoplay.'));showControls();};peer.onicecandidate=e=>{if(e.candidate)send({type:'candidate',candidate:e.candidate.toJSON()});};peer.onconnectionstatechange=()=>{if(peer.connectionState==='connected'){say('Screen mirroring connected');report('Screen mirroring connected');}if(['failed','disconnected'].includes(peer.connectionState))say('Video connection interrupted');};await peer.setRemoteDescription({type:msg.sdpType||'offer',sdp:msg.sdp});while(pendingCandidates.length)await peer.addIceCandidate(pendingCandidates.shift());const answer=await peer.createAnswer();await peer.setLocalDescription(answer);send({type:'answer',sdp:answer.sdp,sdpType:answer.type});}
       else if(msg.type==='candidate'){if(peer&&peer.remoteDescription)await peer.addIceCandidate(msg.candidate);else pendingCandidates.push(msg.candidate);}}
       catch(e){say('Receiver error: '+e.message);}}
     $('connect').addEventListener('click',connect);pinInput.addEventListener('keydown',e=>{if(e.key==='Enter')connect();});
@@ -143,8 +333,34 @@ button{border:0;border-radius:12px;padding:13px 18px;background:var(--accent);co
     $('volume').oninput=e=>{remote('volume',e.target.value);if(Number(e.target.value)>0){$('mute').textContent='🔇 Mute';$('mute').setAttribute('aria-pressed','false');}};$('seek').oninput=e=>{if(urlPlaying&&Number.isFinite(video.duration))remote('seek',Number(e.target.value)/1000*video.duration);};
     video.addEventListener('timeupdate',()=>{if(!urlPlaying||!Number.isFinite(video.duration)||video.duration<=0)return;$('seek').value=Math.round(video.currentTime/video.duration*1000);$('currentTime').textContent=clock(video.currentTime);$('totalTime').textContent=clock(video.duration);});
     video.addEventListener('volumechange',()=>{$('mute').textContent=video.muted?'🔊 Unmute':'🔇 Mute';$('mute').setAttribute('aria-pressed',video.muted?'true':'false');});video.addEventListener('play',()=>{$('playState').textContent='PLAYING';report('Playing '+currentTitle);});video.addEventListener('pause',()=>{$('playState').textContent='PAUSED';report('Paused '+currentTitle);});
-    createPairing();setInterval(pollRelay,850);
+    
+    /* ---- page navigation: landing / movies / connect (QR) ---- */
+    const setView=name=>{Object.keys(views).forEach(k=>views[k].classList.toggle('active',k===name));document.body.dataset.view=name;};
+    const routeName=()=>{const h=location.hash.replace('#','');return views[h]?h:'landing';};
+    let pairingBusy=false;
+    async function ensurePairing(){if(pairingBusy||relayActive||(socket&&socket.readyState===WebSocket.OPEN))return;pairingBusy=true;try{await createPairing();}finally{pairingBusy=false;}}
+    function closePlayer(){if(panel.style.display!=='block')return;const m=document.body.dataset.mode;if(m==='connect')remote('stop');else clearMedia();panel.style.display='none';join.style.display='block';}
+    function route(){closePlayer();const n=routeName();setView(n);if(n==='connect')ensurePairing();}
+    function go(n){if(routeName()===n){route();return;}location.hash=n;}
+    window.addEventListener('hashchange',route);
+    document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
+    $('playerBack').addEventListener('click',closePlayer);
+    document.addEventListener('keydown',e=>{if((e.key==='Escape'||e.key==='Backspace')&&panel.style.display==='block'&&document.body.dataset.mode==='movies'&&!/input|textarea|select/i.test(e.target.tagName)){e.preventDefault();closePlayer();}});
+    window.deeprowssGo=go;window.deeprowssShowJoin=()=>go('connect');window.deeprowssShowLibrary=()=>go('movies');
+    if(params.get('host')||params.get('pin')||params.get('mode')==='connect')history.replaceState(null,'','#connect');
+    route();
+    setInterval(pollRelay,850);
     if(hostInput.value&&pinInput.value)setTimeout(connect,400);
   })();
-  </script>
+</script>
+<script>
+/* Loads the movie library next to this page (works at the site root and in /receiver/). */
+(function(){
+  function load(src,fail){var s=document.createElement('script');s.src=src;s.onerror=fail;document.body.appendChild(s);}
+  load('library.js',function(){load('receiver/library.js',function(){
+    var r=document.getElementById('homeRails');if(r)r.innerHTML='<div class="empty">The movie library could not be loaded.<br>Please refresh the page.</div>';
+  });});
+  if('serviceWorker' in navigator&&location.protocol==='https:'){try{navigator.serviceWorker.register('sw.js').catch(function(){});}catch(e){}}
+})();
+</script>
 </body></html>
