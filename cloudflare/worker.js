@@ -173,10 +173,9 @@ async function castRelay(request, env, url) {
       env.DB.prepare("CREATE TABLE IF NOT EXISTS cast_signals (id INTEGER PRIMARY KEY AUTOINCREMENT, room TEXT NOT NULL, sender TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL)")
     ]);
     const now = Math.floor(Date.now()/1000);
-    await env.DB.prepare("DELETE FROM cast_rooms WHERE expires_at < ?").bind(now).run();
-    await env.DB.prepare("DELETE FROM cast_signals WHERE created_at < ?").bind(now-900).run();
-
     if (url.pathname === "/cast/create" && request.method === "POST") {
+      await env.DB.prepare("DELETE FROM cast_rooms WHERE expires_at < ?").bind(now).run();
+      await env.DB.prepare("DELETE FROM cast_signals WHERE created_at < ?").bind(now-900).run();
       const room = crypto.randomUUID().replace(/-/g,"").slice(0,16).toUpperCase();
       const tokenBytes = crypto.getRandomValues(new Uint8Array(24));
       const token = Array.from(tokenBytes, b => b.toString(16).padStart(2,"0")).join("");
