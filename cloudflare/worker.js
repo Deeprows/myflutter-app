@@ -99,6 +99,7 @@ export default {
       return json({ error: "method not allowed" }, 405);
     }
 
+    if(url.pathname.startsWith('/cast/'))return castRelay(request,env,url);
     if(url.pathname==='/sports-news')return sportsNews(request,env,url,ctx);
     if(url.pathname==='/sports-reels')return sportsReels(request,env,url,ctx);
 
@@ -161,6 +162,66 @@ export default {
     }, 404);
   },
 };
+
+// ------------------------------------------------------------- QR cast relay
+// D1-backed signalling only. Video/audio stays peer-to-peer via WebRTC.
+async function castRelay(request, env, url) {
+  if (!env.DB) return json({ ok:false, error:"pairing service database is not configured" }, 503);
+  try {
+    await env.DB.batch([
+      env.DB.prepare("CREATE TABLE IF NOT EXISTS cast_rooms (room TEXT PRIMARY KEY, token TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)"),
+      env.DB.prepare("CREATE TABLE IF NOT EXISTS cast_signals (id INTEGER PRIMARY KEY AUTOINCREMENT, room TEXT NOT NULL, sender TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL)")
+    ]);
+    const now = Math.floor(Date.now()/1000);
+    await env.DB.prepare("DELETE FROM cast_rooms WHERE expires_at < ?").bind(now).run();
+    await env.DB.prepare("DELETE FROM cast_signals WHERE created_at < ?").bind(now-900).run();
+
+    if (url.pathname === "/cast/create" && request.method === "POST") {
+      const room = crypto.randomUUID().replace(/-/g,"").slice(0,16).toUpperCase();
+      const tokenBytes = crypto.getRandomValues(new Uint8Array(24));
+      const token = Array.from(tokenBytes, b => b.toString(16).padStart(2,"0")).join("");
+      await env.DB.prepare("INSERT INTO cast_rooms(room,token,created_at,expires_at) VALUES(?,?,?,?)")
+        .bind(room,token,now,now+900).run();
+      return json({ok:true,room,token,expiresAt:now+900});
+    }
+
+    const room = String(url.searchParams.get("room") || "");
+    const token = String(url.searchParams.get("token") || "");
+    if (!/^[A-F0-9]{16}$/.test(room) || !/^[a-f0-9]{48}$/.test(token))
+      return json({ok:false,error:"invalid pairing details"},400);
+    const record = await env.DB.prepare("SELECT expires_at FROM cast_rooms WHERE room=? AND token=?")
+      .bind(room,token).first();
+    if (!record || Number(record.expires_at) < now)
+      return json({ok:false,error:"pairing code expired; refresh the receiver page"},410);
+
+    if (url.pathname === "/cast/send" && request.method === "POST") {
+      const body = await request.json().catch(()=>null);
+      const sender = String(body?.sender || "");
+      const payload = body?.payload;
+      if (!["phone","receiver"].includes(sender) || !payload || typeof payload !== "object")
+        return json({ok:false,error:"invalid signalling message"},400);
+      const encoded = JSON.stringify(payload);
+      if (encoded.length > 45000) return json({ok:false,error:"signalling message too large"},413);
+      await env.DB.prepare("INSERT INTO cast_signals(room,sender,payload,created_at) VALUES(?,?,?,?)")
+        .bind(room,sender,encoded,now).run();
+      return json({ok:true});
+    }
+
+    if (url.pathname === "/cast/poll" && request.method === "GET") {
+      const after = Math.max(0,Number(url.searchParams.get("after")||0));
+      const rows = await env.DB.prepare(
+        "SELECT id,sender,payload,created_at FROM cast_signals WHERE room=? AND id>? ORDER BY id ASC LIMIT 40"
+      ).bind(room,after).all();
+      const messages = (rows.results||[]).map(row => ({
+        id:Number(row.id), sender:row.sender, payload:JSON.parse(row.payload)
+      }));
+      return json({ok:true,messages,cursor:messages.length?messages[messages.length-1].id:after,expiresAt:Number(record.expires_at)});
+    }
+    return json({ok:false,error:"not found"},404);
+  } catch (e) {
+    return json({ok:false,error:"pairing relay error: "+String(e?.message||e).slice(0,180)},500);
+  }
+}
 
 // ------------------------------------------------------------------ analytics
 
