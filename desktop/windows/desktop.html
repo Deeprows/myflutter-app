@@ -22,9 +22,34 @@ iframe{width:100%;height:100%;border:0;display:block;background:#05080e}
 </div>
 <script>
 const frame=document.getElementById('deeprowss');
-frame.addEventListener('load',()=>{document.getElementById('loading').style.opacity='0';setTimeout(()=>document.getElementById('loading').remove(),700);});
-frame.addEventListener('error',()=>{document.getElementById('loading').textContent='Receiver server unavailable. Check your internet connection and try again.';});
-window.addEventListener('online',()=>{frame.src='https://deeprows.github.io/myflutter-app/receiver/';});
+const remoteUrl='https://deeprows.github.io/myflutter-app/receiver/';
+let remoteLoaded=false, fallbackUsed=false;
+function useLocalFallback(){
+  if(remoteLoaded||fallbackUsed)return;
+  fallbackUsed=true;
+  document.getElementById('loading').textContent='Loading bundled Deeprowss receiver…';
+  frame.src='receiver/index.html';
+}
+frame.addEventListener('load',()=>{
+  let localError=false;
+  try{
+    const loadedUrl=frame.contentWindow.location.href;
+    localError=loadedUrl==='about:blank'||loadedUrl.startsWith('chrome-error:');
+    if(loadedUrl.startsWith('file:'))fallbackUsed=true;
+  }catch(_){remoteLoaded=true;}
+  if(localError)useLocalFallback();
+  if(remoteLoaded||fallbackUsed){
+    document.getElementById('loading').style.opacity='0';
+    setTimeout(()=>document.getElementById('loading')?.remove(),700);
+  }
+});
+frame.addEventListener('error',useLocalFallback);
+setTimeout(()=>{if(!remoteLoaded&&!fallbackUsed)useLocalFallback();},12000);
+window.addEventListener('online',()=>{
+  remoteLoaded=false;fallbackUsed=false;
+  document.getElementById('loading')?.remove();
+  frame.src=remoteUrl;
+});
 </script>
 </body>
 </html>
