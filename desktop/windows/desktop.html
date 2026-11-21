@@ -16,7 +16,7 @@ iframe{width:100%;height:100%;border:0;display:block;background:#05080e}
 <div id="app">
   <div id="loading">DEEprowss CINEMA · CONNECTING</div>
   <iframe id="deeprowss" title="Deeprowss Movies, Live Channels and Cast Receiver"
-    src="https://deeprows.github.io/myflutter-app/assets/receiver/index.html"
+    src="https://deeprows.github.io/myflutter-app/receiver/"
     allow="autoplay; encrypted-media; fullscreen; picture-in-picture; camera; microphone"
     allowfullscreen></iframe>
 </div>
@@ -24,7 +24,7 @@ iframe{width:100%;height:100%;border:0;display:block;background:#05080e}
 const frame=document.getElementById('deeprowss');
 frame.addEventListener('load',()=>{document.getElementById('loading').style.opacity='0';setTimeout(()=>document.getElementById('loading').remove(),700);});
 frame.addEventListener('error',()=>{document.getElementById('loading').textContent='Receiver server unavailable. Check your internet connection and try again.';});
-window.addEventListener('online',()=>{frame.src='https://deeprows.github.io/myflutter-app/assets/receiver/index.html';});
+window.addEventListener('online',()=>{frame.src='https://deeprows.github.io/myflutter-app/receiver/';});
 </script>
 </body>
 </html>
