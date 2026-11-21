@@ -299,12 +299,13 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
 <script>
   (() => {
     const $ = id => document.getElementById(id);
+    const desktop=window.deeprowssDesktop||null;let winFullscreen=false; // Windows app bridge (null on TVs / browsers)
     const views={landing:$('landing'),movies:$('moviesView'),tv:$('tvView'),connect:$('connectView')};const markMode=()=>{document.body.dataset.mode=views.movies.classList.contains('active')?'movies':(views.tv.classList.contains('active')?'tv':'connect');};
     const pinInput=$('pin'),hostInput=$('host'),video=$('screen'),frame=$('movieFrame'),join=$('join'),panel=$('playerPanel');
     let socket,peer,hls,dash,urlPlaying=false,iframePlaying=false,currentTitle='',reconnectAttempts=0,reconnectTimer,hideControlsTimer;const pendingCandidates=[];
     const showControls=()=>{document.body.classList.add('playing');panel.classList.remove('controls-hidden');clearTimeout(hideControlsTimer);hideControlsTimer=setTimeout(()=>{if((urlPlaying||iframePlaying)&&document.body.dataset.mode!=='movies')panel.classList.add('controls-hidden');},4200);};
     ['pointermove','pointerdown','mousemove','touchstart','keydown'].forEach(type=>document.addEventListener(type,showControls,{passive:true}));
-    const enterFullscreen=()=>{if(document.fullscreenElement){document.exitFullscreen?.().catch?.(()=>{});return;}const target=iframePlaying?frame:(urlPlaying?video:panel);try{const p=target.requestFullscreen?.()||panel.requestFullscreen?.();if(p&&p.catch)p.catch(()=>{try{const q=panel.requestFullscreen?.();if(q&&q.catch)q.catch(()=>{});}catch(_){}});}catch(_){try{panel.requestFullscreen?.().catch?.(()=>{});}catch(__){}}};
+    const enterFullscreen=()=>{if(isTv&&!document.fullscreenElement)return; /* the TV app already shows the player full screen */if(document.fullscreenElement){document.exitFullscreen?.().catch?.(()=>{});return;}if(desktop&&desktop.fullscreen){desktop.fullscreen.set('toggle').then(r=>{winFullscreen=!!(r&&r.fullscreen);reportState();}).catch(()=>{});return;}const target=iframePlaying?frame:(urlPlaying?video:panel);try{const p=target.requestFullscreen?.()||panel.requestFullscreen?.();if(p&&p.catch)p.catch(()=>{try{const q=panel.requestFullscreen?.();if(q&&q.catch)q.catch(()=>{});}catch(_){}});}catch(_){try{panel.requestFullscreen?.().catch?.(()=>{});}catch(__){}}};
 
     const params=new URLSearchParams(location.search);const savedHost=localStorage.getItem('deeprowss_receiver_host')||'';const savedPin=localStorage.getItem('deeprowss_receiver_pin')||'';if(/^\d{6}$/.test(params.get('pin')||''))pinInput.value=params.get('pin');else if(/^\d{6}$/.test(savedPin))pinInput.value=savedPin;hostInput.value=params.get('host')||savedHost||'';
     const say=value=>{$('statusJoin').textContent=value;$('statusPlayer').textContent=value;};
@@ -319,7 +320,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     function clearMedia(){urlPlaying=false;iframePlaying=false;iframePaused=false;iframeMuted=false;document.body.classList.remove('playing');clearTimeout(hideControlsTimer);panel.classList.remove('controls-hidden');if(hls){try{hls.destroy();}catch(_){}hls=null;}if(dash){try{dash.reset();}catch(_){}dash=null;}video.pause();video.removeAttribute('src');video.srcObject=null;frame.src='about:blank';video.style.display='none';frame.style.display='none';$('seek').value=0;$('currentTime').textContent='00:00';$('totalTime').textContent='LIVE';}
     function showJoin(msg){clearMedia();panel.style.display='none';join.style.display='block';say(msg);}
     function safeUrl(raw){try{const u=new URL(raw);if(!['http:','https:'].includes(u.protocol))return null;if(u.hostname.toLowerCase()==='vsembed.ru')u.hostname='vsembed.su';return u.href;}catch(_){return null;}}
-    function playEmbed(raw,title){const url=safeUrl(raw);if(!url){say('This movie embed URL is invalid.');return;}clearMedia();iframePlaying=true;currentTitle=title||'Movie';$('mediaTitle').textContent=currentTitle;$('playState').textContent='EMBED';panel.style.display='block';join.style.display='none';markMode();
+    function playEmbed(raw,title){const url=safeUrl(raw);if(!url){say('This movie embed URL is invalid.');return;}clearMedia();embedStarted=false;iframePlaying=true;currentTitle=title||'Movie';$('mediaTitle').textContent=currentTitle;$('playState').textContent='EMBED';panel.style.display='block';join.style.display='none';markMode();
       const u=new URL(url);
       if(/(^|\.)youtube(-nocookie)?\.com$/.test(u.hostname)&&u.pathname.includes('/embed/')){u.searchParams.set('enablejsapi','1');u.searchParams.set('origin',location.origin);u.searchParams.set('autoplay','1');u.searchParams.set('mute','0');}
       if(/(^|\.)player\.vimeo\.com$/.test(u.hostname)){u.searchParams.set('autoplay','1');u.searchParams.set('muted','0');}
@@ -335,7 +336,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
       if(!frame.contentWindow)return;
       const origin='*';
       // VidSrc/vsembed supports this documented parent-to-player command protocol.
-      if(/^vsembed\\.su$/i.test((()=>{try{return new URL(frame.src).hostname;}catch(_){return '';}})())){const action=command==='rewind'?'seek-10':command==='forward'?'seek+10':command==='volume'?(Number(value)<=0?'mute':'unmute'):command;try{frame.contentWindow.postMessage({player:true,action},origin);}catch(_){}say('Vsembed remote command sent.');return;}
+      if(/^vsembed\.su$/i.test((()=>{try{return new URL(frame.src).hostname;}catch(_){return '';}})())){const action=command==='rewind'?'seek-10':command==='forward'?'seek+10':command==='volume'?(Number(value)<=0?'mute':'unmute'):command;try{frame.contentWindow.postMessage({player:true,action},origin);}catch(_){}say('Vsembed remote command sent.');return;}
       // YouTube IFrame Player API.
       const ytMap={play:'playVideo',pause:'pauseVideo',stop:'stopVideo',mute:'mute',unmute:'unMute',volume:'setVolume'};
       if(ytMap[command]){const msg={event:'command',func:ytMap[command],args:command==='volume'?[Number(value)||0]:[]};try{frame.contentWindow.postMessage(JSON.stringify(msg),origin);}catch(_){}}
@@ -360,15 +361,18 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
       stateTimer=setTimeout(()=>{
         const mode=mediaMode();
         const dur=Number.isFinite(video.duration)?video.duration:0;
-        send({type:'receiver-state',mode,view:curView(),
+        const playingNow=mode==='media'?!video.paused:(mode==='iframe'?!iframePaused:mode==='mirror');
+        if(desktop&&desktop.keepAwake)desktop.keepAwake(playingNow&&panel.style.display==='block');
+        send({type:'receiver-state',mode,view:curView(),platform:desktop?'windows':(isTv?'tv':'web'),
           playerOpen:panel.style.display==='block',
           playing:mode==='media'?!video.paused:(mode==='iframe'?!iframePaused:mode==='mirror'),
           muted:mode==='media'?(video.muted||video.volume===0):(mode==='iframe'?iframeMuted:false),
           volume:mode==='media'?Math.round(video.volume*100):(mode==='iframe'?iframeVol:Number($('volume').value)),
           position:mode==='media'?Math.round(video.currentTime||0):0,duration:Math.round(dur),
-          fullscreen:!!document.fullscreenElement,title:currentTitle});
+          fullscreen:!!document.fullscreenElement||winFullscreen,title:currentTitle});
       },120);
     }
+    if(desktop&&desktop.fullscreen){desktop.fullscreen.get().then(r=>{winFullscreen=!!(r&&r.fullscreen);reportState();}).catch(()=>{});desktop.fullscreen.on(v=>{winFullscreen=!!v;reportState();});}
     function setMutedUi(m){$('mute').textContent=m?'🔊 Unmute':'🔇 Mute';$('mute').setAttribute('aria-pressed',m?'true':'false');}
     function applyVolume(v){
       v=Math.max(0,Math.min(100,Math.round(Number(v)||0)));$('volume').value=v;
@@ -379,7 +383,26 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
       if(iframePlaying){iframeMuted=m;iframeCommand(m?'mute':'unmute');if(!m&&iframeVol===0){iframeVol=50;$('volume').value=50;}setMutedUi(m);}
       else if(urlPlaying){video.muted=m;if(!m&&video.volume===0){video.volume=Math.max(.01,Number($('volume').value)/100||.5);}setMutedUi(m);}
     }
+    /* ---- embeds: real taps from the remote (Windows app / Android TV) ---- */
+    let embedStarted=false;
+    const hasNativeTap=()=>!!((desktop&&desktop.tap)||(window.DeeprowssTv&&window.DeeprowssTv.tap));
+    const embedHost=()=>{try{return new URL(frame.src).hostname.toLowerCase();}catch(_){return '';}};
+    const embedApi=()=>/(^|\.)(youtube(-nocookie)?\.com|player\.vimeo\.com)$/.test(embedHost()); // has a real player API
+    const embedClickable=()=>iframePlaying&&hasNativeTap()&&!embedApi();
+    const embedNeedsTap=()=>embedClickable()&&!/^vsembed\.su$/.test(embedHost());
+    function embedTap(){
+      const r=frame.getBoundingClientRect();if(!r.width||!r.height||!hasNativeTap())return false;
+      const fx=(r.left+r.width/2)/window.innerWidth,fy=(r.top+r.height/2)/window.innerHeight;
+      if(desktop&&desktop.tap)desktop.tap(fx,fy);else window.DeeprowssTv.tap(fx,fy);
+      say('Tapped the player. If an ad opened instead, press OK / Play again.');return true;
+    }
     function setPlaying(p){
+      if(iframePlaying&&embedNeedsTap()){
+        // Unknown provider: it has no remote API, so Play / Pause is a tap on the player.
+        if(!embedStarted){if(!p)return;embedStarted=true;iframePaused=false;embedTap();return;}
+        if(p===iframePaused){iframePaused=!p;embedTap();}
+        return;
+      }
       if(iframePlaying){iframePaused=!p;iframeCommand(p?'play':'pause');}
       else if(urlPlaying){if(p)video.play().catch(()=>say('Press Play on the receiver to allow playback with sound.'));else video.pause();}
     }
@@ -400,13 +423,15 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     }
     function remote(command,value){
       const mode=mediaMode();
+      if(desktop&&desktop.focus&&command!=='hello'&&command!=='state')desktop.focus(false); // restore the window if it is minimised
       switch(command){
         case 'hello':case 'state':reportState();return;
         case 'stop':clearMedia();iframePaused=false;iframeMuted=false;say('Playback stopped.');report('Playback stopped.');send({type:'stop-complete'});reportState();return;
         // ---- navigation (works on the landing page, movie browser, details sheet and player) ----
         case 'up':case 'down':case 'left':case 'right':navKey(command);reportState();return;
         case 'enter':case 'select':case 'ok':
-          if(panel.style.display==='block'&&mode!=='idle'){setPlaying(!isPlayingNow());showControls();}
+          if(panel.style.display==='block'&&mode==='iframe'&&embedClickable()){embedTap();iframePaused=embedStarted?!iframePaused:false;embedStarted=true;showControls();} // OK = a click on the player
+          else if(panel.style.display==='block'&&mode!=='idle'){setPlaying(!isPlayingNow());showControls();}
           else clickFocused();
           reportState();return;
         case 'back':
@@ -420,7 +445,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
           go('landing');reportState();return;
       }
       if(mode==='mirror'||mode==='idle'){
-        if(command==='fullscreen'&&mode==='mirror')enterFullscreen();
+        if(command==='fullscreen'&&(mode==='mirror'||desktop))enterFullscreen();
         else if(command==='mute'||command==='unmute'||command==='togglemute'){const m=command==='mute'?true:command==='unmute'?false:!video.muted;video.muted=m;setMutedUi(m);}
         reportState();return;
       }
@@ -452,7 +477,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
       socket.onclose=()=>{$('connectionBadge').textContent='DISCONNECTED';$('connect').disabled=false;if(urlPlaying||iframePlaying){clearMedia();say('Receiver session ended. Playback stopped.');return;}showJoin('Connection closed. Reconnecting automatically…');if(reconnectAttempts<5){reconnectAttempts++;clearTimeout(reconnectTimer);reconnectTimer=setTimeout(()=>{if(hostInput.value&&pinInput.value&&(!socket||socket.readyState===WebSocket.CLOSED))connect();},Math.min(1200*reconnectAttempts,6000));}else say('Reconnect attempts stopped. Tap Connect to retry.');if(peer){peer.close();peer=null;}};
       socket.onmessage=async event=>{try{await processSignal(JSON.parse(event.data));}catch(e){say('Receiver error: '+e.message);}};
     }
-    async function processSignal(msg){try{if(msg.type==='play'&&typeof msg.url==='string'){if(peer){peer.close();peer=null;}playUrl(msg.url,msg.kind||'video',msg.title||'Deeprowss media');}
+    async function processSignal(msg){try{if(msg.type==='play'&&typeof msg.url==='string'){if(desktop&&desktop.focus)desktop.focus(true);if(peer){peer.close();peer=null;}playUrl(msg.url,msg.kind||'video',msg.title||'Deeprowss media');}
       else if(msg.type==='remote')remote(msg.command,msg.value);
       else if(msg.type==='hello'||msg.type==='ready'){reportState();}
       else if(msg.type==='offer'){clearMedia();peer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]});peer.ontrack=e=>{video.srcObject=e.streams[0];video.muted=false;video.defaultMuted=false;video.volume=1;video.style.display='block';frame.style.display='none';panel.style.display='block';join.style.display='none';markMode();video.play().catch(()=>say('Mirroring video. Press Play once on the receiver to enable audio autoplay.'));showControls();};peer.onicecandidate=e=>{if(e.candidate)send({type:'candidate',candidate:e.candidate.toJSON()});};peer.onconnectionstatechange=()=>{if(peer.connectionState==='connected'){say('Screen mirroring connected');report('Screen mirroring connected');}if(['failed','disconnected'].includes(peer.connectionState))say('Video connection interrupted');};await peer.setRemoteDescription({type:msg.sdpType||'offer',sdp:msg.sdp});while(pendingCandidates.length)await peer.addIceCandidate(pendingCandidates.shift());const answer=await peer.createAnswer();await peer.setLocalDescription(answer);send({type:'answer',sdp:answer.sdp,sdpType:answer.type});}
