@@ -434,7 +434,7 @@ jobs:
           }
 
           mkdir -p site/cast site/receiver site/downloads
-          cp receiver/deeprowss-mirror-receiver/index.html site/index.html
+          cp assets/receiver/index.html site/index.html
           cp receiver/deeprowss-cast-receiver/index.html site/cast/index.html
 
           # Publish the installable PWA receiver and the public app download centre.
