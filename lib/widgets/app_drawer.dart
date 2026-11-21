@@ -33,7 +33,6 @@ import '../services/app_updater.dart';
 import '../services/subscription_service.dart';
 import '../services/settings_service.dart';
 import '../utils/l10n.dart';
-import '../utils/premium_gate.dart';
 import 'language_sheet.dart';
 import '../theme/app_theme.dart';
 
@@ -509,7 +508,7 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
                       Icons.cast_connected_rounded,
                       'Smart Decoder'.tr,
                       (c) async {
-                        if (!await PremiumGate.allowDecoder(c)) return;
+                        // Open to everyone: the items inside ask for Premium.
                         if (!c.mounted) return;
                         await _push(c, const CastScreen());
                       },
