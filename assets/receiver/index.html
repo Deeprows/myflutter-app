@@ -590,7 +590,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
 (function(){
   function load(src,fail){var s=document.createElement('script');s.src=src;s.onerror=fail;document.body.appendChild(s);}
   function both(n){load(n,function(){load('receiver/'+n,function(){});});}
-  both('tv.js');both('shell.js');both('gate.js');both('fixtures.js');both('downloads.js');
+  both('tv.js');both('shell.js');both('gate.js');both('fixtures.js');both('downloads.js');both('manualad.js');
   load('library.js',function(){load('receiver/library.js',function(){
     var r=document.getElementById('homeRails');if(r)r.innerHTML='<div class="empty">The movie library could not be loaded.<br>Please refresh the page.</div>';
   });});
