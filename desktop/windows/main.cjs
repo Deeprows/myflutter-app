@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session } = require('electron');
+const { app, BrowserWindow, session, shell } = require('electron');
 const path = require('path');
 
 function createWindow() {
@@ -22,7 +22,26 @@ function createWindow() {
   });
 
   win.once('ready-to-show', () => win.show());
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    // Movie download links open in the user's browser, not inside an
+    // untrusted embedded player window. Keep the host allowlist explicit.
+    try {
+      const parsed = new URL(url);
+      const allowed = new Set([
+        'web.nxsha.app',
+        'meetdownload.com',
+        'www.meetdownload.com',
+        'wildshare.net',
+        'www.wildshare.net',
+        'archive.org',
+        'www.archive.org'
+      ]);
+      if (parsed.protocol === 'https:' && allowed.has(parsed.hostname.toLowerCase())) {
+        shell.openExternal(parsed.href);
+      }
+    } catch (_) {}
+    return { action: 'deny' };
+  });
   win.webContents.on('will-navigate', (event, target) => {
     // The application shell is local. Do not let embedded content replace it.
     if (target.startsWith('file://')) return;
