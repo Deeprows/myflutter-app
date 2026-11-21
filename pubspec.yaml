@@ -30,6 +30,7 @@ dependencies:
   screen_share_plugin: ^1.0.0
   flutter_webrtc: ^1.6.3
   qr_flutter: ^4.1.0
+  mobile_scanner: ^7.0.1
   open_filex: ^4.7.0
   photo_manager: ^3.6.0
   file_picker: ^8.1.2
