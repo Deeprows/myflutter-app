@@ -32,8 +32,8 @@ npm run dist
 ```
 
 Outputs are written to desktop/windows/dist/:
-- Deeprowss-Cinema-Installer-1.1.0.exe
-- Deeprowss-Cinema-Portable-1.1.0.exe
+- Deeprowss-Cinema-Installer-1.2.0.exe
+- Deeprowss-Cinema-Portable-1.2.0.exe
 
 Playback depends on third-party providers, their embed policies, stream availability, codecs, autoplay rules and network access. Phone-to-PC casting requires both devices on the same Wi-Fi/LAN and may require allowing Deeprowss through Windows Firewall.
 
