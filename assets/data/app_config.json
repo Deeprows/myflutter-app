@@ -46,6 +46,15 @@
     "enabled": true,
     "text": "Not working? Try another stream number.\nDouble Tap. Click 🔳 on player to bypass ads"
   },
+  "downloads": {
+    "_help": "Download Apps page. auto = newest GitHub release file (mobile uses update.apkUrl). Set a key to a full https link to override it, or to off to show Coming soon.",
+    "mobile": "auto",
+    "androidTv": "auto",
+    "webos": "auto",
+    "tizen": "auto",
+    "windows": "auto",
+    "windowsPortable": "auto"
+  },
   "tmdb": {
     "enabled": true,
     "apiKey": "",
