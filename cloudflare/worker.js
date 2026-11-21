@@ -210,8 +210,8 @@ async function castRelay(request, env, url) {
     if (url.pathname === "/cast/poll" && request.method === "GET") {
       const after = Math.max(0,Number(url.searchParams.get("after")||0));
       const rows = await env.DB.prepare(
-        "SELECT id,sender,payload,created_at FROM cast_signals WHERE room=? AND id>? ORDER BY id ASC LIMIT 40"
-      ).bind(room,after).all();
+        "SELECT id,sender,payload,created_at FROM cast_signals WHERE room=? AND id>? AND sender<>? ORDER BY id ASC LIMIT 40"
+      ).bind(room,after,String(url.searchParams.get("role")||"")).all();
       const messages = (rows.results||[]).map(row => ({
         id:Number(row.id), sender:row.sender, payload:JSON.parse(row.payload)
       }));
