@@ -131,9 +131,18 @@ Future<void> sendToReceiver(BuildContext context, CastTarget target) async {
     return;
   }
   final mirror = DeeprowssMirrorService.instance;
-  // QR mode is the preferred TV-first flow. Stop an old phone-hosted session
-  // before opening the scanner so it cannot block the new pairing.
-  if (mirror.running && !mirror.usingQrPairing) await mirror.stop();
+  if (mirror.running && mirror.usingQrPairing) {
+    final kind = target.kind == StreamKind.invalid ? StreamKind.embed : target.kind;
+    final ok = await mirror.sendChannel(url: url, title: target.title, kind: kind,
+      referer: target.referer, userAgent: target.userAgent);
+    if (!context.mounted) return;
+    if (!ok) { decoderToast(context, mirror.error ?? 'Could not send this video.'); return; }
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => const DecoderReceiverPage(),
+    ));
+    return;
+  }
+  if (mirror.running) await mirror.stop();
   if (!context.mounted) return;
   await Navigator.of(context).push<void>(MaterialPageRoute(
     builder: (_) => DecoderReceiverPage(target: target),
