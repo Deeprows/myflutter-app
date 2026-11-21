@@ -1,55 +1,28 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
 <title>Deeprowss Cinema</title>
 <style>
-:root{color-scheme:dark;--bg:#080b12;--panel:#111824;--panel2:#182232;--line:#273448;--text:#f4f6fa;--muted:#9ba8bb;--gold:#ffc629;--red:#e33b4b}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 75% 0%,#1b2b43 0,#080b12 48%);color:var(--text);font:14px Inter,Segoe UI,Arial,sans-serif;min-height:100vh}
-.layout{display:grid;grid-template-columns:230px 1fr;min-height:100vh}.side{position:sticky;top:0;height:100vh;padding:28px 16px;background:#090e17;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:24px}
-.brand{font-size:23px;font-weight:1000;letter-spacing:2px;color:var(--gold);padding:0 12px}.subbrand{font-size:10px;color:#8290a4;letter-spacing:2px;margin:5px 12px}
-.nav{display:grid;gap:8px}.nav button{background:transparent;border:0;color:#aeb9c9;text-align:left;padding:14px 15px;border-radius:12px;font-weight:800;cursor:pointer}.nav button.active,.nav button:hover{background:#202b3b;color:#fff}.nav button.active{box-shadow:inset 3px 0 var(--gold)}
-.side-note{margin-top:auto;color:#68778c;font-size:11px;line-height:1.6;padding:12px}
-main{min-width:0;padding:28px 34px 60px}.top{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:24px}.eyebrow{color:var(--gold);font-size:11px;font-weight:900;letter-spacing:2px}.heading{font-size:30px;font-weight:950;margin:7px 0 0}.top-actions{display:flex;gap:10px;align-items:center}
-.search{width:min(320px,30vw);background:#111a28;border:1px solid var(--line);border-radius:12px;padding:12px 15px;color:white;outline:none}.search:focus{border-color:var(--gold)}
-.btn{border:1px solid var(--line);background:#1a2636;color:#fff;border-radius:11px;padding:11px 15px;font-weight:800;cursor:pointer}.btn.gold{background:linear-gradient(135deg,#ffda70,#efa90d);border:0;color:#17130a}
-.hero{min-height:260px;border:1px solid #34445b;border-radius:22px;overflow:hidden;position:relative;display:flex;align-items:end;padding:28px;background:linear-gradient(90deg,#060a12ee,#060a1266),linear-gradient(135deg,#273d59,#101824);margin-bottom:28px}
-.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.32;filter:blur(1px)}.hero-content{position:relative;max-width:650px}.hero-tag{color:var(--gold);font-weight:900;letter-spacing:2px;font-size:11px}.hero h2{font-size:clamp(28px,4vw,44px);margin:9px 0}.hero p{color:#c0c9d7;line-height:1.5;margin:0 0 17px}
-.filters{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px}.chip{border:1px solid var(--line);background:#111a28;color:#b9c4d3;border-radius:30px;padding:8px 13px;cursor:pointer}.chip.active{background:#ffc629;color:#15120a;border-color:#ffc629;font-weight:900}
-.section-head{display:flex;justify-content:space-between;align-items:center;margin:25px 0 14px}.section-head h3{font-size:18px;margin:0}.muted{color:var(--muted)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:18px}.movie{min-width:0;cursor:pointer}.poster{aspect-ratio:2/3;background:#172232;border-radius:13px;overflow:hidden;position:relative;border:1px solid #26364b;transition:transform .2s,border-color .2s}.movie:hover .poster{transform:translateY(-4px);border-color:var(--gold)}.poster img{width:100%;height:100%;object-fit:cover}.poster .missing{height:100%;display:grid;place-items:center;color:#718096;font-size:36px}.playmark{position:absolute;inset:auto 10px 10px auto;background:#ffc629;color:#17130a;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:17px;opacity:0;transition:opacity .2s}.movie:hover .playmark{opacity:1}.movie-title{font-weight:850;margin:9px 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.movie-meta{font-size:11px;color:#8d9aae}
-.empty{padding:50px;text-align:center;color:var(--muted);background:#111824;border:1px dashed #34445b;border-radius:16px}
-.page{display:none}.page.active{display:block}
-.cast-wrap{height:calc(100vh - 145px);min-height:580px;border:1px solid #34445b;border-radius:18px;overflow:hidden;background:#05080e}.cast-wrap iframe{width:100%;height:100%;border:0}
-.player{display:none;position:fixed;inset:0;background:#03060c;z-index:10}.player.open{display:flex;flex-direction:column}.playerbar{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;background:#0b111b;border-bottom:1px solid #273448}.playerbar strong{font-size:16px}.player iframe{width:100%;height:calc(100% - 64px);border:0;background:#000}
-.status{font-size:11px;color:#718096;margin-top:15px}
-@media(max-width:800px){.layout{grid-template-columns:76px 1fr}.side{padding:22px 8px}.brand{font-size:0}.brand:after{content:'D';font-size:24px}.subbrand,.side-note{display:none}.nav button{font-size:0;text-align:center}.nav button:before{font-size:19px}.nav button[data-page=movies]:before{content:'▣'}.nav button[data-page=cast]:before{content:'▤'}main{padding:22px 16px}.grid{grid-template-columns:repeat(auto-fill,minmax(125px,1fr))}.top{align-items:flex-start;flex-direction:column}.search{width:100%}}
-</style></head>
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#05080e}
+#app{position:fixed;inset:0;background:#05080e}
+iframe{width:100%;height:100%;border:0;display:block;background:#05080e}
+#loading{position:absolute;inset:0;display:grid;place-items:center;color:#ffc629;background:#080b12;font:700 14px Segoe UI,Arial,sans-serif;letter-spacing:2px;z-index:1;pointer-events:none;transition:opacity .2s}
+</style>
+</head>
 <body>
-<div class="layout"><aside class="side"><div><div class="brand">DEEProWSS</div><div class="subbrand">CINEMA & LIVE TV</div></div>
-<nav class="nav"><button class="active" data-page="movies">Movies & Series</button><button data-page="cast">Cast Live Channels</button></nav>
-<div class="side-note">Your Deeprowss movie library and live-channel receiver in one desktop experience.<br><br>Movies play through their configured embed providers. Live channels can be sent from the Deeprowss mobile app.</div></aside>
-<main>
-<section class="page active" id="moviesPage"><div class="top"><div><div class="eyebrow">DEEProWSS ENTERTAINMENT</div><h1 class="heading">Movies & Series</h1></div><div class="top-actions"><input id="search" class="search" placeholder="Search movies, series or genres…"><button class="btn" id="refresh">Refresh</button></div></div>
-<div class="hero" id="hero"><img id="heroImage" hidden><div class="hero-content"><div class="hero-tag">YOUR CINEMA, ON DESKTOP</div><h2>Discover something great.</h2><p>Browse the Deeprowss movie and series catalogue. Select a title to open its configured player.</p><button class="btn gold" id="browse">Browse library</button></div></div>
-<div class="filters" id="filters"><button class="chip active" data-filter="all">All</button><button class="chip" data-filter="movie">Movies</button><button class="chip" data-filter="tv">Series</button></div>
-<div class="section-head"><h3 id="resultTitle">Recently added</h3><span class="muted" id="count"></span></div><div class="grid" id="grid"></div><div class="status" id="status">Loading catalogue…</div></section>
-<section class="page" id="castPage"><div class="top"><div><div class="eyebrow">PHONE TO PC</div><h1 class="heading">Cast Live Channels</h1></div><span class="muted">Pair your Deeprowss app to this PC</span></div>
-<p class="muted">Open Smart Decoder in Deeprowss on your phone, start the receiver, then scan the QR code or enter the address and PIN shown there. Choose a live channel on your phone and it will play here.</p>
-<div class="cast-wrap"><iframe id="receiver" title="Deeprowss live channel receiver" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; camera; microphone" allowfullscreen></iframe></div></section>
-</main></div>
-<div class="player" id="player"><div class="playerbar"><strong id="playingTitle">Now playing</strong><button class="btn" id="closePlayer">← Back to library</button></div><iframe id="moviePlayer" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
+<div id="app">
+  <div id="loading">DEEProWSS CINEMA · LOADING</div>
+  <iframe id="deeprowss" title="Deeprowss Movies, Live Channels and Cast Receiver"
+    src="https://deeprows.github.io/myflutter-app/assets/receiver/"
+    allow="autoplay; encrypted-media; fullscreen; picture-in-picture; camera; microphone"
+    allowfullscreen></iframe>
+</div>
 <script>
-(()=>{const MOVIES='https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/movies.json';const RECEIVER='https://deeprows.github.io/myflutter-app/assets/receiver/';const $=id=>document.getElementById(id);let all=[],kind='all',query='';
-$('receiver').src=RECEIVER;
-function safeUrl(raw){try{const u=new URL(raw);if(!['http:','https:'].includes(u.protocol))return '';if(u.hostname==='vsembed.ru')u.hostname='vsembed.su';return u.href}catch(_){return ''}}
-function title(m){return m.name||m.title||'Untitled'}
-function image(m){return m.image||m.poster||m.posterUrl||''}
-function type(m){return (m.type==='tv'||m.mediaType==='tv'||/series|season|episode/i.test(title(m)))?'tv':'movie'}
-function render(){const list=all.filter(m=>(kind==='all'||type(m)===kind)&&(!query||(title(m)+' '+(m.genre||'')+' '+(m.rating||'')).toLowerCase().includes(query)));$('grid').innerHTML='';$('count').textContent=list.length+' titles';$('resultTitle').textContent=query?'Search results':kind==='tv'?'TV Series':kind==='movie'?'Movies':'Recently added';if(!list.length){$('grid').innerHTML='<div class="empty">No titles match your search.</div>';return}
-for(const m of list){const card=document.createElement('article');card.className='movie';const poster=document.createElement('div');poster.className='poster';const src=image(m);if(src){const im=document.createElement('img');im.loading='lazy';im.src=src;im.alt=title(m);im.onerror=()=>{im.remove();poster.innerHTML='<div class="missing">▣</div>'};poster.append(im)}else poster.innerHTML='<div class="missing">▣</div>';const mark=document.createElement('span');mark.className='playmark';mark.textContent='▶';poster.append(mark);const name=document.createElement('div');name.className='movie-title';name.textContent=title(m);const meta=document.createElement('div');meta.className='movie-meta';meta.textContent=[m.date,m.genre,m.rating].filter(Boolean).join(' · ');card.append(poster,name,meta);card.onclick=()=>play(m);$('grid').append(card)}}
-function play(m){const url=safeUrl(m.url||m.embedUrl||m.streamUrl);if(!url){$('status').textContent='This title has no valid player URL.';return}const u=new URL(url);if(u.hostname.endsWith('vsembed.su')){u.searchParams.set('autoplay','1');if(!u.searchParams.has('ds_lang'))u.searchParams.set('ds_lang','en')}$('playingTitle').textContent=title(m);$('moviePlayer').src=u.href;$('player').classList.add('open')}
-async function load(){ $('status').textContent='Loading Deeprowss catalogue…';try{const r=await fetch(MOVIES,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const data=await r.json();if(!Array.isArray(data))throw new Error('Unexpected catalogue format');all=data.filter(m=>m&&typeof m==='object'&&safeUrl(m.url||m.embedUrl||m.streamUrl));render();$('status').textContent='Catalogue updated · '+new Date().toLocaleTimeString()}catch(e){$('status').textContent='Could not load catalogue: '+e.message+'. Check your internet connection.'}}
-document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.id===(b.dataset.page==='movies'?'moviesPage':'castPage')));});
-document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{kind=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));render()});
-$('search').oninput=e=>{query=e.target.value.trim().toLowerCase();render()};$('refresh').onclick=load;$('browse').onclick=()=>$('grid').scrollIntoView({behavior:'smooth'});$('closePlayer').onclick=()=>{$('player').classList.remove('open');$('moviePlayer').src='about:blank'};document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('player').classList.contains('open'))$('closePlayer').click()});load();
-})();
-</script></body></html>
+const frame=document.getElementById('deeprowss');
+frame.addEventListener('load',()=>{document.getElementById('loading').style.opacity='0';setTimeout(()=>document.getElementById('loading').remove(),2500);});
+</script>
+</body>
+</html>
