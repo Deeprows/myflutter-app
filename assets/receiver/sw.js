@@ -1,6 +1,6 @@
 /* Deeprowss Receiver PWA service worker. Media and third-party embeds are never cached. */
-const CACHE = 'deeprowss-receiver-shell-v1';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-512-maskable.png'];
+const CACHE = 'deeprowss-receiver-shell-v2';
+const SHELL = ['./', './index.html', './library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-512-maskable.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
 });
