@@ -64,12 +64,19 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: desktop/windows/package.json
+      - name: Bundle receiver and remote data for offline fallback
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force desktop/windows/receiver | Out-Null
+          New-Item -ItemType Directory -Force desktop/windows/data | Out-Null
+          Copy-Item -Path assets/receiver/* -Destination desktop/windows/receiver -Recurse -Force
+          Copy-Item -Path assets/data/* -Destination desktop/windows/data -Recurse -Force
       - name: Install dependencies
         working-directory: desktop/windows
         run: npm install
-      - name: Build Windows packages
+      - name: Build Windows packages (no publishing; windows-desktop.yml publishes releases)
         working-directory: desktop/windows
-        run: npm run dist
+        run: npm run dist:build
       - uses: actions/upload-artifact@v4
         with:
           name: deeprowss-windows
