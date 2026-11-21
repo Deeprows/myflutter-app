@@ -1,6 +1,6 @@
 # Samsung Tizen TV package source
 
-This is the Deeprowss Samsung TV web-app project, branded with the original Deeprowss logo. It opens the hosted receiver at `https://deeprows.github.io/myflutter-app/`.
+This is the Deeprowss Samsung TV web-app project, branded with the original Deeprowss logo. It opens the hosted receiver at `https://deeprows.github.io/myflutter-app/receiver/`.
 
 ## Build a signed WGT
 
