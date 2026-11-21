@@ -138,15 +138,30 @@
     if (!apiKey || q.length < 2) return [];
     try { const d = await tmdb('/search/multi', {query:q,include_adult:'false'}); return (d?.results || []).map(x => fromTmdb(x)).filter(Boolean).slice(0,30); } catch (_) { return []; }
   }
+  const discoverIds = {
+    Action:['28','10759'], Adventure:['12','10759'], Animation:['16','16'],
+    Comedy:['35','35'], Crime:['80','80'], Documentary:['99','99'],
+    Drama:['18','18'], Family:['10751','10751'], Fantasy:['14','10765'],
+    History:['36',null], Horror:['27',null], Music:['10402',null],
+    Mystery:['9648','9648'], Romance:['10749',null], 'Sci-Fi':['878','10765'],
+    Thriller:['53',null], War:['10752','10768'], Western:['37','37']
+  };
   async function discoverGenre(g) {
     if (!apiKey || g === 'All') return [];
-    const pair = Object.entries(genreNames).find(([,name]) => name.toLowerCase() === g.toLowerCase());
+    const pair = discoverIds[g];
     if (!pair) return [];
     const [a,b] = await Promise.all([
-      tmdb('/discover/movie',{with_genres:pair[0],sort_by:'popularity.desc',include_adult:'false'}),
-      tmdb('/discover/tv',{with_genres:pair[0],sort_by:'popularity.desc',include_adult:'false'})
+      pair[0] ? tmdb('/discover/movie',{with_genres:pair[0],sort_by:'popularity.desc',include_adult:'false', 'vote_count.gte':50}) : Promise.resolve(null),
+      pair[1] ? tmdb('/discover/tv',{with_genres:pair[1],sort_by:'popularity.desc',include_adult:'false', 'vote_count.gte':50}) : Promise.resolve(null)
     ]);
-    return [...(a?.results || []).map(x => fromTmdb(x,'movie')),...(b?.results || []).map(x => fromTmdb(x,'tv'))].filter(Boolean);
+    const movies = (a?.results || []).map(x => fromTmdb(x,'movie')).filter(Boolean);
+    const shows = (b?.results || []).map(x => fromTmdb(x,'tv')).filter(Boolean);
+    const result = [];
+    for (let i=0; i<Math.max(movies.length,shows.length); i++) {
+      if (movies[i]) result.push(movies[i]);
+      if (shows[i]) result.push(shows[i]);
+    }
+    return result;
   }
   async function renderMovies() {
     renderFilters();
