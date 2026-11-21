@@ -6,50 +6,19 @@
 <meta name="color-scheme" content="dark">
 <title>Deeprowss Cinema</title>
 <style>
-*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#05080e}
-#app{position:fixed;inset:0;background:#05080e}
-iframe{width:100%;height:100%;border:0;display:block;background:#05080e}
-#loading{position:absolute;inset:0;display:grid;place-items:center;color:#ffc629;background:#080b12;font:700 14px Segoe UI,Arial,sans-serif;letter-spacing:2px;z-index:1;pointer-events:none;transition:opacity .2s}
+*{box-sizing:border-box}html,body{height:100%;margin:0;background:#060a10;color:#f2f6fa;font:16px "Segoe UI",Arial,sans-serif}
+body{display:grid;place-items:center;text-align:center;padding:24px;background:radial-gradient(900px 500px at 20% 0,#10405f66,transparent 60%),#060a10}
+.card{max-width:520px;padding:40px;border:1px solid #243449;border-top:3px solid #1db4ea;border-radius:18px;background:#0b131d}
+b{letter-spacing:.24em;color:#1db4ea}h1{margin:14px 0 10px;font-weight:600}p{margin:0 0 22px;color:#9fb0c3;line-height:1.6}
+button{padding:13px 26px;border:0;border-radius:10px;background:#1db4ea;color:#03121b;font:700 15px "Segoe UI",Arial,sans-serif;cursor:pointer}
 </style>
 </head>
 <body>
-<div id="app">
-  <div id="loading">DEEprowss CINEMA · CONNECTING</div>
-  <iframe id="deeprowss" title="Deeprowss Movies, Live Channels and Cast Receiver"
-    src="https://deeprows.github.io/myflutter-app/receiver/"
-    allow="autoplay; encrypted-media; fullscreen; picture-in-picture; camera; microphone"
-    allowfullscreen></iframe>
+<div class="card">
+  <b>DEEPROWSS</b>
+  <h1>Could not open the app screen</h1>
+  <p>The built-in receiver did not start. Close other copies of Deeprowss Cinema and try again.</p>
+  <button onclick="location.reload()">Try again</button>
 </div>
-<script>
-const frame=document.getElementById('deeprowss');
-const remoteUrl='https://deeprows.github.io/myflutter-app/receiver/';
-let remoteLoaded=false, fallbackUsed=false;
-function useLocalFallback(){
-  if(remoteLoaded||fallbackUsed)return;
-  fallbackUsed=true;
-  document.getElementById('loading').textContent='Loading bundled Deeprowss receiver…';
-  frame.src='receiver/index.html';
-}
-frame.addEventListener('load',()=>{
-  let localError=false;
-  try{
-    const loadedUrl=frame.contentWindow.location.href;
-    localError=loadedUrl==='about:blank'||loadedUrl.startsWith('chrome-error:');
-    if(loadedUrl.startsWith('file:'))fallbackUsed=true;
-  }catch(_){remoteLoaded=true;}
-  if(localError)useLocalFallback();
-  if(remoteLoaded||fallbackUsed){
-    document.getElementById('loading').style.opacity='0';
-    setTimeout(()=>document.getElementById('loading')?.remove(),700);
-  }
-});
-frame.addEventListener('error',useLocalFallback);
-setTimeout(()=>{if(!remoteLoaded&&!fallbackUsed)useLocalFallback();},12000);
-window.addEventListener('online',()=>{
-  remoteLoaded=false;fallbackUsed=false;
-  document.getElementById('loading')?.remove();
-  frame.src=remoteUrl;
-});
-</script>
 </body>
 </html>
