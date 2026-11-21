@@ -1,8 +1,11 @@
-/* Deeprowss Receiver PWA service worker. Media and third-party embeds are never cached. */
-const CACHE = 'deeprowss-receiver-shell-v5';
+/* Deeprowss receiver PWA service worker. Media and third-party embeds are never cached. */
+const CACHE = 'deeprowss-receiver-shell-v6';
 const SHELL = ['./', './index.html', './library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-512-maskable.png'];
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+  // Cache each file on its own so one missing file (e.g. library.js at the site root) never blocks the install.
+  event.waitUntil(caches.open(CACHE)
+    .then(cache => Promise.allSettled(SHELL.map(item => cache.add(item))))
+    .then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
@@ -16,5 +19,13 @@ self.addEventListener('fetch', event => {
       if (response.ok) caches.open(CACHE).then(cache => cache.put('./index.html', response.clone()));
       return response;
     }).catch(() => caches.match('./index.html')));
+    return;
+  }
+  // Movie library script: always try the network first so updates show immediately, cache as offline fallback.
+  if (/\/library\.js$/.test(url.pathname)) {
+    event.respondWith(fetch(request).then(response => {
+      if (response.ok) caches.open(CACHE).then(cache => cache.put(request, response.clone()));
+      return response;
+    }).catch(() => caches.match(request)));
   }
 });
