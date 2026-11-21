@@ -72,3 +72,26 @@ higher traffic.
 * **Freshness:** new items reach phones within about 10-60 seconds
   (`FEED_TTL` variable, in seconds, changes it; default 10, `0` = no edge cache). `fixtures` and `ticker` are never edge-cached, so the Live screen is always fresh.
 * Tests: `node cloudflare/worker.test.mjs`.
+
+
+## QR pairing for the TV receiver
+
+The receiver page now creates a short-lived pairing room at
+https://deeprowss-feed.deeprows.workers.dev/cast/create and displays its QR
+code. Smart Decoder scans that QR, then exchanges WebRTC offer/answer and ICE
+messages through /cast/send and /cast/poll.
+
+Before using the QR flow:
+
+1. Deploy the current cloudflare/worker.js to the existing
+   deeprowss-feed.deeprows.workers.dev Worker.
+2. Confirm that the Worker has its existing D1 binding named exactly DB.
+   The QR relay creates cast_rooms and cast_signals tables automatically
+   in that database; no manual SQL migration is needed.
+3. Open https://deeprows.github.io/myflutter-app/receiver/. The page should
+   show a QR code and a 16-character pairing code.
+4. In Smart Decoder, open Send to receiver page → Scan TV QR code.
+
+Pairing rooms expire after 15 minutes. Generate a fresh QR if one expires.
+Only signalling messages pass through the Worker; the media stream itself is
+peer-to-peer WebRTC. The existing local-IP/PIN method remains as a fallback.
