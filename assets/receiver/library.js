@@ -15,7 +15,7 @@
   let apiKey = FALLBACK_KEY, language = 'en-US';
   let embedBase = 'https://vsembed.su/embed', altEmbedBase = 'https://web.nxsha.app/embed', downloadBase = 'https://web.nxsha.app/dl';
   let catalogue = [];
-  const state = { q: '', genre: 'All', type: 'all', view: 'home', saved: LATER_KEY, page: 1, pages: 1, token: 0 };
+  const state = { q: '', genre: 'All', type: 'all', lib: false, view: 'home', saved: LATER_KEY, page: 1, pages: 1, token: 0 };
   let activeMovie = null, sel = { s: 1, e: 1 }, searchTimer, mosaicCount = 0;
 
   const GENRES = {
@@ -33,7 +33,9 @@
   const idOf = m => Number(m?.tmdbId || m?.tmdb_id || m?.id) || null;
   const isTv = m => m?.type === 'tv' || m?.media_type === 'tv' || /\/tv\//i.test(m?.url || '');
   const keyOf = m => String(idOf(m) || m?.url || title(m));
-  const ratingNum = m => { const n = parseFloat(m?.rating); return Number.isFinite(n) && n > 0 ? n : 0; };
+  const ratingNum = m => { const raw = String(m?.rating ?? ''); let n = parseFloat(raw); if (/\/\s*100/.test(raw)) n /= 10; return Number.isFinite(n) && n > 0 ? n : 0; };
+  const isNew = m => !m?.poster_path && m?.date && (Date.now() - Date.parse(m.date)) < 21 * 864e5 && (Date.now() - Date.parse(m.date)) > -864e5;
+  const openDl = u => { if (window.deeprowssDesktop && window.deeprowssDesktop.openDownload) window.deeprowssDesktop.openDownload(u); else window.open(u, '_blank', 'noopener'); };
   const yearOf = m => (m?.release_date || m?.date || (/\((\d{4})\)/.exec(m?.name || '') || [])[1] || '').toString().slice(0, 4);
   const safeUrl = raw => { if (!raw) return ''; try { const u = new URL(raw); return ['http:', 'https:'].includes(u.protocol) ? u.href : ''; } catch (_) { return ''; } };
   function image(m, size = 'w342') {
@@ -53,6 +55,7 @@
     if (!r.ok) throw Error('HTTP ' + r.status);
     return r.json();
   }
+  async function getJsonFb(url, local) { try { return await getJson(url); } catch (e) { try { return await getJson(local); } catch (_) { throw e; } } }
   async function tmdb(path, params = {}) {
     if (!apiKey) return null;
     const u = new URL('https://api.themoviedb.org/3' + path);
@@ -65,7 +68,7 @@
   }
   async function loadConfig() {
     try {
-      const c = await getJson(CONFIG_URL), t = c.tmdb || {}, m = c.movies || {};
+      const c = await getJsonFb(CONFIG_URL, 'data/app_config.json'), t = c.tmdb || {}, m = c.movies || {};
       apiKey = t.enabled === false ? '' : (t.apiKey || t.key || FALLBACK_KEY);
       if (t.language) language = t.language;
       embedBase = (m.embedBase || embedBase).replace(/\/+$/, '');
@@ -101,6 +104,7 @@
     let h = '<span class="poster">' + (src ? '<img loading="lazy" decoding="async" alt="" src="' + esc(src) + '">' : '<span class="noimg">▣</span>');
     if (rank !== null) h += '<span class="rank">' + (rank + 1) + '</span>';
     if (r && kind !== 'h') h += '<span class="star">★ ' + r.toFixed(1) + '</span>';
+    if (kind !== 'h' && rank === null && isNew(m)) h += '<span class="new">NEW</span>';
     if (kind === 'h') {
       h += '<span class="over"><span class="badge-t">🔥 TRENDING</span><span class="ct">' + esc(cleanTitle(m)) + '</span><span class="cm">' + esc(yearOf(m)) + (r ? ' · ★ ' + r.toFixed(1) + '/10' : '') + '</span></span></span>';
     } else {
@@ -166,6 +170,8 @@
         items = items.slice(0, r.n || 20);
         ok++; fillRail(secs[i], items, r);
         if (r.id === 'trending' && items[0]) {
+          const feat = items.filter(x => x.backdrop_path).slice(0, 10).map(x => ({ backdrop: IMG + 'w1280' + x.backdrop_path, title: cleanTitle(x), year: yearOf(x), rating: ratingNum(x), overview: x.overview, tv: isTv(x) }));
+          window.deeprowssFeatureList = feat; window.dispatchEvent(new CustomEvent('deeprowss:feature', { detail: feat }));
           const bg = items.find(x => x.backdrop_path) || items[0];
           if (bg.backdrop_path) $('heroBg').style.backgroundImage = 'url(' + IMG + 'w1280' + bg.backdrop_path + ')';
         }
@@ -208,7 +214,7 @@
   }
   async function loadCatalogue() {
     try {
-      const d = await getJson(MOVIES_URL);
+      const d = await getJsonFb(MOVIES_URL, 'data/movies.json');
       catalogue = (Array.isArray(d) ? d : d.movies || []).filter(m => m && safeUrl(m.url || m.embedUrl || m.streamUrl));
       if (state.view === 'home') renderCatalogueRail();
     } catch (_) { /* catalogue is optional */ }
@@ -218,15 +224,22 @@
   function renderChips() {
     const root = $('libFilters'); root.innerHTML = '';
     const chip = (label, on, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip' + (on ? ' on' : ''); b.textContent = label; b.onclick = fn; root.append(b); };
-    chip('All', state.type === 'all' && state.genre === 'All', () => { state.type = 'all'; state.genre = 'All'; refresh(); });
+    chip('All', state.type === 'all' && state.genre === 'All' && !state.lib, () => { state.type = 'all'; state.genre = 'All'; state.lib = false; refresh(); });
     chip('Movies', state.type === 'movie', () => { state.type = state.type === 'movie' ? 'all' : 'movie'; refresh(); });
     chip('Series', state.type === 'tv', () => { state.type = state.type === 'tv' ? 'all' : 'tv'; refresh(); });
+    chip('★ Deeprowss Library', state.lib, () => { state.lib = !state.lib; refresh(); });
     Object.keys(GENRES).forEach(g => chip(g, state.genre === g, () => { state.genre = state.genre === g ? 'All' : g; refresh(); }));
   }
   async function fetchResults(page) {
     const q = state.q, g = state.genre, t = state.type;
     const typeOk = m => t === 'all' || isTv(m) === (t === 'tv');
     const genreOk = m => g === 'All' || (m.genres || []).includes(g) || String(m.genre || '').toLowerCase().includes(g.toLowerCase());
+    if (state.lib) {
+      const ql = q.toLowerCase();
+      const items = catalogue.filter(m => typeOk(m) && genreOk(m) && (q.length < 2 || title(m).toLowerCase().includes(ql)))
+        .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+      return { items, pages: 1 };
+    }
     if (q.length >= 2) {
       const ql = q.toLowerCase();
       const items = page === 1 ? catalogue.filter(m => typeOk(m) && genreOk(m) && title(m).toLowerCase().includes(ql)) : [];
@@ -266,11 +279,11 @@
   }
   async function refresh() {
     renderChips();
-    const filtered = state.q.length >= 2 || state.genre !== 'All' || state.type !== 'all';
+    const filtered = state.q.length >= 2 || state.genre !== 'All' || state.type !== 'all' || state.lib;
     if (!filtered) { setView('home'); if (!$('homeRails').children.length) loadHome(); else refreshContinue(); return; }
     setView('results'); state.page = 1;
     const token = ++state.token;
-    $('resTitle').textContent = state.q.length >= 2 ? 'Search Results' : state.genre !== 'All' ? state.genre : state.type === 'tv' ? 'Series' : 'Movies';
+    $('resTitle').textContent = state.q.length >= 2 ? 'Search Results' : state.lib ? 'Deeprowss Library' : state.genre !== 'All' ? state.genre : state.type === 'tv' ? 'Series' : 'Movies';
     $('resCount').textContent = 'Loading…'; $('resGrid').innerHTML = '<div class="skel"></div>'.repeat(10); $('loadMore').hidden = true;
     try {
       const r = await fetchResults(1);
@@ -328,8 +341,8 @@
   function backHome() { refresh(); $('moviesView').scrollTo({ top: 0, behavior: 'smooth' }); }
   $('movBack').onclick = () => {
     if (!$('movieDetails').hidden && $('movieDetails').classList.contains('open')) { closeDetails(); return; }
-    if (state.view !== 'home' || state.q || state.genre !== 'All' || state.type !== 'all') {
-      state.q = ''; state.genre = 'All'; state.type = 'all'; $('libSearch').value = ''; $('clearSearch').hidden = true; backHome();
+    if (state.view !== 'home' || state.q || state.genre !== 'All' || state.type !== 'all' || state.lib) {
+      state.q = ''; state.genre = 'All'; state.type = 'all'; state.lib = false; $('libSearch').value = ''; $('clearSearch').hidden = true; backHome();
     } else window.deeprowssGo('landing');
   };
 
@@ -386,11 +399,11 @@
     $('detailTitle').textContent = cleanTitle(movie);
     $('detailPoster').src = image(movie, 'w342') || ''; $('detailPoster').hidden = !image(movie, 'w342');
     $('detailBackdrop').hidden = true; $('detailOverview').textContent = movie.overview || 'Loading…';
-    $('detailMeta').innerHTML = [isTv(movie) ? 'Series' : 'Movie', yearOf(movie), ratingNum(movie) ? '★ ' + ratingNum(movie).toFixed(1) : ''].filter(Boolean).map(x => '<span>' + esc(x) + '</span>').join('');
+    $('detailMeta').innerHTML = [isTv(movie) ? 'Series' : 'Movie', yearOf(movie), ratingNum(movie) ? '★ ' + ratingNum(movie).toFixed(1) : '', movie.date && !movie.release_date ? 'Added ' + movie.date : ''].filter(Boolean).map(x => '<span>' + esc(x) + '</span>').join('');
     $('detailCast').innerHTML = ''; $('detailTrailer').innerHTML = ''; $('detailTrailerWrap').hidden = true;
     $('detailSimilar').innerHTML = ''; $('similarHead').hidden = true; $('detailEpisodes').hidden = true; $('detailAlt').hidden = true;
     const dl = safeUrl(movie.downloadUrl || movie.download_url || '');
-    $('detailDownload').hidden = !dl; $('detailDownload').onclick = () => { if (dl) window.open(dl, '_blank', 'noopener'); };
+    $('detailDownload').hidden = !dl; $('detailDownload').onclick = () => { if (dl) openDl(dl); };
     const refreshSave = () => { $('detailSave').textContent = isSaved(movie) ? '✓ Saved' : '＋ Watch later'; };
     refreshSave();
     $('detailSave').onclick = () => {
@@ -408,10 +421,10 @@
       if (d.poster_path) { $('detailPoster').src = IMG + 'w342' + d.poster_path; $('detailPoster').hidden = false; if (!movie.poster_path) movie.poster_path = d.poster_path; }
       if (d.backdrop_path) { $('detailBackdrop').src = IMG + 'w1280' + d.backdrop_path; $('detailBackdrop').hidden = false; }
       const runtime = d.runtime || d.episode_run_time?.[0];
-      const meta = [target.tv ? 'Series' : 'Movie', (d.release_date || d.first_air_date || '').slice(0, 4), d.vote_average ? '★ ' + Number(d.vote_average).toFixed(1) : '', runtime ? runtime + ' min' : '', ...(d.genres || []).map(g => g.name)];
+      const meta = [target.tv ? 'Series' : 'Movie', (d.release_date || d.first_air_date || '').slice(0, 4), d.vote_average ? '★ ' + Number(d.vote_average).toFixed(1) : '', runtime ? runtime + ' min' : '', movie.date && !movie.release_date ? 'Added ' + movie.date : '', ...(d.genres || []).map(g => g.name)];
       $('detailMeta').innerHTML = meta.filter(Boolean).map(x => '<span>' + esc(x) + '</span>').join('');
       $('detailOverview').textContent = d.overview || movie.overview || 'No overview available.';
-      if (!dl) { const u = safeUrl(downloadBase + '/' + type + '/' + target.id); $('detailDownload').hidden = !u; $('detailDownload').onclick = () => window.open(u, '_blank', 'noopener'); }
+      if (!dl) { const u = safeUrl(downloadBase + '/' + type + '/' + target.id); $('detailDownload').hidden = !u; $('detailDownload').onclick = () => openDl(u); }
       const cast = (d.credits?.cast || []).slice(0, 12);
       $('detailCast').innerHTML = cast.map(c => '<div class="person">' + (c.profile_path ? '<img loading="lazy" alt="" src="' + IMG + 'w185' + esc(c.profile_path) + '">' : '<span class="av">' + esc((c.name || '?')[0]) + '</span>') + '<b>' + esc(c.name) + '</b><small>' + esc(c.character || '') + '</small></div>').join('');
       if (target.tv) setupEpisodes(d.seasons);
