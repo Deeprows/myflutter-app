@@ -1,0 +1,306 @@
+/* Deeprowss receiver library: same TMDB discovery and remote feeds as the mobile app. */
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const ROOT = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/';
+  const MOVIES_URL = ROOT + 'movies.json';
+  const CHANNELS_URL = ROOT + 'tv.json';
+  const CONFIG_URL = ROOT + 'app_config.json';
+  const NEXUS_URL = 'https://dearbulut.github.io/iptv/api/v1/channels.online.json';
+  const FALLBACK_KEY = 'b83de997ce0ca0406c12cab7f256e43a';
+  const IMG = 'https://image.tmdb.org/t/p/';
+  let config = {}, apiKey = FALLBACK_KEY, language = 'en-US';
+  let embedBase = 'https://vsembed.su/embed', altEmbedBase = 'https://web.nxsha.app/embed', downloadBase = 'https://web.nxsha.app/dl';
+  let movies = [], channels = [], trending = [], top10 = [], trendingMovies = [], trailers = [];
+  let genre = 'All', mediaType = 'all', channelCategory = 'All', query = '', activeMovie = null;
+  let searchTimer, remoteConfigTimer;
+  const genreNames = {28:'Action',12:'Adventure',16:'Animation',35:'Comedy',80:'Crime',99:'Documentary',18:'Drama',10751:'Family',14:'Fantasy',36:'History',27:'Horror',10402:'Music',9648:'Mystery',10749:'Romance',878:'Sci-Fi',10770:'TV Movie',53:'Thriller',10752:'War',37:'Western',10759:'Action & Adventure',10762:'Kids',10763:'News',10764:'Reality',10765:'Sci-Fi & Fantasy',10766:'Soap',10767:'Talk',10768:'War & Politics'};
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const title = m => m?.name || m?.title || m?.original_title || m?.original_name || 'Untitled';
+  const image = m => m?.image || m?.poster || m?.posterUrl || (m?.poster_path ? IMG + 'w500' + m.poster_path : '');
+  const isTv = m => m?.type === 'tv' || m?.mediaType === 'tv' || m?.media_type === 'tv' || /\/tv\//i.test(m?.url || '') || /series|season|episode/i.test(title(m));
+  const idOf = m => Number(m?.tmdbId || m?.tmdb_id || m?.id) || null;
+  const safeUrl = (raw, base) => { try { const u = new URL(raw, base || 'https://deeprows.github.io/myflutter-app/'); return ['http:','https:'].includes(u.protocol) ? u.href : ''; } catch (_) { return ''; } };
+  const fresh = url => url + (url.includes('?') ? '&' : '?') + '_refresh=' + Date.now();
+  async function getJson(url) { const r = await fetch(fresh(url), {cache:'no-store'}); if (!r.ok) throw Error('HTTP ' + r.status); return r.json(); }
+  async function loadConfig() {
+    try {
+      config = await getJson(CONFIG_URL);
+      const t = config.tmdb || {};
+      if (t.apiKey || t.key) apiKey = t.apiKey || t.key;
+      if (t.language) language = t.language;
+      if (t.enabled === false) apiKey = '';
+      const m = config.movies || {};
+      embedBase = (m.embedBase || embedBase).replace(/\/+$/, '');
+      altEmbedBase = (m.altEmbedBase || altEmbedBase).replace(/\/+$/, '');
+      downloadBase = (m.downloadBase || downloadBase).replace(/\/+$/, '');
+    } catch (_) { /* use the last known values */ }
+  }
+  async function tmdb(path, params = {}) {
+    if (!apiKey) return null;
+    const u = new URL('https://api.themoviedb.org/3' + path);
+    u.searchParams.set('api_key', apiKey);
+    u.searchParams.set('language', language);
+    Object.entries(params).forEach(([k,v]) => u.searchParams.set(k, v));
+    const r = await fetch(u.href);
+    if (!r.ok) throw Error('TMDB ' + r.status);
+    return r.json();
+  }
+  function fromTmdb(raw, type) {
+    if (!raw || !raw.id) return null;
+    const tv = (raw.media_type || type) === 'tv';
+    const name = raw[tv ? 'name' : 'title'] || raw.name || raw.title;
+    if (!name) return null;
+    const date = raw[tv ? 'first_air_date' : 'release_date'] || '';
+    const gs = (raw.genre_ids || []).map(x => genreNames[x]).filter(Boolean);
+    return {
+      name: name + (date ? ' (' + date.slice(0,4) + ')' : ''),
+      title: name, type: tv ? 'tv' : 'movie', tmdbId: raw.id,
+      url: embedBase + '/' + (tv ? 'tv' : 'movie') + '/' + raw.id,
+      downloadUrl: downloadBase + '/' + (tv ? 'tv' : 'movie') + '/' + raw.id,
+      rating: raw.vote_average ? Number(raw.vote_average).toFixed(1) + '/10' : '',
+      genre: gs.join(','), genres: gs, image: image(raw),
+      overview: raw.overview || '', release_date: date, backdrop_path: raw.backdrop_path
+    };
+  }
+  function movieCard(m, rank) {
+    const el = document.createElement('article');
+    el.className = 'libcard';
+    const poster = document.createElement('div');
+    poster.className = 'libposter';
+    const src = image(m);
+    poster.innerHTML = src ? '<img loading="lazy" src="' + esc(src) + '" alt="' + esc(title(m)) + '">' : '<div style="height:100%;display:grid;place-items:center;color:#8a9ab0">▣</div>';
+    if (rank !== null && rank !== undefined) poster.insertAdjacentHTML('beforeend', '<span class="rank">' + (rank + 1) + '</span>');
+    const name = document.createElement('strong');
+    name.textContent = title(m);
+    const meta = document.createElement('small');
+    meta.textContent = [isTv(m) ? 'Series' : 'Movie', m.rating || '', m.year || (m.date || m.release_date || '').slice(0,4)].filter(Boolean).join(' · ');
+    el.append(poster, name, meta);
+    el.onclick = () => openDetails(m);
+    return el;
+  }
+  function sectionMarkup(label, items, ranked) {
+    if (!items.length) return '';
+    const key = label.toLowerCase().replace(/[^a-z]/g, '');
+    return '<section class="libsection"><div class="libsection-head"><h3>' + esc(label) + '</h3><span class="libmuted">' + (ranked ? 'TOP 10' : '') + '</span></div><div class="librail" id="rail-' + key + '"></div></section>';
+  }
+  function renderTrends() {
+    const root = $('trendSections');
+    root.innerHTML = sectionMarkup('Trending Now', trending) + sectionMarkup('Top 10', top10, true) + sectionMarkup('Trending Movies', trendingMovies) + (trailers.length ? '<section class="libsection"><div class="libsection-head"><h3>Latest Trailers</h3><span class="libmuted">WATCH PREVIEWS</span></div><div class="librail" id="rail-trailers"></div></section>' : '');
+    [['Trending Now',trending],['Top 10',top10],['Trending Movies',trendingMovies]].forEach(([label, list]) => {
+      const node = $('rail-' + label.toLowerCase().replace(/[^a-z]/g, ''));
+      if (node) list.forEach((m,i) => node.append(movieCard(m, label === 'Top 10' ? i : null)));
+    });
+    const rail = $('rail-trailers');
+    if (rail) trailers.forEach(t => {
+      const el = document.createElement('div'); el.className = 'libtrailer';
+      el.innerHTML = '<div class="thumb"><img loading="lazy" src="https://img.youtube.com/vi/' + encodeURIComponent(t.key) + '/hqdefault.jpg"><span class="playicon">▶</span></div><b>' + esc(t.title) + '</b>';
+      el.onclick = () => openTrailer(t.key, t.title); rail.append(el);
+    });
+  }
+  async function loadTrends() {
+    if (!apiKey) { $('trendSections').innerHTML = '<div class="libmuted">TMDB is disabled. Set tmdb.enabled and tmdb.apiKey in app_config.json to enable live recommendations.</div>'; return; }
+    try {
+      const [tr, top, mov, now] = await Promise.all([
+        tmdb('/trending/all/week', {page:1}), tmdb('/movie/top_rated', {page:1}),
+        tmdb('/trending/movie/week', {page:1}), tmdb('/movie/now_playing', {page:1})
+      ]);
+      trending = (tr?.results || []).map(x => fromTmdb(x)).filter(Boolean).slice(0,15);
+      top10 = (top?.results || []).map(x => fromTmdb(x,'movie')).filter(Boolean).sort((a,b) => parseFloat(b.rating || 0) - parseFloat(a.rating || 0)).slice(0,10);
+      trendingMovies = (mov?.results || []).map(x => fromTmdb(x,'movie')).filter(Boolean).slice(0,20);
+      const current = (now?.results || []).slice(0,9);
+      const found = await Promise.all(current.map(async m => {
+        try {
+          const v = await tmdb('/movie/' + m.id + '/videos');
+          const choices = (v?.results || []).filter(x => x.site === 'YouTube' && x.type === 'Trailer' && x.key).sort((a,b) => (b.published_at || '').localeCompare(a.published_at || ''));
+          return choices[0] ? {key:choices[0].key,title:m.title || m.original_title} : null;
+        } catch (_) { return null; }
+      }));
+      trailers = found.filter(Boolean).slice(0,12);
+      renderTrends();
+      if (trending[0]?.backdrop_path) { $('libHeroImage').src = IMG + 'w1280' + trending[0].backdrop_path; $('libHeroImage').hidden = false; }
+    } catch (e) { $('trendSections').innerHTML = '<div class="libmuted">Could not load TMDB sections. Check the TMDB key or connection.</div>'; }
+  }
+  async function loadMovies() {
+    try { const data = await getJson(MOVIES_URL); movies = (Array.isArray(data) ? data : data.movies || []).filter(m => m && safeUrl(m.url || m.embedUrl || m.streamUrl)); renderMovies(); }
+    catch (_) { $('libMovieGrid').innerHTML = '<div class="libempty">Could not load the Deeprowss movie catalogue.</div>'; }
+  }
+  const genres = ['All','Action','Adventure','Animation','Comedy','Crime','Documentary','Drama','Family','Fantasy','Horror','Mystery','Romance','Sci-Fi','Thriller','War'];
+  function renderFilters() {
+    const root = $('libFilters'); root.innerHTML = '';
+    ['All','Movies','Series',...genres.slice(1)].forEach(g => {
+      const selected = (g === 'All' && genre === 'All' && mediaType === 'all') || (g === 'Movies' && mediaType === 'movie') || (g === 'Series' && mediaType === 'tv') || (!['All','Movies','Series'].includes(g) && genre === g);
+      const b = document.createElement('button'); b.className = 'libchip' + (selected ? ' active' : ''); b.textContent = g;
+      b.onclick = () => { if (g === 'Movies' || g === 'Series') { const next = g === 'Movies' ? 'movie' : 'tv'; mediaType = mediaType === next ? 'all' : next; genre = 'All'; } else { genre = g; mediaType = 'all'; } renderMovies(); };
+      root.append(b);
+    });
+  }
+  async function searchTmdb(q) {
+    if (!apiKey || q.length < 2) return [];
+    try { const d = await tmdb('/search/multi', {query:q,include_adult:'false'}); return (d?.results || []).map(x => fromTmdb(x)).filter(Boolean).slice(0,30); } catch (_) { return []; }
+  }
+  async function discoverGenre(g) {
+    if (!apiKey || g === 'All') return [];
+    const pair = Object.entries(genreNames).find(([,name]) => name.toLowerCase() === g.toLowerCase());
+    if (!pair) return [];
+    const [a,b] = await Promise.all([
+      tmdb('/discover/movie',{with_genres:pair[0],sort_by:'popularity.desc',include_adult:'false'}),
+      tmdb('/discover/tv',{with_genres:pair[0],sort_by:'popularity.desc',include_adult:'false'})
+    ]);
+    return [...(a?.results || []).map(x => fromTmdb(x,'movie')),...(b?.results || []).map(x => fromTmdb(x,'tv'))].filter(Boolean);
+  }
+  async function renderMovies() {
+    renderFilters();
+    const q = query.toLowerCase();
+    let list = movies.filter(m => (mediaType === 'all' || isTv(m) === (mediaType === 'tv')) && (genre === 'All' || (m.genre || m.genres?.join(',') || '').toLowerCase().includes(genre.toLowerCase())) && (!q || (title(m) + ' ' + (m.genre || '')).toLowerCase().includes(q)));
+    if (q.length >= 2) {
+      const extra = await searchTmdb(query), seen = new Set(list.map(m => String(idOf(m) || m.url)));
+      extra.forEach(m => { const k = String(idOf(m) || m.url); if (!seen.has(k) && (mediaType === 'all' || isTv(m) === (mediaType === 'tv'))) { list.push(m); seen.add(k); } });
+    } else if (genre !== 'All') {
+      try { const extra = await discoverGenre(genre), seen = new Set(list.map(m => String(idOf(m) || m.url))); extra.forEach(m => { const k = String(idOf(m) || m.url); if (!seen.has(k)) { list.push(m); seen.add(k); } }); } catch (_) {}
+    }
+    $('libCatalogTitle').textContent = q ? 'Search Results' : genre !== 'All' ? genre : mediaType === 'tv' ? 'TV Series' : mediaType === 'movie' ? 'Movies' : 'All Movies & Series';
+    $('libCount').textContent = list.length + ' titles';
+    const grid = $('libMovieGrid'); grid.innerHTML = '';
+    if (!list.length) { grid.innerHTML = '<div class="libempty">No titles found.</div>'; return; }
+    list.forEach(m => grid.append(movieCard(m)));
+  }
+  function saveList(key, movie) {
+    let rows = []; try { rows = JSON.parse(localStorage.getItem(key) || '[]'); } catch (_) {}
+    const k = String(idOf(movie) || movie.url);
+    rows = rows.filter(x => String(x.tmdbId || x.url) !== k);
+    rows.unshift(movie); localStorage.setItem(key, JSON.stringify(rows.slice(0,150)));
+  }
+  function isSaved(movie) {
+    try { return JSON.parse(localStorage.getItem('deeprowss_watch_later') || '[]').some(x => String(x.tmdbId || x.url) === String(idOf(movie) || movie.url)); } catch (_) { return false; }
+  }
+  function playMovie(movie) {
+    const raw = movie.url || movie.embedUrl || movie.streamUrl || (idOf(movie) ? embedBase + '/' + (isTv(movie) ? 'tv' : 'movie') + '/' + idOf(movie) : '');
+    const url = safeUrl(raw); if (!url) { alert('This title has no playable URL.'); return; }
+    saveList('deeprowss_watch_history', movie); window.deeprowssPlay(url, 'embed', title(movie));
+  }
+  function openTrailer(key, name) { window.deeprowssPlay('https://www.youtube.com/embed/' + encodeURIComponent(key) + '?autoplay=1&rel=0', 'embed', name + ' · Trailer'); }
+  async function resolveTmdb(movie) {
+    let id = idOf(movie), tv = isTv(movie);
+    if (id) return {id,tv};
+    const raw = movie.url || '';
+    const match = raw.match(/\/(movie|tv)\/(tt\d+|\d+)/i) || raw.match(/[?&]imdb=(tt\d+)/i);
+    if (match) {
+      tv = match[1] ? match[1].toLowerCase() === 'tv' : tv; id = match[2] || match[1];
+      if (/^\d+$/.test(String(id))) return {id:Number(id),tv};
+      const found = await tmdb('/find/' + id,{external_source:'imdb_id'});
+      const row = (tv ? found.tv_results : found.movie_results)?.[0] || (found.movie_results || found.tv_results || [])[0];
+      if (row) return {id:row.id,tv:!!(found.tv_results || []).some(x => x.id === row.id)};
+    }
+    const name = title(movie).replace(/\s*\(\d{4}\)\s*$/,'');
+    const d = await tmdb(tv ? '/search/tv' : '/search/movie',{query:name});
+    const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g,'');
+    const wanted = norm(name);
+    const row = (d?.results || []).find(x => [x.title,x.name,x.original_title,x.original_name].some(n => norm(n) === wanted));
+    return row ? {id:row.id,tv} : null;
+  }
+  async function openDetails(movie) {
+    activeMovie = movie; $('movieDetails').classList.add('open');
+    $('detailTitle').textContent = title(movie); $('detailPoster').src = image(movie);
+    $('detailBackdrop').hidden = true; $('detailOverview').textContent = movie.overview || 'Loading movie overview…';
+    $('detailMeta').innerHTML = ''; $('detailCredits').textContent = 'Loading cast and crew…';
+    $('detailTrailerWrap').hidden = true; $('detailTrailer').src = 'about:blank'; $('detailSimilar').innerHTML = '';
+    $('detailSave').textContent = isSaved(movie) ? '✓ Saved' : '＋ Watch later';
+    const dl = movie.downloadUrl || movie.download_url || '';
+    $('detailDownload').hidden = !safeUrl(dl);
+    $('detailDownload').onclick = () => window.open(safeUrl(dl),'_blank','noopener');
+    $('detailPlay').onclick = () => { $('movieDetails').classList.remove('open'); playMovie(movie); };
+    $('detailSave').onclick = () => { saveList('deeprowss_watch_later',movie); $('detailSave').textContent = '✓ Saved'; };
+    try {
+      if (!apiKey) throw Error('TMDB is disabled');
+      const target = await resolveTmdb(movie); if (!target) throw Error('No TMDB match found');
+      const type = target.tv ? 'tv' : 'movie';
+      const d = await tmdb('/' + type + '/' + target.id,{append_to_response:'credits,videos,similar'});
+      if (activeMovie !== movie) return;
+      if (d.poster_path) $('detailPoster').src = IMG + 'w500' + d.poster_path;
+      if (d.backdrop_path) { $('detailBackdrop').src = IMG + 'w1280' + d.backdrop_path; $('detailBackdrop').hidden = false; }
+      const year = (d.release_date || d.first_air_date || '').slice(0,4);
+      const meta = [target.tv ? 'Series' : 'Movie',year,d.vote_average ? '★ ' + Number(d.vote_average).toFixed(1) + '/10' : '',d.runtime ? d.runtime + ' min' : (d.episode_run_time?.[0] ? d.episode_run_time[0] + ' min' : ''),(d.genres || []).map(g => g.name).join(' · ')];
+      $('detailMeta').innerHTML = meta.filter(Boolean).map(x => '<span>' + esc(x) + '</span>').join('');
+      $('detailOverview').textContent = d.overview || 'No overview available.';
+      const cast = (d.credits?.cast || []).slice(0,8).map(x => x.name + ' as ' + x.character).join(' · ');
+      const crew = (d.credits?.crew || []).filter(x => ['Director','Creator'].includes(x.job)).slice(0,3).map(x => x.name).join(', ');
+      $('detailCredits').textContent = [crew ? 'Director / Creator: ' + crew : '',cast ? 'Cast: ' + cast : ''].filter(Boolean).join('\n');
+      const vids = (d.videos?.results || []).filter(v => v.site === 'YouTube' && ['Trailer','Teaser'].includes(v.type) && v.key).sort((a,b) => (b.official === true) - (a.official === true) || (b.published_at || '').localeCompare(a.published_at || ''));
+      if (vids[0]) { $('detailTrailerWrap').hidden = false; $('detailTrailer').src = 'https://www.youtube.com/embed/' + encodeURIComponent(vids[0].key); }
+      (d.similar?.results || []).map(x => fromTmdb(x,type)).filter(Boolean).slice(0,12).forEach(x => $('detailSimilar').append(movieCard(x)));
+      if (!movie.tmdbId) { movie.tmdbId = target.id; movie.type = type; movie.url = movie.url || embedBase + '/' + type + '/' + target.id; movie.downloadUrl = movie.downloadUrl || downloadBase + '/' + type + '/' + target.id; }
+    } catch (e) {
+      $('detailCredits').textContent = 'Movie information unavailable: ' + e.message;
+      $('detailOverview').textContent = movie.overview || 'This title can still be played using its configured player.';
+    }
+  }
+  function showPage(page) {
+    document.querySelectorAll('[data-libpage]').forEach(b => b.classList.toggle('active',b.dataset.libpage === page));
+    document.querySelectorAll('.libpage').forEach(p => p.classList.toggle('active',p.id === (page === 'movies' ? 'libMovies' : 'libChannels')));
+    $('libSearch').placeholder = page === 'channels' ? 'Search live channels…' : 'Search movies, series or genres…';
+    if (page === 'cast') { window.deeprowssShowJoin(); return; }
+    window.deeprowssShowLibrary();
+  }
+  document.querySelectorAll('[data-libpage]').forEach(b => b.onclick = () => showPage(b.dataset.libpage));
+  $('backBrowse').onclick = () => showPage('movies');
+  $('detailClose').onclick = () => { $('movieDetails').classList.remove('open'); $('detailTrailer').src = 'about:blank'; };
+  $('movieDetails').addEventListener('click',e => { if (e.target === $('movieDetails')) $('detailClose').click(); });
+  $('libBrowse').onclick = () => $('libMovieGrid').scrollIntoView({behavior:'smooth'});
+  $('libSearch').oninput = e => {
+    query = e.target.value.trim(); clearTimeout(searchTimer);
+    if ($('libChannels').classList.contains('active')) { renderChannels(); return; }
+    searchTimer = setTimeout(renderMovies,350);
+  };
+  function channelCategoryName(c) { const x = String(c.category || 'General').replace(/[_-]/g,' '); return x.charAt(0).toUpperCase() + x.slice(1); }
+  async function loadChannels() {
+    let own = [], extra = [];
+    try { const d = await getJson(CHANNELS_URL); own = Array.isArray(d) ? d : d.channels || []; } catch (_) {}
+    try {
+      const d = await getJson(NEXUS_URL), rows = Array.isArray(d) ? d : d.channels || [];
+      extra = rows.filter(c => c && c.name && Array.isArray(c.streams)).map(c => {
+        const streams = c.streams.filter(s => s?.url && (!s.health || s.health.status === 'online')).sort((a,b) => (b.rank || 0) - (a.rank || 0));
+        const s = streams[0]; return s ? {name:c.name,url:s.url,category:(c.categories || [])[0] || 'other',logo:c.logo,country:c.country,quality:s.quality || c.best_quality} : null;
+      }).filter(Boolean);
+    } catch (_) {}
+    const map = new Map();
+    [...own,...extra].forEach(c => { if (!c?.name || !c?.url) return; const key = c.name.toLowerCase(); if (!map.has(key)) map.set(key,{...c,url:safeUrl(c.url)}); });
+    channels = [...map.values()].filter(c => c.url); renderChannels();
+  }
+  function renderChannels() {
+    const q = query.toLowerCase();
+    const list = channels.filter(c => (channelCategory === 'All' || channelCategoryName(c) === channelCategory) && (!q || (c.name + ' ' + channelCategoryName(c) + ' ' + (c.country || '')).toLowerCase().includes(q)));
+    $('channelCount').textContent = list.length + ' channels available';
+    const categories = ['All',...new Set(channels.map(channelCategoryName).sort())];
+    $('channelFilters').innerHTML = '';
+    categories.forEach(cat => { const b = document.createElement('button'); b.className = 'libchip' + (channelCategory === cat ? ' active' : ''); b.textContent = cat; b.onclick = () => { channelCategory = cat; renderChannels(); }; $('channelFilters').append(b); });
+    const groups = $('channelGroups'); groups.innerHTML = '';
+    const buckets = new Map();
+    list.forEach(c => { const cat = channelCategoryName(c); if (!buckets.has(cat)) buckets.set(cat,[]); buckets.get(cat).push(c); });
+    for (const [cat,items] of buckets) {
+      const section = document.createElement('section'); section.className = 'libchannel-row';
+      section.innerHTML = '<div class="libsection-head"><h3>' + esc(cat) + '</h3><span class="libmuted">' + items.length + ' channels</span></div><div class="libchannel-grid"></div>';
+      const grid = section.querySelector('.libchannel-grid');
+      items.forEach(c => {
+        const b = document.createElement('button'); b.className = 'libchannel';
+        const logo = safeUrl(c.logo || '');
+        b.innerHTML = (logo ? '<img loading="lazy" src="' + esc(logo) + '" alt="">' : '<span style="width:42px;height:42px;display:grid;place-items:center;background:#0a101a;border-radius:8px">TV</span>') + '<span><b>' + esc(c.name) + '</b><small>' + esc([c.country,c.quality].filter(Boolean).join(' · ') || cat) + '</small></span>';
+        b.onclick = () => {
+          const url = safeUrl(c.url), kind = /\.m3u8(\?|$)/i.test(url) ? 'hls' : /\.mpd(\?|$)/i.test(url) ? 'dash' : /\.(mp4|webm)(\?|$)/i.test(url) ? 'video' : 'embed';
+          window.deeprowssPlay(url,kind,c.name);
+        };
+        grid.append(b);
+      });
+      groups.append(section);
+    }
+    if (!list.length) groups.innerHTML = '<div class="libempty">No channels found.</div>';
+  }
+  $('refreshChannels').onclick = loadChannels;
+  $('libSearch').addEventListener('keydown',e => { if (e.key === 'Escape') { $('libSearch').value = ''; query = ''; renderMovies(); renderChannels(); } });
+  async function refreshAll() { await loadConfig(); await Promise.all([loadMovies(),loadChannels()]); await loadTrends(); renderMovies(); }
+  window.deeprowssShowLibrary();
+  refreshAll();
+  remoteConfigTimer = setInterval(async () => { await loadConfig(); await loadTrends(); }, 5 * 60 * 1000);
+  setInterval(loadChannels, 30 * 60 * 1000);
+  setInterval(loadMovies, 10 * 60 * 1000);
+})();
