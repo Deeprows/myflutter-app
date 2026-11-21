@@ -13,6 +13,7 @@ default, so you can never break the app by leaving something out.
               "altEmbedBase": "https://web.nxsha.app/embed",
               "downloadBase": "https://web.nxsha.app/dl",
               "replaceHosts": ["vsembed.ru", "vsembed.su"] },
+  "tmdb":   { "enabled": true, "apiKey": "", "language": "en-US" },
   "update": { "apkUrl": "", "version": "", "notes": "" },
   "chat":   { "enabled": true },
   "scores": { "enabled": true, "pollSeconds": 45,
@@ -37,6 +38,30 @@ Download from `<downloadBase>/movie|tv/<id>`. Write the base **without** a
 trailing slash and **without** the id. Rows in `movies.json` that still have a
 full link on a host listed in `replaceHosts` are moved to `embedBase`
 automatically; rows on other hosts are left alone.
+
+
+## Receiver Movies & Live TV
+
+The hosted receiver page and Windows Cinema load the same movie and channel
+library. The receiver refreshes this file every five minutes, reloads the
+movie catalogue about every ten minutes, refreshes TMDB recommendations every
+fifteen minutes, and refreshes live channels about every thirty minutes.
+
+| TMDB field | Meaning |
+|---|---|
+| `enabled` | `false` hides TMDB-powered recommendations and detail lookups on the receiver |
+| `apiKey` | Optional TMDB v3 key override. Leave empty to use the receiver's built-in key |
+| `language` | TMDB language tag, e.g. `en-US`, `fr-FR`, or `ar-SA` |
+
+TMDB powers Trending Now, Top 10, Trending Movies, Latest Trailers, full
+movie/series details, cast and crew, similar titles, and catalogue search.
+The receiver reads all Deeprowss live channels from `assets/data/tv.json`
+and merges in working channels from the IPTV Nexus online feed. Edit
+`tv.json` to update your own channel list; the receiver picks up the changes
+without rebuilding the Windows app.
+
+The Windows desktop app opens this same receiver URL, so the hosted page is
+the single source for the desktop and receiver movie / live TV interface.
 
 ## Update app
 Put the **direct** link to the new `.apk` in `update.apkUrl` (it must end up
