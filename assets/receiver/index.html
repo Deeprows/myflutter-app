@@ -394,7 +394,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
       tvEmbed={url,title:currentTitle,o,method:m,count:methods.length,name:meth.name};
       tvNative(url,meth.referer,meth.ua);
       frame.setAttribute('referrerpolicy',meth.policy);
-      frame.onload=()=>{reportState();for(let i=0;i<6;i++)setTimeout(()=>{if(!iframePlaying||frame!==tvFrame)return;iframeCommand('unmute');iframeCommand('play');},i*900);showControls();};
+      frame.onload=()=>{window.dispatchEvent(new Event('deeprowss-tv-embed-loaded'));reportState();for(let i=0;i<6;i++)setTimeout(()=>{if(!iframePlaying||frame!==tvFrame)return;iframeCommand('unmute');iframeCommand('play');},i*900);showControls();};
       frame.src=meth.src(url);frame.style.display='block';showControls();
       say('Live channel opened ('+meth.name+', '+(m+1)+'/'+methods.length+'). If the picture stays black press "Try another way".');report('TV embed loaded: '+currentTitle+' ['+meth.name+']');
       return {method:m,count:methods.length,name:meth.name};
