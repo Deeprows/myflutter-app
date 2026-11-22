@@ -104,6 +104,13 @@
   `;
   document.head.appendChild(css);
 
+  // Cloudflare receiver URL only: keep the decoder entry off the mobile home screen.
+  // The existing gate popup still appears when a locked visitor selects a movie or channel.
+  if (location.hostname === 'deeprowss.pages.dev' && window.matchMedia('(max-width: 600px)').matches) {
+    document.body.classList.add('receiver-pages-mobile');
+    css.textContent += '\n@media(max-width:600px){body.receiver-pages-mobile #landing .gate-box{display:none!important}}';
+  }
+
   /* ---------- home-screen box ---------- */
   const box = document.createElement('div');
   box.className = 'gate-box'; box.id = 'gateBox';
