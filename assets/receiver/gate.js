@@ -226,6 +226,11 @@
   }
   function bindModal() {
     $('gateX').onclick = closeModal;
+    const help = modal.querySelector('.gate-helpline a');
+    if (help) help.onclick = e => {
+      e.preventDefault();
+      openExternal(help.href);
+    };
     modal.querySelectorAll('[data-period]').forEach(b => b.addEventListener('click', () => { period = b.dataset.period; fillModal(); }));
     modal.querySelectorAll('[data-method]').forEach(b => b.addEventListener('click', () => { method = b.dataset.method; if (method !== 'card') autoRenew = false; fillModal(); }));
     const auto = $('gateAuto'); if (auto) auto.onchange = () => { autoRenew = auto.checked; };
@@ -234,6 +239,18 @@
     const codeInput = $('gateModalCode');
     codeInput.addEventListener('input', () => { const v = pretty(codeInput.value); if (v !== codeInput.value) codeInput.value = v; });
     $('gateModalUnlock').onclick = () => unlock(codeInput.value, $('gateStatus'));
+  }
+  function openExternal(url) {
+    try {
+      if (window.DeeprowssTv && typeof window.DeeprowssTv.openExternal === 'function') {
+        window.DeeprowssTv.openExternal(url); return true;
+      }
+      if (window.deeprowssDesktop && typeof window.deeprowssDesktop.openExternal === 'function') {
+        window.deeprowssDesktop.openExternal(url); return true;
+      }
+      const win = window.open(url, '_blank', 'noopener');
+      return !!win;
+    } catch (_) { return false; }
   }
   function fillModal() { modal.innerHTML = modalMarkup(); bindModal(); }
   function openModal() {
@@ -269,8 +286,19 @@
     }
     try { localStorage.setItem(PENDING_KEY, result.data.reference || ''); } catch (_) {}
     status.textContent = 'Complete the Paystack payment in the opened page, then return here and tap Verify payment.';
-    const win = window.open(result.data.authorization_url, '_blank', 'noopener');
-    if (!win) status.textContent += ' If the payment page did not open, allow pop-ups and tap Pay again.';
+    const checkoutUrl = result.data.authorization_url;
+    let opened = false;
+    try {
+      if (window.DeeprowssTv && typeof window.DeeprowssTv.openExternal === 'function') {
+        window.DeeprowssTv.openExternal(checkoutUrl); opened = true;
+      } else if (window.deeprowssDesktop && typeof window.deeprowssDesktop.openExternal === 'function') {
+        await window.deeprowssDesktop.openExternal(checkoutUrl); opened = true;
+      } else {
+        const win = window.open(checkoutUrl, '_blank', 'noopener');
+        opened = !!win;
+      }
+    } catch (_) {}
+    if (!opened) status.textContent += ' The checkout page could not open on this device. Use the WhatsApp helpline for manual activation.';
     startVerifyPolling();
   }
   function startVerifyPolling() {
