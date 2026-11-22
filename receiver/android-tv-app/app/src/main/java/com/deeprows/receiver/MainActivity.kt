@@ -1,6 +1,7 @@
 package com.deeprows.receiver
 
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
@@ -386,6 +387,21 @@ class MainActivity : Activity() {
             streamUa = (ua ?: "").trim().take(500)
             streamOn = on
             if (on) frameUrl = ""
+        }
+
+        /** Open the approved payment / WhatsApp links outside the TV WebView. */
+        @JavascriptInterface
+        fun openExternal(raw: String?) {
+            val safe = cleanHttp(raw)
+            if (safe.isEmpty()) return
+            val uri = try { Uri.parse(safe) } catch (_: Exception) { return }
+            val host = (uri.host ?: "").lowercase()
+            val allowed = host == "checkout.paystack.com" || host == "paystack.com" ||
+                host.endsWith(".paystack.com") || host == "wa.me" || host == "api.whatsapp.com"
+            if (!allowed) return
+            runOnUiThread {
+                try { startActivity(Intent(Intent.ACTION_VIEW, uri)) } catch (_: Exception) {}
+            }
         }
 
         @JavascriptInterface
