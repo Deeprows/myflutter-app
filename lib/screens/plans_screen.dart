@@ -318,168 +318,119 @@ class _PlansScreenState extends State<PlansScreen> {
 
   Widget _premiumCard(bool premium) {
     Widget feature(String t) => Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Row(children: [
-            Icon(Icons.check_circle_rounded, size: 18, color: Ui.green),
-            const SizedBox(width: 8),
-            Expanded(
-                child: Text(t,
-                    style: const TextStyle(
-                        fontSize: 13.5, fontWeight: FontWeight.w600))),
-          ]),
-        );
-
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(children: [
+        Icon(Icons.check_circle_rounded, size: 18, color: Ui.green),
+        const SizedBox(width: 8),
+        Expanded(child: Text(t, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600))),
+      ]),
+    );
     return _box(
       highlight: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 42, height: 42,
+            decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Ui.red, Ui.redSoft])),
+            child: const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(child: Text('Premium', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900))),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(color: Ui.red.withValues(alpha: .18), borderRadius: BorderRadius.circular(14)),
+            child: Text('NO ADS', style: TextStyle(color: Ui.redSoft, fontSize: 11, fontWeight: FontWeight.w900)),
+          ),
+        ]),
+        const SizedBox(height: 14),
+        _pricingPicker(),
+        const SizedBox(height: 10),
+        Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+          Expanded(child: Text(_plan.shownPrice, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900))),
+          Text(' / ' + _plan.label, style: TextStyle(color: Ui.muted, fontSize: 14)),
+        ]),
+        if (_plan.localDisplay != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text('Actual transfer: ' + _plan.ngnDisplay + ' · Local estimate: ' + _plan.localDisplay!,
+              style: TextStyle(color: Ui.muted, fontSize: 12.5, fontWeight: FontWeight.w600)),
+          ),
+        const SizedBox(height: 12),
+        feature('No pop-ups'),
+        feature('Stream without interruptions'),
+        feature('Unlimited movies, series and downloads'),
+        feature('Premium Smart Decoder access'),
+        feature('Manual payment with OPay or USDT (TRC20)'),
+        feature('Plans from 7 days up to 365 days'),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(color: Ui.bg.withValues(alpha: .55), borderRadius: BorderRadius.circular(14), border: Border.all(color: Ui.line)),
+          child: Row(children: [
+            const Expanded(child: Text('Paystack online payment', style: TextStyle(fontWeight: FontWeight.w800))),
             Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(colors: [Ui.red, Ui.redSoft]),
-              ),
-              child: const Icon(Icons.workspace_premium_rounded,
-                  color: Colors.white, size: 24),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text('Premium',
-                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Ui.red.withValues(alpha: .18),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text('NO ADS',
-                  style: TextStyle(
-                      color: Ui.redSoft,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900)),
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              decoration: BoxDecoration(color: Ui.red.withValues(alpha: .18), borderRadius: BorderRadius.circular(20)),
+              child: Text('COMING SOON', style: TextStyle(color: Ui.redSoft, fontSize: 10, fontWeight: FontWeight.w900)),
             ),
           ]),
-          const SizedBox(height: 12),
-          _periodToggle(),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(_shownPrice,
-                  style: const TextStyle(
-                      fontSize: 32, fontWeight: FontWeight.w900)),
-              Text('  / $_perLabel',
-                  style: TextStyle(color: Ui.muted, fontSize: 14)),
-            ],
-          ),
-          if (_shownLocal != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text('≈ $_shownLocal / $_perLabel in your currency',
-                  style: TextStyle(
-                      color: Ui.muted,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600)),
-            ),
-          const SizedBox(height: 12),
-          feature('No pop-ups'),
-          feature('Stream without interruptions'),
-          feature('Unlimited movies, series and downloads'),
-          feature('Premium Smart Decoder access'),
-          feature('Manual payment with OPay or USDT (TRC20)'),
-          feature('Monthly or yearly (save with yearly)'),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: Ui.bg.withValues(alpha: .55),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Ui.line),
-            ),
-            child: Row(
-              children: [
-                const Expanded(child: Text('Paystack online payment', style: TextStyle(fontWeight: FontWeight.w800))),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                  decoration: BoxDecoration(color: Ui.red.withValues(alpha: .18), borderRadius: BorderRadius.circular(20)),
-                  child: Text('COMING SOON', style: TextStyle(color: Ui.redSoft, fontSize: 10, fontWeight: FontWeight.w900)),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text('For now, pay manually using OPay or USDT below. Your Premium is activated after we confirm your receipt on WhatsApp.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.35)),
-        ],
-      ),
+        ),
+        const SizedBox(height: 8),
+        Text('For now, pay manually using OPay or USDT below. Your Premium is activated after we confirm your receipt on WhatsApp.',
+          textAlign: TextAlign.center, style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.35)),
+      ]),
     );
   }
 
-  Widget _periodToggle() {
-    Widget tab(String label, bool yearly, {String? badge}) {
-      final on = _yearly == yearly;
-      return Expanded(
-        child: GestureDetector(
-          onTap: _busy ? null : () => setState(() => _yearly = yearly),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: on ? Ui.red.withValues(alpha: .22) : Colors.transparent,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                  color: on ? Ui.red : Colors.transparent, width: 1.2),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(label,
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: on ? FontWeight.w900 : FontWeight.w700,
-                        color: on ? null : Ui.muted)),
-                if (badge != null) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Ui.green.withValues(alpha: .2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(badge,
-                        style: TextStyle(
-                            color: Ui.green,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w900)),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    final save = _plan.yearSavingPercent;
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: Ui.bg.withValues(alpha: .5),
-        borderRadius: BorderRadius.circular(21),
-        border: Border.all(color: Ui.line),
-      ),
-      child: Row(children: [
-        tab('Monthly', false),
-        tab('Yearly', true, badge: save > 0 ? 'SAVE $save%' : null),
+  Widget _pricingPicker() {
+    final currency = _priced?.currency ?? _currency;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(child: Text('Pricing country / currency', style: TextStyle(color: Ui.muted, fontSize: 12.5, fontWeight: FontWeight.w700))),
+        if (_loadingPlans) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
       ]),
-    );
+      const SizedBox(height: 6),
+      DropdownButtonFormField<String>(
+        key: ValueKey('premium-country-$_country'),
+        initialValue: _country,
+        isExpanded: true,
+        decoration: const InputDecoration(prefixIcon: Icon(Icons.public_rounded), isDense: true),
+        items: [
+          const DropdownMenuItem(value: 'auto', child: Text('Automatic (device region)')),
+          for (final item in kPricingCountries)
+            DropdownMenuItem(value: item[0], child: Text(item[1] + ' (' + currencyForCountry(item[0]) + ')')),
+        ],
+        onChanged: (value) {
+          if (value == null || value == _country) return;
+          setState(() => _country = value);
+          _loadPlans();
+        },
+      ),
+      const SizedBox(height: 10),
+      DropdownButtonFormField<int>(
+        key: ValueKey('premium-plan-' + currency + '-' + _plans.length.toString()),
+        initialValue: _plan.days,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Choose Premium duration', prefixIcon: Icon(Icons.timer_outlined), isDense: true),
+        items: [
+          for (final item in _plans)
+            DropdownMenuItem(
+              value: item.days,
+              child: Row(children: [
+                Expanded(child: Text(item.label, style: const TextStyle(fontWeight: FontWeight.w700))),
+                Text(item.shownPrice, style: const TextStyle(fontWeight: FontWeight.w900)),
+              ]),
+            ),
+        ],
+        onChanged: (value) { if (value != null) setState(() => _days = value); },
+      ),
+      if (_priced != null && _priced!.currency != _currency)
+        Padding(
+          padding: const EdgeInsets.only(top: 5),
+          child: Text('No live rate for ' + _currency + ' yet. Showing ' + _priced!.currency + '.',
+            style: TextStyle(color: Ui.muted, fontSize: 11.5)),
+        ),
+    ]);
   }
 
   Widget _freeCard() {
@@ -533,7 +484,7 @@ class _PlansScreenState extends State<PlansScreen> {
       'wallet_name': AppConfig.payCryptoAccountName,
       'wallet_address': AppConfig.payCryptoAddress,
     };
-    final local = _shownLocal == null ? '' : ' · approximately $_shownLocal in your currency';
+    final local = _plan.localDisplay == null ? '' : ' · approximately ' + _plan.localDisplay! + ' in your currency';
     Widget detail(String label, String value, {bool copy = false}) => Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -581,14 +532,14 @@ class _PlansScreenState extends State<PlansScreen> {
               detail('Provider', (bank['provider'] ?? bank['name'] ?? 'OPay').toString()),
               detail('Account name', (bank['account_name'] ?? 'Taiwo').toString()),
               detail('Account number', (bank['account_number'] ?? '').toString(), copy: true),
-              Text('Transfer $_shownPrice for the ' + (_yearly ? 'yearly' : 'monthly') + ' plan$local.',
+              Text('Transfer ' + _plan.ngnDisplay + ' for ' + _plan.label + local + '.',
                 style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.35)),
             ] else ...[
               detail('Wallet', (wallet['provider'] ?? wallet['name'] ?? 'USDT').toString()),
               detail('Network', (wallet['network'] ?? 'TRC20').toString()),
               detail('Wallet name', (wallet['wallet_name'] ?? wallet['account_name'] ?? 'Taiwo').toString()),
               detail('Address', (wallet['wallet_address'] ?? wallet['address'] ?? '').toString(), copy: true),
-              Text('Send the USDT equivalent of $_shownPrice for the ' + (_yearly ? 'yearly' : 'monthly') + ' plan$local. Use TRC20 only.',
+              Text('Send the USDT equivalent of ' + _plan.ngnDisplay + ' for ' + _plan.label + local + '. Use TRC20 only.',
                 style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.35)),
             ],
           ]),
