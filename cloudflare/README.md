@@ -95,3 +95,25 @@ Before using the QR flow:
 Pairing rooms expire after 15 minutes. Generate a fresh QR if one expires.
 Only signalling messages pass through the Worker; the media stream itself is
 peer-to-peer WebRTC. The existing local-IP/PIN method remains as a fallback.
+
+
+## Premium subscriptions and receiver access
+
+The same Worker also handles Deeprowss Premium. Keep the existing D1 binding
+named `DB`, and deploy the current `cloudflare/worker.js` after changes to
+subscription logic. The Worker creates `decoder_codes` and `movie_trials`
+automatically.
+
+The receiver Subscription button uses these routes:
+
+- `POST /receiver/sub/start` and `GET /receiver/sub/verify` for Paystack checkout
+- `GET /receiver/sub/status?device=<receiver-id>` to restore receiver access
+- `POST /receiver/decoder/issue` and `POST /receiver/decoder/validate`
+- `POST /receiver/movie-access` for the three-distinct-title trial
+
+The Deeprowss App uses signed account routes `/sub/movie-access` and
+`/sub/decoder/issue`. Decoder numbers are linked to the Premium expiry and
+stop working after it expires. A new number is issued after resubscribing
+following expiry. The receiver-only subscription flow is tied to that
+receiver's stored device ID; include this ID in manual WhatsApp payment
+messages so the admin can activate the correct EXE / Android TV.
