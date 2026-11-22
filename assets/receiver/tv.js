@@ -527,28 +527,31 @@
   if (location.hash === '#tv') enter();
   // Public bridge for the fixture popup. Reuses the same TV player and failover logic as channel playback.
   window.deeprowssPlayFixture = (fixture, useBackup) => {
-    const selectedUrl = useBackup ? fixture && fixture.altUrl : fixture && fixture.url;
-    if (!fixture || !/^https?:\/\//i.test(String(selectedUrl || ''))) return false;
+    if (!fixture) return false;
+    const streams = Array.isArray(fixture.streams) ? fixture.streams : [
+      { url: fixture.url, referer: fixture.referer, ua: fixture.ua },
+      ...Object.keys(fixture).filter(key => /^altUrl\d*$/i.test(key)).sort((a,b) => Number(a.replace(/\D/g,'')) - Number(b.replace(/\D/g,''))).map(key => ({
+        url: fixture[key], referer: fixture[key.replace(/^altUrl/i,'altReferer')], ua: fixture[key.replace(/^altUrl/i,'altUa')]
+      }))
+    ].filter(x => x && x.url);
+    const selectedUrl = streams[useBackup ? 1 : 0] && streams[useBackup ? 1 : 0].url;
+    if (!/^https?:\/\//i.test(String(selectedUrl || ''))) return false;
     build();
     document.body.classList.add('fixture-streaming');
     const item = {
       id: 'fixture:' + String(fixture.id || fixture.home || 'match'),
       name: String(fixture.home || 'Home') + ' vs ' + String(fixture.away || 'Away'),
-      url: String(fixture.url), altUrl: String(fixture.altUrl || ''), altUrl2: String(fixture.altUrl2 || ''), altUrl3: String(fixture.altUrl3 || ''),
+      url: String(fixture.url || selectedUrl), altUrl: String(fixture.altUrl || ''),
       referer: String(fixture.referer || ''), userAgent: String(fixture.ua || ''),
-      altReferer: String(fixture.altReferer || ''), altUserAgent: String(fixture.altUa || ''),
-      altReferer2: String(fixture.altReferer2 || ''), altUserAgent2: String(fixture.altUa2 || ''),
-      altReferer3: String(fixture.altReferer3 || ''), altUserAgent3: String(fixture.altUa3 || ''),
-      streams: Array.isArray(fixture.streams) ? fixture.streams : undefined,
-      category: 'sports', country: '', logo: ''
+      streams, category: 'sports', country: '', logo: ''
     };
     play(item, !!useBackup);
     return true;
   };
   window.deeprowssTvRemote = command => {
     if (!cur || $('playerPanel').style.display !== 'block') return false;
-    if (command === 'mainstream') { play(cur.c, false); return true; }
-    if (command === 'backupstream' && cur.c.altUrl) { play(cur.c, true); return true; }
+    if (command === 'mainstream') { play(cur.c, 0); return true; }
+    if (command === 'backupstream' && streamList(cur.c).length > 1) { play(cur.c, ((cur.streamIndex || 0) + 1) % streamList(cur.c).length); return true; }
     if (command === 'previous') { zap(-1); return true; }
     if (command === 'next') { zap(1); return true; }
     return false;
