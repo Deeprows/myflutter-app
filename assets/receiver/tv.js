@@ -385,6 +385,10 @@
     }, 15000);
   }
   async function play(c, choice) {
+    if (typeof window.deeprowssTvAccess === 'function') {
+      const allowed = await window.deeprowssTvAccess(c);
+      if (!allowed) return;
+    }
     const streamIndex = streamIndexOf(c, choice), s = streamOf(c, streamIndex), r = resolve(s.url);
     if (r.kind === 'invalid') { say('This channel link is not valid.'); return; }
     let kind = r.kind;
