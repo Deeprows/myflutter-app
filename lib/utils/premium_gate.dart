@@ -47,25 +47,28 @@ class PremiumGate {
 
   /// Download button: true only for Premium members (or right after they
   /// upgrade). Everyone else sees the upgrade sheet, with no ad option.
-  static Future<bool> allowDownload(BuildContext context) => _gate(
-        context,
-        isLocked: () => downloadLocked,
-        title: 'Downloads are for Premium members',
-        body: 'Upgrade to Premium to download movies and series.',
-        allowAd: false,
-      );
+  static Future<bool> allowDownload(BuildContext context, String movieKey) =>
+      allowMovies(context, movieKey, action: 'download');
 
-  /// Returns true when the person may go ahead (already Premium, or just
-  /// upgraded). Otherwise explains, opens the upgrade page and returns false
-  /// if they did not upgrade.
-  static Future<bool> allowMovies(BuildContext context) => _gate(
-        context,
-        isLocked: () => locked,
-        title: 'Movies are for Premium members',
-        body: 'You can browse every movie and series for free. Upgrade to '
-            'Premium to play and download them.',
-        allowAd: true,
-      );
+  /// One visitor may play / download three distinct titles. The Worker keeps
+  /// the count, so it is shared across the app and receiver when signed in.
+  static Future<bool> allowMovies(
+    BuildContext context,
+    String movieKey, {
+    String action = 'play',
+  }) async {
+    if (!AppConfig.moviesPremiumOnly || !SubscriptionService.instance.enabled ||
+        SubscriptionService.instance.isPremium) return true;
+    final access = await SubscriptionService.instance.consumeMovieAccess(movieKey, action: action);
+    if (access.allowed) return true;
+    return _gate(
+      context,
+      isLocked: () => !SubscriptionService.instance.isPremium,
+      title: 'Your 3 free movies are used',
+      body: 'Upgrade to Premium to keep watching, use the alternate player and download movies and series.',
+      allowAd: false,
+    );
+  }
 
   static Future<bool> _gate(
     BuildContext context, {
