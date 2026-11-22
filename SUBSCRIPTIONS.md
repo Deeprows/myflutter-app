@@ -5,8 +5,10 @@ On start the app shows a plans page.
 * **Free** - browse the movie catalogue and watch up to **3 distinct movie or
   series titles**. After the third title, Play, Alternate player and Download
   actions open the Premium upgrade gate. Smart Decoder is Premium-only.
-* **Premium** - ₦2,000 / month or ₦20,000 / year (or the current prices from
-  Worker configuration). People outside Nigeria see an estimate in their own
+* **Premium** - the existing duration plans: 7 days ₦700, 14 days ₦1,200,
+  30 days ₦2,000, 60 days ₦3,600, 90 days ₦5,000, 180 days ₦9,000 and
+  365 days ₦16,000 by default. Prices can be changed with the Worker's
+  AD_PLANS setting. People outside Nigeria see an estimate in their own
   currency; the actual OPay transfer remains in naira, while USDT payers send
   the equivalent amount on TRC20.
 * **Manual payment** - users choose OPay or USDT TRC20, send the amount, then
@@ -30,13 +32,11 @@ Movie actions -> /sub/movie-access or /receiver/movie-access -> D1 trial usage
 Paystack /sub/start and /sub/verify remain dormant until checkout is configured.
 ```
 
-The Paystack secret key lives only in the Worker. A payment is counted once
-per Paystack reference, and only when it is a successful NGN payment of at
-least the selected price. One paid month = 31 days, one paid year = 366 days;
-paying again stacks on the time that is left. The app and receiver show the same duration-based prices and local-currency
-estimate from /sub/config. Both show the same OPay and USDT TRC20 payment
-accounts from assets/data/payment_accounts.json, with receipt confirmation
-through WhatsApp. Paystack is labelled Coming Soon in both interfaces.
+The app and receiver load the same duration-based Premium prices and local
+currency estimates from /sub/ad-plans. Both show the same OPay and USDT TRC20
+payment accounts from assets/data/payment_accounts.json. After manual payment
+is confirmed, the admin grants the selected number of days; renewals stack on
+the remaining time. Paystack is labelled Coming Soon in both interfaces.
 
 ## One-time setup (phone browser is enough)
 
