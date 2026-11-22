@@ -4,8 +4,8 @@ import '../models/movie.dart';
 import '../screens/player_screen.dart';
 import 'premium_gate.dart';
 
-/// Opens the player page for a movie or series. Non-Premium people are sent to
-/// the upgrade page instead (see [PremiumGate]).
+/// Opens the player after checking the shared three-title free allowance.
+/// After that, non-Premium people are sent to the upgrade page.
 Future<void> openMoviePlayer(BuildContext context, Movie m) async {
   final key = '${m.isSeries ? 'tv' : 'movie'}:${m.tmdbId ?? m.title.toLowerCase()}';
   if (!await PremiumGate.allowMovies(context, key, action: 'play')) return;
