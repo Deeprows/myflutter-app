@@ -58,7 +58,7 @@ the remaining time. Paystack is labelled Coming Soon in both interfaces.
 After confirming a receipt, open
 `https://deeprowss-feed.deeprows.workers.dev/sub/admin?token=<ADMIN_TOKEN>`.
 Paste the ID from the customer's WhatsApp message, enter the selected plan's
-exact number of days, and press **Grant Premium days**. The admin confirmation
+exact number of days, and press **Grant Premium + generate Decoder number**. The admin confirmation
 shows the new 10-digit Decoder number. The customer can also tap **Check
 Premium activation** in the app or receiver after the grant.
 
