@@ -147,10 +147,22 @@ jobs:
     needs: [android-tv, windows, webos]
     runs-on: ubuntu-latest
     steps:
-      - name: Download installable build files only
+      - name: Download Android TV APK
         uses: actions/download-artifact@v4
         with:
-          pattern: deeprowss-*
+          name: deeprowss-android-tv
+          path: release-assets
+          merge-multiple: true
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: deeprowss-windows
+          path: release-assets
+          merge-multiple: true
+      - name: Download LG webOS IPK
+        uses: actions/download-artifact@v4
+        with:
+          name: deeprowss-lg-webos
           path: release-assets
           merge-multiple: true
       - name: Verify release contains individual installable files
