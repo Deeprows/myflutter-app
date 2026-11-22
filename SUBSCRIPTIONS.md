@@ -38,45 +38,29 @@ payment accounts from assets/data/payment_accounts.json. After manual payment
 is confirmed, the admin grants the selected number of days; renewals stack on
 the remaining time. Paystack is labelled Coming Soon in both interfaces.
 
-## One-time setup (phone browser is enough)
+## Manual payment setup (Paystack is not required)
 
-1. **Paystack** > Settings > API Keys & Webhooks
-   * copy the **Secret key** (start with `sk_test_...` to try it, then switch
-     to `sk_live_...`)
-   * set **Webhook URL** to `https://deeprowss-feed.deeprows.workers.dev/sub/webhook`
-2. *(optional, for monthly auto-renew)* Paystack > Products > **Plans** >
-   Create plan: ₦2,000, monthly. Copy its plan code (`PLN_...`).
-3. **Cloudflare** > Storage & databases > **D1** > Create database
-   `deeprowss_subs`. Then your Worker > Settings > Bindings > Add > **D1
-   database**, variable name exactly `DB`. (The tables create themselves.)
-4. Worker > Settings > Variables and Secrets:
-   * `PAYSTACK_SECRET_KEY` (secret) - from step 1
-   * `PAYSTACK_PLAN_CODE` (optional) - from step 2; without it the auto-renew
-     switch is hidden and each month is paid by hand
-   * `ADMIN_TOKEN` (secret) - any long random text, for the admin page
-   * `PRICE_NGN` (optional) - default 2000; change it here, no new APK needed
-   * `PRICE_NGN_YEAR` (optional) - yearly price, default 20000 (two months free)
-   * `PAYSTACK_PLAN_CODE_YEAR` (optional) - a yearly Paystack plan for card auto-renew
-5. Paste the new `cloudflare/worker.js` into the Worker and **Deploy**.
-6. Open `https://deeprowss-feed.deeprows.workers.dev/health`. It must show
-   `"subscriptions":true`.
-7. Pay once yourself with the test key (Paystack gives test cards), then
-   switch to the live key.
+1. In Cloudflare, open the existing `deeprowss-feed` Worker and make sure its
+   D1 database binding is named exactly `DB`. The subscription tables create
+   themselves when the Worker is first used.
+2. Add an `ADMIN_TOKEN` secret (or use the existing `STATS_TOKEN`) so only
+   you can grant or revoke Premium.
+3. Deploy the latest `cloudflare/worker.js` from this repository.
+4. Open `https://deeprowss-feed.deeprows.workers.dev/health`. The
+   `subscriptions` field should be `true`; `paystack` may remain `false`.
+5. Check the shared price list at
+   `https://deeprowss-feed.deeprows.workers.dev/sub/ad-plans?cur=EGP`
+   (change EGP to the currency you want to inspect).
+6. Keep OPay and USDT TRC20 details in
+   `assets/data/payment_accounts.json`. The app and receiver load that same
+   file, so edits there sync to the interfaces.
 
-## Manual (WhatsApp) payers
-
-1. Put your link in `lib/config.dart`: `whatsappUrl = 'https://wa.me/<number>'`
-   (country code, no `+`).
-2. When someone pays you, their WhatsApp message contains "My ID: ...",
-   the plan duration and payment method. Confirm the receipt before granting.
-3. Open https://deeprowss-feed.deeprows.workers.dev/sub/admin?token=<ADMIN_TOKEN>,
-   paste the ID, enter the exact plan duration in days shown in the WhatsApp
-   receipt (e.g. 30 or 365), and press **Grant**. The confirmation includes
-   the issued 10-digit Decoder
-   number. Enter **0** to switch someone off; this also expires their Decoder
-   number. The page also lists who is premium.
-4. The phone picks it up the next time the app opens or when the person
-   reopens the plans page.
+After confirming a receipt, open
+`https://deeprowss-feed.deeprows.workers.dev/sub/admin?token=<ADMIN_TOKEN>`.
+Paste the ID from the customer's WhatsApp message, enter the selected plan's
+exact number of days, and press **Grant Premium days**. The admin confirmation
+shows the new 10-digit Decoder number. The customer can also tap **Check
+Premium activation** in the app or receiver after the grant.
 
 ## Settings in the app (`lib/config.dart`)
 
