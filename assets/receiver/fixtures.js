@@ -308,6 +308,7 @@
   ctl.textContent = `
   .player .controls #mainStream.active,.player .controls #backupStream.active{background:var(--accent);color:var(--ink)}
   .player .controls #mainStream:disabled,.player .controls #backupStream:disabled{opacity:.35}
+  body.fixture-streaming .controls .tvonly{display:inline-flex!important}
   body.fixture-streaming .controls .tvonly.nomethod{display:none!important}
   body.fixture-streaming .player .controls #prevCh,body.fixture-streaming .player .controls #nextCh{display:none!important}
   ${phone}{
@@ -315,12 +316,12 @@
     ${mm('.player.controls-hidden .player-head')},${mm('.player.controls-hidden .controls')}{opacity:1;pointer-events:auto}
   }
   @media(max-width:700px){
-    ${mm('.player .controls')}{left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));transform:none;width:auto;max-width:none;display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:8px;border-radius:18px;overflow:visible;background:#0a1119f2}
+    ${mm('.player .controls')}{left:10px;right:10px;bottom:max(7px,env(safe-area-inset-bottom));transform:none;width:auto;max-width:none;display:flex;flex-wrap:wrap;justify-content:center;gap:4px;padding:5px;border-radius:13px;overflow:visible;background:#0a1119ed}
     ${mm('.player .controls::after')}{content:'';order:1;flex:0 0 100%;height:0;margin-top:-6px}
-    ${mm('.player .controls button')}{order:2;flex:1 1 40px;min-width:40px;height:44px;line-height:44px;padding:0 6px;border-radius:12px;background:#ffffff14;font-size:13px;text-align:center}
-    ${mm('.player .controls button svg')}{margin:0;width:20px;height:20px;vertical-align:-5px}
+    ${mm('.player .controls button')}{order:2;flex:1 1 34px;min-width:34px;height:35px;line-height:35px;padding:0 5px;border-radius:9px;background:#ffffff12;font-size:11px;text-align:center}
+    ${mm('.player .controls button svg')}{margin:0;width:16px;height:16px;vertical-align:-4px}
     ${mm('.player .controls button .lbl')}{display:none}
-    ${mm('.player .controls #mainStream')},${mm('.player .controls #backupStream')}{order:0;flex:1 1 38%;font-size:14px;font-weight:800;border:1px solid #ffffff26}
+    ${mm('.player .controls #mainStream')},${mm('.player .controls #backupStream')}{order:0;flex:1 1 38%;min-width:74px;height:34px;line-height:34px;font-size:12px;font-weight:800;border:1px solid #ffffff26}
     ${mm('.player .controls #mainStream .lbl')},${mm('.player .controls #backupStream .lbl')}{display:inline!important}
     ${mm('.player .controls #tvMethod')}{order:0;flex:0 0 52px}
     ${mm('.player-head')}{padding-top:max(8px,env(safe-area-inset-top));padding-bottom:8px;gap:8px}
@@ -422,9 +423,7 @@
     const m = espnFor(f, now), has = hasScore(m);
     const allowAdPlayback = location.hostname === 'deeprowss.pages.dev' && !!f.url;
     const hasAlt = /^https?:\/\//i.test(f.altUrl || '');
-    const watch = !allowAdPlayback ? '' : (hasAlt
-      ? '<div class="fx-stream-choices"><button type="button" class="fx-dl" id="fxWatchAds">▶ Stream 1</button><button type="button" class="fx-dl" id="fxWatchAds2">▶ Stream 2</button></div>'
-      : '<button type="button" class="fx-dl" id="fxWatchAds">▶ Continue watching with ads</button>');
+    const watch = !allowAdPlayback ? '' : '<button type="button" class="fx-dl" id="fxWatchAds">▶ Continue watching with ads</button>';
     modal.innerHTML = '<div class="fx-pop">' +
       '<button type="button" class="fx-x" id="fxX" aria-label="Close">✕</button>' +
       '<div class="fx-match">' + logo(f.homeLogo, f.home, m && m.homeLogo) +
@@ -443,7 +442,6 @@
     $('fxX').onclick = closeModal;
     const play = backup => () => { closeModal(); if (window.deeprowssPlayFixture) window.deeprowssPlayFixture(f, backup); else { const s = document.getElementById('playState'); if (s) s.textContent = 'Player is unavailable. Please refresh and try again.'; } };
     const watchAds = $('fxWatchAds'); if (watchAds) watchAds.onclick = play(false);
-    const watchAds2 = $('fxWatchAds2'); if (watchAds2) watchAds2.onclick = play(true);
     $('fxConnect').onclick = () => { closeModal(); if (window.deeprowssGo) window.deeprowssGo('connect'); };
     const dl = $('fxDl'); if (dl) dl.onclick = () => openDl(url);
     modal.classList.add('open'); modalOpen = true;
