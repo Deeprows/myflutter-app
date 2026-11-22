@@ -477,6 +477,21 @@
   }
   window.addEventListener('hashchange', () => { if (location.hash === '#tv') enter(); });
   if (location.hash === '#tv') enter();
+  // Public bridge for the fixture popup. Reuses the same TV player and failover logic as channel playback.
+  window.deeprowssPlayFixture = fixture => {
+    if (!fixture || !/^https?:\/\//i.test(String(fixture.url || ''))) return false;
+    build();
+    const item = {
+      id: 'fixture:' + String(fixture.id || fixture.home || 'match'),
+      name: String(fixture.home || 'Home') + ' vs ' + String(fixture.away || 'Away'),
+      url: String(fixture.url), altUrl: String(fixture.altUrl || ''),
+      referer: String(fixture.referer || ''), userAgent: String(fixture.ua || ''),
+      altReferer: String(fixture.altReferer || ''), altUserAgent: String(fixture.altUa || ''),
+      category: 'sports', country: '', logo: ''
+    };
+    play(item, false);
+    return true;
+  };
   window.deeprowssTvRemote = command => {
     if (!cur || $('playerPanel').style.display !== 'block') return false;
     if (command === 'mainstream') { play(cur.c, false); return true; }
