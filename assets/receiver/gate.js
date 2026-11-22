@@ -209,7 +209,7 @@
   function openModal() {
     fillModal();
     modal.classList.add('open'); modalOpen = true;
-    setTimeout(() => { const f = $('gateDl') || $('gateHave'); if (f) f.focus(); }, 40);
+    setTimeout(() => { const f = $('gateModalInput') || $('gateDl'); if (f) f.focus(); }, 40);
   }
   function closeModal() { modal.classList.remove('open'); modalOpen = false; }
   modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
