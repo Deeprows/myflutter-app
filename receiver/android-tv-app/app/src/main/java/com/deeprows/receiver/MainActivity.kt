@@ -135,7 +135,7 @@ class MainActivity : Activity() {
     // ------------------------------------------------------------------ website
 
     private fun openSite(host: String?, pin: String?) {
-        val base = Uri.parse(RECEIVER_PAGE).buildUpon().appendQueryParameter("tv", "1")
+        val base = Uri.parse(RECEIVER_PAGE).buildUpon().appendQueryParameter("layout", "desktop")
         if (!host.isNullOrBlank() && !pin.isNullOrBlank()) {
             base.appendQueryParameter("host", host).appendQueryParameter("pin", pin)
         }
