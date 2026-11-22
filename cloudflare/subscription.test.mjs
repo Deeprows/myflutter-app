@@ -193,6 +193,12 @@ assert.equal((await (await post("/receiver/decoder/validate", { code: decoderCod
 await call("/sub/admin", form({ token: "adm", install_id: ID3, days: "0" }));
 j = await (await post("/receiver/decoder/validate", { code: decoderCode })).json();
 assert.equal(j.valid, false);
+// Resubscribing after expiry/revocation issues a different Decoder number.
+await call("/sub/admin", form({ token: "adm", install_id: ID3, days: "30" }));
+j = await (await post("/sub/decoder/issue", { install_id: ID3 })).json();
+assert.equal(j.active, true);
+assert.notEqual(j.code, decoderCode);
+assert.equal((await (await post("/receiver/decoder/validate", { code: j.code })).json()).valid, true);
 
 // 13. A receiver-only visitor can subscribe and receive a fresh Decoder number.
 const RECEIVER_PAID = "fedcba0987654321fedcba0987654321";
