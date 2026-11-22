@@ -257,8 +257,9 @@ class _PlansScreenState extends State<PlansScreen> {
                 if (!premium) ...[
                   _freeCard(),
                   const SizedBox(height: 14),
-                  _manualCard(),
                 ] else _continueButton('Continue'),
+                const SizedBox(height: 14),
+                _manualCard(),
                 _idLine(),
               ],
             ),
@@ -514,7 +515,7 @@ class _PlansScreenState extends State<PlansScreen> {
     }
     return _box(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Manual Premium payment', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+        Text(_sub.isPremium ? 'Renew Premium manually' : 'Manual Premium payment', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
         const SizedBox(height: 5),
         Text('Choose OPay or USDT, transfer the amount, then send your receipt on WhatsApp. We confirm your payment and activate Premium.',
           style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.35)),
