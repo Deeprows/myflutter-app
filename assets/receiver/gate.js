@@ -161,7 +161,8 @@
     '.gate-pop p{margin:0 0 14px;font-size:14px;line-height:1.5;color:#aebdce}',
     '.gate-features{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:14px 0 18px;padding:0;list-style:none}',
     '.gate-features li{font-size:12px;color:#d7e1ec;padding:8px 9px;border:1px solid #293b50;border-radius:9px;background:#111d2a}',
-    '.gate-plans,.gate-methods{display:flex;gap:8px;margin:10px 0}',
+    '.gate-plans,.gate-methods{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap}',
+    '.gate-methods .gate-choice{flex:1 1 21%}',
     '.gate-choice{flex:1;min-width:0;padding:11px 8px;border:1px solid #33465c;border-radius:12px;background:#101c2a;color:#dbe7f3;text-align:center;font-weight:800;cursor:pointer}',
     '.gate-choice.active{border-color:#f3c76b;background:#f3c76b18;color:#ffe2a0}',
     '.gate-choice small{display:block;margin-top:4px;font-size:11px;color:#9aabc0;font-weight:600}',
@@ -237,6 +238,7 @@
         '<button type="button" class="gate-choice ' + (method === 'card' ? 'active' : '') + '" data-method="card">Card</button>' +
         '<button type="button" class="gate-choice ' + (method === 'ussd' ? 'active' : '') + '" data-method="ussd">USSD</button>' +
         '<button type="button" class="gate-choice ' + (method === 'bank_transfer' ? 'active' : '') + '" data-method="bank_transfer">Bank transfer</button>' +
+        '<button type="button" class="gate-choice ' + (method === 'any' ? 'active' : '') + '" data-method="any">All options</button>' +
       '</div>' +
       (method === 'card' && recurring ? '<label class="gate-toggle"><input id="gateAuto" type="checkbox" ' + (autoRenew ? 'checked' : '') + '> Renew automatically by card</label>' : '') +
       '<button type="button" class="gate-pay" id="gatePay" ' + (plan.available ? '' : 'disabled') + '>' + (plan.available ? 'Pay securely with Paystack · ' + escapeHtml(shownPrice(period === 'year')) : 'Online payment unavailable') + '</button>' +
