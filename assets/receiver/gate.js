@@ -301,7 +301,7 @@
         '</div>').join('') +
       '<p>' + (manualMethod === 'opay'
         ? 'Transfer ' + escapeHtml(amountLine()) + ' for the ' + escapeHtml(planLabel(selectedPlan())) + ' Premium plan.'
-        : 'Send the USDT equivalent of ' + escapeHtml(amountLine()) + ' for ' + escapeHtml(planLabel(selectedPlan())) + '. Use TRC20 only.') +
+        : 'Send approximately ' + escapeHtml(selectedPlan().usd_display || (pricingCurrency === 'USD' ? selectedPlan().local_display : '') || selectedPlan().ngn_display) + ' USDT for ' + escapeHtml(planLabel(selectedPlan())) + ' (naira price: ' + escapeHtml(amountLine()) + '). Use TRC20 only.') +
       '</p></div>';
   }
   function manualReceiptUrl() {
@@ -311,6 +311,7 @@
       'Plan: ' + planLabel(selectedPlan()) + ' (' + days + ' days)\n' +
       'Payment method: ' + method + '\n' +
       'Amount: ' + amountLine() + '\n' +
+      (manualMethod === 'crypto' ? 'USDT estimate: ' + (selectedPlan().usd_display || (pricingCurrency === 'USD' ? selectedPlan().local_display : '') || 'see amount above') + '\n' : '') +
       'Please confirm my payment and activate Premium. I will attach my receipt.\n' +
       'Receiver ID: ' + deviceId();
     const base = String(paymentConfig.receipt_whatsapp || 'https://wa.me/2347041629630');
@@ -372,7 +373,7 @@
       '<label class="gate-field" for="gatePlan">Choose Premium duration (' + escapeHtml(pricingCurrency) + ')</label>' +
       '<select id="gatePlan" class="gate-plan-select">' +
         plans.map(p => '<option value="' + Number(p.days) + '"' + (Number(p.days) === selectedDays ? ' selected' : '') + '>' +
-          escapeHtml(planLabel(p)) + ' · ' + escapeHtml(p.local_display ? p.local_display + ' · ' + p.ngn_display : p.ngn_display) + '</option>').join('') +
+          escapeHtml(planLabel(p)) + ' · ' + escapeHtml((p.local_display ? p.local_display + ' · ' : '') + p.ngn_display + (p.usd_display ? ' · ' + p.usd_display : '')) + '</option>').join('') +
       '</select>' +
       '<div class="gate-paystack"><span>Paystack online payment</span><b class="gate-coming">COMING SOON</b></div>' +
       '<div class="gate-field">Choose manual payment method</div>' +
