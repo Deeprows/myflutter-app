@@ -331,12 +331,9 @@
   `;
   document.head.appendChild(css);
 
-  /* ---------- match player controls: Switch 1 / Switch 2 + phone layout ----------
-     The controls live in index.html / kodi.css; their labels are set by tv.js. On phones kodi.css hides every
-     label, which left the two stream buttons blank. Here, for a match (body.fixture-streaming) or a live channel
-     (body[data-mode=tv]) on a phone: two rows, big tap targets, "Switch 1 / Switch 2" always labelled and
-     highlighted when active, channel zapping and 10-second seek hidden for a match, bar never auto-hides
-     (a tap on the video goes to the embedded player, so it could not be brought back). */
+  /* ---------- compact multi-stream switch + phone player controls ----------
+     tv.js updates one Switch 1/N button as the user cycles through every published stream. On phones the
+     control stays labelled and easy to tap; match-only channel zapping and seek controls remain hidden. */
   const mm = s => ['body.fixture-streaming', 'body[data-mode=tv]'].map(p => p + ' ' + s).join(',');
   const phone = '@media(max-width:700px),(max-height:480px) and (max-width:1000px)';
   const ctl = document.createElement('style');
@@ -357,8 +354,9 @@
     ${mm('.player .controls button')}{order:2;flex:1 1 34px;min-width:34px;height:35px;line-height:35px;padding:0 5px;border-radius:9px;background:#ffffff12;font-size:11px;text-align:center}
     ${mm('.player .controls button svg')}{margin:0;width:16px;height:16px;vertical-align:-4px}
     ${mm('.player .controls button .lbl')}{display:none}
-    ${mm('.player .controls #mainStream')},${mm('.player .controls #backupStream')}{order:0;flex:1 1 38%;min-width:74px;height:34px;line-height:34px;font-size:12px;font-weight:800;border:1px solid #ffffff26}
-    ${mm('.player .controls #mainStream .lbl')},${mm('.player .controls #backupStream .lbl')}{display:inline!important}
+    ${mm('.player .controls #mainStream')}{order:0;flex:0 0 auto;min-width:94px;height:34px;line-height:34px;padding:0 12px;font-size:12px;font-weight:800;border:1px solid #ffffff26}
+    ${mm('.player .controls #backupStream')}{display:none!important}
+    ${mm('.player .controls #mainStream .lbl')}{display:inline!important}
     ${mm('.player .controls #tvMethod')}{order:0;flex:0 0 52px}
     ${mm('.player-head')}{padding-top:max(8px,env(safe-area-inset-top));padding-bottom:8px;gap:8px}
     ${mm('.player-head .title')}{font-size:15px;line-height:1.25}
@@ -368,7 +366,7 @@
     ${mm('.player .controls::after')}{display:none}
     ${mm('.player .controls button')}{order:0;flex:none;height:38px;line-height:38px;padding:0 12px;border-radius:999px;font-size:13px}
     ${mm('.player .controls button .lbl')}{display:none}
-    ${mm('.player .controls #mainStream .lbl')},${mm('.player .controls #backupStream .lbl')}{display:inline!important}
+    ${mm('.player .controls #mainStream .lbl')}{display:inline!important}
     ${mm('.player .controls button svg')}{margin:0}
     ${mm('.player .controls #tvMethod')}{flex:none}
     ${mm('.player-head')}{padding-top:max(6px,env(safe-area-inset-top));padding-bottom:6px}
