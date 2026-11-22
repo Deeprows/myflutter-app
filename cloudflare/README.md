@@ -111,8 +111,9 @@ The receiver Subscription button uses these routes:
 - `POST /receiver/decoder/issue` and `POST /receiver/decoder/validate`
 - `POST /receiver/movie-access` for the three-distinct-title trial
 
-The Deeprowss App uses signed account routes `/sub/movie-access` and
-`/sub/decoder/issue`. Decoder numbers are linked to the Premium expiry and
+The Deeprowss App uses `/sub/movie-access` for signed-in accounts,
+`/sub/movie-access-guest` for guest install IDs, and `/sub/decoder/issue`
+for Premium Decoder numbers. Decoder numbers are linked to the Premium expiry and
 stop working after it expires. A new number is issued after resubscribing
 following expiry. The receiver-only subscription flow is tied to that
 receiver's stored device ID; include this ID in manual WhatsApp payment
