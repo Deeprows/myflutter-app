@@ -301,7 +301,10 @@
         '</div>').join('') +
       '<p>' + (manualMethod === 'opay'
         ? 'Transfer ' + escapeHtml(amountLine()) + ' for the ' + escapeHtml(planLabel(selectedPlan())) + ' Premium plan.'
-        : 'Send approximately ' + escapeHtml(selectedPlan().usd_display || (pricingCurrency === 'USD' ? selectedPlan().local_display : '') || selectedPlan().ngn_display) + ' USDT for ' + escapeHtml(planLabel(selectedPlan())) + ' (naira price: ' + escapeHtml(amountLine()) + '). Use TRC20 only.') +
+        : ((selectedPlan().usd_display || (pricingCurrency === 'USD' ? selectedPlan().local_display : ''))
+          ? 'Send approximately ' + escapeHtml(selectedPlan().usd_display || selectedPlan().local_display) + ' worth of USDT'
+          : 'Send the USDT equivalent of ' + escapeHtml(selectedPlan().ngn_display)) +
+          ' for ' + escapeHtml(planLabel(selectedPlan())) + ' (naira price: ' + escapeHtml(amountLine()) + '). Use TRC20 only.') +
       '</p></div>';
   }
   function manualReceiptUrl() {
