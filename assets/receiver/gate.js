@@ -459,8 +459,8 @@
       '<div class="gate-layout">' +
       '<section class="gate-left">' +
       '<h2>Deeprowss Premium</h2>' +
-      '<p>Unlock unlimited movies and series, Play, Alternate player, Downloads and Smart Decoder. Visitors can watch 3 movie titles free.</p>' +
-      '<ul class="gate-features"><li>✓ No pop-ups</li><li>✓ Stream without interruptions</li><li>✓ Unlimited movies and downloads</li><li>✓ Smart Decoder access</li></ul>' +
+      '<p>Enjoy unlimited live TV, movies, alternate players, downloads and Smart Decoder access. Visitors get 10 TV channels each day and 3 free movie titles.</p>' +
+      '<ul class="gate-features"><li>✓ Unlimited live TV channels</li><li>✓ No pop-ups</li><li>✓ Unlimited movies and downloads</li><li>✓ Smart Decoder access</li></ul>' +
       statusPanelMarkup(!!(unlocked && (!codeExpiry || Date.now() + serverOffset < codeExpiry)), codeExpiry, code) +
       '<div class="gate-code"><label class="gate-field" for="gateModalCode">Have a Premium activation token from Deeprowss on WhatsApp?</label><input id="gateModalCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Enter your 10-digit token"><button type="button" class="gate-verify" id="gateModalUnlock">Activate Premium</button></div>' +
       '</section><section class="gate-right">' +
