@@ -44,7 +44,7 @@ import java.net.URL
  */
 class MainActivity : Activity() {
     companion object {
-        private const val RECEIVER_PAGE = "https://deeprows.github.io/myflutter-app/receiver/"
+        private const val RECEIVER_PAGE = "https://deeprows.github.io/myflutter-app/receiver/#landing"
 
         // Ad / pop-under networks that embedded players must not reach (extended from receiver/adblock.json).
         @Volatile private var adHosts: Set<String> = setOf(
