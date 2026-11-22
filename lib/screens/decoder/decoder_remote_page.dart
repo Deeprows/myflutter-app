@@ -91,7 +91,7 @@ class _DecoderRemotePageState extends State<DecoderRemotePage> {
         final k = {
               'KEY_UP': 'Up', 'KEY_DOWN': 'Down', 'KEY_LEFT': 'Left', 'KEY_RIGHT': 'Right',
               'KEY_ENTER': 'Select', 'KEY_HOME': 'Home', 'KEY_BACK': 'Back', 'KEY_VOLUMEUP': 'VolumeUp',
-              'KEY_VOLUMEDOWN': 'VolumeDown', 'KEY_MUTE': 'VolumeMute', 'KEY_MENU': 'Info',
+              'KEY_VOLUMEDOWN': 'VolumeDown', 'KEY_MUTE': 'VolumeMute', 'KEY_MENU': 'Info', 'KEY_1': 'Lit_1', 'KEY_2': 'Lit_2',
               'KEY_POWER': 'Power', 'KEY_SOURCE': 'InputTuner',
             }[key] ??
             key;
@@ -100,13 +100,13 @@ class _DecoderRemotePageState extends State<DecoderRemotePage> {
         final k = {
               'KEY_UP': 'UP', 'KEY_DOWN': 'DOWN', 'KEY_LEFT': 'LEFT', 'KEY_RIGHT': 'RIGHT',
               'KEY_ENTER': 'ENTER', 'KEY_HOME': 'HOME', 'KEY_BACK': 'BACK', 'KEY_VOLUMEUP': 'VOLUMEUP',
-              'KEY_VOLUMEDOWN': 'VOLUMEDOWN', 'KEY_MUTE': 'MUTE', 'KEY_MENU': 'MENU',
+              'KEY_VOLUMEDOWN': 'VOLUMEDOWN', 'KEY_MUTE': 'MUTE', 'KEY_MENU': 'MENU', 'KEY_1': '1', 'KEY_2': '2',
               'KEY_POWER': 'POWER', 'KEY_SOURCE': 'INPUT',
             }[key] ??
             key;
         return TvRemoteService.lgWebOs(_host, k);
       case 'Samsung':
-        final k = {'KEY_VOLUMEUP': 'KEY_VOLUP', 'KEY_VOLUMEDOWN': 'KEY_VOLDOWN', 'KEY_BACK': 'KEY_RETURN'}[key] ?? key;
+        final k = {'KEY_VOLUMEUP': 'KEY_VOLUP', 'KEY_VOLUMEDOWN': 'KEY_VOLDOWN', 'KEY_BACK': 'KEY_RETURN', 'KEY_1': 'KEY_1', 'KEY_2': 'KEY_2'}[key] ?? key;
         return TvRemoteService.samsung(_host, k);
       default:
         return false;
@@ -164,6 +164,10 @@ class _DecoderRemotePageState extends State<DecoderRemotePage> {
                 _key(Icons.undo, 'Back', 'KEY_BACK'),
                 _key(Icons.volume_up, 'Vol +', 'KEY_VOLUMEUP'),
                 _key(Icons.volume_down, 'Vol −', 'KEY_VOLUMEDOWN'),
+              ]),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+                _key(Icons.looks_one, 'Main stream', 'KEY_1'),
+                _key(Icons.looks_two, 'Backup stream', 'KEY_2'),
               ]),
               Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
                 _key(Icons.volume_off, 'Mute', 'KEY_MUTE'),
