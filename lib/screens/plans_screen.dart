@@ -550,9 +550,10 @@ class _PlansScreenState extends State<PlansScreen> {
               detail('Wallet name', (wallet['wallet_name'] ?? wallet['account_name'] ?? 'Taiwo').toString()),
               detail('Address', (wallet['wallet_address'] ?? wallet['address'] ?? '').toString(), copy: true),
               Text(
-                'Send approximately ' +
-                    (_plan.usdDisplay ?? (_priced?.currency == 'USD' ? _plan.localDisplay : null) ?? _plan.ngnDisplay) +
-                    ' USDT for ' + _plan.label + ' (naira price: ' + _plan.ngnDisplay + local + '). Use TRC20 only.',
+                ((_plan.usdDisplay ?? (_priced?.currency == 'USD' ? _plan.localDisplay : null)) != null
+                    ? 'Send approximately ' + (_plan.usdDisplay ?? _plan.localDisplay!) + ' worth of USDT'
+                    : 'Send the USDT equivalent of ' + _plan.ngnDisplay) +
+                    ' for ' + _plan.label + ' (naira price: ' + _plan.ngnDisplay + local + '). Use TRC20 only.',
                 style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.35)),
             ],
           ]),
