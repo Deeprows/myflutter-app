@@ -16,7 +16,7 @@
       @media(max-width:600px){
         body.fixture-streaming .controls{gap:7px;padding:10px 8px max(12px,env(safe-area-inset-bottom))}
         body.fixture-streaming .controls #mainStream,body.fixture-streaming .controls #backupStream{min-width:46px;width:46px;flex:0 0 46px;height:38px;padding:6px 3px;border-radius:9px}
-        body.fixture-streaming .controls #mainStream .lbl,body.fixture-streaming .controls #backupStream .lbl{font-size:11px}
+        body.fixture-streaming .controls #mainStream .lbl,body.fixture-streaming .controls #backupStream .lbl{font-size:0}\n        body.fixture-streaming .controls #mainStream .lbl:after{content:'1';font-size:14px}\n        body.fixture-streaming .controls #backupStream .lbl:after{content:'2';font-size:14px}
         body.fixture-streaming .controls #prevCh,body.fixture-streaming .controls #nextCh{display:none!important}
         body.fixture-streaming .controls #mainStream{order:-4}
         body.fixture-streaming .controls #backupStream{order:-3}
