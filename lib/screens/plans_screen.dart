@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import '../utils/safe_error_message.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -44,7 +43,6 @@ class _PlansScreenState extends State<PlansScreen> {
 
   PlanInfo _plan = PlanInfo.fallback();
   String _installId = '';
-  bool _auto = false;
   bool _yearly = false;
   bool _busy = false;
   String? _error;
@@ -182,56 +180,6 @@ class _PlansScreenState extends State<PlansScreen> {
   String get _shownPrice => _yearly ? _plan.yearPriceDisplay : _plan.priceDisplay;
   String? get _shownLocal => _yearly ? _plan.yearLocalDisplay : _plan.localDisplay;
   String get _perLabel => _yearly ? 'year' : 'month';
-
-  Future<void> _restore() async {
-    final mail = TextEditingController(text: _email.text);
-    final ref = TextEditingController();
-    final go = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Ui.panel,
-        title: const Text('Restore Premium'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Paid on another phone? Enter the e-mail you paid with and the '
-              'payment reference from your Paystack receipt.',
-              style: TextStyle(color: Ui.muted, fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: mail,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'E-mail'),
-            ),
-            TextField(
-              controller: ref,
-              decoration: const InputDecoration(labelText: 'Payment reference'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Restore')),
-        ],
-      ),
-    );
-    final email = mail.text.trim();
-    final reference = ref.text.trim();
-    mail.dispose();
-    ref.dispose();
-    if (go != true || !mounted) return;
-    setState(() => _busy = true);
-    final err = await _sub.restore(email: email, reference: reference);
-    if (!mounted) return;
-    setState(() => _busy = false);
-    _toast(err ?? 'Premium restored. Thank you! 💗');
-  }
 
   // ------------------------------------------------------------------ UI
 
@@ -495,146 +443,6 @@ class _PlansScreenState extends State<PlansScreen> {
         tab('Monthly', false),
         tab('Yearly', true, badge: save > 0 ? 'SAVE $save%' : null),
       ]),
-    );
-  }
-
-  Widget _methodPicker() {
-    Widget chip(String id, IconData icon, String label) {
-      final on = _method == id;
-      return ChoiceChip(
-        avatar: Icon(icon, size: 16, color: on ? Ui.text : Ui.muted),
-        label: Text(label),
-        selected: on,
-        showCheckmark: false,
-        selectedColor: Ui.red,
-        backgroundColor: Ui.bg.withValues(alpha: .5),
-        side: BorderSide(color: on ? Ui.red : Ui.line),
-        labelStyle: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w800,
-            color: on ? Ui.text : null),
-        onSelected: _busy ? null : (_) => setState(() => _method = id),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Pay with',
-            style: TextStyle(
-                color: Ui.muted, fontSize: 12.5, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 6),
-        Wrap(spacing: 8, runSpacing: 6, children: [
-          chip('card', Icons.credit_card_rounded, 'Card'),
-          chip('ussd', Icons.dialpad_rounded, 'USSD'),
-          chip('bank_transfer', Icons.account_balance_rounded, 'Bank transfer'),
-          chip('any', Icons.apps_rounded, 'All options'),
-        ]),
-      ],
-    );
-  }
-
-  /// Shows that checkout is run by Paystack (card, bank transfer, USSD).
-  Widget _paystackStrip() => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: Ui.bg.withValues(alpha: .5),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Ui.line),
-        ),
-        child: Row(children: [
-          Icon(Icons.lock_rounded, size: 18, color: Ui.green),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text.rich(
-              TextSpan(children: [
-                TextSpan(
-                    text: 'Secured by ',
-                    style: TextStyle(color: Ui.muted, fontSize: 12.5)),
-                const TextSpan(
-                    text: 'Paystack',
-                    style: TextStyle(
-                        color: Color(0xFF00C3F7),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900)),
-              ]),
-            ),
-          ),
-          Text('Card • USSD • Transfer',
-              style: TextStyle(
-                  color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w700)),
-        ]),
-      );
-
-  /// Shown once a payment succeeds: the payment reference is the access
-  /// code (works with "Restore purchase" on any phone).
-  Future<void> _showAccessCode(String reference, String email) async {
-    if (reference.isEmpty) return;
-    final decoder = await _sub.issueDecoderNumber();
-    final decoderDisplay = decoder == null
-        ? null
-        : '${decoder.substring(0, 3)} ${decoder.substring(3, 6)} ${decoder.substring(6)}';
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Ui.panel,
-        title: const Text('Payment received 🎉'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Your Premium Decoder number for the Windows EXE and Android TV:',
-                style: TextStyle(color: Ui.muted, fontSize: 13)),
-            const SizedBox(height: 8),
-            if (decoderDisplay != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Ui.bg,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Ui.line),
-                ),
-                child: SelectableText(decoderDisplay,
-                    style: const TextStyle(fontSize: 19, letterSpacing: 2, fontWeight: FontWeight.w900)),
-              )
-            else
-              Text('Premium is active. Open Smart Decoder to refresh your Decoder number.',
-                  style: TextStyle(color: Ui.muted, fontSize: 13)),
-            const SizedBox(height: 14),
-            Text('Payment reference (keep this for Restore Premium):',
-                style: TextStyle(color: Ui.muted, fontSize: 12)),
-            const SizedBox(height: 6),
-            SelectableText(reference,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 10),
-            Text('Your receipt was sent to $email. The Decoder number expires with Premium; resubscribe after expiry to receive a new one.',
-                style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.3)),
-          ],
-        ),
-        actions: [
-          if (decoder != null)
-            TextButton(
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: decoder));
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (mounted) _toast('Decoder number copied');
-              },
-              child: const Text('Copy Decoder number'),
-            ),
-          TextButton(
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: reference));
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) _toast('Payment reference copied');
-            },
-            child: const Text('Copy reference'),
-          ),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
-        ],
-      ),
     );
   }
 
