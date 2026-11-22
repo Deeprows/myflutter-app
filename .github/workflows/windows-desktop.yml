@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   windows:
-    name: Build Windows installer and portable app
+    name: Build Windows installer only
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +42,7 @@ jobs:
       - name: Install dependencies
         working-directory: desktop/windows
         run: npm install
-      - name: Build and publish installer and portable EXE
+      - name: Build and publish Windows installer
         working-directory: desktop/windows
         run: npm run dist
         env:
@@ -51,6 +51,6 @@ jobs:
         with:
           name: deeprowss-cinema-windows
           path: |
-            desktop/windows/dist/*.exe
+            desktop/windows/dist/*Installer*.exe
           if-no-files-found: error
           retention-days: 30
