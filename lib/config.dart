@@ -131,9 +131,9 @@ class AppConfig {
   ///
   /// On start the app shows a plans page: FREE (everything, with the
   /// "We Need Your Support" page every [adIntervalMinutes] minutes of use) or
-  /// PREMIUM (no ads, paid through Paystack). Needs [feedBase] (the Worker
-  /// does the payment work, see SUBSCRIPTIONS.md). false = no plans page and
-  /// no ads for anyone.
+  /// PREMIUM (no ads, manual OPay / USDT payment confirmed on WhatsApp).
+  /// Paystack is shown as Coming Soon until its setup is complete. The Worker
+  /// handles activation and Decoder numbers; see SUBSCRIPTIONS.md.
   static const plansEnabled = true;
 
   /// false = the Premium / plans screens, the "Go Premium" menu item and the
