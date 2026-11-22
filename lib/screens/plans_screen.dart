@@ -121,6 +121,10 @@ class _PlansScreenState extends State<PlansScreen> {
   }
 
   Future<void> _sendManualReceipt() async {
+    if (_sub.accountId == null) {
+      _toast('Please sign in with Google in the Deeprowss App before making a Premium payment.');
+      return;
+    }
     final account = _manualMethod == 'opay' ? _paymentAccount('opay') : _paymentAccount('wallet');
     final network = (account?['network'] ?? 'TRC20').toString();
     final method = _manualMethod == 'opay' ? 'OPay transfer' : 'USDT ' + network + ' wallet';
@@ -139,6 +143,10 @@ class _PlansScreenState extends State<PlansScreen> {
   }
 
   Future<void> _checkManualActivation() async {
+    if (_sub.accountId == null) {
+      _toast('Please sign in with Google to check your Premium account.');
+      return;
+    }
     if (_busy) return;
     setState(() { _busy = true; _error = null; });
     await _sub.refresh(force: true);
@@ -565,7 +573,9 @@ class _PlansScreenState extends State<PlansScreen> {
           style: FilledButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 13)),
         )),
         const SizedBox(height: 6),
-        Text('Attach your payment screenshot in WhatsApp. Your app ID is included automatically: $_installId',
+        Text(_sub.accountId == null
+            ? 'Sign in with Google before paying so your Premium can be linked to your account.'
+            : 'Attach your payment screenshot in WhatsApp. Your account ID is included automatically: $_installId',
           style: TextStyle(color: Ui.dim, fontSize: 11.5, height: 1.3)),
         const SizedBox(height: 10),
         SizedBox(width: double.infinity, child: OutlinedButton.icon(
