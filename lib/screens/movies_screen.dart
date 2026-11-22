@@ -825,7 +825,8 @@ class _MovieSheet extends StatelessWidget {
 
   Future<void> _download(BuildContext context) async {
     // Premium only (no ad unlock): everyone else is sent to upgrade.
-    if (!await PremiumGate.allowDownload(context)) return;
+    final key = '${movie.isSeries ? 'tv' : 'movie'}:${movie.tmdbId ?? movie.title.toLowerCase()}';
+    if (!await PremiumGate.allowDownload(context, key)) return;
     if (!context.mounted) return;
     // Deeprows Browser offer; otherwise the phone's own browser.
     await PartnerBrowser.instance.download(context, movie.downloadUrl);
