@@ -26,8 +26,12 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: desktop/windows/package.json
-      - name: Validate receiver library JavaScript
-        run: node --check assets/receiver/library.js
+      - name: Validate receiver and desktop JavaScript
+        run: |
+          node --check assets/receiver/gate.js
+          node --check assets/receiver/library.js
+          node --check desktop/windows/main.cjs
+          node --check desktop/windows/preload.cjs
       - name: Bundle receiver and remote data for offline fallback
         shell: pwsh
         run: |
