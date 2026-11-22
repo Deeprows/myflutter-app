@@ -580,7 +580,7 @@ class _PlansScreenState extends State<PlansScreen> {
         ),
         const SizedBox(height: 12),
         SizedBox(width: double.infinity, child: FilledButton.icon(
-          onPressed: _busy ? null : _sendManualReceipt,
+          onPressed: (_busy || _sub.accountId == null) ? null : _sendManualReceipt,
           icon: const Icon(Icons.chat_rounded),
           label: const Text('Send payment receipt on WhatsApp'),
           style: FilledButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 13)),
@@ -592,7 +592,7 @@ class _PlansScreenState extends State<PlansScreen> {
           style: TextStyle(color: Ui.dim, fontSize: 11.5, height: 1.3)),
         const SizedBox(height: 10),
         SizedBox(width: double.infinity, child: OutlinedButton.icon(
-          onPressed: _busy ? null : _checkManualActivation,
+          onPressed: (_busy || _sub.accountId == null) ? null : _checkManualActivation,
           icon: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.verified_user_outlined),
           label: const Text("I've paid — check Premium activation"),
         )),
