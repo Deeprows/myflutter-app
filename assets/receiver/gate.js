@@ -158,7 +158,7 @@
   // the pages.dev phone homepage, while channel taps still open the gate.
   if (location.hostname === 'deeprowss.pages.dev' && window.matchMedia('(max-width: 600px)').matches) {
     document.body.classList.add('receiver-pages-mobile');
-    css.textContent += '\\n@media(max-width:600px){body.receiver-pages-mobile #landing .gate-box{display:none!important}}';
+    css.textContent += '\n@media(max-width:600px){body.receiver-pages-mobile #landing .gate-box{display:none!important}}';
   }
 
   const box = document.createElement('div');
