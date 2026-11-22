@@ -2019,6 +2019,7 @@ async function stopPhone(env, id) {
       "DELETE FROM tokens WHERE bound_to = ? AND redeemed_by IS NULL"
     ).bind(id),
     env.DB.prepare("DELETE FROM token_requests WHERE install_id = ?").bind(id),
+    env.DB.prepare("UPDATE decoder_codes SET expires_at = 0 WHERE owner_id = ?").bind(id),
   ]);
 }
 
