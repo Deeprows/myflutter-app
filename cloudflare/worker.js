@@ -2307,9 +2307,9 @@ ${r.days ? `<div style="font-size:13.5px;margin-bottom:6px;color:#22e07a">Wants 
     : "";
 
   return html(
-    `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>${quotaReqs.length ? `(${quotaReqs.length}) ` : ""}Ad-free admin</title>
+    `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>${quotaReqs.length ? `(${quotaReqs.length}) ` : ""}Deeprowss Premium admin</title>
 <body style="font-family:sans-serif;background:#080b10;color:#e8edf5;padding:18px;max-width:560px;margin:auto">
-<h2>Ad-free admin</h2>
+<h2>Deeprowss Premium &amp; token admin</h2>
 ${note ? `<p style="background:#16202e;padding:10px;border-radius:8px">${esc(note)}</p>` : ""}
 ${madeHtml}
 <h3>AI quota requests${quotaReqs.length ? ` (${quotaReqs.length})` : ""}</h3>
@@ -2326,16 +2326,16 @@ ${reqHtml}
 <p><input name="note" placeholder="Note (optional, e.g. a name)" style="${box}"></p>
 <p><button style="${box};font-size:16px">Make token(s)</button></p>
 </form>
-<h3>Grant days to an ID</h3>
+<h3>Grant Premium to an ID</h3>
 <form method="post">
 <input type="hidden" name="token" value="${tk}"><input type="hidden" name="action" value="grant">
 <p><input name="install_id" placeholder="Paste the person's ID" style="${box}"></p>
-<p><input name="days" type="number" value="30" style="${box}"></p>
-<p><button style="${box};font-size:16px">Grant days (0 = switch off)</button></p>
+<p><input name="days" type="number" value="31" style="${box}"></p>
+<p><button style="${box};font-size:16px">Grant Premium days (0 = revoke)</button></p>
 </form>
 <h3>Unused tokens</h3>
 <table style="width:100%;font-size:12.5px"><tr><th align=left>Token<th align=left>Days<th align=left>For<th align=left>Note<th></tr>${unusedHtml}</table>
-<h3>Ad-free phones (active)</h3>
+<h3>Premium subscriptions (active)</h3>
 <table style="width:100%;font-size:12.5px"><tr><th align=left>ID<th align=left>Source<th align=left>Until<th align=left>E-mail<th></tr>${list}</table>
 <h3>Used tokens</h3>
 <table style="width:100%;font-size:12.5px"><tr><th align=left>Token<th align=left>Days<th align=left>Used<th align=left>Note<th></tr>${usedHtml}</table>
