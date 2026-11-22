@@ -9,11 +9,10 @@
   const ROOT = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/';
   const CODE_KEY = 'deeprowss_decoder_code_v2';
   const DEVICE_KEY = 'deeprowss_receiver_device_v1';
-  const PENDING_KEY = 'deeprowss_receiver_payment_ref';
   const FREE_LIMIT = 3;
   let cfg = {}, unlocked = false, code = '', codeExpiry = 0, serverOffset = 0, modalOpen = false;
   let plan = { available: true, recurring: false, recurring_year: false, price_display: '₦2,000', year_price_display: '₦20,000' };
-  let period = 'month', method = 'card', autoRenew = false, verifyTimer = null, verifyCount = 0;
+  let period = 'month', manualMethod = 'opay', paymentConfig = {};
 
   function signalPremiumState() {
     const active = !!(unlocked && (!codeExpiry || Date.now() + serverOffset < codeExpiry));
@@ -69,7 +68,28 @@
     const base = year ? plan.year_price_display : plan.price_display;
     return local || base || (year ? '₦20,000' : '₦2,000');
   }
+  async function loadPaymentAccounts() {
+    for (const u of [ROOT + 'payment_accounts.json', 'data/payment_accounts.json', '../data/payment_accounts.json']) {
+      try {
+        const r = await fetch(u + '?_payment=' + Date.now(), { cache: 'no-store' });
+        if (r.ok) {
+          const j = await r.json();
+          if (j && Array.isArray(j.accounts)) { paymentConfig = j; return; }
+        }
+      } catch (_) {}
+    }
+  }
+  function paymentAccount(id) {
+    const rows = Array.isArray(paymentConfig.accounts) ? paymentConfig.accounts : [];
+    return rows.find(x => x && x.id === id && x.enabled !== false) || {};
+  }
+  function amountLine(year) {
+    const base = year ? plan.year_price_display : plan.price_display;
+    const local = year ? plan.year_local_display : plan.local_display;
+    return local ? base + ' (about ' + local + ')' : base;
+  }
   async function loadConfig() {
+    await loadPaymentAccounts();
     for (const u of [ROOT + 'app_config.json', 'data/app_config.json', '../data/app_config.json']) {
       try {
         const r = await fetch(u + '?_gate=' + Date.now(), { cache: 'no-store' });
@@ -175,6 +195,15 @@
     '.gate-status{min-height:18px;margin:8px 0;font-size:12px;line-height:1.4;color:#a9bad0}',
     '.gate-helpline{margin-top:16px;padding:12px;border:1px solid #24563b;border-radius:12px;background:#0c2118;color:#d6f6e3;font-size:13px}',
     '.gate-helpline a{display:inline-block;margin-left:5px;color:#86efac;font-weight:900;text-decoration:underline}',
+    '.gate-paystack{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0;padding:10px 12px;border:1px solid #34485e;border-radius:12px;background:#101c2a;color:#dceaf6;font-size:12px;font-weight:800}',
+    '.gate-coming{padding:5px 9px;border-radius:20px;background:#f59e0b22;color:#fbbf24;font-size:10px;font-weight:900;white-space:nowrap}',
+    '.gate-account{margin:12px 0;padding:13px;border:1px solid #34485e;border-radius:13px;background:#080f18}',
+    '.gate-account-row{display:flex;align-items:flex-start;gap:8px;margin:7px 0;font-size:12px}',
+    '.gate-account-row span{width:92px;flex:none;color:#9aabc0}',
+    '.gate-account-row b{min-width:0;flex:1;overflow-wrap:anywhere;color:#fff}',
+    '.gate-copy{padding:4px 8px;border:1px solid #52667d;border-radius:8px;background:#172536;color:#e6f0fa;font-size:11px;font-weight:800}',
+    '.gate-action{width:100%;min-height:44px;margin-top:9px;border:0;border-radius:12px;background:#25d366;color:#fff;font-weight:900}',
+    '.gate-check{width:100%;min-height:42px;margin-top:8px;border:1px solid #52667d;border-radius:12px;background:#172536;color:#e6f0fa;font-weight:800}'
     '.gate-code{margin-top:12px;padding:12px;border:1px solid #2c3d52;border-radius:12px;background:#080f18}',
     '.gate-code button{margin-top:8px}',
     '@media(max-width:860px){.home-top{flex-wrap:wrap;gap:12px}.gate-box{order:3;flex:1 1 100%;margin:0}.gate-features{grid-template-columns:1fr 1fr}}'
