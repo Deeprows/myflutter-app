@@ -13,10 +13,14 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
+import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceResponse
 import java.io.ByteArrayInputStream
+import java.io.FilterInputStream
+import java.io.InputStream
+import java.net.HttpURLConnection
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -51,6 +55,55 @@ class MainActivity : Activity() {
         )
         @Volatile private var adBlockOn = true
 
+        // ---- live TV headers (set by the receiver page through the DeeprowssTv bridge) ----
+        // Web channel (iframe): the embed page is downloaded here with the Referer / User-Agent the phone app uses.
+        @Volatile private var frameUrl = ""
+        @Volatile private var frameReferer = ""
+        @Volatile private var frameUa = ""
+        // Direct stream (m3u8 / mpd / mp4): requests get the channel's Referer + User-Agent and a CORS allowance.
+        @Volatile private var streamOn = false
+        @Volatile private var streamReferer = ""
+        @Volatile private var streamUa = ""
+
+        private val SERVICE_HOSTS = Regex(
+            "(^|\\.)(themoviedb\\.org|tmdb\\.org|githubusercontent\\.com|github\\.io|workers\\.dev|youtube\\.com|ytimg\\.com|googleapis\\.com|gstatic\\.com|jsdelivr\\.net|cdnjs\\.cloudflare\\.com)$",
+            RegexOption.IGNORE_CASE
+        )
+        private val DROP_RESPONSE_HEADERS = setOf(
+            "content-encoding", "content-length", "transfer-encoding", "connection", "keep-alive", "x-frame-options",
+            "content-security-policy", "content-security-policy-report-only", "set-cookie", "strict-transport-security",
+            "access-control-allow-origin", "access-control-allow-headers", "access-control-allow-methods",
+            "access-control-expose-headers", "access-control-allow-credentials"
+        )
+
+        private fun cleanHttp(value: String?): String {
+            val v = (value ?: "").trim().take(2000)
+            return if (v.startsWith("http://", true) || v.startsWith("https://", true)) v else ""
+        }
+
+        private fun sameDoc(a: String, b: String) =
+            a.substringBefore('#').trimEnd('/').equals(b.substringBefore('#').trimEnd('/'), ignoreCase = true)
+
+        private fun originOf(url: String): String? = try {
+            val u = Uri.parse(url)
+            if (u.scheme.isNullOrEmpty() || u.host.isNullOrEmpty()) null
+            else u.scheme + "://" + u.host + (if (u.port > 0) ":" + u.port else "")
+        } catch (_: Exception) {
+            null
+        }
+
+        private fun guessType(url: String): String {
+            val path = (Uri.parse(url).path ?: "").lowercase()
+            return when {
+                path.endsWith(".m3u8") -> "application/vnd.apple.mpegurl"
+                path.endsWith(".ts") -> "video/mp2t"
+                path.endsWith(".mpd") -> "application/dash+xml"
+                path.endsWith(".mp4") || path.endsWith(".m4s") -> "video/mp4"
+                path.endsWith(".key") -> "application/octet-stream"
+                else -> "application/octet-stream"
+            }
+        }
+
         private fun isAdHost(host: String?): Boolean {
             var h = host?.lowercase() ?: return false
             while (adBlockOn && h.isNotEmpty()) {
@@ -62,6 +115,8 @@ class MainActivity : Activity() {
             return false
         }
     }
+
+    private val receiverHost: String = Uri.parse(RECEIVER_PAGE).host.orEmpty()
 
     private var webView: WebView? = null
     private var customView: View? = null
@@ -100,6 +155,7 @@ class MainActivity : Activity() {
             settings.setSupportMultipleWindows(false)
             // Phone remote: lets the receiver page tap the embedded player (cross-origin frames cannot be clicked from JS).
             addJavascriptInterface(TapBridge(), "DeeprowssTv")
+            try { CookieManager.getInstance().setAcceptThirdPartyCookies(this, true) } catch (_: Exception) {}
             webChromeClient = object : WebChromeClient() {
                 // Lets embedded players (iframes) go full screen.
                 override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
@@ -132,6 +188,10 @@ class MainActivity : Activity() {
                 override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                     if (isAdHost(request?.url?.host)) {
                         return WebResourceResponse("text/plain", "utf-8", 204, "No Content", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+                    }
+                    if (request != null) {
+                        val proxied = try { proxyTvRequest(request) } catch (_: Exception) { null }
+                        if (proxied != null) return proxied
                     }
                     return super.shouldInterceptRequest(view, request)
                 }
@@ -171,9 +231,157 @@ class MainActivity : Activity() {
         }.start()
     }
 
+    // ------------------------------------------------------------------ live TV: same headers as the phone app
+
+    /**
+     * Web channels and direct streams only play on some hosts when the request carries the Referer / User-Agent
+     * the Deeprowss phone app sends (the app loads them as if they came from its own site). A WebView cannot set
+     * those headers on an iframe, so the request is made here and the answer handed back to the page.
+     * Returns null (normal loading) for everything else or on any error.
+     */
+    private fun proxyTvRequest(req: WebResourceRequest): WebResourceResponse? {
+        if (req.isForMainFrame) return null
+        val scheme = req.url.scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") return null
+        val host = req.url.host?.lowercase() ?: return null
+        if (host == receiverHost || SERVICE_HOSTS.containsMatchIn(host)) return null
+        val method = (req.method ?: "GET").uppercase()
+        val target = req.url.toString()
+
+        val fUrl = frameUrl
+        val isFrame = fUrl.isNotEmpty() && method == "GET" && sameDoc(target, fUrl)
+        val isStream = !isFrame && streamOn && (method == "GET" || method == "HEAD" || method == "OPTIONS") &&
+            req.requestHeaders["Accept"]?.startsWith("image/") != true
+        if (!isFrame && !isStream) return null
+
+        val pageOrigin = "https://$receiverHost"
+        if (isStream && method == "OPTIONS") {
+            return WebResourceResponse("text/plain", "utf-8", 204, "No Content", corsHeaders(), ByteArrayInputStream(ByteArray(0)))
+        }
+        return fetchWithHeaders(
+            req, target,
+            if (isFrame) frameReferer else streamReferer,
+            if (isFrame) frameUa else streamUa,
+            isFrame, pageOrigin
+        )
+    }
+
+    private fun corsHeaders(): MutableMap<String, String> = hashMapOf(
+        "Access-Control-Allow-Origin" to "*",
+        "Access-Control-Allow-Headers" to "*",
+        "Access-Control-Allow-Methods" to "GET, HEAD, OPTIONS",
+        "Access-Control-Expose-Headers" to "*"
+    )
+
+    private fun fetchWithHeaders(
+        req: WebResourceRequest, firstUrl: String, referer: String, ua: String, forFrame: Boolean, pageOrigin: String
+    ): WebResourceResponse? {
+        var current = firstUrl
+        var hops = 0
+        val cookies = CookieManager.getInstance()
+        while (true) {
+            val c = URL(current).openConnection() as HttpURLConnection
+            try {
+                c.instanceFollowRedirects = false
+                c.connectTimeout = 10000
+                c.readTimeout = 25000
+                c.requestMethod = (req.method ?: "GET").uppercase()
+                for ((k, v) in req.requestHeaders) {
+                    val lk = k.lowercase()
+                    if (lk == "referer" || lk == "origin" || lk == "host" || lk == "accept-encoding" ||
+                        lk == "cookie" || lk == "connection" || lk == "user-agent"
+                    ) continue
+                    c.setRequestProperty(k, v)
+                }
+                val agent = if (ua.isNotEmpty()) ua else req.requestHeaders["User-Agent"] ?: ""
+                if (agent.isNotEmpty()) c.setRequestProperty("User-Agent", agent)
+                if (referer.isNotEmpty()) {
+                    c.setRequestProperty("Referer", referer)
+                    if (!forFrame) originOf(referer)?.let { c.setRequestProperty("Origin", it) }
+                }
+                cookies.getCookie(current)?.let { if (it.isNotEmpty()) c.setRequestProperty("Cookie", it) }
+
+                val code = c.responseCode
+                for ((k, vals) in c.headerFields) {
+                    if (k != null && k.equals("set-cookie", ignoreCase = true)) vals.forEach { cookies.setCookie(current, it) }
+                }
+                if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
+                    val loc = c.getHeaderField("Location")
+                    c.disconnect()
+                    if (loc.isNullOrEmpty() || ++hops > 6) return null
+                    current = URL(URL(current), loc).toString()
+                    if (forFrame) {
+                        // The page must end up on the real address so its own files load from there; keep adding the headers.
+                        frameUrl = current
+                        val safe = current.replace("\\", "\\\\").replace("\"", "%22").replace("<", "%3C")
+                        val html = "<!doctype html><meta charset=utf-8><body style=\"background:#000\"><script>location.replace(\"$safe\")</script>"
+                        return WebResourceResponse("text/html", "utf-8", 200, "OK", hashMapOf<String, String>(), ByteArrayInputStream(html.toByteArray()))
+                    }
+                    continue
+                }
+                if (code < 100 || code > 599 || code in 300..399) { c.disconnect(); return null }
+
+                val body: InputStream = (if (code >= 400) c.errorStream else c.inputStream) ?: run { c.disconnect(); return null }
+                val out: MutableMap<String, String> = if (forFrame) hashMapOf<String, String>() else corsHeaders()
+                for ((k, vals) in c.headerFields) {
+                    if (k == null || vals.isNullOrEmpty()) continue
+                    val lk = k.lowercase()
+                    if (lk == "content-security-policy" && forFrame) {
+                        // Allow the embed to open inside the receiver page (the same relaxation the Windows app makes).
+                        val v = vals.joinToString("; ").replace(Regex("frame-ancestors[^;]*;?", RegexOption.IGNORE_CASE), "").trim()
+                        if (v.isNotEmpty()) out[k] = v
+                        continue
+                    }
+                    if (lk in DROP_RESPONSE_HEADERS) continue
+                    out[k] = vals.joinToString(", ")
+                }
+                val ct = c.contentType ?: guessType(current)
+                val mime = ct.substringBefore(';').trim().ifEmpty { "application/octet-stream" }
+                val charset = Regex("charset=([^;\\s]+)", RegexOption.IGNORE_CASE).find(ct)?.groupValues?.get(1)?.trim('"')
+                val encoding = charset ?: if (mime.startsWith("text/") || mime.contains("json") || mime.contains("xml") || mime.contains("mpegurl")) "utf-8" else null
+                val reason = (c.responseMessage ?: "").ifBlank { if (code < 400) "OK" else "Error" }
+                return WebResourceResponse(mime, encoding, code, reason, out, DisconnectingStream(body, c))
+            } catch (e: Exception) {
+                try { c.disconnect() } catch (_: Exception) {}
+                return null
+            }
+        }
+    }
+
+    private class DisconnectingStream(source: InputStream, private val conn: HttpURLConnection) : FilterInputStream(source) {
+        override fun close() {
+            try {
+                super.close()
+            } finally {
+                try { conn.disconnect() } catch (_: Exception) {}
+            }
+        }
+    }
+
     /** JavaScript bridge used by the receiver page: tap at a fraction of the screen. */
     inner class TapBridge {
         private var last = 0L
+
+        /** A web channel is about to open in the TV iframe: its page is fetched with this Referer / User-Agent. Empty = normal loading. */
+        @JavascriptInterface
+        fun setFrame(url: String?, referer: String?, ua: String?) {
+            val r = cleanHttp(referer)
+            val agent = (ua ?: "").trim().take(500)
+            val u = cleanHttp(url)
+            frameUrl = if (u.isNotEmpty() && (r.isNotEmpty() || agent.isNotEmpty())) u else ""
+            frameReferer = r
+            frameUa = agent
+            streamOn = false
+        }
+
+        /** A direct stream (m3u8 / mpd / mp4) is playing: its requests get the channel's Referer / User-Agent and CORS is allowed. */
+        @JavascriptInterface
+        fun setStream(referer: String?, ua: String?, on: Boolean) {
+            streamReferer = cleanHttp(referer)
+            streamUa = (ua ?: "").trim().take(500)
+            streamOn = on
+            if (on) frameUrl = ""
+        }
 
         @JavascriptInterface
         fun tap(fx: Double, fy: Double) {
