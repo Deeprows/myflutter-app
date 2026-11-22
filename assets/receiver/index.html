@@ -659,4 +659,56 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
   }, true);
 })();
 </script>
+
+<script>
+/* Mobile-only pull-to-refresh for the Cloudflare receiver home screen. */
+(function () {
+  if (location.hostname !== 'deeprowss.pages.dev' || !window.matchMedia('(max-width: 820px)').matches) return;
+  var home = document.getElementById('landing');
+  if (!home) return;
+  var indicator = document.createElement('div');
+  indicator.className = 'receiver-pull-indicator';
+  indicator.innerHTML = '<span class="pull-icon">↓</span><span class="pull-label">Pull down to refresh</span>';
+  home.appendChild(indicator);
+  var startY = 0, distance = 0, tracking = false, refreshing = false;
+  function reset() {
+    tracking = false; distance = 0;
+    indicator.classList.remove('visible');
+    indicator.querySelector('.pull-icon').textContent = '↓';
+    indicator.querySelector('.pull-label').textContent = 'Pull down to refresh';
+  }
+  home.addEventListener('touchstart', function (e) {
+    if (document.body.dataset.view !== 'landing' || e.touches.length !== 1 || refreshing) return;
+    startY = e.touches[0].clientY;
+    tracking = startY < 140;
+    distance = 0;
+  }, { passive: true });
+  home.addEventListener('touchmove', function (e) {
+    if (!tracking || e.touches.length !== 1 || document.body.dataset.view !== 'landing') return;
+    distance = Math.max(0, e.touches[0].clientY - startY);
+    if (distance > 12) {
+      if (e.cancelable) e.preventDefault();
+      indicator.classList.add('visible');
+      if (distance >= 78) {
+        indicator.querySelector('.pull-icon').textContent = '↻';
+        indicator.querySelector('.pull-label').textContent = 'Release to refresh';
+      } else {
+        indicator.querySelector('.pull-icon').textContent = '↓';
+        indicator.querySelector('.pull-label').textContent = 'Pull down to refresh';
+      }
+    }
+  }, { passive: false });
+  home.addEventListener('touchend', function () {
+    if (!tracking) return;
+    if (distance >= 78 && document.body.dataset.view === 'landing') {
+      refreshing = true;
+      indicator.querySelector('.pull-icon').textContent = '↻';
+      indicator.querySelector('.pull-label').textContent = 'Refreshing…';
+      indicator.classList.add('visible');
+      window.setTimeout(function () { location.reload(); }, 180);
+    } else reset();
+  }, { passive: true });
+  home.addEventListener('touchcancel', reset, { passive: true });
+})();
+</script>
 </body></html>
