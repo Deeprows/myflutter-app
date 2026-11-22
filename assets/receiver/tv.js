@@ -5,6 +5,12 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
+  if (!document.getElementById('fixture-stream-control-style')) {
+    const style = document.createElement('style');
+    style.id = 'fixture-stream-control-style';
+    style.textContent = 'body.fixture-streaming .controls .tvonly{display:inline-flex!important}';
+    document.head.appendChild(style);
+  }
   const ROOT = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/';
   const OWN_URL = ROOT + 'tv.json';
   const CONFIG_URL = ROOT + 'app_config.json';
@@ -457,6 +463,12 @@
       io = new IntersectionObserver(es => { if (es.some(x => x.isIntersecting)) more(); }, { root: $('tvMain'), rootMargin: '600px' });
       io.observe($('tvSentinel'));
     } else $('tvMain').addEventListener('scroll', () => { const m = $('tvMain'); if (m.scrollTop + m.clientHeight > m.scrollHeight - 800) more(); });
+    $('mainStream').querySelector('.lbl').textContent = 'Switch 1';
+    $('mainStream').title = 'Switch to stream 1';
+    $('mainStream').setAttribute('aria-label', 'Switch to stream 1');
+    $('backupStream').querySelector('.lbl').textContent = 'Switch 2';
+    $('backupStream').title = 'Switch to stream 2';
+    $('backupStream').setAttribute('aria-label', 'Switch to stream 2');
     $('mainStream').onclick = () => { if (cur) play(cur.c, false); };
     $('backupStream').onclick = () => { if (cur && cur.c.altUrl) play(cur.c, true); };
     if ($('tvMethod')) $('tvMethod').onclick = nextWay;
@@ -482,6 +494,7 @@
     const selectedUrl = useBackup ? fixture && fixture.altUrl : fixture && fixture.url;
     if (!fixture || !/^https?:\/\//i.test(String(selectedUrl || ''))) return false;
     build();
+    document.body.classList.add('fixture-streaming');
     const item = {
       id: 'fixture:' + String(fixture.id || fixture.home || 'match'),
       name: String(fixture.home || 'Home') + ' vs ' + String(fixture.away || 'Away'),
