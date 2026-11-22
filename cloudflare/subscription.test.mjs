@@ -144,6 +144,7 @@ const ID3 = "00112233445566778899aabbccddeeff";
 const form = (o) => ({ method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(o).toString() });
 let page = await (await call("/sub/admin", form({ token: "adm", install_id: ID3, days: "30" }))).text();
 assert.match(page, /Premium until/);
+assert.match(page, /Decoder number: \\d{10}/);
 assert.equal((await (await call(`/sub/status?install=${ID3}`)).json()).active, true);
 await call("/sub/admin", form({ token: "adm", install_id: ID3, days: "0" }));
 assert.equal((await (await call(`/sub/status?install=${ID3}`)).json()).active, false);
@@ -176,6 +177,7 @@ for (const [id, prefix] of [[TRIAL_APP, "/sub/movie-access"], [TRIAL_GUEST, "/su
 // 12. Decoder numbers are server-issued and stop working when Premium expires.
 const decoderGrant = await (await call("/sub/admin", form({ token: "adm", install_id: ID3, days: "30" }))).text();
 assert.match(decoderGrant, /Premium until/);
+assert.match(decoderGrant, /Decoder number: \\d{10}/);
 j = await (await post("/sub/decoder/issue", { install_id: ID3 })).json();
 assert.equal(j.active, true);
 assert.match(j.code, /^\d{10}$/);
