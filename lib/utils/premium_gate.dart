@@ -36,7 +36,7 @@ class PremiumGate {
         context,
         isLocked: () => decoderLocked,
         title: 'Deeprowss Decoder is for Premium members',
-        body: 'Upgrade to Premium to use casting, Kodi, screen mirroring, the receiver and TV remote features.',
+        body: 'Upgrade to Premium to get your Decoder number and unlock the Smart Decoder, Windows EXE and Android TV receiver.',
         allowAd: false,
       );
 
