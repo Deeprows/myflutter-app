@@ -36,8 +36,9 @@
       id: s('id') || s('home') + '-' + s('away') + '-' + s('kickoff'),
       home: s('home'), away: s('away'), homeLogo: s('homeLogo'), awayLogo: s('awayLogo'),
       league: s('league') || 'Football', scoreLeague: s('scoreLeague'), start: t, mins: parseInt(s('duration'), 10) || DEFAULT_MIN,
-      url: s('url'), altUrl: s('altUrl'), referer: s('referer'), ua: s('ua'),
-      altReferer: s('altReferer'), altUa: s('altUa')
+      url: s('url'), altUrl: s('altUrl'), altUrl2: s('altUrl2'), altUrl3: s('altUrl3'), referer: s('referer'), ua: s('ua'),
+      altReferer: s('altReferer'), altUa: s('altUa'), altReferer2: s('altReferer2'), altUa2: s('altUa2'), altReferer3: s('altReferer3'), altUa3: s('altUa3'),
+      streams: [s('url'), s('altUrl'), s('altUrl2'), s('altUrl3')].filter(Boolean).map((url, i) => ({ url, referer: s(i === 0 ? 'referer' : 'altReferer' + (i > 1 ? i : '')), ua: s(i === 0 ? 'ua' : 'altUa' + (i > 1 ? i : '')) }))
     };
   }
   async function load() {
