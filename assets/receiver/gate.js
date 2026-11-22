@@ -22,7 +22,36 @@
   ];
   let selectedDays = 30, selectedCurrency = 'auto', pricingCurrency = 'NGN', manualMethod = 'opay', paymentConfig = {};
 
+  function updateSubscriptionButton() {
+    const button = $('subscriptionOpen');
+    if (!button) return;
+    const now = Date.now() + serverOffset;
+    const active = !!(unlocked && (!codeExpiry || now < codeExpiry));
+    const daysLeft = codeExpiry ? Math.ceil((codeExpiry - now) / 86400000) : Infinity;
+    const expiring = active && daysLeft <= 3;
+    button.classList.toggle('is-subscribed', active && !expiring);
+    button.classList.toggle('is-expiring', expiring);
+    const label = button.querySelector('b');
+    if (label) label.textContent = expiring ? 'Expiring' : (active ? 'Subscribed' : 'Subscribe');
+    button.setAttribute('aria-label', expiring ? 'Premium subscription expiring soon' : (active ? 'Premium subscription active' : 'Subscribe to Deeprowss Premium'));
+  }
+  function placeSubscriptionButton() {
+    const button = $('subscriptionOpen');
+    const landing = $('landing');
+    const footer = landing && landing.querySelector('.receiver-footer');
+    if (!button || !landing || !footer) return;
+    const desktopLayout = window.deeprowssDesktop || document.documentElement.classList.contains('tv') || window.matchMedia('(min-width:821px)').matches;
+    if (desktopLayout) {
+      if (button.parentNode !== footer) footer.insertBefore(button, footer.firstElementChild || null);
+    } else if (button.parentNode !== landing) {
+      landing.insertBefore(button, footer);
+    }
+  }
+  placeSubscriptionButton();
+  window.addEventListener('resize', placeSubscriptionButton);
+
   function signalPremiumState() {
+    updateSubscriptionButton();
     const active = !!(unlocked && (!codeExpiry || Date.now() + serverOffset < codeExpiry));
     window.deeprowssPremiumActive = active;
     window.dispatchEvent(new CustomEvent('deeprowss-premium-change', { detail: { active } }));
@@ -266,6 +295,7 @@
   let shown = '';
   function render() {
     placeBox();
+    updateSubscriptionButton();
     const state = !gateOn() ? 'off' : (unlocked ? 'ok' : 'lock');
     if (state === shown) return;
     shown = state;
@@ -274,7 +304,7 @@
     document.body.classList.toggle('gate-locked', !unlocked);
     if (unlocked) {
       const exp = codeExpiry ? new Date(codeExpiry).toLocaleDateString() : 'Active';
-      box.innerHTML = '<div class="gate-card"><div class="gate-ok"><span class="gate-key">✓</span><div class="gate-grow"><b>Premium active</b><small>' + escapeHtml(pretty(code)) + ' · until ' + escapeHtml(exp) + '</small></div><button type="button" class="gate-link" id="gateManage">Subscription</button></div></div>';
+      box.innerHTML = '<div class="gate-card"><div class="gate-ok"><span class="gate-key">✓</span><div class="gate-grow"><b>Subscribed</b><small>' + escapeHtml(pretty(code)) + ' · until ' + escapeHtml(exp) + '</small></div><button type="button" class="gate-link" id="gateManage">Subscribed</button></div></div>';
       $('gateManage').onclick = () => openModal();
       return;
     }
@@ -424,11 +454,14 @@
   function modalMarkup() {
     return '<div class="gate-pop">' +
       '<button type="button" class="gate-x" id="gateX" aria-label="Close">✕</button>' +
+      '<div class="gate-layout">' +
+      '<section class="gate-left">' +
       '<h2>Deeprowss Premium</h2>' +
       '<p>Unlock unlimited movies and series, Play, Alternate player, Downloads and Smart Decoder. Visitors can watch 3 movie titles free.</p>' +
       '<ul class="gate-features"><li>✓ No pop-ups</li><li>✓ Stream without interruptions</li><li>✓ Unlimited movies and downloads</li><li>✓ Smart Decoder access</li></ul>' +
       statusPanelMarkup(!!(unlocked && (!codeExpiry || Date.now() + serverOffset < codeExpiry)), codeExpiry, code) +
-      '<div class="gate-code"><label class="gate-field" for="gateModalCode">Already have a Decoder number from the Deeprowss App?</label><input id="gateModalCode" type="text" inputmode="numeric" maxlength="12" placeholder="000 000 0000"><button type="button" class="gate-verify" id="gateModalUnlock">Unlock with Decoder number</button></div>' +
+      '<div class="gate-code"><label class="gate-field" for="gateModalCode">Have a Premium activation token from Deeprowss on WhatsApp?</label><input id="gateModalCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Enter your 10-digit token"><button type="button" class="gate-verify" id="gateModalUnlock">Activate Premium</button></div>' +
+      '</section><section class="gate-right">' +
       '<label class="gate-field" for="gateCurrency">Pricing currency</label>' +
       '<select id="gateCurrency" class="gate-plan-select">' +
         '<option value="auto"' + (selectedCurrency === 'auto' ? ' selected' : '') + '>Automatic (device region)</option>' +
@@ -463,7 +496,7 @@
       '<button type="button" class="gate-check" id="gateCheck">I have paid · Check Premium activation</button>' +
       '<div class="gate-status" id="gateStatus">Make your transfer, then send the payment screenshot to our WhatsApp helpline. Your receiver ID is included automatically.</div>' +
       '<div class="gate-helpline">WhatsApp helpline: <a href="' + escapeHtml(manualHelpUrl()) + '" target="_blank" rel="noopener noreferrer">+234 704 162 9630</a></div>' +
-    '</div>';
+      '</section></div></div>';
   }
   function bindModal() {
     $('gateX').onclick = closeModal;
