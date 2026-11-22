@@ -145,6 +145,7 @@
     '.gate-pop input[type=email],.gate-pop input[type=text]{box-sizing:border-box;width:100%;min-width:0;padding:12px;border:1px solid #33465c;border-radius:10px;background:#060a10;color:#fff;font-size:15px}',
     '.gate-toggle{display:flex;align-items:center;gap:8px;margin:10px 0;color:#b8c7d8;font-size:12px}',
     '.gate-pay{width:100%;min-height:48px;margin-top:8px;border:0;border-radius:13px;background:linear-gradient(110deg,#f3c76b,#d99a32);color:#201707;font-size:15px;font-weight:900;cursor:pointer}',
+    '.gate-pay:disabled{opacity:.45;cursor:not-allowed}',
     '.gate-verify{width:100%;min-height:42px;margin-top:8px;border:1px solid #52667d;border-radius:12px;background:#172536;color:#e6f0fa;font-weight:800;cursor:pointer}',
     '.gate-status{min-height:18px;margin:8px 0;font-size:12px;line-height:1.4;color:#a9bad0}',
     '.gate-helpline{margin-top:16px;padding:12px;border:1px solid #24563b;border-radius:12px;background:#0c2118;color:#d6f6e3;font-size:13px}',
@@ -156,10 +157,7 @@
   document.head.appendChild(css);
   // Preserve the receiver's mobile layout: the decoder entry stays hidden on
   // the pages.dev phone homepage, while channel taps still open the gate.
-  if (location.hostname === 'deeprowss.pages.dev' && window.matchMedia('(max-width: 600px)').matches) {
-    document.body.classList.add('receiver-pages-mobile');
-    css.textContent += '\n@media(max-width:600px){body.receiver-pages-mobile #landing .gate-box{display:none!important}}';
-  }
+  css.textContent += '\n@media(max-width:600px){#landing .gate-box{display:none!important}}';
 
   const box = document.createElement('div');
   box.className = 'gate-box'; box.id = 'gateBox';
@@ -217,7 +215,7 @@
         '<button type="button" class="gate-choice ' + (method === 'bank_transfer' ? 'active' : '') + '" data-method="bank_transfer">Bank transfer</button>' +
       '</div>' +
       (method === 'card' && recurring ? '<label class="gate-toggle"><input id="gateAuto" type="checkbox" ' + (autoRenew ? 'checked' : '') + '> Renew automatically by card</label>' : '') +
-      '<button type="button" class="gate-pay" id="gatePay">Pay securely with Paystack · ' + escapeHtml(shownPrice(period === 'year')) + '</button>' +
+      '<button type="button" class="gate-pay" id="gatePay" ' + (plan.available ? '' : 'disabled') + '>' + (plan.available ? 'Pay securely with Paystack · ' + escapeHtml(shownPrice(period === 'year')) : 'Online payment unavailable') + '</button>' +
       '<button type="button" class="gate-verify" id="gateVerify">I have paid · Verify payment</button>' +
       '<div class="gate-status" id="gateStatus">Pay securely with Paystack, or contact our WhatsApp helpline for manual activation.</div>' +
       '<div class="gate-code"><label class="gate-field" for="gateModalCode">Already have a Decoder number from the Deeprowss App?</label><input id="gateModalCode" type="text" inputmode="numeric" maxlength="12" placeholder="000 000 0000"><button type="button" class="gate-verify" id="gateModalUnlock">Unlock with Decoder number</button></div>' +
@@ -276,6 +274,13 @@
     }
     status.classList.remove('err'); status.textContent = 'Creating your secure Paystack checkout…';
     try { localStorage.setItem('deeprowss_receiver_email', email); } catch (_) {}
+    // Reserve a browser tab synchronously for normal browsers before awaiting
+    // the Worker; native EXE / Android TV bridges open the checkout externally.
+    let checkoutWindow = null;
+    if (!(window.DeeprowssTv && typeof window.DeeprowssTv.openExternal === 'function') &&
+        !(window.deeprowssDesktop && typeof window.deeprowssDesktop.openExternal === 'function')) {
+      try { checkoutWindow = window.open('about:blank', '_blank'); } catch (_) {}
+    }
     const result = await api('/receiver/sub/start', 'POST', {
       install_id: deviceId(), email: email, recurring: method === 'card' && autoRenew,
       period: period, channels: channelsForMethod()
@@ -293,12 +298,20 @@
         window.DeeprowssTv.openExternal(checkoutUrl); opened = true;
       } else if (window.deeprowssDesktop && typeof window.deeprowssDesktop.openExternal === 'function') {
         await window.deeprowssDesktop.openExternal(checkoutUrl); opened = true;
+      } else if (checkoutWindow) {
+        checkoutWindow.location.href = checkoutUrl;
+        try { checkoutWindow.opener = null; } catch (_) {}
+        opened = true;
       } else {
-        const win = window.open(checkoutUrl, '_blank', 'noopener');
+        const win = window.open(checkoutUrl, '_blank');
         opened = !!win;
+        if (win) { try { win.opener = null; } catch (_) {} }
       }
     } catch (_) {}
-    if (!opened) status.textContent += ' The checkout page could not open on this device. Use the WhatsApp helpline for manual activation.';
+    if (!opened) {
+      try { if (checkoutWindow) checkoutWindow.close(); } catch (_) {}
+      status.textContent += ' The checkout page could not open on this device. Use the WhatsApp helpline for manual activation.';
+    }
     startVerifyPolling();
   }
   function startVerifyPolling() {
