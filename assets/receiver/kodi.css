@@ -74,6 +74,23 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .home-hint kbd{padding:2px 7px;border:1px solid #33465c;border-radius:5px;background:#0b131d;color:#b9c8d8;font:inherit;font-weight:700;margin-right:6px}
 @keyframes fadeUp{from{opacity:0;transform:translateY(22px)}}
 @media(max-height:720px){.home-feature{bottom:240px}.home-feature p{display:none}.tile{min-height:150px;padding-top:80px}}
+
+/* Slim home-screen app promotion */
+.home-app-promo{position:absolute;z-index:4;left:20px;right:20px;bottom:118px;min-height:34px;display:flex;align-items:center;justify-content:center;gap:8px;padding:7px 12px;border:1px solid #1db4ea55;border-radius:999px;background:#071522d9;color:#a9e9ff;text-decoration:none;text-align:center;font-size:10px;font-weight:800;letter-spacing:.075em;box-shadow:0 4px 18px #0008;animation:promoPulse 2.8s ease-in-out infinite}
+.home-app-promo b{color:#fff;font-weight:900}
+.home-app-promo .promo-dot{width:6px;height:6px;flex:none;border-radius:50%;background:#54d8ff;box-shadow:0 0 10px #54d8ff}
+.home-app-promo .promo-arrow{font-size:18px;line-height:10px;color:#54d8ff}
+@keyframes promoPulse{0%,100%{opacity:1}50%{opacity:.62}}
+.receiver-pull-indicator{position:absolute;z-index:12;top:calc(env(safe-area-inset-top) + 8px);left:50%;transform:translate(-50%,-52px);display:flex;align-items:center;gap:8px;padding:9px 14px;border:1px solid #31475c;border-radius:999px;background:#0b1724ed;color:#d7f5ff;font-size:12px;font-weight:700;white-space:nowrap;opacity:0;transition:transform .18s ease,opacity .18s ease;pointer-events:none}
+.receiver-pull-indicator.visible{transform:translate(-50%,0);opacity:1}
+.receiver-pull-indicator .pull-icon{font-size:16px;line-height:1}
+@media(max-width:820px){
+  #landing .tiles{bottom:104px}
+  #landing .home-app-promo{bottom:56px}
+  #landing .receiver-pull-indicator{display:flex}
+}
+@media(min-width:821px){.home-app-promo,.receiver-pull-indicator{display:none!important}}
+
 @media(max-width:820px){
   .home-top{padding:20px 22px}.clock{display:none}.home-feature{display:none}
   .tiles{left:20px;right:20px;bottom:72px;grid-template-columns:1fr;gap:12px}.tile{height:92px;min-height:0;flex-direction:row;align-items:center;justify-content:flex-start;padding:0 16px 0 90px}
