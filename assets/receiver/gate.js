@@ -126,7 +126,7 @@
         if (r.ok) { cfg = await r.json(); break; }
       } catch (_) {}
     }
-    await loadPlans(selectedCurrency === 'auto' ? currencyForLocale() : selectedCurrency, false);
+    await loadPlans(selectedCurrency === 'auto' ? currencyForLocale() : selectedCurrency, true);
     render();
   }
 
