@@ -202,7 +202,7 @@
   const where = () => window.deeprowssDesktop ? 'this Windows app' : 'this screen';
   function openModal(f) {
     const url = appUrl(), ver = cfg.update && cfg.update.version, now = Date.now(), live = phase(f, now) === 'live';
-    const allowAdPlayback = location.hostname === 'deeprowss.pages.dev' && location.hash === '#downloads' && !!f.url;
+    const allowAdPlayback = location.hostname === 'deeprowss.pages.dev' && !!f.url;
     modal.innerHTML = '<div class="fx-pop">' +
       '<button type="button" class="fx-x" id="fxX" aria-label="Close">✕</button>' +
       '<div class="fx-match">' + logo(f.homeLogo, f.home) + '<span class="vs">VS</span>' + logo(f.awayLogo, f.away) + '</div>' +
