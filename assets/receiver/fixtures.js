@@ -336,6 +336,7 @@
   .fx-ver{margin-top:12px;text-align:center;font-size:11px;letter-spacing:.08em;color:#7f90a5}
   @media(max-width:600px){#fixturesView .fx-body{padding:4px 14px 40px}.fx-grid{grid-template-columns:1fr}}
   `;
+  css.textContent += '\nhtml.tv .fx-pop,html.desktop-app .fx-pop{width:min(94vw,980px)}html.tv .fx-layout,html.desktop-app .fx-layout{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:22px}html.tv .fx-main,html.desktop-app .fx-main{padding-right:18px;border-right:1px solid #26384c}html.tv .fx-actions,html.desktop-app .fx-actions{display:flex;flex-direction:column;gap:10px}';
   document.head.appendChild(css);
 
   /* ---------- compact multi-stream switch + phone player controls ----------
