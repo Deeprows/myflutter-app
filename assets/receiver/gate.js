@@ -20,7 +20,7 @@
     { days: 180, label: '180 days', ngn_display: '₦9,000' },
     { days: 365, label: '1 year', ngn_display: '₦16,000' }
   ];
-  let selectedDays = 30, pricingCurrency = 'NGN', manualMethod = 'opay', paymentConfig = {};
+  let selectedDays = 30, selectedCurrency = 'auto', pricingCurrency = 'NGN', manualMethod = 'opay', paymentConfig = {};
 
   function signalPremiumState() {
     const active = !!(unlocked && (!codeExpiry || Date.now() + serverOffset < codeExpiry));
@@ -86,6 +86,19 @@
     const p = selectedPlan();
     return (p.ngn_display || '₦2,000') + (p.local_display ? ' (about ' + p.local_display + ')' : '');
   }
+  async function loadPlans(currency, refreshModal) {
+    const wanted = currency || currencyForLocale();
+    const p = await api('/sub/ad-plans?cur=' + encodeURIComponent(wanted));
+    if (p.ok && Array.isArray(p.data.plans) && p.data.plans.length) {
+      const next = p.data.plans.filter(x => Number(x.days) > 0 && x.ngn_display);
+      if (next.length) {
+        plans = next;
+        pricingCurrency = p.data.currency || wanted;
+        if (!plans.some(x => Number(x.days) === selectedDays)) selectedDays = Number(plans[0].days);
+      }
+    }
+    if (refreshModal && modalOpen) fillModal();
+  }
   async function loadPaymentAccounts() {
     for (const u of [ROOT + 'payment_accounts.json', 'data/payment_accounts.json', '../data/payment_accounts.json']) {
       try {
@@ -113,12 +126,7 @@
         if (r.ok) { cfg = await r.json(); break; }
       } catch (_) {}
     }
-    const p = await api('/sub/ad-plans?cur=' + encodeURIComponent(currencyForLocale()));
-    if (p.ok && Array.isArray(p.data.plans) && p.data.plans.length) {
-      plans = p.data.plans.filter(x => Number(x.days) > 0 && x.ngn_display);
-      pricingCurrency = p.data.currency || currencyForLocale();
-      if (!plans.some(x => Number(x.days) === selectedDays)) selectedDays = Number(plans[0].days);
-    }
+    await loadPlans(currencyForLocale(), false);
     render();
   }
 
@@ -343,6 +351,24 @@
       '<p>Unlock unlimited movies and series, Play, Alternate player, Downloads and Smart Decoder. Visitors can watch 3 movie titles free.</p>' +
       '<ul class="gate-features"><li>✓ No pop-ups</li><li>✓ Stream without interruptions</li><li>✓ Unlimited movies and downloads</li><li>✓ Smart Decoder access</li></ul>' +
       '<div class="gate-code"><label class="gate-field" for="gateModalCode">Already have a Decoder number from the Deeprowss App?</label><input id="gateModalCode" type="text" inputmode="numeric" maxlength="12" placeholder="000 000 0000"><button type="button" class="gate-verify" id="gateModalUnlock">Unlock with Decoder number</button></div>' +
+      '<label class="gate-field" for="gateCurrency">Pricing currency</label>' +
+      '<select id="gateCurrency" class="gate-plan-select">' +
+        '<option value="auto"' + (selectedCurrency === 'auto' ? ' selected' : '') + '>Automatic (device region)</option>' +
+        '<option value="NGN"' + (selectedCurrency === 'NGN' ? ' selected' : '') + '>Nigeria · NGN</option>' +
+        '<option value="EGP"' + (selectedCurrency === 'EGP' ? ' selected' : '') + '>Egypt · EGP</option>' +
+        '<option value="USD"' + (selectedCurrency === 'USD' ? ' selected' : '') + '>United States · USD</option>' +
+        '<option value="GBP"' + (selectedCurrency === 'GBP' ? ' selected' : '') + '>United Kingdom · GBP</option>' +
+        '<option value="GHS"' + (selectedCurrency === 'GHS' ? ' selected' : '') + '>Ghana · GHS</option>' +
+        '<option value="ZAR"' + (selectedCurrency === 'ZAR' ? ' selected' : '') + '>South Africa · ZAR</option>' +
+        '<option value="KES"' + (selectedCurrency === 'KES' ? ' selected' : '') + '>Kenya · KES</option>' +
+        '<option value="UGX"' + (selectedCurrency === 'UGX' ? ' selected' : '') + '>Uganda · UGX</option>' +
+        '<option value="TZS"' + (selectedCurrency === 'TZS' ? ' selected' : '') + '>Tanzania · TZS</option>' +
+        '<option value="AED"' + (selectedCurrency === 'AED' ? ' selected' : '') + '>UAE · AED</option>' +
+        '<option value="SAR"' + (selectedCurrency === 'SAR' ? ' selected' : '') + '>Saudi Arabia · SAR</option>' +
+        '<option value="INR"' + (selectedCurrency === 'INR' ? ' selected' : '') + '>India · INR</option>' +
+        '<option value="CAD"' + (selectedCurrency === 'CAD' ? ' selected' : '') + '>Canada · CAD</option>' +
+        '<option value="AUD"' + (selectedCurrency === 'AUD' ? ' selected' : '') + '>Australia · AUD</option>' +
+      '</select>' +
       '<label class="gate-field" for="gatePlan">Choose Premium duration (' + escapeHtml(pricingCurrency) + ')</label>' +
       '<select id="gatePlan" class="gate-plan-select">' +
         plans.map(p => '<option value="' + Number(p.days) + '"' + (Number(p.days) === selectedDays ? ' selected' : '') + '>' +
@@ -365,6 +391,11 @@
     $('gateX').onclick = closeModal;
     const help = modal.querySelector('.gate-helpline a');
     if (help) help.onclick = e => { e.preventDefault(); openExternal(help.href); };
+    const currencySelect = $('gateCurrency');
+    currencySelect.onchange = () => {
+      selectedCurrency = currencySelect.value || 'auto';
+      loadPlans(selectedCurrency === 'auto' ? currencyForLocale() : selectedCurrency, true);
+    };
     const planSelect = $('gatePlan');
     planSelect.onchange = () => { selectedDays = Number(planSelect.value) || 30; fillModal(); };
     modal.querySelectorAll('[data-manual]').forEach(b => b.addEventListener('click', () => { manualMethod = b.dataset.manual; fillModal(); }));
