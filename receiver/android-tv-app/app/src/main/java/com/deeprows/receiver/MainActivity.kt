@@ -44,7 +44,9 @@ import java.net.URL
  */
 class MainActivity : Activity() {
     companion object {
-        private const val RECEIVER_PAGE = "https://deeprows.github.io/myflutter-app/receiver/#landing"
+        private const val RECEIVER_BASE = "https://deeprows.github.io/myflutter-app/receiver/"
+        private const val RECEIVER_PAGE = RECEIVER_BASE + "#landing"
+        private const val RECEIVER_LAYOUT = "desktop"
 
         // Ad / pop-under networks that embedded players must not reach (extended from receiver/adblock.json).
         @Volatile private var adHosts: Set<String> = setOf(
@@ -135,7 +137,7 @@ class MainActivity : Activity() {
     // ------------------------------------------------------------------ website
 
     private fun openSite(host: String?, pin: String?) {
-        val base = Uri.parse(RECEIVER_PAGE).buildUpon().appendQueryParameter("layout", "desktop")
+        val base = Uri.parse(RECEIVER_PAGE).buildUpon().appendQueryParameter("layout", RECEIVER_LAYOUT)
         if (!host.isNullOrBlank() && !pin.isNullOrBlank()) {
             base.appendQueryParameter("host", host).appendQueryParameter("pin", pin)
         }
@@ -220,7 +222,7 @@ class MainActivity : Activity() {
     private fun refreshAdBlockList() {
         Thread {
             try {
-                val json = JSONObject(URL(RECEIVER_PAGE + "adblock.json").readText())
+                val json = JSONObject(URL(RECEIVER_BASE + "adblock.json").readText())
                 adBlockOn = json.optBoolean("enabled", true)
                 val list = json.optJSONArray("hosts") ?: return@Thread
                 val merged = adHosts.toMutableSet()
