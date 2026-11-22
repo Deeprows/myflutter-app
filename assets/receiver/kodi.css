@@ -221,7 +221,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 body[data-mode=tv] .tvonly{display:inline-block}
 body[data-mode=tv] #rewind,body[data-mode=tv] #forward,body[data-mode=tv] .progress{display:none}
 body[data-mode=tv] .live{border-color:#7a2b3a;color:#ff7389}
-.noalt{display:none!important}
+.noalt,.nomethod{display:none!important}
 .player-head{background:linear-gradient(#000e,transparent)}
 .controls{background:linear-gradient(transparent,#000e)}
 .controls button{border-radius:8px}
