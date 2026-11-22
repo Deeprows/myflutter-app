@@ -11,8 +11,8 @@ On start the app shows a plans page.
   the equivalent amount on TRC20.
 * **Manual payment** - users choose OPay or USDT TRC20, send the amount, then
   attach their receipt in WhatsApp. The message includes their account/device
-  ID and selected plan. After confirming the receipt, the admin grants 31 days
-  for monthly or 366 days for yearly from /sub/admin. The grant now issues
+  ID and selected plan. After confirming the receipt, the admin grants the exact number of days selected in the plan dropdown from
+  /sub/admin. The grant now issues
   the Premium Decoder number in the admin confirmation, which users can enter
   on the EXE / Android TV. The helpline is **+234 704 162 9630**.
 * **Paystack** is shown as **Coming Soon** and no checkout or payment
@@ -33,7 +33,7 @@ Paystack /sub/start and /sub/verify remain dormant until checkout is configured.
 The Paystack secret key lives only in the Worker. A payment is counted once
 per Paystack reference, and only when it is a successful NGN payment of at
 least the selected price. One paid month = 31 days, one paid year = 366 days;
-paying again stacks on the time that is left. The app and receiver show the same monthly/yearly prices and local-currency
+paying again stacks on the time that is left. The app and receiver show the same duration-based prices and local-currency
 estimate from /sub/config. Both show the same OPay and USDT TRC20 payment
 accounts from assets/data/payment_accounts.json, with receipt confirmation
 through WhatsApp. Paystack is labelled Coming Soon in both interfaces.
@@ -70,8 +70,9 @@ through WhatsApp. Paystack is labelled Coming Soon in both interfaces.
 2. When someone pays you, their WhatsApp message contains "My ID: ...",
    the plan duration and payment method. Confirm the receipt before granting.
 3. Open https://deeprowss-feed.deeprows.workers.dev/sub/admin?token=<ADMIN_TOKEN>,
-   paste the ID, enter **31** for monthly or **366** for yearly, and press
-   **Grant**. The confirmation now includes the issued 10-digit Decoder
+   paste the ID, enter the exact plan duration in days shown in the WhatsApp
+   receipt (e.g. 30 or 365), and press **Grant**. The confirmation includes
+   the issued 10-digit Decoder
    number. Enter **0** to switch someone off; this also expires their Decoder
    number. The page also lists who is premium.
 4. The phone picks it up the next time the app opens or when the person
