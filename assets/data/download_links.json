@@ -1,9 +1,9 @@
 {
-  "_help": "Manual download links for the Deeprowss receiver Download Apps page. Paste a full https:// URL for a manual link. Use auto to fall back to the existing automatic source, or off to hide that download item. Manual links in this file take priority over app_config.json and GitHub Releases.",
-  "mobile": "auto",
-  "androidTv": "auto",
-  "webos": "auto",
-  "tizen": "auto",
-  "windows": "auto",
-  "windowsPortable": "auto"
+  "_help": "OWNER-MANAGED APP DOWNLOAD LINKS. Edit this file to control the Downloads page in both Deeprowss Cinema for Windows EXE and the receiver website. Paste your own direct HTTPS file URL for each app. Leave a value empty or set it to off to show Coming soon. These links are the ONLY source used; no GitHub Releases or app_config.json fallback is used. Commit changes and refresh the Downloads page.",
+  "mobile": "",
+  "androidTv": "",
+  "webos": "",
+  "tizen": "",
+  "windows": "",
+  "windowsPortable": ""
 }
