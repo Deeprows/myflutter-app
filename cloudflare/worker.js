@@ -1384,9 +1384,9 @@ async function subConfig(url, env) {
   return json(out);
 }
 
-// ---- "Remove ads" plans: duration + amount, in the person's own currency ----
+// ---- Shared Premium plans: duration + amount, in the person's own currency ----
 //
-// Naira prices per number of days. Change them without a rebuild by setting the
+// Naira Premium prices per duration. Change them without a rebuild by setting the
 // Worker variable AD_PLANS to JSON such as {"7":700,"30":2000,"90":5000}.
 const DEFAULT_AD_PLANS = {
   7: 700,
