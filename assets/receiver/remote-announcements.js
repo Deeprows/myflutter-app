@@ -7,7 +7,7 @@
   const $ = (tag, cls) => { const n = document.createElement(tag); if (cls) n.className = cls; return n; };
   const css = document.createElement('style');
   css.textContent = `
-    .dr-remote-ticker{position:relative;z-index:5;display:flex;align-items:center;justify-content:center;overflow:hidden;width:min(100% - 48px,1100px);margin:4px auto 0;height:30px;border:1px solid #ffffff16;border-radius:999px;background:#080d16d9;color:#e8f4ff}
+    .dr-remote-ticker{position:absolute;z-index:5;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;overflow:hidden;width:min(48vw,720px);margin:0;height:30px;border:1px solid #ffffff16;border-radius:999px;background:#080d16d9;color:#e8f4ff}
     .dr-remote-ticker[hidden]{display:none}.dr-ticker-track{display:flex;white-space:nowrap;will-change:transform;animation:drTickerScroll var(--dr-speed,36s) linear infinite}
     .dr-ticker-track span{padding:0 42px;font-size:13px;font-weight:700;letter-spacing:.02em}
     @keyframes drTickerScroll{from{transform:translateX(100%)}to{transform:translateX(-100%)}}
@@ -15,8 +15,8 @@
     .dr-notice-card{width:min(560px,94vw);padding:24px;border:1px solid #ffffff26;border-radius:18px;background:#111a27;color:#f5f7fb;box-shadow:0 24px 90px #000b}
     .dr-notice-card h2{margin:0 0 12px;font-size:clamp(20px,3vw,28px)}.dr-notice-card p{white-space:pre-wrap;line-height:1.65;color:#d5deea}
     .dr-notice-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}.dr-notice-actions a,.dr-notice-actions button{border:0;border-radius:9px;padding:11px 16px;font-weight:800;text-decoration:none;background:#e11d48;color:white;cursor:pointer}.dr-notice-actions button{background:#263449;color:white}
-    html.tv .dr-remote-ticker{height:40px;margin-top:8px}html.tv .dr-ticker-track span{font-size:18px}
-    @media(max-width:600px){.dr-remote-ticker{width:calc(100% - 24px);margin-top:2px;height:27px}.dr-ticker-track span{font-size:11px;padding:0 28px}}
+    html.tv .dr-remote-ticker{height:40px;width:min(48vw,900px)}html.tv .dr-ticker-track span{font-size:18px}
+    @media(max-width:600px){.dr-remote-ticker{left:12px;top:76px;transform:none;width:calc(100% - 24px);height:27px}.dr-ticker-track span{font-size:11px;padding:0 28px}}
     @media(prefers-reduced-motion:reduce){.dr-ticker-track{animation:none;white-space:normal;text-align:center}}
   `;
   document.head.appendChild(css);
@@ -43,7 +43,7 @@
     if (!el) {
       el = $('div','dr-remote-ticker');
       const homeTop = document.querySelector('.home-top');
-      if (homeTop) homeTop.insertAdjacentElement('afterend',el);
+      if (homeTop) homeTop.appendChild(el);
       else document.body.prepend(el);
     }
     const items = Array.isArray(data.items) ? data.items.map(x=>String(x||'').trim()).filter(Boolean) : [];
