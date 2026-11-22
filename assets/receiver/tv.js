@@ -8,26 +8,7 @@
   if (!document.getElementById('fixture-stream-control-style')) {
     const style = document.createElement('style');
     style.id = 'fixture-stream-control-style';
-    style.textContent = `
-      body.fixture-streaming .controls .tvonly{display:inline-flex!important}
-      body.fixture-streaming .controls #mainStream,body.fixture-streaming .controls #backupStream{min-width:66px;flex:0 0 66px;padding:9px 7px;border-radius:11px;font-size:12px;line-height:1}
-      body.fixture-streaming .controls #mainStream .lbl,body.fixture-streaming .controls #backupStream .lbl{font-size:12px;font-weight:900;letter-spacing:.02em}
-      body.fixture-streaming .controls #mainStream.active,body.fixture-streaming .controls #backupStream.active{background:#ffc42e;color:#1a1300;border-color:#ffc42e;box-shadow:0 0 0 2px #ffc42e35}
-      @media(max-width:600px){
-        body.fixture-streaming .controls{gap:7px;padding:10px 8px max(12px,env(safe-area-inset-bottom))}
-        body.fixture-streaming .controls #mainStream,body.fixture-streaming .controls #backupStream{min-width:46px;width:46px;flex:0 0 46px;height:38px;padding:6px 3px;border-radius:9px}
-        body.fixture-streaming .controls #mainStream .lbl,body.fixture-streaming .controls #backupStream .lbl{font-size:0}\n        body.fixture-streaming .controls #mainStream .lbl:after{content:'1';font-size:14px}\n        body.fixture-streaming .controls #backupStream .lbl:after{content:'2';font-size:14px}
-        body.fixture-streaming .controls #prevCh,body.fixture-streaming .controls #nextCh{display:none!important}
-        body.fixture-streaming .controls #mainStream{order:-4}
-        body.fixture-streaming .controls #backupStream{order:-3}
-        body.fixture-streaming .controls #play{order:-2}
-        body.fixture-streaming .controls #pause{order:-1}
-      }`;
-    const mainLabel = document.querySelector('#mainStream .lbl'), backupLabel = document.querySelector('#backupStream .lbl');
-    if (mainLabel) mainLabel.textContent = 'Switch 1';
-    if (backupLabel) backupLabel.textContent = 'Switch 2';
-    document.querySelector('#mainStream')?.setAttribute('title','Switch to stream 1');
-    document.querySelector('#backupStream')?.setAttribute('title','Switch to stream 2');
+    style.textContent = 'body.fixture-streaming .controls .tvonly{display:inline-flex!important}';
     document.head.appendChild(style);
   }
   const ROOT = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/';
