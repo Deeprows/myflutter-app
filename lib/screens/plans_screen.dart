@@ -409,7 +409,7 @@ class _PlansScreenState extends State<PlansScreen> {
       ),
       const SizedBox(height: 10),
       DropdownButtonFormField<int>(
-        key: ValueKey('premium-plan-' + currency + '-' + _plans.length.toString()),
+        key: ValueKey('premium-plan-' + currency + '-' + _plans.length.toString() + '-' + _days.toString()),
         initialValue: _plan.days,
         isExpanded: true,
         decoration: const InputDecoration(labelText: 'Choose Premium duration', prefixIcon: Icon(Icons.timer_outlined), isDense: true),
