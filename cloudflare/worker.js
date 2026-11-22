@@ -2330,7 +2330,7 @@ ${reqHtml}
 <form method="post">
 <input type="hidden" name="token" value="${tk}"><input type="hidden" name="action" value="grant">
 <p><input name="install_id" placeholder="Paste the person's ID" style="${box}"></p>
-<p><input name="days" type="number" value="31" style="${box}"></p>
+<p><input name="days" type="number" value="30" style="${box}"></p>
 <p><button style="${box};font-size:16px">Grant Premium days (0 = revoke)</button></p>
 </form>
 <h3>Unused tokens</h3>
