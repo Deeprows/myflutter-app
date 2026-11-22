@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
 import '../config.dart';
 import '../services/ad_scheduler.dart';
@@ -45,7 +46,6 @@ class _PlansScreenState extends State<PlansScreen> {
   String _installId = '';
   bool _yearly = false;
   bool _busy = false;
-  String? _error;
 
   bool get _startup => widget.onContinue != null;
 
@@ -96,6 +96,19 @@ class _PlansScreenState extends State<PlansScreen> {
   // ------------------------------------------------------------- actions
 
   Future<void> _loadPaymentAccounts() async {
+    // Prefer the hosted payment_accounts.json so changes to OPay / USDT details
+    // reach existing app installs; fall back to the bundled copy when offline.
+    try {
+      final response = await http.get(Uri.parse(AppConfig.paymentAccountsUrl))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic> && data['accounts'] is List && mounted) {
+          setState(() => _paymentConfig = data);
+          return;
+        }
+      }
+    } catch (_) {}
     try {
       final raw = await rootBundle.loadString('assets/data/payment_accounts.json');
       final data = jsonDecode(raw);
@@ -148,7 +161,7 @@ class _PlansScreenState extends State<PlansScreen> {
       return;
     }
     if (_busy) return;
-    setState(() { _busy = true; _error = null; });
+    setState(() => _busy = true);
     await _sub.refresh(force: true);
     final active = _sub.isPremium;
     final decoder = active ? await _sub.issueDecoderNumber() : null;
