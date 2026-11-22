@@ -293,7 +293,7 @@
         '</div>').join('') +
       '<p>' + (manualMethod === 'opay'
         ? 'Transfer ' + escapeHtml(amountLine()) + ' for the ' + escapeHtml(planLabel(selectedPlan())) + ' Premium plan.'
-        : 'Send the USDT equivalent of ' + escapeHtml(amountLine()) + ' for ' + escapeHtml(selectedPlan().label || (selectedPlan().days + ' days')) + '. Use TRC20 only.') +
+        : 'Send the USDT equivalent of ' + escapeHtml(amountLine()) + ' for ' + escapeHtml(planLabel(selectedPlan())) + '. Use TRC20 only.') +
       '</p></div>';
   }
   function manualReceiptUrl() {
