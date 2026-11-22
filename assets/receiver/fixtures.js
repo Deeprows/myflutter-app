@@ -311,6 +311,13 @@
   .fx-skel{height:150px;border-radius:18px;background:linear-gradient(90deg,#0f1a27,#16253a,#0f1a27);background-size:200% 100%;animation:sh 1.2s infinite}
   .fx-sheet{z-index:90;align-items:center}
   .fx-pop{position:relative;width:min(100%,480px);margin:auto;padding:28px 26px 24px;background:#0d1520;border:1px solid #2c3d52;border-radius:26px;box-shadow:0 30px 90px #000c;animation:up .25s ease both;max-height:94dvh;overflow-y:auto}
+  .fx-layout{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:22px;align-items:center}
+  .fx-main,.fx-actions{min-width:0}
+  .fx-main{padding-right:18px;border-right:1px solid #26384c}
+  .fx-actions{display:flex;flex-direction:column;gap:10px;justify-content:center}
+  .fx-actions .fx-dl,.fx-actions .fx-connect{margin:0}
+  @media(max-width:820px){.fx-layout{display:block}.fx-main{padding-right:0;border-right:0}.fx-actions{margin-top:14px}.fx-actions .fx-dl{margin-bottom:0}}
+  @media(min-width:821px){.fx-pop{width:min(94vw,980px);padding:34px 32px}.fx-match{margin:8px 0 14px}.fx-match .fx-logo{width:62px;height:62px}.fx-pop h2{text-align:center;font-size:25px}.fx-meta{text-align:center;margin-bottom:18px}.fx-opt{padding:14px}.fx-actions .fx-dl{min-height:48px}.fx-actions .fx-connect{min-height:48px}}
   .fx-pop .fx-x{position:absolute;top:10px;right:10px;width:38px;height:38px;padding:0;border-radius:50%;background:#16222f;border:1px solid #2c3d52;color:#fff;font-size:15px}
   .fx-match{display:flex;align-items:center;justify-content:center;gap:14px;margin:4px 0 6px}
   .fx-match .fx-logo{width:52px;height:52px}.fx-match span.vs{font-size:12px;font-weight:900;letter-spacing:.12em;color:#7f90a5}
@@ -460,20 +467,19 @@
     const watch = !allowAdPlayback ? '' : '<button type="button" class="fx-dl" id="fxWatchAds">▶ Continue watching with ads</button>';
     modal.innerHTML = '<div class="fx-pop">' +
       '<button type="button" class="fx-x" id="fxX" aria-label="Close">✕</button>' +
+      '<div class="fx-layout"><section class="fx-main">' +
       '<div class="fx-match">' + logo(f.homeLogo, f.home, m && m.homeLogo) +
         (has ? '<span class="fx-big">' + esc(m.hs) + ' – ' + esc(m.aw) + '</span>' : '<span class="vs">VS</span>') +
         logo(f.awayLogo, f.away, m && m.awayLogo) + '</div>' +
       '<h2>' + esc(f.home) + ' vs ' + esc(f.away) + '</h2>' +
       '<p class="fx-meta">' + esc(f.league) + ' · ' + (has || live ? esc(whenText(f, now)) : esc(dayLabel(f.start)) + ', ' + esc(timeOf(f.start))) + '</p>' +
-      download +
-      watch +
       '<div class="fx-opts">' +
         '<div class="fx-opt"><span class="ic">📱</span><div><b>Watch on your phone</b><p>Get the Deeprowss app and open this match from Fixtures. Live streams, scores and match analysis are all there.</p></div></div>' +
         '<div class="fx-opt"><span class="ic">📺</span><div><b>Watch on ' + where() + '</b><p>In the app, open <b>Smart Decoder</b>, choose <b>Send to receiver page</b> and scan the QR code under <b>Connect with App</b> here. The match then plays on ' + where() + '.</p></div></div>' +
-      '</div>' +
-
+      '</div></section><section class="fx-actions">' +
+      download + watch +
       '<button type="button" class="secondary fx-connect" id="fxConnect">Connect with App</button>' +
-      (ver ? '<div class="fx-ver">LATEST VERSION ' + esc(ver) + '</div>' : '') + '</div>';
+      (ver ? '<div class="fx-ver">LATEST VERSION ' + esc(ver) + '</div>' : '') + '</section></div></div>';
     $('fxX').onclick = closeModal;
     const play = backup => () => { closeModal(); if (window.deeprowssPlayFixture) window.deeprowssPlayFixture(f, backup); else { const s = document.getElementById('playState'); if (s) s.textContent = 'Player is unavailable. Please refresh and try again.'; } };
     const watchAds = $('fxWatchAds'); if (watchAds) watchAds.onclick = play(false);
