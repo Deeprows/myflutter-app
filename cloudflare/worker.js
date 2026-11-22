@@ -2315,7 +2315,6 @@ ${r.days ? `<div style="font-size:13.5px;margin-bottom:6px;color:#22e07a">Wants 
     .join("");
 
   const stopBtn = (installId) =>
-    `<form method="post" style="margin:0" onsubmit="return confirm('Stop this subscription now?')"><input type="hidden" name="token" value="${tk}"><input type="hidden" name="install_id" value="${esc(installId)}"><button type="submit" name="action" value="stop" style="padding:4px 8px;background:#5a1f1f;color:#fff;border:0;border-radius:6px">Stop</button></form>`;
     `<form method="post" style="margin:0" onsubmit="return confirm('Stop this subscription now?')"><input type="hidden" name="token" value="${tk}"><input type="hidden" name="action" value="stop"><input type="hidden" name="install_id" value="${esc(installId)}"><button style="padding:4px 8px;background:#5a1f1f;color:#fff;border:0;border-radius:6px">Stop</button></form>`;
 
   const used = (
