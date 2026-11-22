@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="referrer" content="origin">
+<title>Deeprowss TV frame</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#000}</style>
+</head><body>
+<!-- Optional. Copy this file to the site your stream hosts whitelist (e.g. footbolive.online/tvframe.html) and set
+     "tv": { "framePage": "https://footbolive.online/tvframe.html" } in app_config.json. The receiver then opens web channels
+     inside this page, so the channel host sees that site as the page that embeds it. -->
+<iframe id="f" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="origin"></iframe>
+<script>
+(function () {
+  var u = ''; try { u = decodeURIComponent((location.hash || '').slice(1)); } catch (e) {}
+  if (/^https?:\/\//i.test(u)) document.getElementById('f').src = u;
+})();
+</script>
+</body></html>
