@@ -45,8 +45,11 @@ jobs:
           keyPassword=$KEY_PASSWORD
           EOF
             echo "Stable release signing configured."
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "::error::Android TV release signing secrets are incomplete. Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD before publishing a release."
+            exit 1
           else
-            echo "::warning::Stable Android signing secrets are incomplete; building a debug-signed test APK. Do not distribute it as an update build."
+            echo "::warning::Stable Android signing secrets are incomplete; this branch build is debug-signed and is not for public distribution."
           fi
       - name: Build Android TV release APK
         run: |
@@ -81,14 +84,26 @@ jobs:
       - name: Install dependencies
         working-directory: desktop/windows
         run: npm install
-      - name: Build Windows packages (no publishing; windows-desktop.yml publishes releases)
+      - name: Build Windows packages (no publishing; release job publishes the installer)
         working-directory: desktop/windows
         run: npm run dist:build
+      - name: Give the installer a stable release filename
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path desktop/windows/dist -Filter '*Installer*.exe' -File | Select-Object -First 1
+          if (-not $installer) {
+            Write-Error "Windows installer was not found."
+            exit 1
+          }
+          $target = Join-Path $installer.DirectoryName 'Deeprowss-Windows-Setup.exe'
+          if ($installer.FullName -ne $target) {
+            Copy-Item -LiteralPath $installer.FullName -Destination $target -Force
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: deeprowss-windows
-          path: |
-            desktop/windows/dist/*Installer*.exe
+          path: desktop/windows/dist/Deeprowss-Windows-Setup.exe
+          if-no-files-found: error
 
   webos:
     name: Build LG webOS IPK
@@ -117,7 +132,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Zip Samsung Tizen project (requires Samsung signing profile to make installable WGT)
+      - name: Zip Samsung Tizen project source (not an installable app)
         run: |
           mkdir -p dist
           cd tv && zip -r ../dist/Deeprowss-Samsung-Tizen-Project.zip tizen
@@ -127,20 +142,32 @@ jobs:
           path: dist/Deeprowss-Samsung-Tizen-Project.zip
 
   publish-release:
-    name: Publish receiver downloads
+    name: Publish direct app downloads
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [android-tv, windows, webos, tizen-source]
+    needs: [android-tv, windows, webos]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download installable build files only
+        uses: actions/download-artifact@v4
         with:
+          pattern: deeprowss-*
           path: release-assets
           merge-multiple: true
-      - name: Add Samsung Tizen project source
+      - name: Verify release contains individual installable files
         run: |
-          find release-assets -maxdepth 2 -type f -print
+          find release-assets -maxdepth 1 -type f -print
+          test -f release-assets/Deeprowss-Android-TV.apk
+          test -f release-assets/Deeprowss-Windows-Setup.exe
+          test -f release-assets/Deeprowss-LG-webOS.ipk
+          if find release-assets -maxdepth 1 -type f -name '*.zip' | grep -q .; then
+            echo "::error::ZIP files are not permitted as app release downloads."
+            exit 1
+          fi
       - uses: softprops/action-gh-release@v2
         with:
           name: Deeprowss Receiver ${{ github.ref_name }}
-          files: release-assets/**
+          files: |
+            release-assets/Deeprowss-Android-TV.apk
+            release-assets/Deeprowss-Windows-Setup.exe
+            release-assets/Deeprowss-LG-webOS.ipk
           generate_release_notes: true
