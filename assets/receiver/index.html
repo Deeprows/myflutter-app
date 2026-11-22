@@ -635,32 +635,26 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
 </script>
 
 <script>
-/* Adsterra popunder: wait for the page load and a deliberate eligible click.
-   Do not initialise it from the Download Apps screen or its home tile. */
+/* Adsterra popunder: initialise once as soon as this Deeprowss Pages document is ready.
+   The network/browser may only open the popunder after the visitor's first eligible gesture. */
 (function () {
-  if (location.hostname !== 'deeprowss.pages.dev') return;
-  var loaded = false, ready = document.readyState === 'complete';
-  window.addEventListener('load', function () { ready = true; }, { once: true });
-  function isDownloadArea(target) {
-    return document.body.dataset.view === 'downloads' ||
-      (target && target.closest && (target.closest('#goDownloads') || target.closest('#downloadsView') || target.closest('#dlModal')));
-  }
+  if (location.hostname !== 'deeprowss.pages.dev' || window.__deeprowssPopunderLoaded) return;
+  window.__deeprowssPopunderLoaded = true;
   function loadPopunder() {
-    if (loaded || !ready || document.body.dataset.view === 'downloads') return;
-    loaded = true;
+    if (window.__deeprowssPopunderScriptAdded) return;
+    window.__deeprowssPopunderScriptAdded = true;
     var s = document.createElement('script');
     s.setAttribute('data-cfasync', 'false');
     s.src = 'https://capitalhospitals.org/1/e5e505327285cf6306fe79dfac583467';
     s.async = true;
     document.head.appendChild(s);
   }
-  document.addEventListener('click', function (event) {
-    if (!ready || isDownloadArea(event.target)) return;
-    // Load after this click so the first tap is not hijacked by a newly loaded ad.
-    window.setTimeout(loadPopunder, 900);
-  }, true);
-})();
-</script>
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadPopunder, { once: true });
+  } else {
+    loadPopunder();
+  }
+})();</script>
 
 <script>
 /* Mobile-only pull-to-refresh for the Cloudflare receiver home screen. */
