@@ -11,6 +11,7 @@ import '../services/install_id.dart';
 import '../services/remote_config.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/currency_map.dart';
 import 'browser_screen.dart' show openExternally;
 
 /// Builds the WhatsApp link for people who pay manually. The person's ID is
@@ -42,9 +43,11 @@ class _PlansScreenState extends State<PlansScreen> {
   Map<String, dynamic> _paymentConfig = {};
   String _manualMethod = 'opay';
 
-  PlanInfo _plan = PlanInfo.fallback();
+  AdPlans? _priced;
   String _installId = '';
-  bool _yearly = false;
+  String _country = 'auto';
+  int _days = 30;
+  bool _loadingPlans = true;
   bool _busy = false;
 
   bool get _startup => widget.onContinue != null;
@@ -74,9 +77,8 @@ class _PlansScreenState extends State<PlansScreen> {
     final id = _sub.accountId ?? await InstallId.get();
     if (!mounted) return;
     setState(() => _installId = id);
-    final plan = await _sub.loadPlan();
     unawaited(_sub.refresh(force: true));
-    if (mounted) setState(() => _plan = plan);
+    await _loadPlans();
   }
 
   void _continue() {
@@ -141,13 +143,12 @@ class _PlansScreenState extends State<PlansScreen> {
     final account = _manualMethod == 'opay' ? _paymentAccount('opay') : _paymentAccount('wallet');
     final network = (account?['network'] ?? 'TRC20').toString();
     final method = _manualMethod == 'opay' ? 'OPay transfer' : 'USDT ' + network + ' wallet';
-    final days = _yearly ? 366 : 31;
-    final local = _shownLocal == null ? '' : ' (local estimate: $_shownLocal)';
-    final periodName = _yearly ? 'Yearly' : 'Monthly';
+    final days = _plan.days;
+    final local = _plan.localDisplay == null ? '' : ' (local estimate: ' + _plan.localDisplay! + ')';
     final message = 'Hello Deeprowss, I have made a manual Premium payment.\n'
-        'Plan: ' + periodName + ' (' + days.toString() + ' days)\n'
+        'Plan: ' + _plan.label + ' (' + days.toString() + ' days)\n'
         'Payment method: ' + method + '\n'
-        'Amount: $_shownPrice$local\n'
+        'Amount: ' + _plan.ngnDisplay + local + '\n'
         'Please confirm my payment and activate Premium. I will attach my receipt.';
     final uri = buildWhatsappUri(AppConfig.receiptWhatsappUrl, message, _installId);
     if (uri == null || !await openExternally(uri.toString())) {
@@ -198,9 +199,23 @@ class _PlansScreenState extends State<PlansScreen> {
     );
   }
 
-  String get _shownPrice => _yearly ? _plan.yearPriceDisplay : _plan.priceDisplay;
-  String? get _shownLocal => _yearly ? _plan.yearLocalDisplay : _plan.localDisplay;
-  String get _perLabel => _yearly ? 'year' : 'month';
+  String get _effectiveCountry => _country == 'auto' ? (_sub.deviceCountry ?? '') : _country;
+  String get _currency => currencyForCountry(_effectiveCountry);
+  List<AdPlan> get _plans => _priced?.plans ?? AdPlan.fallback();
+  AdPlan get _plan => _plans.firstWhere((p) => p.days == _days, orElse: () => _plans.first);
+  String get _shownPrice => _plan.shownPrice;
+
+  Future<void> _loadPlans() async {
+    final wanted = _currency;
+    if (mounted) setState(() => _loadingPlans = true);
+    final got = await _sub.loadAdPlans(currency: wanted);
+    if (!mounted || wanted != _currency) return;
+    setState(() {
+      _priced = got;
+      _loadingPlans = false;
+      if (!got.plans.any((p) => p.days == _days)) _days = got.plans.first.days;
+    });
+  }
 
   // ------------------------------------------------------------------ UI
 
