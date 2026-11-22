@@ -58,7 +58,7 @@
   function showNotice(n) {
     if (!n || n.enabled !== true || !n.message || n.popup === false) return;
     if (n.expires) {
-      const expiry = /^\\d{4}-\\d{2}-\\d{2}$/.test(String(n.expires))
+      const expiry = /^\d{4}-\d{2}-\d{2}$/.test(String(n.expires))
         ? Date.parse(String(n.expires) + 'T23:59:59') : Date.parse(n.expires);
       if (Number.isFinite(expiry) && Date.now() > expiry) return;
     }
