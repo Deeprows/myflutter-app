@@ -283,6 +283,7 @@
   // Preserve the receiver's mobile layout: the decoder entry stays hidden on
   // the pages.dev phone homepage, while channel taps still open the gate.
   css.textContent += '\n#landing .gate-box{display:none!important}';
+  css.textContent += '\nhtml.tv .gate-pop,html.desktop-app .gate-pop{width:min(94vw,1080px);max-height:92vh}html.tv .gate-layout,html.desktop-app .gate-layout{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:22px}html.tv .gate-left,html.desktop-app .gate-left{padding-right:18px;border-right:1px solid #26384c}html.tv .gate-right,html.desktop-app .gate-right{padding-right:4px}';
 
   const box = document.createElement('div');
   box.className = 'gate-box'; box.id = 'gateBox';
