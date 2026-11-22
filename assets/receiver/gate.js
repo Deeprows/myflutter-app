@@ -74,6 +74,10 @@
   function selectedPlan() {
     return plans.find(p => Number(p.days) === selectedDays) || plans[0];
   }
+  function planLabel(p) {
+    const days = Number(p && p.days) || 30;
+    return days % 365 === 0 ? (days / 365) + ' year' + (days === 365 ? '' : 's') : days + ' days';
+  }
   function shownPrice() {
     const p = selectedPlan();
     return p.local_display || p.ngn_display || '₦2,000';
@@ -288,7 +292,7 @@
         (i === rows.length - 1 ? '<button type="button" class="gate-copy" data-copy="' + escapeHtml(r[1]) + '">Copy</button>' : '') +
         '</div>').join('') +
       '<p>' + (manualMethod === 'opay'
-        ? 'Transfer ' + escapeHtml(amountLine()) + ' for the ' + escapeHtml(selectedPlan().label || (selectedPlan().days + ' days')) + ' Premium plan.'
+        ? 'Transfer ' + escapeHtml(amountLine()) + ' for the ' + escapeHtml(planLabel(selectedPlan())) + ' Premium plan.'
         : 'Send the USDT equivalent of ' + escapeHtml(amountLine()) + ' for ' + escapeHtml(selectedPlan().label || (selectedPlan().days + ' days')) + '. Use TRC20 only.') +
       '</p></div>';
   }
@@ -296,7 +300,7 @@
     const days = Number(selectedPlan().days);
     const method = manualMethod === 'opay' ? 'OPay bank transfer' : 'USDT ' + (paymentAccount('wallet').network || 'TRC20');
     const msg = 'Hello Deeprowss, I have made a manual Premium payment.\n' +
-      'Plan: ' + (selectedPlan().label || (days + ' days')) + ' (' + days + ' days)\n' +
+      'Plan: ' + planLabel(selectedPlan()) + ' (' + days + ' days)\n' +
       'Payment method: ' + method + '\n' +
       'Amount: ' + amountLine() + '\n' +
       'Please confirm my payment and activate Premium. I will attach my receipt.\n' +
@@ -336,7 +340,7 @@
       '<label class="gate-field" for="gatePlan">Choose Premium duration (' + escapeHtml(pricingCurrency) + ')</label>' +
       '<select id="gatePlan" class="gate-plan-select">' +
         plans.map(p => '<option value="' + Number(p.days) + '"' + (Number(p.days) === selectedDays ? ' selected' : '') + '>' +
-          escapeHtml(p.label || (p.days + ' days')) + ' · ' + escapeHtml(p.local_display || p.ngn_display) + '</option>').join('') +
+          escapeHtml(planLabel(p)) + ' · ' + escapeHtml(p.local_display || p.ngn_display) + '</option>').join('') +
       '</select>' +
       '<div class="gate-paystack"><span>Paystack online payment</span><b class="gate-coming">COMING SOON</b></div>' +
       '<div class="gate-field">Choose manual payment method</div>' +
