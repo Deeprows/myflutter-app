@@ -305,7 +305,13 @@
       'Amount: ' + amountLine() + '\n' +
       'Please confirm my payment and activate Premium. I will attach my receipt.\n' +
       'Receiver ID: ' + deviceId();
-    return 'https://wa.me/2347041629630?text=' + encodeURIComponent(msg);
+    const base = String(paymentConfig.receipt_whatsapp || 'https://wa.me/2347041629630');
+    return base + (base.indexOf('?') >= 0 ? '&' : '?') + 'text=' + encodeURIComponent(msg);
+  }
+  function manualHelpUrl() {
+    const base = String(paymentConfig.receipt_whatsapp || 'https://wa.me/2347041629630');
+    const msg = 'Hello Deeprowss, I need help with Premium. Receiver ID: ' + deviceId();
+    return base + (base.indexOf('?') >= 0 ? '&' : '?') + 'text=' + encodeURIComponent(msg);
   }
   async function copyManualValue(value) {
     try {
@@ -352,7 +358,7 @@
       '<button type="button" class="gate-action" id="gateReceipt">Send payment receipt on WhatsApp</button>' +
       '<button type="button" class="gate-check" id="gateCheck">I have paid · Check Premium activation</button>' +
       '<div class="gate-status" id="gateStatus">Make your transfer, then send the payment screenshot to our WhatsApp helpline. Your receiver ID is included automatically.</div>' +
-      '<div class="gate-helpline">WhatsApp helpline: <a href="https://wa.me/2347041629630?text=' + encodeURIComponent('Hello Deeprowss, I need help with Premium. Receiver ID: ' + deviceId()) + '" target="_blank" rel="noopener noreferrer">+234 704 162 9630</a></div>' +
+      '<div class="gate-helpline">WhatsApp helpline: <a href="' + escapeHtml(manualHelpUrl()) + '" target="_blank" rel="noopener noreferrer">+234 704 162 9630</a></div>' +
     '</div>';
   }
   function bindModal() {
