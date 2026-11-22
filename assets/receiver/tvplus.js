@@ -9,7 +9,10 @@
       const f = frame();
       if (f) {
         try {
-          f.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation allow-orientation-lock');
+          // Do not sandbox third-party channel pages: many providers detect sandboxed frames and refuse playback.
+          f.removeAttribute('sandbox');
+          f.setAttribute('scrolling', 'no');
+          f.style.overflow = 'hidden';
           f.setAttribute('allow', 'autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope');
           f.setAttribute('referrerpolicy', 'origin');
         } catch (_) {}
