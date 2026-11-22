@@ -1667,6 +1667,11 @@ async function settle(env, tx) {
     source: "paystack",
     days: period === "year" ? YEAR_DAYS : PERIOD_DAYS,
   });
+  // Renewals before expiry extend the existing Decoder number. If its
+  // expiry has already passed, leave it expired so re-issue creates a new one.
+  await env.DB.prepare(
+    "UPDATE decoder_codes SET expires_at = ? WHERE owner_id = ? AND expires_at > ?"
+  ).bind(expires, installId, Date.now()).run();
   return { installId, expires };
 }
 
