@@ -226,6 +226,7 @@
     return m;
   };
   const hasScore = m => !!m && m.state !== 'pre' && m.hs != null && m.aw != null;
+  const cardPhase = (f, now) => { const m = espnFor(f, now); return m && m.state === 'post' ? 'ended' : (m && m.state === 'in' ? 'live' : phase(f, now)); };
 
   /* ---------- formatting ---------- */
   const timeOf = ms => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -386,8 +387,8 @@
   function leagues(list) { return ['All', ...Array.from(new Set(list.map(f => f.league))).sort()]; }
   const scoreCell = (v, on) => '<span class="fx-sc' + (on ? '' : ' dim') + '">' + (on ? esc(v) : '\u2013') + '</span>';
   function cardHtml(f, now) {
-    const ph = phase(f, now), m = espnFor(f, now), has = hasScore(m);
-    const pill = ph === 'live' || (m && m.state === 'in') ? '● LIVE' : (m && m.state === 'post' ? 'FT' : esc(timeOf(f.start)));
+    const ph = cardPhase(f, now), m = espnFor(f, now), has = hasScore(m);
+    const pill = m && m.state === 'post' ? 'FT' : (ph === 'live' ? '● LIVE' : esc(timeOf(f.start)));
     return '<button type="button" class="fxcard ' + ph + '" data-id="' + esc(f.id) + '" aria-label="' + esc(f.home + ' vs ' + f.away + (has ? ', ' + m.hs + ' to ' + m.aw : '')) + '">' +
       '<div class="fx-top"><span>' + esc(f.league) + '</span><span class="fx-pill">' + pill + '</span></div>' +
       '<div class="fx-team">' + logo(f.homeLogo, f.home, m && m.homeLogo) + '<b>' + esc(f.home) + '</b>' + scoreCell(m && m.hs, has) + '</div>' +
@@ -399,14 +400,14 @@
   function render(force) {
     const root = $('fxList'); if (!root) return;
     const now = Date.now(), all = visible(now);
-    const live = all.filter(f => phase(f, now) === 'live').length;
+    const live = all.filter(f => cardPhase(f, now) === 'live').length;
     const badge = $('fxBadge');
     if (badge) { badge.classList.toggle('on', live > 0); $('fxBadgeTxt').textContent = live + ' LIVE'; }
     const names = leagues(all);
     if (!names.includes(league)) league = 'All';
     const list = league === 'All' ? all : all.filter(f => f.league === league);
     const scoreSig = f => { const m = espnFor(f, now); return m ? [m.state, m.hs, m.aw, m.note].join(':') : ''; };
-    const sig = [league, names.join('|'), list.map(f => [f.id, f.home, f.away, f.start, f.league, f.homeLogo, f.awayLogo, phase(f, now), scoreSig(f)].join('~')).join(',')].join('#');
+    const sig = [league, names.join('|'), list.map(f => [f.id, f.home, f.away, f.start, f.league, f.homeLogo, f.awayLogo, cardPhase(f, now), scoreSig(f)].join('~')).join(',')].join('#');
     if (!force && sig === rendered) return;
     rendered = sig;
 
@@ -417,10 +418,12 @@
     if (!loaded) { root.innerHTML = failed ? '<div class="fx-empty">Could not load fixtures.<br>Check your connection and press refresh.</div>' : '<div class="fx-grid"><div class="fx-skel"></div><div class="fx-skel"></div><div class="fx-skel"></div></div>'; return; }
     if (!list.length) { root.innerHTML = '<div class="fx-empty">No live or upcoming matches right now.<br>New fixtures appear here as soon as they are added.</div>'; return; }
 
-    const groups = [], liveList = list.filter(f => phase(f, now) === 'live');
+    const groups = [], liveList = list.filter(f => cardPhase(f, now) === 'live');
     if (liveList.length) groups.push({ cls: 'live', title: 'Live now', sub: liveList.length + (liveList.length === 1 ? ' match' : ' matches'), items: liveList });
+    const finishedList = list.filter(f => cardPhase(f, now) === 'ended');
+    if (finishedList.length) groups.push({ cls: '', title: 'Recently finished', sub: finishedList.length + (finishedList.length === 1 ? ' match' : ' matches'), items: finishedList });
     const byDay = new Map();
-    list.filter(f => phase(f, now) === 'upcoming').forEach(f => { const k = dayKey(f.start); if (!byDay.has(k)) byDay.set(k, { cls: '', title: dayLabel(f.start), sub: '', items: [] }); byDay.get(k).items.push(f); });
+    list.filter(f => cardPhase(f, now) === 'upcoming').forEach(f => { const k = dayKey(f.start); if (!byDay.has(k)) byDay.set(k, { cls: '', title: dayLabel(f.start), sub: '', items: [] }); byDay.get(k).items.push(f); });
     byDay.forEach(g => { g.sub = g.items.length + (g.items.length === 1 ? ' match' : ' matches'); groups.push(g); });
     root.innerHTML = groups.map(g => '<div class="fx-day ' + g.cls + '"><h3>' + esc(g.title) + '</h3><span>' + esc(g.sub) + '</span></div><div class="fx-grid">' + g.items.map(f => cardHtml(f, now)).join('') + '</div>').join('');
   }
@@ -430,7 +433,7 @@
     document.querySelectorAll('#fxList .fx-when').forEach(el => {
       const f = byId.get(el.dataset.id); if (!f) return;
       const card = el.closest('.fxcard');
-      if (!card || !card.classList.contains(phase(f, now))) { changed = true; return; }
+      if (!card || !card.classList.contains(cardPhase(f, now))) { changed = true; return; }
       el.textContent = whenText(f, now);
     });
     if (changed) render(true); else render(false);
