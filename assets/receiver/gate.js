@@ -11,8 +11,16 @@
   const DEVICE_KEY = 'deeprowss_receiver_device_v1';
   const FREE_LIMIT = 3;
   let cfg = {}, unlocked = false, code = '', codeExpiry = 0, serverOffset = 0, modalOpen = false;
-  let plan = { available: true, recurring: false, recurring_year: false, price_display: '₦2,000', year_price_display: '₦20,000' };
-  let period = 'month', manualMethod = 'opay', paymentConfig = {};
+  let plans = [
+    { days: 7, label: '7 days', ngn_display: '₦700' },
+    { days: 14, label: '14 days', ngn_display: '₦1,200' },
+    { days: 30, label: '30 days', ngn_display: '₦2,000' },
+    { days: 60, label: '60 days', ngn_display: '₦3,600' },
+    { days: 90, label: '90 days', ngn_display: '₦5,000' },
+    { days: 180, label: '180 days', ngn_display: '₦9,000' },
+    { days: 365, label: '1 year', ngn_display: '₦16,000' }
+  ];
+  let selectedDays = 30, pricingCurrency = 'NGN', manualMethod = 'opay', paymentConfig = {};
 
   function signalPremiumState() {
     const active = !!(unlocked && (!codeExpiry || Date.now() + serverOffset < codeExpiry));
@@ -63,10 +71,16 @@
     const map = { EG:'EGP', NG:'NGN', US:'USD', GB:'GBP', GH:'GHS', ZA:'ZAR', KE:'KES', UG:'UGX', TZ:'TZS', CA:'CAD', AU:'AUD', IN:'INR', AE:'AED', SA:'SAR' };
     return map[region] || 'NGN';
   }
-  function shownPrice(year) {
-    const local = year ? plan.year_local_display : plan.local_display;
-    const base = year ? plan.year_price_display : plan.price_display;
-    return local || base || (year ? '₦20,000' : '₦2,000');
+  function selectedPlan() {
+    return plans.find(p => Number(p.days) === selectedDays) || plans[0];
+  }
+  function shownPrice() {
+    const p = selectedPlan();
+    return p.local_display || p.ngn_display || '₦2,000';
+  }
+  function amountLine() {
+    const p = selectedPlan();
+    return (p.ngn_display || '₦2,000') + (p.local_display ? ' (about ' + p.local_display + ')' : '');
   }
   async function loadPaymentAccounts() {
     for (const u of [ROOT + 'payment_accounts.json', 'data/payment_accounts.json', '../data/payment_accounts.json']) {
@@ -100,8 +114,12 @@
         if (r.ok) { cfg = await r.json(); break; }
       } catch (_) {}
     }
-    const p = await api('/sub/config?cur=' + encodeURIComponent(currencyForLocale()));
-    if (p.ok) plan = p.data;
+    const p = await api('/sub/ad-plans?cur=' + encodeURIComponent(currencyForLocale()));
+    if (p.ok && Array.isArray(p.data.plans) && p.data.plans.length) {
+      plans = p.data.plans.filter(x => Number(x.days) > 0 && x.ngn_display);
+      pricingCurrency = p.data.currency || currencyForLocale();
+      if (!plans.some(x => Number(x.days) === selectedDays)) selectedDays = Number(plans[0].days);
+    }
     render();
   }
 
@@ -190,6 +208,7 @@
     '.gate-choice{flex:1;min-width:0;padding:11px 8px;border:1px solid #33465c;border-radius:12px;background:#101c2a;color:#dbe7f3;text-align:center;font-weight:800;cursor:pointer}',
     '.gate-choice.active{border-color:#f3c76b;background:#f3c76b18;color:#ffe2a0}',
     '.gate-choice small{display:block;margin-top:4px;font-size:11px;color:#9aabc0;font-weight:600}',
+    '.gate-plan-select{box-sizing:border-box;width:100%;padding:12px;border:1px solid #33465c;border-radius:10px;background:#060a10;color:#fff;font-size:14px;margin:4px 0 10px}'
     '.gate-field{display:block;margin:12px 0 6px;font-size:12px;font-weight:800;color:#dceaf6}',
     '.gate-pop input[type=email],.gate-pop input[type=text]{box-sizing:border-box;width:100%;min-width:0;padding:12px;border:1px solid #33465c;border-radius:10px;background:#060a10;color:#fff;font-size:15px}',
     '.gate-toggle{display:flex;align-items:center;gap:8px;margin:10px 0;color:#b8c7d8;font-size:12px}',
@@ -274,17 +293,17 @@
         (i === rows.length - 1 ? '<button type="button" class="gate-copy" data-copy="' + escapeHtml(r[1]) + '">Copy</button>' : '') +
         '</div>').join('') +
       '<p>' + (manualMethod === 'opay'
-        ? 'Transfer ' + escapeHtml(amountLine(period === 'year')) + ' for the ' + (period === 'year' ? 'yearly' : 'monthly') + ' Premium plan.'
-        : 'Send the USDT equivalent of ' + escapeHtml(amountLine(period === 'year')) + '. Use TRC20 only.') +
+        ? 'Transfer ' + escapeHtml(amountLine()) + ' for the ' + escapeHtml(selectedPlan().label || (selectedPlan().days + ' days')) + ' Premium plan.'
+        : 'Send the USDT equivalent of ' + escapeHtml(amountLine()) + ' for ' + escapeHtml(selectedPlan().label || (selectedPlan().days + ' days')) + '. Use TRC20 only.') +
       '</p></div>';
   }
   function manualReceiptUrl() {
-    const days = period === 'year' ? 366 : 31;
+    const days = Number(selectedPlan().days);
     const method = manualMethod === 'opay' ? 'OPay bank transfer' : 'USDT ' + (paymentAccount('wallet').network || 'TRC20');
     const msg = 'Hello Deeprowss, I have made a manual Premium payment.\n' +
-      'Plan: ' + (period === 'year' ? 'Yearly' : 'Monthly') + ' (' + days + ' days)\n' +
+      'Plan: ' + (selectedPlan().label || (days + ' days')) + ' (' + days + ' days)\n' +
       'Payment method: ' + method + '\n' +
-      'Amount: ' + amountLine(period === 'year') + '\n' +
+      'Amount: ' + amountLine() + '\n' +
       'Please confirm my payment and activate Premium. I will attach my receipt.\n' +
       'Receiver ID: ' + deviceId();
     return 'https://wa.me/2347041629630?text=' + encodeURIComponent(msg);
@@ -319,10 +338,11 @@
       '<p>Unlock unlimited movies and series, Play, Alternate player, Downloads and Smart Decoder. Visitors can watch 3 movie titles free.</p>' +
       '<ul class="gate-features"><li>✓ No pop-ups</li><li>✓ Stream without interruptions</li><li>✓ Unlimited movies and downloads</li><li>✓ Smart Decoder access</li></ul>' +
       '<div class="gate-code"><label class="gate-field" for="gateModalCode">Already have a Decoder number from the Deeprowss App?</label><input id="gateModalCode" type="text" inputmode="numeric" maxlength="12" placeholder="000 000 0000"><button type="button" class="gate-verify" id="gateModalUnlock">Unlock with Decoder number</button></div>' +
-      '<div class="gate-plans">' +
-        '<button type="button" class="gate-choice ' + (period === 'month' ? 'active' : '') + '" data-period="month">Monthly<small>' + escapeHtml(shownPrice(false)) + ' / month</small></button>' +
-        '<button type="button" class="gate-choice ' + (period === 'year' ? 'active' : '') + '" data-period="year">Yearly<small>' + escapeHtml(shownPrice(true)) + ' / year · Save more</small></button>' +
-      '</div>' +
+      '<label class="gate-field" for="gatePlan">Choose Premium duration (' + escapeHtml(pricingCurrency) + ')</label>' +
+      '<select id="gatePlan" class="gate-plan-select">' +
+        plans.map(p => '<option value="' + Number(p.days) + '"' + (Number(p.days) === selectedDays ? ' selected' : '') + '>' +
+          escapeHtml(p.label || (p.days + ' days')) + ' · ' + escapeHtml(p.local_display || p.ngn_display) + '</option>').join('') +
+      '</select>' +
       '<div class="gate-paystack"><span>Paystack online payment</span><b class="gate-coming">COMING SOON</b></div>' +
       '<div class="gate-field">Choose manual payment method</div>' +
       '<div class="gate-methods">' +
@@ -340,7 +360,8 @@
     $('gateX').onclick = closeModal;
     const help = modal.querySelector('.gate-helpline a');
     if (help) help.onclick = e => { e.preventDefault(); openExternal(help.href); };
-    modal.querySelectorAll('[data-period]').forEach(b => b.addEventListener('click', () => { period = b.dataset.period; fillModal(); }));
+    const planSelect = $('gatePlan');
+    planSelect.onchange = () => { selectedDays = Number(planSelect.value) || 30; fillModal(); };
     modal.querySelectorAll('[data-manual]').forEach(b => b.addEventListener('click', () => { manualMethod = b.dataset.manual; fillModal(); }));
     modal.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', () => copyManualValue(b.dataset.copy || '')));
     $('gateReceipt').onclick = () => openExternal(manualReceiptUrl());
