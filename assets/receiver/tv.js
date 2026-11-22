@@ -303,19 +303,34 @@
     });
     if (!info) return;
     cur.mode = 'embed'; cur.embedUrl = url; cur.method = info.method; cur.count = info.count; cur.via = via || '';
+    updateStreamButtons();
     showTvButton(true, 'Try another way (' + (info.method + 1) + '/' + info.count + ')');
     const ps = $('playState'); if (ps) ps.textContent = 'LIVE · WEB';
   }
-  let watchdog = 0;
-  function clearWatchdog() { clearTimeout(watchdog); watchdog = 0; }
+  let watchdog = 0, fallbackWatchdog = 0;
+  function clearWatchdog() { clearTimeout(watchdog); clearTimeout(fallbackWatchdog); watchdog = 0; fallbackWatchdog = 0; }
+  function updateStreamButtons() {
+    const main = $('mainStream'), backup = $('backupStream');
+    if (main) { main.disabled = !cur; main.classList.toggle('active', !!cur && !cur.alt); }
+    if (backup) { backup.disabled = !cur || !cur.c.altUrl; backup.classList.toggle('active', !!cur && !!cur.alt); }
+  }
+  function armEmbedFallback(token, c, alt) {
+    clearTimeout(fallbackWatchdog);
+    if (alt || !c.altUrl) return;
+    fallbackWatchdog = setTimeout(() => {
+      if (token !== playToken || !cur || cur.c !== c || cur.alt) return;
+      say('Main stream is taking too long. Switching to backup…');
+      play(c, true);
+    }, 18000);
+  }
   /* A direct stream that cannot be read here (CORS, hotlink protection, geo): try the channel's own player page,
      then the backup stream, like the phone app's Reload does. */
   function streamFailed(reason) {
     if (!cur || cur.mode !== 'media' || cur.failed || $('playerPanel').style.display !== 'block') return;
     cur.failed = true; clearWatchdog();
-    const c = cur.c, alt = cur.alt, s = streamOf(c, alt);
-    if (cur.wrapper) { say('Direct stream blocked (' + reason + '). Opening the channel page instead…'); openEmbed(c, alt, cur.wrapper, 0, 'wrapper'); return; }
-    if (!alt && c.altUrl) { say('Stream not available. Switching to the backup stream…'); play(c, true); return; }
+    const c = cur.c, alt = cur.alt;
+    if (!alt && c.altUrl) { say('Main stream unavailable. Switching to backup…'); play(c, true); return; }
+    if (cur.wrapper) { say('Trying an alternate player…'); openEmbed(c, alt, cur.wrapper, 0, 'wrapper'); return; }
     say('This channel could not be opened here. Try Backup stream or another channel.');
   }
   window.deeprowssTvFail = streamFailed;
@@ -340,6 +355,7 @@
     if (kind === 'embed') {
       /* Web channels get their own iframe page (not the movie iframe) and several ways to open it. */
       openEmbed(c, cur.alt, r.url, 0, 'embed');
+      armEmbedFallback(token, c, cur.alt);
     } else {
       cur.wrapper = wrapperOf(s.url, r.url);
       /* Windows app / Android TV app: send the channel's Referer + User-Agent and lift CORS for the stream. */
@@ -348,11 +364,10 @@
       try { if (window.DeeprowssTv && window.DeeprowssTv.setStream) window.DeeprowssTv.setStream(s.referer || '', s.ua || '', true); } catch (_) {}
       try { window.deeprowssPlay(r.url, kind, c.name + (cur.alt ? ' · Backup stream' : '')); } finally { window.__tvKeep = false; }
       const ps = $('playState'); if (ps) ps.textContent = 'LIVE';
-      showTvButton(!!cur.wrapper, 'Open channel page');
+      showTvButton(false);
       armWatchdog(token);
     }
-    $('altStream').classList.toggle('noalt', !c.altUrl);
-    { const l = $('altStream').querySelector('.lbl'); if (l) l.textContent = cur.alt ? 'Main stream' : 'Backup stream'; }
+    updateStreamButtons();
     if (!$('tvView').classList.contains('active')) return;
     renderSide();
   }
@@ -441,7 +456,8 @@
       io = new IntersectionObserver(es => { if (es.some(x => x.isIntersecting)) more(); }, { root: $('tvMain'), rootMargin: '600px' });
       io.observe($('tvSentinel'));
     } else $('tvMain').addEventListener('scroll', () => { const m = $('tvMain'); if (m.scrollTop + m.clientHeight > m.scrollHeight - 800) more(); });
-    $('altStream').onclick = () => { if (cur && cur.c.altUrl) play(cur.c, !cur.alt); };
+    $('mainStream').onclick = () => { if (cur) play(cur.c, false); };
+    $('backupStream').onclick = () => { if (cur && cur.c.altUrl) play(cur.c, true); };
     if ($('tvMethod')) $('tvMethod').onclick = nextWay;
     $('prevCh').onclick = () => zap(-1);
     $('nextCh').onclick = () => zap(1);
@@ -460,5 +476,13 @@
   }
   window.addEventListener('hashchange', () => { if (location.hash === '#tv') enter(); });
   if (location.hash === '#tv') enter();
+  window.deeprowssTvRemote = command => {
+    if (!cur || $('playerPanel').style.display !== 'block') return false;
+    if (command === 'mainstream') { play(cur.c, false); return true; }
+    if (command === 'backupstream' && cur.c.altUrl) { play(cur.c, true); return true; }
+    if (command === 'previous') { zap(-1); return true; }
+    if (command === 'next') { zap(1); return true; }
+    return false;
+  };
   window.deeprowssTv = { reload: () => load(true) };
 })();
