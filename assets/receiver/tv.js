@@ -298,11 +298,11 @@
       if (!/^https?:\/\//i.test(u) || out.some(x => x.url === u)) return;
       out.push({ url: u, referer: String(referer || ''), ua: String(ua || '') });
     };
-    if (Array.isArray(c.streams)) c.streams.forEach(x => x && add(x.url, x.referer || x.referrer, x.ua || x.userAgent || x.user_agent));
     add(c.url, c.referer, c.userAgent || c.ua);
-    add(c.altUrl, c.altReferer, c.altUserAgent || c.altUa);
-    add(c.altUrl2, c.altReferer2, c.altUserAgent2 || c.altUa2);
-    add(c.altUrl3, c.altReferer3, c.altUserAgent3 || c.altUa3);
+    if (Array.isArray(c.streams)) c.streams.forEach(x => x && add(x.url, x.referer || x.referrer, x.ua || x.userAgent || x.user_agent));
+    Object.keys(c).filter(key => /^altUrl\\d*$/i.test(key))
+      .sort((a,b) => Number(a.replace(/\\D/g,'')) - Number(b.replace(/\\D/g,'')))
+      .forEach(key => add(c[key], c[key.replace(/^altUrl/i,'altReferer')], c[key.replace(/^altUrl/i,'altUa')]));
     return out;
   }
   function streamIndexOf(c, choice) {
