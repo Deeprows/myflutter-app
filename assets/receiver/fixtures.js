@@ -32,13 +32,19 @@
     if (k && !/(Z|[+-]\d{2}:?\d{2})$/i.test(k) && /[T ]/.test(k)) k += '+01:00';
     const t = Date.parse(k);
     if (!s('home') || !s('away') || Number.isNaN(t)) return null;
+    const streams = Array.isArray(raw.streams)
+      ? raw.streams.map(x => ({ url: String(x && x.url || '').trim(), referer: String(x && (x.referer || x.referrer) || '').trim(), ua: String(x && (x.ua || x.userAgent || x.user_agent) || '').trim() })).filter(x => x.url)
+      : [
+          { url: s('url'), referer: s('referer'), ua: s('ua') },
+          ...Object.keys(raw).filter(key => /^altUrl\d*$/i.test(key)).sort((a,b) => Number(a.replace(/\D/g,'')) - Number(b.replace(/\D/g,''))).map(key => ({ url: s(key), referer: s(key.replace(/^altUrl/i,'altReferer')), ua: s(key.replace(/^altUrl/i,'altUa')) }))
+        ].filter(x => x.url);
     return {
       id: s('id') || s('home') + '-' + s('away') + '-' + s('kickoff'),
       home: s('home'), away: s('away'), homeLogo: s('homeLogo'), awayLogo: s('awayLogo'),
       league: s('league') || 'Football', scoreLeague: s('scoreLeague'), start: t, mins: parseInt(s('duration'), 10) || DEFAULT_MIN,
       url: s('url'), altUrl: s('altUrl'), altUrl2: s('altUrl2'), altUrl3: s('altUrl3'), referer: s('referer'), ua: s('ua'),
       altReferer: s('altReferer'), altUa: s('altUa'), altReferer2: s('altReferer2'), altUa2: s('altUa2'), altReferer3: s('altReferer3'), altUa3: s('altUa3'),
-      streams: [s('url'), s('altUrl'), s('altUrl2'), s('altUrl3')].filter(Boolean).map((url, i) => ({ url, referer: s(i === 0 ? 'referer' : 'altReferer' + (i > 1 ? i : '')), ua: s(i === 0 ? 'ua' : 'altUa' + (i > 1 ? i : '')) }))
+      streams
     };
   }
   async function load() {
