@@ -177,7 +177,7 @@ const decoderGrant = await (await call("/sub/admin", form({ token: "adm", instal
 assert.match(decoderGrant, /Premium until/);
 j = await (await post("/sub/decoder/issue", { install_id: ID3 })).json();
 assert.equal(j.active, true);
-assert.match(j.code, /^\\d{10}$/);
+assert.match(j.code, /^\d{10}$/);
 const decoderCode = j.code;
 j = await (await post("/receiver/decoder/validate", { code: decoderCode })).json();
 assert.equal(j.valid, true);
@@ -197,7 +197,7 @@ j = await (await call("/receiver/sub/verify?reference=" + encodeURIComponent(rec
 assert.equal(j.status, "success");
 j = await (await post("/receiver/decoder/issue", { device_id: RECEIVER_PAID })).json();
 assert.equal(j.active, true);
-assert.match(j.code, /^\\d{10}$/);
+assert.match(j.code, /^\d{10}$/);
 assert.equal((await (await call("/receiver/sub/status?device=" + RECEIVER_PAID)).json()).active, true);
 assert.equal((await (await post("/receiver/decoder/validate", { code: j.code })).json()).valid, true);
 
