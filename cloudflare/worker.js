@@ -2159,7 +2159,13 @@ async function subAdmin(request, env, url) {
       await env.DB.prepare(
         "UPDATE decoder_codes SET expires_at = ? WHERE owner_id = ? AND expires_at > ?"
       ).bind(e, id, Date.now()).run();
-      note = `Premium until ${new Date(e).toISOString().slice(0, 10)} for ${id}`;
+      // Issue (or renew) the actual Premium Decoder number as the manual
+      // payment token, so the app, Windows EXE and Android TV share one gate.
+      const issued = await issueDecoderCode(env, id);
+      const issuedData = await issued.json().catch(() => ({}));
+      const decoder = issuedData.active && issuedData.code ? String(issuedData.code) : "";
+      note = `Premium until ${new Date(e).toISOString().slice(0, 10)} for ${id}` +
+        (decoder ? `. Decoder number: ${decoder}` : `. Premium is active, but Decoder number generation failed; retry from the receiver.`);
     }
   }
 
