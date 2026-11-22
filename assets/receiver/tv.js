@@ -302,12 +302,13 @@
       method, referer: s.referer || '', ua: s.ua || '', origin: cfg.frameOrigin, framePage: cfg.framePage
     });
     if (!info) return;
-    cur.mode = 'embed'; cur.embedUrl = url; cur.method = info.method; cur.count = info.count; cur.via = via || '';
+    cur.mode = 'embed'; cur.embedUrl = url; cur.method = info.method; cur.count = info.count; cur.via = via || ''; cur.embedLoaded = false;
     updateStreamButtons();
     showTvButton(true, 'Try another way (' + (info.method + 1) + '/' + info.count + ')');
     const ps = $('playState'); if (ps) ps.textContent = 'LIVE · WEB';
   }
   let watchdog = 0, fallbackWatchdog = 0;
+  window.addEventListener('deeprowss-tv-embed-loaded', () => { if (cur && cur.mode === 'embed') { cur.embedLoaded = true; clearTimeout(fallbackWatchdog); } });
   function clearWatchdog() { clearTimeout(watchdog); clearTimeout(fallbackWatchdog); watchdog = 0; fallbackWatchdog = 0; }
   function updateStreamButtons() {
     const main = $('mainStream'), backup = $('backupStream');
@@ -318,7 +319,7 @@
     clearTimeout(fallbackWatchdog);
     if (alt || !c.altUrl) return;
     fallbackWatchdog = setTimeout(() => {
-      if (token !== playToken || !cur || cur.c !== c || cur.alt) return;
+      if (token !== playToken || !cur || cur.c !== c || cur.alt || cur.embedLoaded) return;
       say('Main stream is taking too long. Switching to backup…');
       play(c, true);
     }, 18000);
