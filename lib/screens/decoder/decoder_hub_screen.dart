@@ -37,18 +37,20 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
   @override
   void initState() {
     super.initState();
-    DecoderNumber.get().then((n) {
-      if (mounted) setState(() => _number = n);
-    });
-    // Everyone can open the Smart Decoder page. Tapping an item asks non-Premium
-    // visitors to upgrade (see _open and the Ready-to-watch buttons).
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       DecoderMemory.save('hub');
-      if (!PremiumGate.decoderLocked) {
-        final restore = _pageFor(widget.initialPage);
-        if (restore != null) _open(restore.$1, restore.$2);
+      // The Smart Decoder itself is Premium-only, not just its sub-pages.
+      final allowed = await PremiumGate.allowDecoder(context);
+      if (!mounted) return;
+      if (!allowed) {
+        Navigator.of(context).maybePop();
+        return;
       }
+      final n = await DecoderNumber.get();
+      if (mounted) setState(() => _number = n);
+      final restore = _pageFor(widget.initialPage);
+      if (restore != null) _open(restore.$1, restore.$2);
     });
   }
 
