@@ -630,4 +630,29 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
   if('serviceWorker' in navigator&&location.protocol==='https:'){try{navigator.serviceWorker.register('sw.js').catch(function(){});}catch(e){}}
 })();
 </script>
+
+<script>
+/* Adsterra popunder: load only on the Cloudflare receiver after the page is fully ready.
+   The provider script handles click activation; it is not opened automatically on page load. */
+(function () {
+  if (location.hostname !== 'deeprowss.pages.dev') return;
+  var loaded = false;
+  function loadPopunder() {
+    if (loaded) return;
+    loaded = true;
+    var s = document.createElement('script');
+    s.setAttribute('data-cfasync', 'false');
+    s.src = 'https://capitalhospitals.org/1/e5e505327285cf6306fe79dfac583467';
+    s.async = true;
+    document.head.appendChild(s);
+  }
+  if (document.readyState === 'complete') {
+    window.setTimeout(loadPopunder, 1200);
+  } else {
+    window.addEventListener('load', function () {
+      window.setTimeout(loadPopunder, 1200);
+    }, { once: true });
+  }
+})();
+</script>
 </body></html>
