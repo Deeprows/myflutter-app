@@ -152,7 +152,8 @@ assert.equal((await call("/sub/admin?token=adm")).status, 200);
 // 11. shared three-title movie trial (app account + receiver visitor)
 const TRIAL_APP = "1234567890abcdef1234567890abcdef";
 const TRIAL_DEVICE = "abcdef1234567890abcdef1234567890";
-for (const [id, prefix] of [[TRIAL_APP, "/sub/movie-access"], [TRIAL_DEVICE, "/receiver/movie-access"]]) {
+const TRIAL_GUEST = "abcdefabcdefabcdefabcdefabcdefab";
+for (const [id, prefix] of [[TRIAL_APP, "/sub/movie-access"], [TRIAL_GUEST, "/sub/movie-access-guest"], [TRIAL_DEVICE, "/receiver/movie-access"]]) {
   const payload = key => prefix === "/sub/movie-access"
     ? { install_id: id, movie_key: key, action: "play" }
     : { device_id: id, movie_key: key, action: "play" };
