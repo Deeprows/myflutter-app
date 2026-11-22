@@ -34,7 +34,8 @@
     return {
       id: s('id') || s('home') + '-' + s('away') + '-' + s('kickoff'),
       home: s('home'), away: s('away'), homeLogo: s('homeLogo'), awayLogo: s('awayLogo'),
-      league: s('league') || 'Football', start: t, mins: parseInt(s('duration'), 10) || DEFAULT_MIN
+      league: s('league') || 'Football', start: t, mins: parseInt(s('duration'), 10) || DEFAULT_MIN,
+      url: s('url'), altUrl: s('altUrl'), referer: s('referer'), ua: s('ua')
     };
   }
   async function load() {
@@ -201,11 +202,13 @@
   const where = () => window.deeprowssDesktop ? 'this Windows app' : 'this screen';
   function openModal(f) {
     const url = appUrl(), ver = cfg.update && cfg.update.version, now = Date.now(), live = phase(f, now) === 'live';
+    const allowAdPlayback = location.hostname === 'deeprowss.pages.dev' && location.hash === '#downloads' && !!f.url;
     modal.innerHTML = '<div class="fx-pop">' +
       '<button type="button" class="fx-x" id="fxX" aria-label="Close">✕</button>' +
       '<div class="fx-match">' + logo(f.homeLogo, f.home) + '<span class="vs">VS</span>' + logo(f.awayLogo, f.away) + '</div>' +
       '<h2>' + esc(f.home) + ' vs ' + esc(f.away) + '</h2>' +
       '<p class="fx-meta">' + esc(f.league) + ' · ' + (live ? 'Live now' : esc(dayLabel(f.start)) + ', ' + esc(timeOf(f.start))) + '</p>' +
+      (allowAdPlayback ? '<button type="button" class="fx-dl" id="fxWatchAds">▶ Continue watching with ads</button>' : '') +
       '<div class="fx-opts">' +
         '<div class="fx-opt"><span class="ic">📱</span><div><b>Watch on your phone</b><p>Get the Deeprowss app and open this match from Fixtures. Live streams, scores and match analysis are all there.</p></div></div>' +
         '<div class="fx-opt"><span class="ic">📺</span><div><b>Watch on ' + where() + '</b><p>In the app, open <b>Smart Decoder</b>, choose <b>Send to receiver page</b> and scan the QR code under <b>Connect with App</b> here. The match then plays on ' + where() + '.</p></div></div>' +
@@ -214,6 +217,7 @@
       '<button type="button" class="secondary fx-connect" id="fxConnect">Connect with App</button>' +
       (ver ? '<div class="fx-ver">LATEST VERSION ' + esc(ver) + '</div>' : '') + '</div>';
     $('fxX').onclick = closeModal;
+    const watchAds = $('fxWatchAds'); if (watchAds) watchAds.onclick = () => { closeModal(); if (window.deeprowssPlayFixture) window.deeprowssPlayFixture(f); else { const s = document.getElementById('playState'); if (s) s.textContent = 'Player is unavailable. Please refresh and try again.'; } };
     $('fxConnect').onclick = () => { closeModal(); if (window.deeprowssGo) window.deeprowssGo('connect'); };
     const dl = $('fxDl'); if (dl) dl.onclick = () => openDl(url);
     modal.classList.add('open'); modalOpen = true;
