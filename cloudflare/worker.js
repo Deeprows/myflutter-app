@@ -1180,7 +1180,7 @@ async function receiverAccess(request, env, url) {
     if (path === "/receiver/decoder/validate" && request.method === "POST") {
       const body = await request.json().catch(() => ({}));
       const result = await validateDecoderCode(env, body.code);
-      return json(result);
+      return json({ valid: result.valid === true, expires_at: result.expires_at || 0, now: result.now || Date.now() });
     }
     if (path === "/receiver/movie-access" && request.method === "POST") {
       const body = await request.json().catch(() => ({}));
