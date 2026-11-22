@@ -9,7 +9,9 @@
   const OWN_URL = ROOT + 'tv.json';
   const CONFIG_URL = ROOT + 'app_config.json';
   const FAV_KEY = 'deeprowss_tv_favs', RECENT_KEY = 'deeprowss_tv_recent', LAST_CAT_KEY = 'deeprowss_tv_cat';
-  const cfg = { base: 'https://dearbulut.github.io/iptv', path: '/api/v1/channels.online.json', refreshMin: 180, hideNsfw: true };
+  const cfg = { base: 'https://dearbulut.github.io/iptv', path: '/api/v1/channels.online.json', refreshMin: 180, hideNsfw: true,
+    /* Same site address the phone app opens web channels under (player.embedOrigin / player.origin in app_config.json). */
+    frameOrigin: 'https://footbolive.online/', framePage: '' };
   const desktop = window.deeprowssDesktop || null;
 
   const CATS = [
@@ -281,21 +283,84 @@
   function streamOf(c, alt) {
     return alt && c.altUrl ? { url: c.altUrl, referer: c.altReferer, ua: c.altUserAgent } : { url: c.url, referer: c.referer, ua: c.userAgent };
   }
+  /* The link as the phone app would open it as a web page (wrapper players such as anym3u8player / m3u8-player pages). */
+  function wrapperOf(s, inner) {
+    let x = String(s || '').trim();
+    if (x.includes('<')) { const m = /src\s*=\s*["']([^"']+)["']/i.exec(x); if (m) x = m[1].replace(/&amp;/g, '&').trim(); }
+    x = x.split(/\s+/)[0]; if (x.startsWith('//')) x = 'https:' + x;
+    if (!HTTP.test(x) || x === inner) return '';
+    try { return MEDIA_EXT.test(new URL(x).pathname) || /\.(m3u8|mpd)$/i.test(new URL(x).pathname) ? '' : x; } catch (_) { return ''; }
+  }
+  function showTvButton(on, label) {
+    const b = $('tvMethod'); if (!b) return;
+    b.classList.toggle('nomethod', !on);
+    const l = b.querySelector('.lbl'); if (l && label) l.textContent = label;
+  }
+  function openEmbed(c, alt, url, method, via) {
+    const s = streamOf(c, alt);
+    const info = window.deeprowssPlayTv(url, c.name + (alt && c.altUrl ? ' · Backup stream' : ''), {
+      method, referer: s.referer || '', ua: s.ua || '', origin: cfg.frameOrigin, framePage: cfg.framePage
+    });
+    if (!info) return;
+    cur.mode = 'embed'; cur.embedUrl = url; cur.method = info.method; cur.count = info.count; cur.via = via || '';
+    showTvButton(true, 'Try another way (' + (info.method + 1) + '/' + info.count + ')');
+    const ps = $('playState'); if (ps) ps.textContent = 'LIVE · WEB';
+  }
+  let watchdog = 0;
+  function clearWatchdog() { clearTimeout(watchdog); watchdog = 0; }
+  /* A direct stream that cannot be read here (CORS, hotlink protection, geo): try the channel's own player page,
+     then the backup stream, like the phone app's Reload does. */
+  function streamFailed(reason) {
+    if (!cur || cur.mode !== 'media' || cur.failed || $('playerPanel').style.display !== 'block') return;
+    cur.failed = true; clearWatchdog();
+    const c = cur.c, alt = cur.alt, s = streamOf(c, alt);
+    if (cur.wrapper) { say('Direct stream blocked (' + reason + '). Opening the channel page instead…'); openEmbed(c, alt, cur.wrapper, 0, 'wrapper'); return; }
+    if (!alt && c.altUrl) { say('Stream not available. Switching to the backup stream…'); play(c, true); return; }
+    say('This channel could not be opened here. Try Backup stream or another channel.');
+  }
+  window.deeprowssTvFail = streamFailed;
+  function armWatchdog(token) {
+    clearWatchdog();
+    watchdog = setTimeout(() => {
+      if (token !== playToken || !cur || cur.mode !== 'media' || $('playerPanel').style.display !== 'block') return;
+      const v = $('screen');
+      if (v && (v.readyState >= 3 || (!v.paused && v.currentTime > 0))) return;
+      streamFailed('no data');
+    }, 15000);
+  }
   async function play(c, alt) {
     const s = streamOf(c, alt), r = resolve(s.url);
     if (r.kind === 'invalid') { say('This channel link is not valid.'); return; }
-    if (desktop && desktop.setStreamHeaders) desktop.setStreamHeaders({ referer: s.referer || '', userAgent: s.ua || '' });
     let kind = r.kind;
     const token = ++playToken;
+    clearWatchdog();
     if (kind === 'embed') { const k = await sniff(r.url); if (token !== playToken) return; if (k) kind = k; }
-    cur = { c, alt: !!alt && !!c.altUrl, idx: filtered.findIndex(x => keyOf(x) === keyOf(c)) };
+    cur = { c, alt: !!alt && !!c.altUrl, idx: filtered.findIndex(x => keyOf(x) === keyOf(c)), mode: 'media', wrapper: '', failed: false };
     pushRecent(c);
-    window.deeprowssPlay(r.url, kind, c.name + (cur.alt ? ' · Backup stream' : ''));
-    const ps = $('playState'); if (ps) ps.textContent = kind === 'embed' ? 'LIVE · WEB' : 'LIVE';
+    if (kind === 'embed') {
+      /* Web channels get their own iframe page (not the movie iframe) and several ways to open it. */
+      openEmbed(c, cur.alt, r.url, 0, 'embed');
+    } else {
+      cur.wrapper = wrapperOf(s.url, r.url);
+      /* Windows app / Android TV app: send the channel's Referer + User-Agent and lift CORS for the stream. */
+      if (desktop && desktop.setStreamHeaders) desktop.setStreamHeaders({ referer: s.referer || '', userAgent: s.ua || '' });
+      window.__tvKeep = true; // clearMedia() inside deeprowssPlay must not drop the headers we are about to set
+      try { if (window.DeeprowssTv && window.DeeprowssTv.setStream) window.DeeprowssTv.setStream(s.referer || '', s.ua || '', true); } catch (_) {}
+      try { window.deeprowssPlay(r.url, kind, c.name + (cur.alt ? ' · Backup stream' : '')); } finally { window.__tvKeep = false; }
+      const ps = $('playState'); if (ps) ps.textContent = 'LIVE';
+      showTvButton(!!cur.wrapper, 'Open channel page');
+      armWatchdog(token);
+    }
     $('altStream').classList.toggle('noalt', !c.altUrl);
     { const l = $('altStream').querySelector('.lbl'); if (l) l.textContent = cur.alt ? 'Main stream' : 'Backup stream'; }
     if (!$('tvView').classList.contains('active')) return;
     renderSide();
+  }
+  /* "Try another way": next opening method for a web channel, or the channel's own page for a direct stream. */
+  function nextWay() {
+    if (!cur || $('playerPanel').style.display !== 'block') return;
+    if (cur.mode === 'embed') { openEmbed(cur.c, cur.alt, cur.embedUrl, (cur.method + 1) % Math.max(1, cur.count), cur.via); return; }
+    if (cur.wrapper) { cur.failed = true; clearWatchdog(); openEmbed(cur.c, cur.alt, cur.wrapper, 0, 'wrapper'); }
   }
   let playToken = 0;
   function say(msg) { const s = $('tvStatus'); if (s) { s.textContent = msg; setTimeout(renderStatus, 4000); } }
@@ -316,6 +381,9 @@
       const c = await getJson(CONFIG_URL, 'data/app_config.json'), t = c.tv || c.nexus || {};
       if (t.nexusBase) cfg.base = String(t.nexusBase); if (t.nexusPath) cfg.path = String(t.nexusPath);
       if (Number(t.refreshMinutes) > 0) cfg.refreshMin = Number(t.refreshMinutes); if (t.hideNsfw === false) cfg.hideNsfw = false;
+      const pl = c.player || {}, fo = String(pl.embedOrigin || pl.origin || '').trim();
+      if (/^https?:\/\//i.test(fo)) cfg.frameOrigin = fo.endsWith('/') ? fo : fo + '/';
+      const fp = String(t.framePage || pl.tvFramePage || '').trim(); if (/^https:\/\//i.test(fp)) cfg.framePage = fp;
     } catch (_) {}
   }
   function rebuild() { all = merge(own, nexus); renderCountries(); render(); }
@@ -374,6 +442,7 @@
       io.observe($('tvSentinel'));
     } else $('tvMain').addEventListener('scroll', () => { const m = $('tvMain'); if (m.scrollTop + m.clientHeight > m.scrollHeight - 800) more(); });
     $('altStream').onclick = () => { if (cur && cur.c.altUrl) play(cur.c, !cur.alt); };
+    if ($('tvMethod')) $('tvMethod').onclick = nextWay;
     $('prevCh').onclick = () => zap(-1);
     $('nextCh').onclick = () => zap(1);
     document.addEventListener('keydown', e => {
@@ -381,6 +450,7 @@
       if (e.key === 'PageUp' || e.key === ']' ) { e.preventDefault(); zap(-1); }
       else if (e.key === 'PageDown' || e.key === '[') { e.preventDefault(); zap(1); }
       else if (e.key.toLowerCase() === 'b') { if (cur && cur.c.altUrl) play(cur.c, !cur.alt); }
+      else if (e.key.toLowerCase() === 'r') nextWay();
     });
   }
   function enter() {
