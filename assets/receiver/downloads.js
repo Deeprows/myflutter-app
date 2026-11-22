@@ -226,7 +226,7 @@
         const t = resolve(KEY_OF(a.id, b.dataset.slot)), span = b.querySelector('span');
         b.disabled = t.state === 'off' || t.state === 'loading';
         span.textContent = t.state === 'off' ? 'Coming soon'
-          : t.state === 'loading' ? 'Checking latest version…'
+          : t.state === 'loading' ? 'Loading download links…'
           : (tv ? 'Show QR to download' : b.dataset.label);
         if (b.dataset.slot === 'main' && t.state === 'ok') meta = [t.version, fmtSize(t.size)].filter(Boolean).join(' · ');
       });
