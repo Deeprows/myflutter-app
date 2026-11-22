@@ -11,7 +11,7 @@
   const DEVICE_KEY = 'deeprowss_receiver_device_v1';
   const PENDING_KEY = 'deeprowss_receiver_payment_ref';
   const FREE_LIMIT = 3;
-  let cfg = {}, unlocked = false, code = '', codeExpiry = 0, modalOpen = false;
+  let cfg = {}, unlocked = false, code = '', codeExpiry = 0, serverOffset = 0, modalOpen = false;
   let plan = { available: true, recurring: false, recurring_year: false, price_display: '₦2,000', year_price_display: '₦20,000' };
   let period = 'month', method = 'card', autoRenew = false, verifyTimer = null, verifyCount = 0;
 
@@ -84,7 +84,7 @@
       if (messageEl) { messageEl.classList.add('err'); messageEl.textContent = 'This Decoder number is invalid or its Premium subscription has expired.'; }
       return false;
     }
-    code = n; unlocked = true; codeExpiry = Number(result.expires_at || 0);
+    code = n; unlocked = true; codeExpiry = Number(result.expires_at || 0); serverOffset = Number(result.now || Date.now()) - Date.now();
     try { localStorage.setItem(CODE_KEY, code); } catch (_) {}
     if (messageEl) messageEl.textContent = 'Premium unlocked.';
     closeModal(); render();
@@ -95,7 +95,7 @@
     if (saved) {
       const result = await validateCode(saved);
       if (result.valid) {
-        code = saved; unlocked = true; codeExpiry = Number(result.expires_at || 0);
+        code = saved; unlocked = true; codeExpiry = Number(result.expires_at || 0); serverOffset = Number(result.now || Date.now()) - Date.now();
         render(); return true;
       }
       try { localStorage.removeItem(CODE_KEY); } catch (_) {}
@@ -107,11 +107,20 @@
     if (status.ok && status.data.active) {
       const issued = await api('/receiver/decoder/issue', 'POST', { device_id: deviceId() });
       if (issued.ok && issued.data.active && issued.data.code) {
-        code = digits(issued.data.code); unlocked = true; codeExpiry = Number(issued.data.expires_at || 0);
+        code = digits(issued.data.code); unlocked = true; codeExpiry = Number(issued.data.expires_at || 0); serverOffset = Number(issued.data.now || Date.now()) - Date.now();
         try { localStorage.setItem(CODE_KEY, code); } catch (_) {}
       }
     }
     render(); return unlocked;
+  }
+
+  function activeUnlock() {
+    if (unlocked && codeExpiry && Date.now() + serverOffset >= codeExpiry) {
+      unlocked = false; code = ''; codeExpiry = 0;
+      try { localStorage.removeItem(CODE_KEY); } catch (_) {}
+      render();
+    }
+    return unlocked;
   }
 
   const css = document.createElement('style');
@@ -367,7 +376,7 @@
     const type = movie && (movie.type === 'tv' || movie.isSeries) ? 'tv' : 'movie';
     const key = type + ':' + title.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 100);
     const result = await api('/receiver/movie-access', 'POST', {
-      device_id: deviceId(), decoder_code: unlocked ? code : '',
+      device_id: deviceId(), decoder_code: activeUnlock() ? code : '',
       movie_key: key, action: action || 'play'
     });
     if (result.ok && result.data.allowed === true) return true;
@@ -388,10 +397,10 @@
   // Keep the Decoder-number gate for live TV channels. Movie cards themselves
   // remain browsable; the three-title gate is applied to their action buttons.
   document.addEventListener('click', e => {
-    if (unlocked || !gateOn()) return;
+    if (!gateOn()) return;
     const t = e.target && e.target.closest ? e.target : null;
     if (!t || t.closest('#gateModal') || t.closest('.rm,.fav,[data-fav]')) return;
-    if (!t.closest('.ch')) return;
+    if (!t.closest('.ch') || activeUnlock()) return;
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
     openModal();
   }, true);
@@ -417,6 +426,6 @@
     const pending = localStorage.getItem(PENDING_KEY);
     if (pending) startVerifyPolling();
   }
-  setInterval(() => { if (unlocked) refreshEntitlement(); }, 60000);
+  setInterval(() => { if (unlocked) refreshEntitlement(); }, 15000);
   setInterval(loadConfig, 5 * 60 * 1000);
 })();
