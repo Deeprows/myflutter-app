@@ -249,47 +249,98 @@
   modal.className = 'sheet gate-sheet'; modal.id = 'gateModal';
   modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); modal.setAttribute('aria-label', 'Deeprowss Premium subscription');
 
+  function manualAccountMarkup() {
+    const bank = paymentAccount('opay');
+    const wallet = paymentAccount('wallet');
+    const account = manualMethod === 'opay' ? bank : wallet;
+    const rows = manualMethod === 'opay'
+      ? [
+          ['Provider', account.provider || account.name || 'OPay'],
+          ['Account name', account.account_name || account.wallet_name || ''],
+          ['Account number', account.account_number || '']
+        ]
+      : [
+          ['Wallet', account.provider || account.name || 'USDT'],
+          ['Network', account.network || 'TRC20'],
+          ['Wallet name', account.wallet_name || account.account_name || ''],
+          ['Wallet address', account.wallet_address || account.address || '']
+        ];
+    return '<div class="gate-account">' +
+      rows.map((r, i) => '<div class="gate-account-row"><span>' + escapeHtml(r[0]) + '</span><b>' + escapeHtml(r[1]) + '</b>' +
+        (i === rows.length - 1 ? '<button type="button" class="gate-copy" data-copy="' + escapeHtml(r[1]) + '">Copy</button>' : '') +
+        '</div>').join('') +
+      '<p>' + (manualMethod === 'opay'
+        ? 'Transfer ' + escapeHtml(amountLine(period === 'year')) + ' for the ' + (period === 'year' ? 'yearly' : 'monthly') + ' Premium plan.'
+        : 'Send the USDT equivalent of ' + escapeHtml(amountLine(period === 'year')) + '. Use TRC20 only.') +
+      '</p></div>';
+  }
+  function manualReceiptUrl() {
+    const days = period === 'year' ? 366 : 31;
+    const method = manualMethod === 'opay' ? 'OPay bank transfer' : 'USDT ' + (paymentAccount('wallet').network || 'TRC20');
+    const msg = 'Hello Deeprowss, I have made a manual Premium payment.\\n' +
+      'Plan: ' + (period === 'year' ? 'Yearly' : 'Monthly') + ' (' + days + ' days)\\n' +
+      'Payment method: ' + method + '\\n' +
+      'Amount: ' + amountLine(period === 'year') + '\\n' +
+      'Please confirm my payment and activate Premium. I will attach my receipt.\\n' +
+      'Receiver ID: ' + deviceId();
+    return 'https://wa.me/2347041629630?text=' + encodeURIComponent(msg);
+  }
+  async function copyManualValue(value) {
+    try {
+      await navigator.clipboard.writeText(value);
+      const s = $('gateStatus'); if (s) s.textContent = 'Payment detail copied.';
+    } catch (_) {
+      const input = document.createElement('textarea');
+      input.value = value; document.body.appendChild(input); input.select();
+      try { document.execCommand('copy'); } catch (__) {}
+      input.remove();
+      const s = $('gateStatus'); if (s) s.textContent = 'Payment detail copied.';
+    }
+  }
+  async function checkManualActivation() {
+    const status = $('gateStatus');
+    if (status) status.textContent = 'Checking your Premium activation…';
+    const ok = await issueGuestCode();
+    const current = $('gateStatus');
+    if (ok) {
+      if (current) current.textContent = 'Premium is active. Your Decoder number: ' + pretty(code) + '. Enter this on your other TV devices if needed.';
+    } else if (current) {
+      current.textContent = 'Your payment has not been confirmed yet. Send your receipt on WhatsApp; once the admin activates your ID, tap this button again.';
+    }
+  }
   function modalMarkup() {
-    const recurring = period === 'year' ? plan.recurring_year : plan.recurring;
     return '<div class="gate-pop">' +
       '<button type="button" class="gate-x" id="gateX" aria-label="Close">✕</button>' +
       '<h2>Deeprowss Premium</h2>' +
       '<p>Unlock unlimited movies and series, Play, Alternate player, Downloads and Smart Decoder. Visitors can watch 3 movie titles free.</p>' +
-      '<ul class="gate-features"><li>✓ No pop-ups</li><li>✓ Stream without interruptions</li><li>✓ Movies and series</li><li>✓ Smart Decoder access</li></ul>' +
+      '<ul class="gate-features"><li>✓ No pop-ups</li><li>✓ Stream without interruptions</li><li>✓ Unlimited movies and downloads</li><li>✓ Smart Decoder access</li></ul>' +
       '<div class="gate-code"><label class="gate-field" for="gateModalCode">Already have a Decoder number from the Deeprowss App?</label><input id="gateModalCode" type="text" inputmode="numeric" maxlength="12" placeholder="000 000 0000"><button type="button" class="gate-verify" id="gateModalUnlock">Unlock with Decoder number</button></div>' +
       '<div class="gate-plans">' +
         '<button type="button" class="gate-choice ' + (period === 'month' ? 'active' : '') + '" data-period="month">Monthly<small>' + escapeHtml(shownPrice(false)) + ' / month</small></button>' +
         '<button type="button" class="gate-choice ' + (period === 'year' ? 'active' : '') + '" data-period="year">Yearly<small>' + escapeHtml(shownPrice(true)) + ' / year · Save more</small></button>' +
       '</div>' +
-      '<label class="gate-field" for="gateEmail">Your e-mail (for the receipt)</label>' +
-      '<input id="gateEmail" type="email" autocomplete="email" placeholder="you@example.com">' +
-      '<div class="gate-field">Payment method</div>' +
+      '<div class="gate-paystack"><span>Paystack online payment</span><b class="gate-coming">COMING SOON</b></div>' +
+      '<div class="gate-field">Choose manual payment method</div>' +
       '<div class="gate-methods">' +
-        '<button type="button" class="gate-choice ' + (method === 'card' ? 'active' : '') + '" data-method="card">Card</button>' +
-        '<button type="button" class="gate-choice ' + (method === 'ussd' ? 'active' : '') + '" data-method="ussd">USSD</button>' +
-        '<button type="button" class="gate-choice ' + (method === 'bank_transfer' ? 'active' : '') + '" data-method="bank_transfer">Bank transfer</button>' +
-        '<button type="button" class="gate-choice ' + (method === 'any' ? 'active' : '') + '" data-method="any">All options</button>' +
+        '<button type="button" class="gate-choice ' + (manualMethod === 'opay' ? 'active' : '') + '" data-manual="opay">OPay</button>' +
+        '<button type="button" class="gate-choice ' + (manualMethod === 'crypto' ? 'active' : '') + '" data-manual="crypto">USDT · TRC20</button>' +
       '</div>' +
-      (method === 'card' && recurring ? '<label class="gate-toggle"><input id="gateAuto" type="checkbox" ' + (autoRenew ? 'checked' : '') + '> Renew automatically by card</label>' : '') +
-      '<button type="button" class="gate-pay" id="gatePay" ' + (plan.available ? '' : 'disabled') + '>' + (plan.available ? 'Pay securely with Paystack · ' + escapeHtml(shownPrice(period === 'year')) : 'Online payment unavailable') + '</button>' +
-      '<button type="button" class="gate-verify" id="gateVerify">I have paid · Verify payment</button>' +
-      '<div class="gate-status" id="gateStatus">Pay securely with Paystack, or contact our WhatsApp helpline for manual activation.</div>' +
-
-      '<div class="gate-helpline">WhatsApp helpline: <a href="https://wa.me/2347041629630?text=' + encodeURIComponent('Hello Deeprowss, I want to subscribe to Premium. Receiver ID: ' + deviceId()) + '" target="_blank" rel="noopener noreferrer">+234 704 162 9630</a></div>' +
+      manualAccountMarkup() +
+      '<button type="button" class="gate-action" id="gateReceipt">Send payment receipt on WhatsApp</button>' +
+      '<button type="button" class="gate-check" id="gateCheck">I have paid · Check Premium activation</button>' +
+      '<div class="gate-status" id="gateStatus">Make your transfer, then send the payment screenshot to our WhatsApp helpline. Your receiver ID is included automatically.</div>' +
+      '<div class="gate-helpline">WhatsApp helpline: <a href="https://wa.me/2347041629630?text=' + encodeURIComponent('Hello Deeprowss, I need help with Premium. Receiver ID: ' + deviceId()) + '" target="_blank" rel="noopener noreferrer">+234 704 162 9630</a></div>' +
     '</div>';
   }
   function bindModal() {
     $('gateX').onclick = closeModal;
     const help = modal.querySelector('.gate-helpline a');
-    if (help) help.onclick = e => {
-      e.preventDefault();
-      openExternal(help.href);
-    };
+    if (help) help.onclick = e => { e.preventDefault(); openExternal(help.href); };
     modal.querySelectorAll('[data-period]').forEach(b => b.addEventListener('click', () => { period = b.dataset.period; fillModal(); }));
-    modal.querySelectorAll('[data-method]').forEach(b => b.addEventListener('click', () => { method = b.dataset.method; if (method !== 'card') autoRenew = false; fillModal(); }));
-    const auto = $('gateAuto'); if (auto) auto.onchange = () => { autoRenew = auto.checked; };
-    $('gatePay').onclick = startCheckout;
-    $('gateVerify').onclick = verifyPayment;
+    modal.querySelectorAll('[data-manual]').forEach(b => b.addEventListener('click', () => { manualMethod = b.dataset.manual; fillModal(); }));
+    modal.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', () => copyManualValue(b.dataset.copy || '')));
+    $('gateReceipt').onclick = () => openExternal(manualReceiptUrl());
+    $('gateCheck').onclick = checkManualActivation;
     const codeInput = $('gateModalCode');
     codeInput.addEventListener('input', () => { const v = pretty(codeInput.value); if (v !== codeInput.value) codeInput.value = v; });
     $('gateModalUnlock').onclick = () => unlock(codeInput.value, $('gateStatus'));
@@ -309,9 +360,6 @@
   function fillModal() { modal.innerHTML = modalMarkup(); bindModal(); }
   function openModal() {
     fillModal(); modal.classList.add('open'); modalOpen = true;
-    const email = localStorage.getItem('deeprowss_receiver_email') || '';
-    if ($('gateEmail')) $('gateEmail').value = email;
-    if (localStorage.getItem(PENDING_KEY)) startVerifyPolling();
   }
   function closeModal() { modal.classList.remove('open'); modalOpen = false; }
   modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
