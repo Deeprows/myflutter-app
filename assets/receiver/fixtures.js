@@ -423,6 +423,7 @@
     const m = espnFor(f, now), has = hasScore(m);
     const allowAdPlayback = location.hostname === 'deeprowss.pages.dev' && !!f.url;
     const hasAlt = /^https?:\/\//i.test(f.altUrl || '');
+    const download = url ? '<button type="button" class="fx-dl" id="fxDl">⬇ Download Deeprowss App</button>' : '<p class="fx-meta">The download link is not available right now. Please try again in a moment.</p>';
     const watch = !allowAdPlayback ? '' : '<button type="button" class="fx-dl" id="fxWatchAds">▶ Continue watching with ads</button>';
     modal.innerHTML = '<div class="fx-pop">' +
       '<button type="button" class="fx-x" id="fxX" aria-label="Close">✕</button>' +
@@ -431,12 +432,13 @@
         logo(f.awayLogo, f.away, m && m.awayLogo) + '</div>' +
       '<h2>' + esc(f.home) + ' vs ' + esc(f.away) + '</h2>' +
       '<p class="fx-meta">' + esc(f.league) + ' · ' + (has || live ? esc(whenText(f, now)) : esc(dayLabel(f.start)) + ', ' + esc(timeOf(f.start))) + '</p>' +
+      download +
       watch +
       '<div class="fx-opts">' +
         '<div class="fx-opt"><span class="ic">📱</span><div><b>Watch on your phone</b><p>Get the Deeprowss app and open this match from Fixtures. Live streams, scores and match analysis are all there.</p></div></div>' +
         '<div class="fx-opt"><span class="ic">📺</span><div><b>Watch on ' + where() + '</b><p>In the app, open <b>Smart Decoder</b>, choose <b>Send to receiver page</b> and scan the QR code under <b>Connect with App</b> here. The match then plays on ' + where() + '.</p></div></div>' +
       '</div>' +
-      (url ? '<button type="button" class="fx-dl" id="fxDl">⬇ Download Deeprowss App</button>' : '<p class="fx-meta">The download link is not available right now. Please try again in a moment.</p>') +
+
       '<button type="button" class="secondary fx-connect" id="fxConnect">Connect with App</button>' +
       (ver ? '<div class="fx-ver">LATEST VERSION ' + esc(ver) + '</div>' : '') + '</div>';
     $('fxX').onclick = closeModal;
