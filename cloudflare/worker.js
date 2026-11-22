@@ -2319,13 +2319,13 @@ ${quotaHtml}
 ${creditHtml}
 <h3>Token requests</h3>
 ${reqHtml}
-<h3>Make tokens</h3>
+<h3>Legacy ad-free tokens</h3>
 <form method="post">
 <input type="hidden" name="token" value="${tk}"><input type="hidden" name="action" value="mint">
 <p><input name="days" type="number" value="30" placeholder="Days" style="${box}"></p>
 <p><input name="count" type="number" value="1" placeholder="How many (1-20)" style="${box}"></p>
 <p><input name="note" placeholder="Note (optional, e.g. a name)" style="${box}"></p>
-<p><button style="${box};font-size:16px">Make token(s)</button></p>
+<p><button style="${box};font-size:16px">Make legacy ad-free token(s)</button></p>
 </form>
 <h3>Grant Premium to an ID</h3>
 <form method="post">
@@ -2334,11 +2334,11 @@ ${reqHtml}
 <p><input name="days" type="number" value="30" style="${box}"></p>
 <p><button style="${box};font-size:16px">Grant Premium + generate Decoder number (0 = revoke)</button></p>
 </form>
-<h3>Unused tokens</h3>
+<h3>Unused legacy ad-free tokens</h3>
 <table style="width:100%;font-size:12.5px"><tr><th align=left>Token<th align=left>Days<th align=left>For<th align=left>Note<th></tr>${unusedHtml}</table>
 <h3>Premium subscriptions (active)</h3>
 <table style="width:100%;font-size:12.5px"><tr><th align=left>ID<th align=left>Source<th align=left>Until<th align=left>E-mail<th></tr>${list}</table>
-<h3>Used tokens</h3>
+<h3>Used legacy ad-free tokens</h3>
 <table style="width:100%;font-size:12.5px"><tr><th align=left>Token<th align=left>Days<th align=left>Used<th align=left>Note<th></tr>${usedHtml}</table>
 </body>`
   );
