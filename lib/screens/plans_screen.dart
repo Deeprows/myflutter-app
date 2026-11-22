@@ -407,6 +407,8 @@ class _PlansScreenState extends State<PlansScreen> {
           const SizedBox(height: 12),
           feature('No pop-ups'),
           feature('Stream without interruptions'),
+          feature('Unlimited movies, series and downloads'),
+          feature('Premium Smart Decoder access'),
           feature('Pay with card, USSD or bank transfer'),
           feature('Monthly or yearly (save with yearly)'),
           const SizedBox(height: 8),
@@ -704,8 +706,10 @@ class _PlansScreenState extends State<PlansScreen> {
               style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
           Text(
-            'Everything is open. A short “Support” page shows every $m '
-            'minutes of use.',
+            'Browse the full catalogue and watch 3 distinct movie or series '
+            'titles free. After that, Play, Alternate player and Download '
+            'require Premium. Smart Decoder is Premium-only. A short “Support” '
+            'page shows every $m minutes of use.',
             style: TextStyle(color: Ui.muted, fontSize: 13.5, height: 1.25),
           ),
           const SizedBox(height: 12),
