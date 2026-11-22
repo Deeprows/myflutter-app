@@ -76,8 +76,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 @media(max-height:720px){.home-feature{bottom:240px}.home-feature p{display:none}.tile{min-height:150px;padding-top:80px}}
 @media(max-width:820px){
   .home-top{padding:20px 22px}.clock{display:none}.home-feature{display:none}
-  .tiles{left:20px;right:20px;bottom:44px;grid-template-columns:1fr;gap:12px}.tile{height:92px;min-height:0;flex-direction:row;align-items:center;justify-content:flex-start;padding:0 16px 0 90px}
+  .tiles{left:20px;right:20px;bottom:72px;grid-template-columns:1fr;gap:12px}.tile{height:92px;min-height:0;flex-direction:row;align-items:center;justify-content:flex-start;padding:0 16px 0 90px}
   .tile svg{top:21px;left:22px;width:46px;height:46px}.tile b{font-size:21px}.home-hint{display:none}
+  .receiver-footer{position:absolute;z-index:3;left:0;right:0;bottom:16px;text-align:center;font-size:11px;letter-spacing:.12em;color:#7f90a5;pointer-events:none}
 }
 
 /* ---------- movies ---------- */
