@@ -215,7 +215,7 @@
     '.gate-choice{flex:1;min-width:0;padding:11px 8px;border:1px solid #33465c;border-radius:12px;background:#101c2a;color:#dbe7f3;text-align:center;font-weight:800;cursor:pointer}',
     '.gate-choice.active{border-color:#f3c76b;background:#f3c76b18;color:#ffe2a0}',
     '.gate-choice small{display:block;margin-top:4px;font-size:11px;color:#9aabc0;font-weight:600}',
-    '.gate-plan-select{box-sizing:border-box;width:100%;padding:12px;border:1px solid #33465c;border-radius:10px;background:#060a10;color:#fff;font-size:14px;margin:4px 0 10px}'
+    '.gate-plan-select{box-sizing:border-box;width:100%;padding:12px;border:1px solid #33465c;border-radius:10px;background:#060a10;color:#fff;font-size:14px;margin:4px 0 10px}',
     '.gate-field{display:block;margin:12px 0 6px;font-size:12px;font-weight:800;color:#dceaf6}',
     '.gate-pop input[type=email],.gate-pop input[type=text]{box-sizing:border-box;width:100%;min-width:0;padding:12px;border:1px solid #33465c;border-radius:10px;background:#060a10;color:#fff;font-size:15px}',
     '.gate-toggle{display:flex;align-items:center;gap:8px;margin:10px 0;color:#b8c7d8;font-size:12px}',
@@ -223,6 +223,16 @@
     '.gate-pay:disabled{opacity:.45;cursor:not-allowed}',
     '.gate-verify{width:100%;min-height:42px;margin-top:8px;border:1px solid #52667d;border-radius:12px;background:#172536;color:#e6f0fa;font-weight:800;cursor:pointer}',
     '.gate-status{min-height:18px;margin:8px 0;font-size:12px;line-height:1.4;color:#a9bad0}',
+    '.gate-substatus{margin:14px 0;padding:14px;border:1px solid #35533f;border-radius:14px;background:#0c1c16}',
+    '.gate-substatus .status-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px;color:#f2f7f4;font-weight:900}',
+    '.gate-substatus .status-pill{padding:5px 9px;border-radius:20px;background:#1b9b5528;color:#7be8a4;font-size:10px;font-weight:900}',
+    '.gate-substatus .status-pill.expired{background:#ef444422;color:#fca5a5}',
+    '.gate-substatus .status-days{font-size:25px;font-weight:900;color:#86efac;line-height:1.2}',
+    '.gate-substatus .status-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}',
+    '.gate-substatus .status-item{min-width:0;padding:9px;border-radius:9px;background:#ffffff08}',
+    '.gate-substatus .status-item small{display:block;color:#9eafa5;font-size:10px;margin-bottom:4px}',
+    '.gate-substatus .status-item b{display:block;color:#edf7f0;font-size:12px;overflow-wrap:anywhere}',
+    '.gate-substatus .status-note{margin:10px 0 0;color:#aabbb0;font-size:11px;line-height:1.45}',
     '.gate-helpline{margin-top:16px;padding:12px;border:1px solid #24563b;border-radius:12px;background:#0c2118;color:#d6f6e3;font-size:13px}',
     '.gate-helpline a{display:inline-block;margin-left:5px;color:#86efac;font-weight:900;text-decoration:underline}',
     '.gate-paystack{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0;padding:10px 12px;border:1px solid #34485e;border-radius:12px;background:#101c2a;color:#dceaf6;font-size:12px;font-weight:800}',
@@ -233,7 +243,7 @@
     '.gate-account-row b{min-width:0;flex:1;overflow-wrap:anywhere;color:#fff}',
     '.gate-copy{padding:4px 8px;border:1px solid #52667d;border-radius:8px;background:#172536;color:#e6f0fa;font-size:11px;font-weight:800}',
     '.gate-action{width:100%;min-height:44px;margin-top:9px;border:0;border-radius:12px;background:#25d366;color:#fff;font-weight:900}',
-    '.gate-check{width:100%;min-height:42px;margin-top:8px;border:1px solid #52667d;border-radius:12px;background:#172536;color:#e6f0fa;font-weight:800}'
+    '.gate-check{width:100%;min-height:42px;margin-top:8px;border:1px solid #52667d;border-radius:12px;background:#172536;color:#e6f0fa;font-weight:800}',
     '.gate-code{margin-top:12px;padding:12px;border:1px solid #2c3d52;border-radius:12px;background:#080f18}',
     '.gate-code button{margin-top:8px}',
     '@media(max-width:860px){.home-top{flex-wrap:wrap;gap:12px}.gate-box{order:3;flex:1 1 100%;margin:0}.gate-features{grid-template-columns:1fr 1fr}}'
@@ -348,12 +358,74 @@
       current.textContent = 'Your payment has not been confirmed yet. Send your receipt on WhatsApp; once the admin activates your ID, tap this button again.';
     }
   }
+  function statusPanelMarkup(active, expiry, decoder) {
+    const now = Date.now() + serverOffset;
+    const remaining = active && expiry ? Math.max(0, Math.ceil((expiry - now) / 86400000)) : 0;
+    const date = expiry ? new Date(expiry).toLocaleString() : 'Not available';
+    const label = active ? 'ACTIVE' : 'INACTIVE';
+    return '<section class="gate-substatus" id="gateSubStatus">' +
+      '<div class="status-head"><span>My subscription</span><span class="status-pill ' + (active ? '' : 'expired') + '">' + label + '</span></div>' +
+      (active
+        ? '<div class="status-days">' + remaining + ' day' + (remaining === 1 ? '' : 's') + ' remaining</div>'
+        : '<div class="status-days" style="color:#fca5a5">No active Premium</div>') +
+      '<div class="status-grid">' +
+        '<div class="status-item"><small>Expiry date</small><b>' + escapeHtml(date) + '</b></div>' +
+        '<div class="status-item"><small>Decoder number</small><b>' + escapeHtml(decoder ? pretty(decoder) : 'Not issued') + '</b></div>' +
+      '</div>' +
+      '<p class="status-note">' + (active
+        ? 'Your Premium access is checked against the Deeprowss server. Renew before this date to avoid interruption.'
+        : 'If you have paid, send your receipt on WhatsApp. Access will appear here after payment confirmation.') + '</p>' +
+      '<button type="button" class="gate-check" id="gateRefreshStatus">Refresh subscription status</button>' +
+    '</section>';
+  }
+  async function refreshStatusPanel() {
+    const panel = $('gateSubStatus');
+    if (!panel) return;
+    const refresh = $('gateRefreshStatus');
+    if (refresh) { refresh.disabled = true; refresh.textContent = 'Checking…'; }
+    let active = false, expiry = 0, decoder = code;
+    if (decoder) {
+      const validated = await validateCode(decoder);
+      active = !!validated.valid;
+      expiry = Number(validated.expires_at || 0);
+      if (validated.now) serverOffset = Number(validated.now) - Date.now();
+      if (!active) { unlocked = false; code = ''; codeExpiry = 0; try { localStorage.removeItem(CODE_KEY); } catch (_) {} }
+    } else {
+      const result = await api('/receiver/sub/status?device=' + encodeURIComponent(deviceId()));
+      if (result.ok) {
+        active = !!result.data.active;
+        expiry = Number(result.data.expires_at || 0);
+        if (result.data.now) serverOffset = Number(result.data.now) - Date.now();
+        if (active) {
+          const issued = await api('/receiver/decoder/issue', 'POST', { device_id: deviceId() });
+          if (issued.ok && issued.data.active && issued.data.code) {
+            decoder = digits(issued.data.code); code = decoder; unlocked = true;
+            codeExpiry = Number(issued.data.expires_at || expiry);
+            try { localStorage.setItem(CODE_KEY, decoder); } catch (_) {}
+          }
+        }
+      }
+    }
+    const target = $('gateSubStatus');
+    if (target) {
+      target.outerHTML = statusPanelMarkup(active, expiry || codeExpiry, decoder);
+      const btn = $('gateRefreshStatus');
+      if (btn) btn.onclick = refreshStatusPanel;
+    }
+    if (!active) {
+      const note = $('gateStatus');
+      if (note) note.textContent = 'No active subscription was found for this receiver. You can renew below.';
+    }
+    signalPremiumState();
+    render();
+  }
   function modalMarkup() {
     return '<div class="gate-pop">' +
       '<button type="button" class="gate-x" id="gateX" aria-label="Close">✕</button>' +
       '<h2>Deeprowss Premium</h2>' +
       '<p>Unlock unlimited movies and series, Play, Alternate player, Downloads and Smart Decoder. Visitors can watch 3 movie titles free.</p>' +
       '<ul class="gate-features"><li>✓ No pop-ups</li><li>✓ Stream without interruptions</li><li>✓ Unlimited movies and downloads</li><li>✓ Smart Decoder access</li></ul>' +
+      statusPanelMarkup(!!(unlocked && (!codeExpiry || Date.now() + serverOffset < codeExpiry)), codeExpiry, code) +
       '<div class="gate-code"><label class="gate-field" for="gateModalCode">Already have a Decoder number from the Deeprowss App?</label><input id="gateModalCode" type="text" inputmode="numeric" maxlength="12" placeholder="000 000 0000"><button type="button" class="gate-verify" id="gateModalUnlock">Unlock with Decoder number</button></div>' +
       '<label class="gate-field" for="gateCurrency">Pricing currency</label>' +
       '<select id="gateCurrency" class="gate-plan-select">' +
@@ -406,6 +478,8 @@
     modal.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', () => copyManualValue(b.dataset.copy || '')));
     $('gateReceipt').onclick = () => openExternal(manualReceiptUrl());
     $('gateCheck').onclick = checkManualActivation;
+    const statusRefresh = $('gateRefreshStatus');
+    if (statusRefresh) statusRefresh.onclick = refreshStatusPanel;
     const codeInput = $('gateModalCode');
     codeInput.addEventListener('input', () => { const v = pretty(codeInput.value); if (v !== codeInput.value) codeInput.value = v; });
     $('gateModalUnlock').onclick = () => unlock(codeInput.value, $('gateStatus'));
@@ -425,6 +499,7 @@
   function fillModal() { modal.innerHTML = modalMarkup(); bindModal(); }
   function openModal() {
     fillModal(); modal.classList.add('open'); modalOpen = true;
+    refreshStatusPanel();
   }
   function closeModal() { modal.classList.remove('open'); modalOpen = false; }
   modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
