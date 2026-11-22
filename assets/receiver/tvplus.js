@@ -32,6 +32,11 @@
     const code = String(e.code || '').toLowerCase();
     const prev = ['channel_down','channeldown','mediatrackprevious'].includes(k) || code === 'mediatrackprevious';
     const next = ['channel_up','channelup','mediatracknext'].includes(k) || code === 'mediatracknext';
+    if (k === '1' || code === 'digit1' || k === '2' || code === 'digit2') {
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (window.deeprowssTvRemote) window.deeprowssTvRemote((k === '1' || code === 'digit1') ? 'mainstream' : 'backupstream');
+      return;
+    }
     if (prev || next) {
       e.preventDefault(); e.stopImmediatePropagation();
       channel(prev ? -1 : 1);
