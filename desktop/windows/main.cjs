@@ -327,7 +327,7 @@ ipcMain.handle('dl:action', (event, id, action) => {
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 900, minHeight: 600, show: false, autoHideMenuBar: true,
-    backgroundColor: '#060a10', title: 'Deeprowss Cinema', icon, fullscreen: false,
+    backgroundColor: '#060a10', title: 'Deeprowss Cinema', icon, fullscreen: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false, contextIsolation: true, sandbox: true,
