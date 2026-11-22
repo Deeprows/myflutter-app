@@ -177,9 +177,10 @@ class TokenState {
 class MovieAccessResult {
   final bool allowed;
   final bool premium;
+  final bool verified;
   final int used;
   final int remaining;
-  const MovieAccessResult({required this.allowed, this.premium = false, this.used = 0, this.remaining = 0});
+  const MovieAccessResult({required this.allowed, this.premium = false, this.verified = true, this.used = 0, this.remaining = 0});
 }
 
 /// Free or Premium. The phone only keeps a copy of "premium until <date>";
@@ -460,7 +461,7 @@ class SubscriptionService extends ChangeNotifier {
   /// free allowance. The Worker keys this to the signed-in Gmail account.
   Future<MovieAccessResult> consumeMovieAccess(String movieKey, {String action = 'play'}) async {
     if (!enabled || isPremium) return const MovieAccessResult(allowed: true, premium: true, remaining: 3);
-    if (accountId == null) return const MovieAccessResult(allowed: false);
+    if (accountId == null) return const MovieAccessResult(allowed: false, verified: false);
     try {
       final r = await _signed(
         (h) => http.post(
@@ -474,7 +475,7 @@ class SubscriptionService extends ChangeNotifier {
         ),
         json: true,
       );
-      if (r == null || r.statusCode != 200) return const MovieAccessResult(allowed: false);
+      if (r == null || r.statusCode != 200) return const MovieAccessResult(allowed: false, verified: false);
       final j = jsonDecode(r.body) as Map<String, dynamic>;
       return MovieAccessResult(
         allowed: j['allowed'] == true,
@@ -483,7 +484,7 @@ class SubscriptionService extends ChangeNotifier {
         remaining: (j['remaining'] as num?)?.toInt() ?? 0,
       );
     } catch (_) {
-      return const MovieAccessResult(allowed: false);
+      return const MovieAccessResult(allowed: false, verified: false);
     }
   }
 
