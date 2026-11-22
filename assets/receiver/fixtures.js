@@ -35,7 +35,7 @@
     return {
       id: s('id') || s('home') + '-' + s('away') + '-' + s('kickoff'),
       home: s('home'), away: s('away'), homeLogo: s('homeLogo'), awayLogo: s('awayLogo'),
-      league: s('league') || 'Football', start: t, mins: parseInt(s('duration'), 10) || DEFAULT_MIN,
+      league: s('league') || 'Football', scoreLeague: s('scoreLeague'), start: t, mins: parseInt(s('duration'), 10) || DEFAULT_MIN,
       url: s('url'), altUrl: s('altUrl'), referer: s('referer'), ua: s('ua'),
       altReferer: s('altReferer'), altUa: s('altUa')
     };
@@ -52,145 +52,173 @@
   const visible = now => fixtures.filter(f => phase(f, now) !== 'ended')
     .sort((a, b) => (phase(a, now) === 'live' ? 0 : 1) - (phase(b, now) === 'live' ? 0 : 1) || a.start - b.start);
 
-  /* ---------- ESPN scoreboard ----------
-     Public (unofficial) ESPN soccer scoreboard: site.api.espn.com/apis/site/v2/sports/soccer/<league>/scoreboard.
-     The league name in fixtures.json ("Serie A - Italy") is mapped to an ESPN league code; anything we cannot
-     map, or cannot find there, is looked up in ESPN's "all soccer" board. A match is paired with a fixture when
-     both team names agree and ESPN's kick-off is within 18 hours of ours. Failures are silent: the card then
-     just keeps its normal countdown. */
-  const ESPN = 'https://site.api.espn.com/apis/site/v2/sports/soccer/';
-  const ESPN_LIVE_MS = 25 * 1000, ESPN_IDLE_MS = 4 * 60 * 1000, ESPN_ALL_MS = 5 * 60 * 1000;
-  let espn = new Map(), espnAt = 0, espnAllAt = 0, espnBusy = false;
+  /* ---------- ESPN scoreboard: mirror the app's ScoreService ----------
+     Use the same all-soccer feed, app_config settings, UTC date lookup,
+     team-name matching, 8-hour kickoff tolerance and 12-hour look-back. */
+  const ESPN_DEFAULT = 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard';
+  const ESPN_DEFAULT_POLL = 45;
+  let espn = new Map(), espnAt = 0, espnBusy = false;
 
-  const plain = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const LEAGUES = [
-    [/^premier league$/, /england|^$/, 'eng.1'],
-    [/^championship$/, /england|^$/, 'eng.2'],
-    [/^league one$/, /england|^$/, 'eng.3'],
-    [/^league two$/, /england|^$/, 'eng.4'],
-    [/^fa cup$/, null, 'eng.fa'],
-    [/^(efl|carabao|league) cup$/, null, 'eng.league_cup'],
-    [/^la ?liga$|^primera division$/, /spain|^$/, 'esp.1'],
-    [/^la ?liga ?2$|^segunda division$/, null, 'esp.2'],
-    [/^copa del rey$/, null, 'esp.copa_del_rey'],
-    [/^serie a$/, /brazil/, 'bra.1'],
-    [/^serie a$/, /italy|^$/, 'ita.1'],
-    [/^serie b$/, /italy|^$/, 'ita.2'],
-    [/^coppa italia$/, null, 'ita.coppa_italia'],
-    [/^bundesliga$/, /germany|^$/, 'ger.1'],
-    [/^2\.? ?bundesliga$/, null, 'ger.2'],
-    [/^dfb[- ]pokal$/, null, 'ger.dfb_pokal'],
-    [/^ligue 1$/, null, 'fra.1'],
-    [/^ligue 2$/, null, 'fra.2'],
-    [/^coupe de france$/, null, 'fra.coupe_de_france'],
-    [/^eredivisie$/, null, 'ned.1'],
-    [/^(primeira liga|liga portugal.*)$/, null, 'por.1'],
-    [/^(scottish )?premiership$/, null, 'sco.1'],
-    [/^super lig$/, null, 'tur.1'],
-    [/^(belgian )?pro league$/, null, 'bel.1'],
-    [/^(uefa )?champions league$/, null, 'uefa.champions'],
-    [/^(uefa )?europa league$/, null, 'uefa.europa'],
-    [/^(uefa )?(europa )?conference league$/, null, 'uefa.europa.conf'],
-    [/^(mls|major league soccer)$/, null, 'usa.1'],
-    [/^liga mx$/, null, 'mex.1'],
-    [/^(liga profesional.*|primera division)$/, /argentina/, 'arg.1'],
-    [/^saudi pro league$/, null, 'ksa.1']
-  ];
-  function slugFor(name) {
-    const parts = String(name || '').split(/\s+-\s+/), n = plain(parts[0]).trim(), c = plain(parts[1] || '').trim();
-    for (const [re, cre, slug] of LEAGUES) if (re.test(n) && (!cre || cre.test(c))) return slug;
-    return '';
-  }
-  const ymd = ms => { const d = new Date(ms); return d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0'); };
-
-  const STOP = new Set(['fc', 'cf', 'afc', 'ac', 'as', 'sc', 'ssc', 'cd', 'ud', 'sd', 'rc', 'rcd', 'ca', 'the', 'club', 'de', 'del', 'and', 'sv', 'vfb', 'vfl', 'tsg', 'fsv', 'bsc', 'calcio']);
-  const toks = s => plain(s).replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').split(' ').filter(w => w && !STOP.has(w));
-  function same(a, names) {
-    const A = toks(a); if (!A.length) return false;
-    return names.some(n => {
-      const B = toks(n); if (!B.length) return false;
-      const [s, l] = A.length <= B.length ? [A, B] : [B, A];
-      return s.every(w => l.includes(w));
+  const scoreTargets = now => fixtures.filter(f => {
+    const d = f.start - now;
+    return d <= 30 * 60000 && d >= -12 * 3600000;
+  });
+  const scoreDates = list => {
+    const out = new Set();
+    const ymdUtc = ms => {
+      const d = new Date(ms);
+      return d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0');
+    };
+    list.forEach(f => {
+      out.add(ymdUtc(f.start));
+      out.add(ymdUtc(f.start - 86400000));
     });
-  }
-  const namesOf = c => { const t = (c && c.team) || {}; return [t.displayName, t.shortDisplayName, t.name, t.location]; };
-  function parseEvent(ev) {
-    const comp = ev && ev.competitions && ev.competitions[0];
-    if (!comp || !Array.isArray(comp.competitors)) return null;
-    const h = comp.competitors.find(c => c.homeAway === 'home'), a = comp.competitors.find(c => c.homeAway === 'away');
-    if (!h || !a) return null;
-    return { id: ev.id, t: Date.parse(ev.date || comp.date), ev, h, a, hn: namesOf(h), an: namesOf(a) };
-  }
-  function scoreInfo(e, swapped) {
-    const st = e.ev.status || {}, type = st.type || {};
-    const H = swapped ? e.a : e.h, A = swapped ? e.h : e.a;
-    const num = c => { const v = String(c.score == null ? '' : c.score).trim(); return v === '' ? null : v; };
-    const logoOf = c => String((c.team && c.team.logo) || '');
-    let state = type.state || 'pre', detail = '', note = '';
-    if (/POSTPONED|CANCEL|ABANDON|SUSPEND/i.test(type.name || '')) { state = 'pre'; note = String(type.shortDetail || type.description || 'Postponed'); }
-    else if (state === 'in') {
-      if (/half/i.test(type.name || type.description || '')) detail = 'Half-time';
-      else { const clk = String(st.displayClock || type.shortDetail || '').replace(/'/g, '\u2032').trim(); detail = clk ? 'Live · ' + clk : 'Live now'; }
-    } else if (state === 'post') {
-      const d = String(type.shortDetail || type.detail || '');
-      detail = /pen/i.test(d) ? 'Full time · pens' : (/aet|extra/i.test(d) ? 'Full time · AET' : 'Full time');
-    }
-    return { state, detail, note, hs: note ? null : num(H), aw: note ? null : num(A), homeLogo: logoOf(H), awayLogo: logoOf(A) };
-  }
-  function matchAll(list, events) {
-    const out = new Map();
-    for (const f of list) {
-      let best = null, bd = Infinity;
-      for (const e of events) {
-        if (Number.isNaN(e.t)) continue;
-        const d = Math.abs(e.t - f.start);
-        if (d > 18 * 3600000 || d >= bd) continue;
-        const straight = same(f.home, e.hn) && same(f.away, e.an), swapped = !straight && same(f.home, e.an) && same(f.away, e.hn);
-        if (straight || swapped) { best = { e, swapped }; bd = d; }
-      }
-      if (best) out.set(f.id, scoreInfo(best.e, best.swapped));
-    }
-    return out;
-  }
-  async function fetchBoard(slug, dates) {
+    return [...out];
+  };
+  const scorePollMs = () => {
+    const n = Number(cfg.scores && cfg.scores.pollSeconds);
+    return Math.max(20, Math.min(300, Number.isFinite(n) && n ? n : ESPN_DEFAULT_POLL)) * 1000;
+  };
+  const scoreFeedUrl = () => {
+    const v = cfg.scores && typeof cfg.scores.url === 'string' ? cfg.scores.url.trim() : '';
+    return v || ESPN_DEFAULT;
+  };
+  async function fetchScoreboard(url, date) {
     try {
-      const r = await fetch(ESPN + slug + '/scoreboard?dates=' + dates + '&limit=300', { cache: 'no-store' });
+      const u = new URL(url);
+      u.searchParams.set('dates', date);
+      const r = await fetch(u.href, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } });
       if (!r.ok) return [];
       const j = await r.json();
       return Array.isArray(j.events) ? j.events : [];
     } catch (_) { return []; }
   }
+  const scorePlain = s => String(s || '').toLowerCase()
+    .replace(/[áàâäãå]/g, 'a').replace(/[ç]/g, 'c').replace(/[éèêë]/g, 'e')
+    .replace(/[íìîï]/g, 'i').replace(/[ñ]/g, 'n').replace(/[óòôöõø]/g, 'o')
+    .replace(/[úùûü]/g, 'u').replace(/[ý]/g, 'y').replace(/[ß]/g, 'ss')
+    .replace(/[š]/g, 's').replace(/[ž]/g, 'z').replace(/[čć]/g, 'c')
+    .replace(/[ł]/g, 'l').replace(/[ğ]/g, 'g').replace(/[ı]/g, 'i').replace(/[ş]/g, 's')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+  const SCORE_STOP = new Set(['fc','cf','afc','sc','ac','as','ssc','cd','ud','fk','sk','bk','club','the','sv']);
+  const SCORE_ALIAS = { man:'manchester', utd:'united', spurs:'tottenham', wolves:'wolverhampton', atleti:'atletico', intl:'international', st:'saint', nottm:'nottingham', notts:'nottingham' };
+  const SCORE_SQUAD = new Set(['w','women','u17','u18','u19','u20','u21','u23','ii','b','reserves']);
+  function scoreTokens(name) {
+    return scorePlain(name).split(' ').filter(t => t && !SCORE_STOP.has(t)).map(t => SCORE_ALIAS[t] || t);
+  }
+  const scoreTokenMatch = (a,b) => a === b || (a.length >= 3 && b.startsWith(a)) || (b.length >= 3 && a.startsWith(b));
+  function scoreTeamMatches(fixtureName, candidates) {
+    const ft = scoreTokens(fixtureName);
+    if (!ft.length) return false;
+    for (const candidate of candidates) {
+      const ct = scoreTokens(candidate);
+      if (!ct.length) continue;
+      if (ft.join(' ') === ct.join(' ')) return true;
+      const shorter = ft.length <= ct.length ? ft : ct;
+      const longer = ft.length <= ct.length ? ct : ft;
+      if (!shorter.every(s => longer.some(l => scoreTokenMatch(s,l)))) continue;
+      const extra = longer.filter(l => !shorter.some(s => scoreTokenMatch(s,l)));
+      if (extra.some(t => SCORE_SQUAD.has(t))) continue;
+      return true;
+    }
+    return false;
+  }
+  function scoreEvent(ev) {
+    const comp = ev && Array.isArray(ev.competitions) && ev.competitions[0];
+    if (!comp || !Array.isArray(comp.competitors)) return null;
+    const home = comp.competitors.find(x => x && x.homeAway === 'home');
+    const away = comp.competitors.find(x => x && x.homeAway === 'away');
+    if (!home || !away) return null;
+    const status = comp.status || ev.status || {};
+    const type = status.type || {};
+    const state = String(type.state || '');
+    const name = String(type.name || '').toUpperCase();
+    if (state !== 'in' && state !== 'post') return null;
+    if (/POSTPON|CANCEL|ABANDON|FORFEIT|SUSPEND|DELAY/.test(name)) return null;
+    const displayClock = String(status.displayClock || '').trim();
+    const clock = state === 'in'
+      ? (name.includes('HALF') && !name.includes('FIRST') && !name.includes('SECOND')
+          ? 'HT'
+          : (displayClock && displayClock !== "0'" ? displayClock : String(type.shortDetail || '').trim()))
+      : (String(type.shortDetail || '').trim() || 'FT');
+    const names = c => {
+      const t = c && c.team || {};
+      return ['displayName','shortDisplayName','name','location','abbreviation']
+        .map(k => String(t[k] || '').trim()).filter(Boolean);
+    };
+    return {
+      homeNames: names(home), awayNames: names(away),
+      home: parseInt(home.score,10) || 0, away: parseInt(away.score,10) || 0,
+      state, clock, date: Date.parse(ev.date || comp.date || '')
+    };
+  }
+  function matchScoreEvents(list, events) {
+    const out = new Map();
+    for (const f of list) {
+      let best = null, bestFlip = false, bestGap = Infinity;
+      for (const e of events) {
+        const straight = scoreTeamMatches(f.home,e.homeNames) && scoreTeamMatches(f.away,e.awayNames);
+        const flipped = !straight && scoreTeamMatches(f.home,e.awayNames) && scoreTeamMatches(f.away,e.homeNames);
+        if (!straight && !flipped) continue;
+        const gap = Number.isFinite(e.date) ? Math.abs(e.date - f.start) : 0;
+        if (gap > 8 * 3600000 || gap >= bestGap) continue;
+        best = e; bestFlip = flipped; bestGap = gap;
+      }
+      if (!best) continue;
+      const clock = String(best.clock || '').trim();
+      const upper = clock.toUpperCase();
+      let detail = '';
+      if (best.state === 'in') detail = upper === 'HT' ? 'Half-time' : ('Live · ' + (clock || 'Live now').replace(/'/g, '′'));
+      else detail = /pen/i.test(clock) ? 'Full time · pens' : (/aet|extra/i.test(clock) ? 'Full time · AET' : (upper === 'FT' ? 'Full time' : clock));
+      out.set(f.id, {
+        state: best.state, detail,
+        hs: bestFlip ? best.away : best.home,
+        aw: bestFlip ? best.home : best.away,
+        homeLogo: '', awayLogo: ''
+      });
+    }
+    return out;
+  }
   async function espnLoad(force) {
-    if (espnBusy) return;
-    const now = Date.now(), list = visible(now);
+    const scoresCfg = cfg.scores || {};
+    if (scoresCfg.enabled === false || scoresCfg.enabled === 'false' || espnBusy) return;
+    const now = Date.now(), list = scoreTargets(now);
     if (!list.length) return;
-    const live = list.some(f => phase(f, now) === 'live');
-    if (!force && now - espnAt < (live ? ESPN_LIVE_MS : ESPN_IDLE_MS)) return;
+    if (!force && now - espnAt < scorePollMs()) return;
     espnBusy = true;
     try {
-      const slugs = new Set();
-      let loose = false;
-      list.forEach(f => { const s = slugFor(f.league); if (s) slugs.add(s); else loose = true; });
-      const lo = Math.min(...list.map(f => f.start)) - 864e5;
-      const hi = Math.min(Math.max(...list.map(f => f.start)) + 864e5, lo + 14 * 864e5);
-      const dates = ymd(lo) + '-' + ymd(hi);
+      const base = scoreFeedUrl();
+      const dates = scoreDates(list);
+      const boards = await Promise.all(dates.map(d => fetchScoreboard(base,d)));
       const seen = new Set(), events = [];
-      const take = boards => boards.forEach(b => b.forEach(ev => { if (!ev || seen.has(ev.id)) return; seen.add(ev.id); const p = parseEvent(ev); if (p) events.push(p); }));
-      take(await Promise.all([...slugs].slice(0, 14).map(s => fetchBoard(s, dates))));
-      let found = matchAll(list, events);
-      // Unmapped leagues, or matches missing from their league board: try ESPN's all-soccer board (at most every 5 min).
-      if ((loose || list.some(f => !found.has(f.id))) && now - espnAllAt > ESPN_ALL_MS) {
-        espnAllAt = now;
-        take([await fetchBoard('all', dates)]);
-        found = matchAll(list, events);
+      boards.forEach(board => board.forEach(raw => {
+        if (!raw || (raw.id && seen.has(raw.id))) return;
+        if (raw.id) seen.add(raw.id);
+        const parsed = scoreEvent(raw);
+        if (parsed) events.push(parsed);
+      }));
+      const found = matchScoreEvents(list, events);
+      if (base.includes('/all/')) {
+        for (const f of list) {
+          const leagueCode = String(f.scoreLeague || '').trim();
+          if (found.has(f.id) || !leagueCode) continue;
+          const leagueUrl = base.replace('/all/','/' + leagueCode + '/');
+          const more = [];
+          for (const date of scoreDates([f])) more.push(...await fetchScoreboard(leagueUrl,date));
+          const extra = matchScoreEvents([f],more.map(scoreEvent).filter(Boolean));
+          extra.forEach((value,key) => found.set(key,value));
+        }
       }
-      if (events.length) espn = found;
+      if (found.size) {
+        found.forEach((value,key) => espn.set(key,value));
+        rendered = '';
+        render(false);
+      }
       espnAt = now;
     } catch (_) { espnAt = now; }
     finally { espnBusy = false; }
     tick();
   }
-  // ESPN data for a fixture, ignoring a "started/finished" state that cannot be right yet.
   const espnFor = (f, now) => {
     const m = espn.get(f.id);
     if (!m) return null;
