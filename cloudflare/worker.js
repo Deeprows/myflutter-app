@@ -2150,6 +2150,10 @@ async function subAdmin(request, env, url) {
       note = `Subscription stopped for ${id}`;
     } else {
       const e = await addDays(env, id, { email: null, source: "manual", days });
+      // Manual renewal before expiry extends the current Decoder number too.
+      await env.DB.prepare(
+        "UPDATE decoder_codes SET expires_at = ? WHERE owner_id = ? AND expires_at > ?"
+      ).bind(e, id, Date.now()).run();
       note = `Premium until ${new Date(e).toISOString().slice(0, 10)} for ${id}`;
     }
   }
