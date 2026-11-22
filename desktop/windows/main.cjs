@@ -306,6 +306,20 @@ ipcMain.handle('dl:open', (event, url) => {
     return true;
   } catch (_) { return false; }
 });
+
+ipcMain.handle('external:open', async (event, url) => {
+  if (!trusted(event)) return false;
+  try {
+    const u = new URL(String(url));
+    if (u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase();
+    const allowed = host === 'checkout.paystack.com' || host === 'paystack.com' ||
+      host.endsWith('.paystack.com') || host === 'wa.me' || host === 'api.whatsapp.com';
+    if (!allowed) return false;
+    await shell.openExternal(u.href);
+    return true;
+  } catch (_) { return false; }
+});
 ipcMain.handle('dl:list', (event) => (trusted(event) ? { folder: app.getPath('downloads'), items: snapshot() } : { folder: '', items: [] }));
 ipcMain.handle('dl:action', (event, id, action) => {
   if (!trusted(event)) return false;
