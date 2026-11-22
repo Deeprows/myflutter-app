@@ -101,11 +101,6 @@
     if (id === 'wallet') return { provider: 'USDT', network: 'TRC20', wallet_name: 'Taiwo', wallet_address: 'TFijBKULxEJuJwgj9nrEcQHvTuweKQoZ2M' };
     return {};
   }
-  function amountLine(year) {
-    const base = year ? plan.year_price_display : plan.price_display;
-    const local = year ? plan.year_local_display : plan.local_display;
-    return local ? base + ' (about ' + local + ')' : base;
-  }
   async function loadConfig() {
     await loadPaymentAccounts();
     for (const u of [ROOT + 'app_config.json', 'data/app_config.json', '../data/app_config.json']) {
