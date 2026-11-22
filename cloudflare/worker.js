@@ -1229,6 +1229,7 @@ async function subscriptions(request, env, url) {
     path === "/sub/status" ||
     path === "/sub/decoder/issue" ||
     path === "/sub/movie-access" ||
+    path === "/sub/movie-access-guest" ||
     path === "/sub/admin" ||
     path.startsWith("/sub/token/");
   if (!env.DB || (!env.PAYSTACK_SECRET_KEY && !dbOnly)) {
@@ -1278,6 +1279,9 @@ async function subscriptions(request, env, url) {
       return issueDecoderCode(env, ownerId);
     }
     if (path === "/sub/movie-access" && request.method === "POST") {
+      return subMovieAccess(request, env);
+    }
+    if (path === "/sub/movie-access-guest" && request.method === "POST") {
       return subMovieAccess(request, env);
     }
     if (path === "/sub/start" && request.method === "POST") {
