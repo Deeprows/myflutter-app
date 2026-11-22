@@ -282,18 +282,24 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     <div class="badge" id="connectionBadge">NOT CONNECTED</div>
   </header>
   <section id="join">
-    <h1>Connect your phone</h1>
-    <p>Open Smart Decoder on your phone, choose <b>Scan to Connect</b>, and scan this QR code. Your video will play here.</p>
-    <div id="pairQr" style="width:210px;height:210px;margin:18px auto;padding:10px;background:#fff;border-radius:14px;display:grid;place-items:center"></div>
-    <div style="text-align:center"><div class="tag">PAIRING CODE</div><div id="pairCode" style="font-size:25px;font-weight:950;letter-spacing:4px;margin:8px 0">Preparing…</div></div>
-    <div id="statusJoin" role="status" style="text-align:center">Creating a secure connection…</div>
-    <button id="newPair" class="secondary" style="width:100%;margin-top:12px">Generate new QR code</button>
-    <details style="margin-top:18px;color:#aab2bf"><summary>Use manual connection (legacy)</summary>
-    <input id="host" type="text" inputmode="url" autocomplete="off" placeholder="Phone address (e.g. 192.168.1.5:37027)" aria-label="Phone address">
-    <input id="pin" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="Six-digit PIN" aria-label="Six-digit PIN">
-    <button id="connect" class="secondary" style="width:100%">Connect with PIN</button>
-    </details>
-    <div class="hint" style="text-align:center">Private pairing · WebRTC video is sent directly between devices. The pairing service only carries connection messages.</div>
+    <div class="join-layout">
+      <div class="join-intro">
+        <h1>Connect your phone</h1>
+        <p>Open Smart Decoder on your phone, choose <b>Scan to Connect</b>, and scan this QR code. Your video will play here.</p>
+        <div class="join-qr"><div id="pairQr" style="width:210px;height:210px;margin:10px auto;padding:10px;background:#fff;border-radius:14px;display:grid;place-items:center"></div></div>
+      </div>
+      <div class="join-controls">
+        <div><div class="tag">PAIRING CODE</div><div id="pairCode" style="font-size:25px;font-weight:950;letter-spacing:4px;margin:8px 0">Preparing…</div></div>
+        <div id="statusJoin" role="status">Creating a secure connection…</div>
+        <button id="newPair" class="secondary" style="width:100%;margin-top:12px">Generate new QR code</button>
+        <details style="margin-top:18px;color:#aab2bf"><summary>Use manual connection (legacy)</summary>
+          <input id="host" type="text" inputmode="url" autocomplete="off" placeholder="Phone address (e.g. 192.168.1.5:37027)" aria-label="Phone address">
+          <input id="pin" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="Six-digit PIN" aria-label="Six-digit PIN">
+          <button id="connect" class="secondary" style="width:100%">Connect with PIN</button>
+        </details>
+        <div class="hint">Private pairing · WebRTC video is sent directly between devices. The pairing service only carries connection messages.</div>
+      </div>
+    </div>
   </section>
 </section>
 
