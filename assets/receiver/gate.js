@@ -227,6 +227,7 @@
       '<h2>Deeprowss Premium</h2>' +
       '<p>Unlock unlimited movies and series, Play, Alternate player, Downloads and Smart Decoder. Visitors can watch 3 movie titles free.</p>' +
       '<ul class="gate-features"><li>✓ No pop-ups</li><li>✓ Stream without interruptions</li><li>✓ Movies and series</li><li>✓ Smart Decoder access</li></ul>' +
+      '<div class="gate-code"><label class="gate-field" for="gateModalCode">Already have a Decoder number from the Deeprowss App?</label><input id="gateModalCode" type="text" inputmode="numeric" maxlength="12" placeholder="000 000 0000"><button type="button" class="gate-verify" id="gateModalUnlock">Unlock with Decoder number</button></div>' +
       '<div class="gate-plans">' +
         '<button type="button" class="gate-choice ' + (period === 'month' ? 'active' : '') + '" data-period="month">Monthly<small>' + escapeHtml(shownPrice(false)) + ' / month</small></button>' +
         '<button type="button" class="gate-choice ' + (period === 'year' ? 'active' : '') + '" data-period="year">Yearly<small>' + escapeHtml(shownPrice(true)) + ' / year · Save more</small></button>' +
@@ -244,7 +245,7 @@
       '<button type="button" class="gate-pay" id="gatePay" ' + (plan.available ? '' : 'disabled') + '>' + (plan.available ? 'Pay securely with Paystack · ' + escapeHtml(shownPrice(period === 'year')) : 'Online payment unavailable') + '</button>' +
       '<button type="button" class="gate-verify" id="gateVerify">I have paid · Verify payment</button>' +
       '<div class="gate-status" id="gateStatus">Pay securely with Paystack, or contact our WhatsApp helpline for manual activation.</div>' +
-      '<div class="gate-code"><label class="gate-field" for="gateModalCode">Already have a Decoder number from the Deeprowss App?</label><input id="gateModalCode" type="text" inputmode="numeric" maxlength="12" placeholder="000 000 0000"><button type="button" class="gate-verify" id="gateModalUnlock">Unlock with Decoder number</button></div>' +
+
       '<div class="gate-helpline">WhatsApp helpline: <a href="https://wa.me/2347041629630?text=' + encodeURIComponent('Hello Deeprowss, I want to subscribe to Premium. Receiver ID: ' + deviceId()) + '" target="_blank" rel="noopener noreferrer">+234 704 162 9630</a></div>' +
     '</div>';
   }
