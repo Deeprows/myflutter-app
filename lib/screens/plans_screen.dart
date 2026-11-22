@@ -269,17 +269,11 @@ class _PlansScreenState extends State<PlansScreen> {
                 if (premium) _activeCard(),
                 _premiumCard(premium),
                 const SizedBox(height: 12),
-                if (!premium) _freeCard() else _continueButton('Continue'),
-                const SizedBox(height: 14),
-                _manualCard(),
-                const SizedBox(height: 6),
-                Center(
-                  child: TextButton(
-                    onPressed: _busy ? null : _restore,
-                    child: Text('Restore purchase',
-                        style: TextStyle(color: Ui.muted)),
-                  ),
-                ),
+                if (!premium) ...[
+                  _freeCard(),
+                  const SizedBox(height: 14),
+                  _manualCard(),
+                ] else _continueButton('Continue'),
                 _idLine(),
               ],
             ),
@@ -413,87 +407,31 @@ class _PlansScreenState extends State<PlansScreen> {
           feature('Stream without interruptions'),
           feature('Unlimited movies, series and downloads'),
           feature('Premium Smart Decoder access'),
-          feature('Pay with card, USSD or bank transfer'),
+          feature('Manual payment with OPay or USDT (TRC20)'),
           feature('Monthly or yearly (save with yearly)'),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _email,
-            keyboardType: TextInputType.emailAddress,
-            autocorrect: false,
-            enabled: !_busy,
-            decoration: InputDecoration(
-              labelText: 'Your e-mail (for the receipt)',
-              prefixIcon: const Icon(Icons.mail_outline_rounded),
-              errorText: _error,
-              errorMaxLines: 3,
-            ),
-          ),
-          if (_canAuto)
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              value: _auto,
-              onChanged: _busy ? null : (v) => setState(() => _auto = v),
-              title: Text('Renew automatically every $_perLabel',
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
-              subtitle: Text('Card only. Otherwise pay again each $_perLabel.',
-                  style: TextStyle(color: Ui.muted, fontSize: 12)),
-            ),
-          const SizedBox(height: 8),
-          _paystackStrip(),
-          const SizedBox(height: 10),
-          _methodPicker(),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(26),
-                gradient: LinearGradient(colors: [Ui.red, Ui.redSoft]),
-              ),
-              child: Material(
-                type: MaterialType.transparency,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(26),
-                  onTap: (_busy || !_plan.available) ? null : _subscribe,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    child: Center(
-                      child: _busy
-                          ? SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2.5, color: Ui.text))
-                          : Text(
-                              premium
-                                  ? 'Add 1 more $_perLabel'
-                                  : 'Pay  •  $_shownPrice/$_perLabel',
-                              style: TextStyle(
-                                  color: Ui.text,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w900)),
-                    ),
-                  ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Ui.bg.withValues(alpha: .55),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Ui.line),
+            ),
+            child: Row(
+              children: [
+                const Expanded(child: Text('Paystack online payment', style: TextStyle(fontWeight: FontWeight.w800))),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(color: Ui.red.withValues(alpha: .18), borderRadius: BorderRadius.circular(20)),
+                  child: Text('COMING SOON', style: TextStyle(color: Ui.redSoft, fontSize: 10, fontWeight: FontWeight.w900)),
                 ),
-              ),
+              ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Text(
-                'Pay securely with Paystack. Premium turns on automatically '
-                'and your receipt is sent to your e-mail.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.3)),
-          ),
-          if (!_plan.available)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text('Online payment is not available right now. '
-                  'Use WhatsApp below.',
-                  style: TextStyle(color: Ui.muted, fontSize: 12.5)),
-            ),
+          const SizedBox(height: 8),
+          Text('For now, pay manually using OPay or USDT below. Your Premium is activated after we confirm your receipt on WhatsApp.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.35)),
         ],
       ),
     );
@@ -739,40 +677,99 @@ class _PlansScreenState extends State<PlansScreen> {
         ),
       );
 
-  Widget _manualCard() => _box(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Can't pay online?",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            Text(
-              'Chat with us on WhatsApp and pay manually. We switch Premium '
-              'on for you.',
-              style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.25),
-            ),
-            const SizedBox(height: 5),
-            const Text('WhatsApp helpline: +234 704 162 9630',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _whatsapp,
-                icon: Icon(Icons.chat_rounded, color: Ui.green),
-                label: const Text('Pay manually on WhatsApp',
-                    style: TextStyle(fontWeight: FontWeight.w800)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  side: BorderSide(color: Ui.green.withValues(alpha: .7)),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24)),
-                ),
-              ),
-            ),
-          ],
+  Widget _manualCard() {
+    final bank = _paymentAccount('opay') ?? {
+      'provider': AppConfig.payBankProvider,
+      'account_name': AppConfig.payBankAccountName,
+      'account_number': AppConfig.payBankAccountNumber,
+    };
+    final wallet = _paymentAccount('wallet') ?? {
+      'provider': AppConfig.payCryptoProvider,
+      'network': AppConfig.payCryptoNetwork,
+      'wallet_name': AppConfig.payCryptoAccountName,
+      'wallet_address': AppConfig.payCryptoAddress,
+    };
+    final local = _shownLocal == null ? '' : ' · approximately $_shownLocal in your currency';
+    Widget detail(String label, String value, {bool copy = false}) => Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: 105, child: Text(label, style: TextStyle(color: Ui.muted, fontSize: 12))),
+        Expanded(child: SelectableText(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
+        if (copy) IconButton(
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _copyPayment(value, label),
+          icon: Icon(Icons.copy_rounded, size: 18, color: Ui.redSoft),
         ),
-      );
+      ]),
+    );
+    Widget choice(String id, String label, IconData icon) {
+      final on = _manualMethod == id;
+      return Expanded(child: OutlinedButton.icon(
+        onPressed: () => setState(() => _manualMethod = id),
+        icon: Icon(icon, size: 18),
+        label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: on ? Ui.text : Ui.muted,
+          backgroundColor: on ? Ui.red.withValues(alpha: .16) : Ui.bg,
+          side: BorderSide(color: on ? Ui.red : Ui.line),
+          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 7),
+        ),
+      ));
+    }
+    return _box(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Manual Premium payment', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 5),
+        Text('Choose OPay or USDT, transfer the amount, then send your receipt on WhatsApp. We confirm your payment and activate Premium.',
+          style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.35)),
+        const SizedBox(height: 12),
+        Row(children: [
+          choice('opay', 'OPay', Icons.account_balance_rounded),
+          const SizedBox(width: 8),
+          choice('crypto', 'USDT · TRC20', Icons.currency_bitcoin_rounded),
+        ]),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(color: Ui.bg.withValues(alpha: .55), borderRadius: BorderRadius.circular(15), border: Border.all(color: Ui.line)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (_manualMethod == 'opay') ...[
+              detail('Provider', (bank['provider'] ?? bank['name'] ?? 'OPay').toString()),
+              detail('Account name', (bank['account_name'] ?? 'Taiwo').toString()),
+              detail('Account number', (bank['account_number'] ?? '').toString(), copy: true),
+              Text('Transfer $_shownPrice for the ' + (_yearly ? 'yearly' : 'monthly') + ' plan$local.',
+                style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.35)),
+            ] else ...[
+              detail('Wallet', (wallet['provider'] ?? wallet['name'] ?? 'USDT').toString()),
+              detail('Network', (wallet['network'] ?? 'TRC20').toString()),
+              detail('Wallet name', (wallet['wallet_name'] ?? wallet['account_name'] ?? 'Taiwo').toString()),
+              detail('Address', (wallet['wallet_address'] ?? wallet['address'] ?? '').toString(), copy: true),
+              Text('Send the USDT equivalent of $_shownPrice for the ' + (_yearly ? 'yearly' : 'monthly') + ' plan$local. Use TRC20 only.',
+                style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.35)),
+            ],
+          ]),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(width: double.infinity, child: FilledButton.icon(
+          onPressed: _busy ? null : _sendManualReceipt,
+          icon: const Icon(Icons.chat_rounded),
+          label: const Text('Send payment receipt on WhatsApp'),
+          style: FilledButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 13)),
+        )),
+        const SizedBox(height: 6),
+        Text('Attach your payment screenshot in WhatsApp. Your app ID is included automatically: $_installId',
+          style: TextStyle(color: Ui.dim, fontSize: 11.5, height: 1.3)),
+        const SizedBox(height: 10),
+        SizedBox(width: double.infinity, child: OutlinedButton.icon(
+          onPressed: _busy ? null : _checkManualActivation,
+          icon: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.verified_user_outlined),
+          label: const Text("I've paid — check Premium activation"),
+        )),
+        const SizedBox(height: 6),
+        Center(child: Text('WhatsApp helpline: +234 704 162 9630', style: TextStyle(color: Ui.muted, fontSize: 12))),
+      ]),
+    );
+  }
 
   Widget _idLine() {
     if (_installId.isEmpty) return const SizedBox.shrink();
