@@ -23,10 +23,11 @@ Premium people skip the plans page and go straight into the app.
 ## How it works
 
 ```
-Deeprowss App -> /sub/start -> Paystack -> /sub/verify -> D1 subscription
-Receiver/EXE  -> /receiver/sub/start -> Paystack -> /receiver/sub/verify
-App / Receiver -> Decoder number -> /receiver/decoder/validate
+App -> WhatsApp receipt + account ID -> admin /sub/admin grant -> D1 Premium
+EXE / Android TV -> WhatsApp receipt + device ID -> admin /sub/admin grant
+Admin grant -> server-issued Decoder number -> /receiver/decoder/validate
 Movie actions -> /sub/movie-access or /receiver/movie-access -> D1 trial usage
+Paystack /sub/start and /sub/verify remain dormant until checkout is configured.
 ```
 
 The Paystack secret key lives only in the Worker. A payment is counted once
