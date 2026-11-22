@@ -1,0 +1,5 @@
+{
+  "_help": "Future IPTV API provider configuration. Add providers here when ready. Keep API keys and private tokens in Cloudflare Worker secrets, never in this public JSON.",
+  "enabled": false,
+  "providers": []
+}
