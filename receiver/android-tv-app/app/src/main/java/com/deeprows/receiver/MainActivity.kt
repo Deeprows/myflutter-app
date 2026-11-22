@@ -396,8 +396,9 @@ class MainActivity : Activity() {
             if (safe.isEmpty()) return
             val uri = try { Uri.parse(safe) } catch (_: Exception) { return }
             val host = (uri.host ?: "").lowercase()
-            val allowed = host == "checkout.paystack.com" || host == "paystack.com" ||
-                host.endsWith(".paystack.com") || host == "wa.me" || host == "api.whatsapp.com"
+            val allowed = host == "paystack.com" || host.endsWith(".paystack.com") ||
+                host == "paystack.co" || host.endsWith(".paystack.co") ||
+                host == "wa.me" || host == "api.whatsapp.com"
             if (!allowed) return
             runOnUiThread {
                 try { startActivity(Intent(Intent.ACTION_VIEW, uri)) } catch (_: Exception) {}
