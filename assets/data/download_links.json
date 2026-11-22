@@ -1,0 +1,9 @@
+{
+  "_help": "Manual download links for the Deeprowss receiver Download Apps page. Paste a full https:// URL for a manual link. Use auto to fall back to the existing automatic source, or off to hide that download item. Manual links in this file take priority over app_config.json and GitHub Releases.",
+  "mobile": "auto",
+  "androidTv": "auto",
+  "webos": "auto",
+  "tizen": "auto",
+  "windows": "auto",
+  "windowsPortable": "auto"
+}
