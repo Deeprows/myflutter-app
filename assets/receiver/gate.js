@@ -182,7 +182,7 @@
   document.head.appendChild(css);
   // Preserve the receiver's mobile layout: the decoder entry stays hidden on
   // the pages.dev phone homepage, while channel taps still open the gate.
-  css.textContent += '\n@media(max-width:600px){#landing .gate-box{display:none!important}}';
+  css.textContent += '\n#landing .gate-box{display:none!important}';
 
   const box = document.createElement('div');
   box.className = 'gate-box'; box.id = 'gateBox';
