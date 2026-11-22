@@ -62,6 +62,10 @@ exact number of days, and press **Grant Premium + generate Decoder number**. The
 shows the new 10-digit Decoder number. The customer can also tap **Check
 Premium activation** in the app or receiver after the grant.
 
+Use **Grant Premium to an ID** for movie / Smart Decoder Premium. The separate
+**Legacy ad-free tokens** section is only for the older phone ad-removal token
+flow; do not use it to activate Premium or Smart Decoder.
+
 ## Settings in the app (`lib/config.dart`)
 
 | Setting                 | Meaning                                                    |
