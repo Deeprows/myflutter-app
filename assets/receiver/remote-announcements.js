@@ -22,6 +22,7 @@
   document.head.appendChild(css);
 
   let soundReady = false, lastNoticeId = '';
+  try { lastNoticeId = localStorage.getItem('dr_receiver_notice_seen') || ''; } catch (_) {}
   const enableSound = () => { soundReady = true; };
   ['pointerdown','keydown','touchstart'].forEach(ev => window.addEventListener(ev, enableSound, {once:true,passive:true}));
   function beep() {
@@ -55,11 +56,16 @@
     el.replaceChildren(track);
   }
   function showNotice(n) {
-    if (!n || n.enabled !== true || !n.message) return;
-    if (n.expires && Date.parse(n.expires) && Date.now() > Date.parse(n.expires)) return;
+    if (!n || n.enabled !== true || !n.message || n.popup === false) return;
+    if (n.expires) {
+      const expiry = /^\\d{4}-\\d{2}-\\d{2}$/.test(String(n.expires))
+        ? Date.parse(String(n.expires) + 'T23:59:59') : Date.parse(n.expires);
+      if (Number.isFinite(expiry) && Date.now() > expiry) return;
+    }
     const id = String(n.id || n.updated_at || n.title || n.message);
     if (id === lastNoticeId) return;
     lastNoticeId = id;
+    try { localStorage.setItem('dr_receiver_notice_seen', id); } catch (_) {}
     if (n.beep !== false) beep();
     const back = $('div','dr-notice-backdrop'), card=$('section','dr-notice-card');
     const h=$('h2');h.textContent=n.title||'Deeprowss Notice';
