@@ -85,9 +85,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .receiver-pull-indicator.visible{transform:translate(-50%,0);opacity:1}
 .receiver-pull-indicator .pull-icon{font-size:16px;line-height:1}
 @media(max-width:820px){
-  #landing .tiles{bottom:104px}
+  #landing .tiles{bottom:84px}
   /* Place the app banner immediately above the five home tiles on phones. */
-  #landing .home-app-promo{bottom:calc(72px + 5 * 92px + 4 * 12px + 12px);left:20px;right:20px;min-height:42px}
+  #landing .home-app-promo{top:92px;bottom:auto;left:20px;right:20px;min-height:42px}
   #landing .receiver-pull-indicator{display:flex}
 }
 @media(min-width:821px){.home-app-promo,.receiver-pull-indicator{display:none!important}}
