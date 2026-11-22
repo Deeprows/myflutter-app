@@ -313,7 +313,7 @@
   body.fixture-streaming .player .controls #prevCh,body.fixture-streaming .player .controls #nextCh{display:none!important}
   ${phone}{
     body.fixture-streaming .player .controls #rewind,body.fixture-streaming .player .controls #forward,body.fixture-streaming .player .progress{display:none!important}
-    ${mm('.player.controls-hidden .player-head')},${mm('.player.controls-hidden .controls')}{opacity:1;pointer-events:auto}
+    ${mm('.player.controls-hidden .controls')}{opacity:1;pointer-events:auto}
   }
   @media(max-width:700px){
     ${mm('.player .controls')}{left:10px;right:10px;bottom:max(7px,env(safe-area-inset-bottom));transform:none;width:auto;max-width:none;display:flex;flex-wrap:wrap;justify-content:center;gap:4px;padding:5px;border-radius:13px;overflow:visible;background:#0a1119ed}
