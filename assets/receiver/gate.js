@@ -97,8 +97,13 @@
   .gate-steps{list-style:none;margin:0 0 20px;padding:0;text-align:left}
   .gate-steps li{display:flex;gap:12px;align-items:flex-start;padding:9px 0;font-size:14px;line-height:1.4;color:#d7e1ec}
   .gate-steps i{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:900;background:#1db4ea;color:#03121b}
-  .gate-pop .gate-dl{width:100%;min-height:52px;font-size:16px;margin-bottom:10px}
-  .gate-pop .gate-have{width:100%;min-height:46px}
+  .gate-entry{margin:0 0 16px;padding:14px;border:1px solid #2c3d52;border-radius:14px;background:#080f18}
+  .gate-entry label{display:block;margin:0 0 9px;text-align:left;font-size:13px;font-weight:800;color:#dceaf6}
+  .gate-entry .gate-row{display:flex;align-items:center;gap:8px}
+  .gate-entry input{flex:1;min-width:0;width:100%;padding:12px 10px;border:1px solid #33465c;border-radius:10px;background:#060a10;color:#fff;font-size:16px;font-weight:800;letter-spacing:.08em}
+  .gate-entry input:focus{outline:2px solid #1db4ea;border-color:#1db4ea}
+  .gate-entry .gate-msg{margin:8px 0 0;text-align:left}
+  .gate-pop .gate-dl{width:100%;min-height:52px;font-size:16px;margin-bottom:0}
   .gate-ver{margin-top:12px;font-size:11px;letter-spacing:.08em;color:#7f90a5}
   @media(max-width:860px){.home-top{flex-wrap:wrap;gap:12px}.gate-box{order:3;flex:1 1 100%;margin:0}}
   `;
@@ -169,21 +174,36 @@
       '<h2>Get your one-time access code</h2>' +
       '<p>Download the Deeprowss app to get your free access code and start watching movies and live TV here.</p>' +
       '<ul class="gate-steps">' +
-        '<li><i>1</i><span>Download and install the Deeprowss app on your phone.</span></li>' +
-        '<li><i>2</i><span>Open <b>Smart Decoder</b>. Your Decoder number is at the top of the page.</span></li>' +
-        '<li><i>3</i><span>Enter it in the box on this home screen to unlock everything.</span></li>' +
+        '<li><i>1</i><span>Open the Deeprowss app on your phone.</span></li>' +
+        '<li><i>2</i><span>Open <b>Smart Decoder</b> and find your Decoder number at the top.</span></li>' +
       '</ul>' +
+      '<div class="gate-entry">' +
+        '<label for="gateModalInput">Already have your Decoder number?</label>' +
+        '<div class="gate-row"><input id="gateModalInput" type="text" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="Enter Decoder number" aria-label="Enter Decoder number">' +
+        '<button type="button" class="gate-go" id="gateModalGo">Unlock</button></div>' +
+        '<div class="gate-msg" id="gateModalMsg" aria-live="polite">Enter the number shown in Smart Decoder.</div>' +
+      '</div>' +
       (url ? '<button type="button" class="gate-dl" id="gateDl">⬇ Download Deeprowss App</button>'
            : '<p>The download link is not available right now. Please try again in a moment.</p>') +
-      '<button type="button" class="secondary gate-have" id="gateHave">I already have my code</button>' +
       (ver ? '<div class="gate-ver">LATEST VERSION ' + String(ver).replace(/[<>&"]/g, '') + '</div>' : '') +
       '</div>';
     $('gateX').onclick = closeModal;
-    $('gateHave').onclick = () => {
-      closeModal();
-      if (window.deeprowssGo) window.deeprowssGo('landing');
-      setTimeout(() => { const i = $('gateInput'); if (i) i.focus(); }, 120);
+    const codeInput = $('gateModalInput'), codeMsg = $('gateModalMsg');
+    const submitCode = () => {
+      if (unlock(codeInput.value)) return;
+      codeMsg.classList.add('err');
+      codeMsg.textContent = 'That Decoder number is not valid. Check the number at the top of Smart Decoder in the app.';
     };
+    codeInput.addEventListener('input', () => {
+      const formatted = pretty(codeInput.value);
+      if (codeInput.value !== formatted) codeInput.value = formatted;
+      codeMsg.classList.remove('err');
+      codeMsg.textContent = 'Enter the number shown in Smart Decoder.';
+    });
+    codeInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); submitCode(); }
+    });
+    $('gateModalGo').onclick = submitCode;
     const dl = $('gateDl'); if (dl) dl.onclick = () => openDl(url);
   }
   function openModal() {
