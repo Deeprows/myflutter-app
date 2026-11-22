@@ -1,17 +1,22 @@
-# Free & Premium (Paystack)
+# Free & Premium (manual payment; Paystack coming soon)
 
 On start the app shows a plans page.
 
 * **Free** - browse the movie catalogue and watch up to **3 distinct movie or
   series titles**. After the third title, Play, Alternate player and Download
   actions open the Premium upgrade gate. Smart Decoder is Premium-only.
-* **Premium** - ₦2,000 / month or ₦20,000 / year through Paystack. No pop-ups
-  and uninterrupted streaming, plus unlimited movies, downloads and Smart
-  Decoder. People outside Nigeria see an estimate in their own currency; the
-  charge is always in naira.
-* **Can't pay online** - the *Pay manually on WhatsApp* button opens a chat
-  with the person's ID already in the message; you switch Premium on from the
-  admin page (below). The helpline is **+234 704 162 9630**.
+* **Premium** - ₦2,000 / month or ₦20,000 / year (or the current prices from
+  Worker configuration). People outside Nigeria see an estimate in their own
+  currency; the actual OPay transfer remains in naira, while USDT payers send
+  the equivalent amount on TRC20.
+* **Manual payment** - users choose OPay or USDT TRC20, send the amount, then
+  attach their receipt in WhatsApp. The message includes their account/device
+  ID and selected plan. After confirming the receipt, the admin grants 31 days
+  for monthly or 366 days for yearly from /sub/admin. The grant now issues
+  the Premium Decoder number in the admin confirmation, which users can enter
+  on the EXE / Android TV. The helpline is **+234 704 162 9630**.
+* **Paystack** is shown as **Coming Soon** and no checkout or payment
+  verification action is exposed until its setup is ready.
 
 Premium people skip the plans page and go straight into the app.
 
@@ -27,9 +32,10 @@ Movie actions -> /sub/movie-access or /receiver/movie-access -> D1 trial usage
 The Paystack secret key lives only in the Worker. A payment is counted once
 per Paystack reference, and only when it is a successful NGN payment of at
 least the selected price. One paid month = 31 days, one paid year = 366 days;
-paying again stacks on the time that is left. The app's monthly/yearly prices,
-local-currency estimate, card/USSD/bank-transfer options and manual WhatsApp
-route are also shown in the receiver Subscription screen.
+paying again stacks on the time that is left. The app and receiver show the same monthly/yearly prices and local-currency
+estimate from /sub/config. Both show the same OPay and USDT TRC20 payment
+accounts from assets/data/payment_accounts.json, with receipt confirmation
+through WhatsApp. Paystack is labelled Coming Soon in both interfaces.
 
 ## One-time setup (phone browser is enough)
 
@@ -60,10 +66,13 @@ route are also shown in the receiver Subscription screen.
 
 1. Put your link in `lib/config.dart`: `whatsappUrl = 'https://wa.me/<number>'`
    (country code, no `+`).
-2. When someone pays you, their WhatsApp message contains `My ID: ...`.
-3. Open `https://deeprowss-feed.deeprows.workers.dev/sub/admin?token=<ADMIN_TOKEN>`,
-   paste the ID, enter the days (30) and press **Grant**. Enter **0** to switch
-   someone off. The page also lists who is premium.
+2. When someone pays you, their WhatsApp message contains "My ID: ...",
+   the plan duration and payment method. Confirm the receipt before granting.
+3. Open https://deeprowss-feed.deeprows.workers.dev/sub/admin?token=<ADMIN_TOKEN>,
+   paste the ID, enter **31** for monthly or **366** for yearly, and press
+   **Grant**. The confirmation now includes the issued 10-digit Decoder
+   number. Enter **0** to switch someone off; this also expires their Decoder
+   number. The page also lists who is premium.
 4. The phone picks it up the next time the app opens or when the person
    reopens the plans page.
 
