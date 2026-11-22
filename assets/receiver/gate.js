@@ -28,17 +28,22 @@
   const digits = s => String(s || '').replace(/\D/g, '').slice(0, 10);
   const pretty = s => { const n = digits(s); return [n.slice(0,3), n.slice(3,6), n.slice(6)].filter(Boolean).join(' '); };
   const escapeHtml = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let ephemeralDeviceId = '';
   function deviceId() {
     try {
       let id = localStorage.getItem(DEVICE_KEY) || '';
       if (!/^[a-f0-9]{32}$/i.test(id)) {
         const b = new Uint8Array(16);
-        crypto.getRandomValues(b);
+        if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(b);
+        else for (let i = 0; i < b.length; i++) b[i] = Math.floor(Math.random() * 256);
         id = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
         localStorage.setItem(DEVICE_KEY, id);
       }
       return id;
-    } catch (_) { return 'receiverdevice000000000000000000'; }
+    } catch (_) {
+      if (!ephemeralDeviceId) ephemeralDeviceId = ('receiver' + Date.now().toString(36) + Math.random().toString(36).slice(2)).replace(/[^a-z0-9]/gi, '').slice(0, 48);
+      return ephemeralDeviceId;
+    }
   }
   async function api(path, method, body) {
     try {
