@@ -81,7 +81,11 @@
   }
   function paymentAccount(id) {
     const rows = Array.isArray(paymentConfig.accounts) ? paymentConfig.accounts : [];
-    return rows.find(x => x && x.id === id && x.enabled !== false) || {};
+    const found = rows.find(x => x && x.id === id && x.enabled !== false);
+    if (found) return found;
+    if (id === 'opay') return { provider: 'OPAY', account_name: 'Taiwo', account_number: '9028840867' };
+    if (id === 'wallet') return { provider: 'USDT', network: 'TRC20', wallet_name: 'Taiwo', wallet_address: 'TFijBKULxEJuJwgj9nrEcQHvTuweKQoZ2M' };
+    return {};
   }
   function amountLine(year) {
     const base = year ? plan.year_price_display : plan.price_display;
@@ -277,11 +281,11 @@
   function manualReceiptUrl() {
     const days = period === 'year' ? 366 : 31;
     const method = manualMethod === 'opay' ? 'OPay bank transfer' : 'USDT ' + (paymentAccount('wallet').network || 'TRC20');
-    const msg = 'Hello Deeprowss, I have made a manual Premium payment.\\n' +
-      'Plan: ' + (period === 'year' ? 'Yearly' : 'Monthly') + ' (' + days + ' days)\\n' +
-      'Payment method: ' + method + '\\n' +
-      'Amount: ' + amountLine(period === 'year') + '\\n' +
-      'Please confirm my payment and activate Premium. I will attach my receipt.\\n' +
+    const msg = 'Hello Deeprowss, I have made a manual Premium payment.\n' +
+      'Plan: ' + (period === 'year' ? 'Yearly' : 'Monthly') + ' (' + days + ' days)\n' +
+      'Payment method: ' + method + '\n' +
+      'Amount: ' + amountLine(period === 'year') + '\n' +
+      'Please confirm my payment and activate Premium. I will attach my receipt.\n' +
       'Receiver ID: ' + deviceId();
     return 'https://wa.me/2347041629630?text=' + encodeURIComponent(msg);
   }
@@ -429,8 +433,6 @@
     await loadConfig();
     await refreshEntitlement();
     signalPremiumState();
-    const pending = localStorage.getItem(PENDING_KEY);
-    if (pending) startVerifyPolling();
   }
   setInterval(() => { if (unlocked) refreshEntitlement(); }, 15000);
   setInterval(loadConfig, 5 * 60 * 1000);
