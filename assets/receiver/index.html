@@ -670,13 +670,15 @@ window.__deeprowssPremiumReady = new Promise(function(resolve) {
   }
   function maybeLoadPopunder() {
     if (isHome() || window.__deeprowssPremiumActive) return;
-    if (window.__deeprowssPremiumReady && typeof window.__deeprowssPremiumReady.then === 'function') {
+    if (window.__deeprowssPremiumResolve && window.__deeprowssPremiumReady &&
+        typeof window.__deeprowssPremiumReady.then === 'function') {
       window.__deeprowssPremiumReady.then(function(active) { if (!active) loadPopunder(); });
-    } else loadPopunder();
+    } else {
+      loadPopunder();
+    }
   }
   if (window.__deeprowssPremiumReady && typeof window.__deeprowssPremiumReady.then === 'function') {
     window.__deeprowssPremiumReady.then(function(active) { if (!active) maybeLoadPopunder(); });
-    window.setTimeout(function() { if (window.__deeprowssPremiumResolve) maybeLoadPopunder(); }, 5000);
   } else {
     window.setTimeout(maybeLoadPopunder, 3000);
   }
