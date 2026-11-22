@@ -139,7 +139,7 @@ class AppConfig {
   /// false = the Premium / plans screens, the "Go Premium" menu item and the
   /// "Remove ads - go Premium" button are hidden (everything is still built
   /// and ready). Ads keep working. Set true to bring Premium back.
-  static const showSubscriptions = false;
+  static const showSubscriptions = true;
 
   /// true = everyone can open the Movies page, but the Play and Download
   /// buttons send people to upgrade unless they are Premium (the logged-in
