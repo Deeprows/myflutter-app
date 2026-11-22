@@ -114,11 +114,12 @@ export default {
         stats: Boolean(
           env.STATS_TOKEN && env.CF_ACCOUNT_ID && env.CF_API_TOKEN
         ),
-        subscriptions: Boolean(env.DB && env.PAYSTACK_SECRET_KEY),
+        subscriptions: Boolean(env.DB),
+        paystack: Boolean(env.PAYSTACK_SECRET_KEY),
         fan_zone: Boolean(env.DB && env.GOOGLE_WEB_CLIENT_ID),
         ai_quota_admin: Boolean(env.DB && (env.ADMIN_TOKEN || env.STATS_TOKEN)),
         ai_quota_push: Boolean(env.DB && env.FIREBASE_SERVICE_ACCOUNT && env.AI_QUOTA_ADMIN_EMAIL),
-        // Ad-free tokens only need the D1 binding + an admin password.
+        // Manual Premium grants and ad-free tokens need D1 + an admin password.
         tokens: Boolean(env.DB && (env.ADMIN_TOKEN || env.STATS_TOKEN)),
       });
     }
