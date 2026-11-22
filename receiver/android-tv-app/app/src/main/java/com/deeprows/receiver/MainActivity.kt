@@ -182,6 +182,9 @@ class MainActivity : Activity() {
                 // Only the Deeprowss site may take over the page; embedded players load inside their frames.
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val req = request ?: return true
+                    // Refuse known ad-network navigations in both the top page and embedded
+                    // channel frames. Allow legitimate third-party stream/player frames.
+                    if (isAdHost(req.url.host)) return true
                     return req.isForMainFrame && req.url.host != allowedHost
                 }
 
