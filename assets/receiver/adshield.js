@@ -2,6 +2,8 @@
    Runs in the receiver document; cross-origin player frames remain browser-isolated. */
 (() => {
   'use strict';
+  // The receiver host is also used to serve the owner's ads; never filter ads on this domain.
+  if (location.hostname === 'deeprowss.pages.dev') return;
   if (window.__dwReceiverShield) return;
   window.__dwReceiverShield = true;
   const BAD = /(doubleclick|googlesyndication|googleadservices|googletagservices|imasdk|adnxs|adsterra|propellerads|popads|popcash|exoclick|exosrv|juicyads|trafficjunky|clickadu|hilltopads|adcash|taboola|outbrain|mgid|criteo|onclickads|onclkds|monetag|admaven|richpush|bidvertiser|tsyndicate|exdynsrv|popunder)/i;
