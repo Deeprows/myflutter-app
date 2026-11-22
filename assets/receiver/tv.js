@@ -295,7 +295,7 @@
     const out = [];
     const add = (url, referer, ua) => {
       const u = String(url || '').trim();
-      if (!/^https?:\\/\\//i.test(u) || out.some(x => x.url === u)) return;
+      if (!/^https?:\/\//i.test(u) || out.some(x => x.url === u)) return;
       out.push({ url: u, referer: String(referer || ''), ua: String(ua || '') });
     };
     if (Array.isArray(c.streams)) c.streams.forEach(x => x && add(x.url, x.referer || x.referrer, x.ua || x.userAgent || x.user_agent));
@@ -327,9 +327,9 @@
     b.classList.toggle('nomethod', !on);
     const l = b.querySelector('.lbl'); if (l && label) l.textContent = label;
   }
-  function openEmbed(c, alt, url, method, via) {
-    const s = streamOf(c, alt);
-    const info = window.deeprowssPlayTv(url, c.name + (alt && c.altUrl ? ' · Backup stream' : ''), {
+  function openEmbed(c, streamIndex, url, method, via) {
+    const s = streamOf(c, streamIndex);
+    const info = window.deeprowssPlayTv(url, c.name + (streamIndex > 0 ? ' · Backup stream ' + (streamIndex + 1) : ''), {
       method, referer: s.referer || '', ua: s.ua || '', origin: cfg.frameOrigin, framePage: cfg.framePage
     });
     if (!info) return;
@@ -395,8 +395,8 @@
     pushRecent(c);
     if (kind === 'embed') {
       /* Web channels get their own iframe page (not the movie iframe) and several ways to open it. */
-      openEmbed(c, cur.alt, r.url, 0, 'embed');
-      armEmbedFallback(token, c, cur.alt);
+      openEmbed(c, streamIndex, r.url, 0, 'embed');
+      armEmbedFallback(token, c, streamIndex);
     } else {
       cur.wrapper = wrapperOf(s.url, r.url);
       /* Windows app / Android TV app: send the channel's Referer + User-Agent and lift CORS for the stream. */
@@ -415,8 +415,8 @@
   /* "Try another way": next opening method for a web channel, or the channel's own page for a direct stream. */
   function nextWay() {
     if (!cur || $('playerPanel').style.display !== 'block') return;
-    if (cur.mode === 'embed') { openEmbed(cur.c, cur.alt, cur.embedUrl, (cur.method + 1) % Math.max(1, cur.count), cur.via); return; }
-    if (cur.wrapper) { cur.failed = true; clearWatchdog(); openEmbed(cur.c, cur.alt, cur.wrapper, 0, 'wrapper'); }
+    if (cur.mode === 'embed') { openEmbed(cur.c, cur.streamIndex || 0, cur.embedUrl, (cur.method + 1) % Math.max(1, cur.count), cur.via); return; }
+    if (cur.wrapper) { cur.failed = true; clearWatchdog(); openEmbed(cur.c, cur.streamIndex || 0, cur.wrapper, 0, 'wrapper'); }
   }
   let playToken = 0;
   function say(msg) { const s = $('tvStatus'); if (s) { s.textContent = msg; setTimeout(renderStatus, 4000); } }
