@@ -99,6 +99,7 @@ export default {
       return json({ error: "method not allowed" }, 405);
     }
 
+    if(url.pathname.startsWith('/receiver/'))return receiverAccess(request,env,url);
     if(url.pathname.startsWith('/cast/'))return castRelay(request,env,url);
     if(url.pathname==='/sports-news')return sportsNews(request,env,url,ctx);
     if(url.pathname==='/sports-reels')return sportsReels(request,env,url,ctx);
@@ -1042,6 +1043,12 @@ async function ensureSchema(env) {
     env.DB.prepare(
       "CREATE TABLE IF NOT EXISTS token_requests (install_id TEXT PRIMARY KEY, contact TEXT, created_at INTEGER NOT NULL DEFAULT 0)"
     ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS decoder_codes (owner_id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS movie_trials (owner_id TEXT NOT NULL, movie_key TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(owner_id, movie_key))"
+    ),
   ]);
   // Older databases: remember which plan a phone asked for. Harmless when the
   // columns already exist.
@@ -1053,6 +1060,146 @@ async function ensureSchema(env) {
     }
   }
   schemaReady = true;
+}
+
+
+// ------------------------------------------------------- receiver premium gate
+// Three distinct free titles per visitor/account. Paid access and decoder
+// codes are checked against the same D1 subscription expiry used by the app.
+const RECEIVER_FREE_MOVIES = 3;
+const receiverIdOk = (v) => ID_RE.test(String(v || ""));
+const cleanMovieKey = (v) => String(v || "").trim().slice(0, 120);
+
+function randomDecoderCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(10));
+  return Array.from(bytes, b => String(b % 10)).join("");
+}
+
+async function issueDecoderCode(env, ownerId) {
+  const now = Date.now();
+  const expires = await expiryOf(env, ownerId);
+  if (expires <= now) return json({ active: false, error: "An active Premium subscription is required." }, 403);
+  const old = await env.DB.prepare(
+    "SELECT code, expires_at FROM decoder_codes WHERE owner_id = ?"
+  ).bind(ownerId).first();
+  if (old && Number(old.expires_at) > now) {
+    await env.DB.prepare("UPDATE decoder_codes SET expires_at = ? WHERE owner_id = ?")
+      .bind(expires, ownerId).run();
+    return json({ active: true, code: String(old.code), expires_at: expires, now });
+  }
+  for (let i = 0; i < 5; i++) {
+    const code = randomDecoderCode();
+    try {
+      await env.DB.prepare(
+        "INSERT INTO decoder_codes (owner_id, code, expires_at, created_at) VALUES (?, ?, ?, ?) " +
+        "ON CONFLICT(owner_id) DO UPDATE SET code = excluded.code, expires_at = excluded.expires_at, created_at = excluded.created_at"
+      ).bind(ownerId, code, expires, now).run();
+      return json({ active: true, code, expires_at: expires, now });
+    } catch (e) {
+      if (i === 4) throw e;
+    }
+  }
+  return json({ error: "Could not issue a Decoder number. Try again." }, 503);
+}
+
+async function validateDecoderCode(env, raw) {
+  const code = String(raw || "").replace(/\D/g, "");
+  if (!/^\d{10}$/.test(code)) return { valid: false };
+  const row = await env.DB.prepare(
+    "SELECT owner_id, expires_at FROM decoder_codes WHERE code = ?"
+  ).bind(code).first();
+  if (!row || Number(row.expires_at) <= Date.now()) return { valid: false };
+  const subscriptionExpiry = await expiryOf(env, String(row.owner_id));
+  if (subscriptionExpiry <= Date.now()) return { valid: false };
+  return {
+    valid: true,
+    owner_id: String(row.owner_id),
+    expires_at: Math.min(Number(row.expires_at), subscriptionExpiry),
+    now: Date.now(),
+  };
+}
+
+async function recordMovieTrial(env, ownerId, movieKey) {
+  const key = cleanMovieKey(movieKey);
+  if (!receiverIdOk(ownerId) || !key) return { allowed: false, used: 0, remaining: 0 };
+  const now = Date.now();
+  // Conditional insert is atomic: parallel clicks cannot consume more than 3
+  // distinct titles. Reopening one of the first three titles stays allowed.
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO movie_trials (owner_id, movie_key, created_at) " +
+    "SELECT ?, ?, ? WHERE (SELECT COUNT(*) FROM movie_trials WHERE owner_id = ?) < ?"
+  ).bind(ownerId, key, now, ownerId, RECEIVER_FREE_MOVIES).run();
+  const seen = await env.DB.prepare(
+    "SELECT 1 AS found FROM movie_trials WHERE owner_id = ? AND movie_key = ?"
+  ).bind(ownerId, key).first();
+  const row = await env.DB.prepare(
+    "SELECT COUNT(*) AS used FROM movie_trials WHERE owner_id = ?"
+  ).bind(ownerId).first();
+  const used = Number(row?.used || 0);
+  return { allowed: Boolean(seen), used, remaining: Math.max(0, RECEIVER_FREE_MOVIES - used) };
+}
+
+async function subMovieAccess(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const ownerId = String(body.install_id || "");
+  const movieKey = cleanMovieKey(body.movie_key);
+  if (!receiverIdOk(ownerId) || !movieKey) return json({ error: "bad movie request" }, 400);
+  const expires = await expiryOf(env, ownerId);
+  if (expires > Date.now()) return json({ allowed: true, premium: true, used: 0, remaining: RECEIVER_FREE_MOVIES, expires_at: expires, now: Date.now() });
+  const result = await recordMovieTrial(env, ownerId, movieKey);
+  return json({ ...result, premium: false, limit: RECEIVER_FREE_MOVIES, now: Date.now() });
+}
+
+async function receiverAccess(request, env, url) {
+  const path = url.pathname;
+  if (!env.DB) return json({ error: "Premium service is not configured." }, 503);
+  try {
+    await ensureSchema(env);
+    if (path === "/receiver/sub/start" && request.method === "POST") {
+      if (!env.PAYSTACK_SECRET_KEY) return json({ error: "Online payment is not available. Please use WhatsApp." }, 503);
+      return subStart(request, env, url);
+    }
+    if (path === "/receiver/sub/verify" && request.method === "GET") {
+      if (!env.PAYSTACK_SECRET_KEY) return json({ status: "failed", error: "Payment service unavailable." }, 503);
+      return subVerify(url, env);
+    }
+    if (path === "/receiver/sub/status" && request.method === "GET") {
+      const id = String(url.searchParams.get("device") || "");
+      if (!receiverIdOk(id)) return json({ error: "bad device id" }, 400);
+      const u = new URL(url.toString());
+      u.pathname = "/sub/status";
+      u.searchParams.set("install", id);
+      return subStatus(u, env);
+    }
+    if (path === "/receiver/decoder/issue" && request.method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const id = String(body.device_id || "");
+      if (!receiverIdOk(id)) return json({ error: "bad device id" }, 400);
+      return issueDecoderCode(env, id);
+    }
+    if (path === "/receiver/decoder/validate" && request.method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const result = await validateDecoderCode(env, body.code);
+      return json(result);
+    }
+    if (path === "/receiver/movie-access" && request.method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const deviceId = String(body.device_id || "");
+      const movieKey = cleanMovieKey(body.movie_key);
+      if (!receiverIdOk(deviceId) || !movieKey) return json({ error: "bad movie request" }, 400);
+      const codeResult = await validateDecoderCode(env, body.decoder_code);
+      const ownerId = codeResult.valid ? codeResult.owner_id : deviceId;
+      if (codeResult.valid) return json({ allowed: true, premium: true, used: 0, remaining: RECEIVER_FREE_MOVIES, expires_at: codeResult.expires_at, now: Date.now() });
+      const expires = await expiryOf(env, ownerId);
+      if (expires > Date.now()) return json({ allowed: true, premium: true, used: 0, remaining: RECEIVER_FREE_MOVIES, expires_at: expires, now: Date.now() });
+      const result = await recordMovieTrial(env, ownerId, movieKey);
+      return json({ ...result, premium: false, limit: RECEIVER_FREE_MOVIES, now: Date.now() });
+    }
+  } catch (e) {
+    console.error("receiver access error", e && e.message);
+    return json({ error: "receiver access error" }, 500);
+  }
+  return json({ error: "not found" }, 404);
 }
 
 async function subscriptions(request, env, url) {
@@ -1080,6 +1227,8 @@ async function subscriptions(request, env, url) {
   // everything else also needs the Paystack key.
   const dbOnly =
     path === "/sub/status" ||
+    path === "/sub/decoder/issue" ||
+    path === "/sub/movie-access" ||
     path === "/sub/admin" ||
     path.startsWith("/sub/token/");
   if (!env.DB || (!env.PAYSTACK_SECRET_KEY && !dbOnly)) {
@@ -1095,6 +1244,8 @@ async function subscriptions(request, env, url) {
     // verified account's.
     const accountBound =
       path === "/sub/status" ||
+      path === "/sub/decoder/issue" ||
+      path === "/sub/movie-access" ||
       path === "/sub/start" ||
       path === "/sub/restore" ||
       path.startsWith("/sub/token/");
@@ -1119,6 +1270,15 @@ async function subscriptions(request, env, url) {
 
     if (path === "/sub/status" && request.method === "GET") {
       return subStatus(url, env);
+    }
+    if (path === "/sub/decoder/issue" && request.method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const ownerId = String(body.install_id || url.searchParams.get("install") || "");
+      if (!ID_RE.test(ownerId)) return json({ error: "bad account id" }, 400);
+      return issueDecoderCode(env, ownerId);
+    }
+    if (path === "/sub/movie-access" && request.method === "POST") {
+      return subMovieAccess(request, env);
     }
     if (path === "/sub/start" && request.method === "POST") {
       return subStart(request, env, url);
