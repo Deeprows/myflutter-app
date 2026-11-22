@@ -1050,6 +1050,9 @@ async function ensureSchema(env) {
     env.DB.prepare(
       "CREATE TABLE IF NOT EXISTS movie_trials (owner_id TEXT NOT NULL, movie_key TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(owner_id, movie_key))"
     ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS tv_trials (device_id TEXT NOT NULL, day_utc TEXT NOT NULL, channel_key TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(device_id, day_utc, channel_key))"
+    ),
   ]);
   // Older databases: remember which plan a phone asked for. Harmless when the
   // columns already exist.
@@ -1140,6 +1143,29 @@ async function recordMovieTrial(env, ownerId, movieKey) {
   return { allowed: Boolean(seen), used, remaining: Math.max(0, RECEIVER_FREE_MOVIES - used) };
 }
 
+const RECEIVER_FREE_TV_CHANNELS = 10;
+
+async function recordTvTrial(env, deviceId, channelKey) {
+  const key = String(channelKey || '').trim().slice(0, 120);
+  if (!receiverIdOk(deviceId) || !key) return { allowed: false, used: 0, remaining: 0 };
+  const now = Date.now();
+  const day = new Date(now).toISOString().slice(0, 10);
+  // A unique key per device, UTC day and channel means repeats do not consume
+  // another slot. The conditional insert caps distinct channels at ten.
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO tv_trials (device_id, day_utc, channel_key, created_at) " +
+    "SELECT ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM tv_trials WHERE device_id = ? AND day_utc = ?) < ?"
+  ).bind(deviceId, day, key, now, deviceId, day, RECEIVER_FREE_TV_CHANNELS).run();
+  const seen = await env.DB.prepare(
+    "SELECT 1 AS found FROM tv_trials WHERE device_id = ? AND day_utc = ? AND channel_key = ?"
+  ).bind(deviceId, day, key).first();
+  const row = await env.DB.prepare(
+    "SELECT COUNT(*) AS used FROM tv_trials WHERE device_id = ? AND day_utc = ?"
+  ).bind(deviceId, day).first();
+  const used = Number(row?.used || 0);
+  return { allowed: Boolean(seen), used, remaining: Math.max(0, RECEIVER_FREE_TV_CHANNELS - used), limit: RECEIVER_FREE_TV_CHANNELS, day };
+}
+
 async function subMovieAccess(request, env) {
   const body = await request.json().catch(() => ({}));
   const ownerId = String(body.install_id || "");
@@ -1195,6 +1221,18 @@ async function receiverAccess(request, env, url) {
       if (expires > Date.now()) return json({ allowed: true, premium: true, used: 0, remaining: RECEIVER_FREE_MOVIES, expires_at: expires, now: Date.now() });
       const result = await recordMovieTrial(env, ownerId, movieKey);
       return json({ ...result, premium: false, limit: RECEIVER_FREE_MOVIES, now: Date.now() });
+    }
+    if (path === "/receiver/tv-access" && request.method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const deviceId = String(body.device_id || "");
+      const channelKey = String(body.channel_key || "").trim().slice(0, 120);
+      if (!receiverIdOk(deviceId) || !channelKey) return json({ error: "bad TV channel request" }, 400);
+      const codeResult = await validateDecoderCode(env, body.decoder_code);
+      if (codeResult.valid) return json({ allowed: true, premium: true, used: 0, remaining: RECEIVER_FREE_TV_CHANNELS, expires_at: codeResult.expires_at, now: Date.now() });
+      const expires = await expiryOf(env, deviceId);
+      if (expires > Date.now()) return json({ allowed: true, premium: true, used: 0, remaining: RECEIVER_FREE_TV_CHANNELS, expires_at: expires, now: Date.now() });
+      const result = await recordTvTrial(env, deviceId, channelKey);
+      return json({ ...result, premium: false, now: Date.now() });
     }
   } catch (e) {
     console.error("receiver access error", e && e.message);
