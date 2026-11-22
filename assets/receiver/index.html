@@ -631,13 +631,14 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
 (function(){
   function load(src,fail,done){var s=document.createElement('script');s.src=src;if(fail)s.onerror=fail;if(done)s.onload=done;document.body.appendChild(s);}
   function both(n,done){load(n,function(){load('receiver/'+n,function(){if(done)done();},done);},done);}
-  both('adshield.js');both('tvplus.js');both('tv.js');both('shell.js');both('fixtures.js');both('downloads.js');both('manualad.js');
-  // Load the movie library only after gate.js has registered its Premium check.
-  both('gate.js',function(){
+  both('adshield.js');both('tvplus.js');both('tv.js');both('fixtures.js');both('downloads.js');both('manualad.js');
+  // Load shell first so gate.js can wrap its Back handler, then load the
+  // movie library only after the Premium check has been registered.
+  both('shell.js',function(){both('gate.js',function(){
     load('library.js',function(){load('receiver/library.js',function(){
       var r=document.getElementById('homeRails');if(r)r.innerHTML='<div class="empty">The movie library could not be loaded.<br>Please refresh the page.</div>';
     });});
-  });
+  });});
   if('serviceWorker' in navigator&&location.protocol==='https:'){try{navigator.serviceWorker.register('sw.js').catch(function(){});}catch(e){}}
 })();
 </script>
