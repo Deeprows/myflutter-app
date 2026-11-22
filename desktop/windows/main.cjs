@@ -313,8 +313,9 @@ ipcMain.handle('external:open', async (event, url) => {
     const u = new URL(String(url));
     if (u.protocol !== 'https:') return false;
     const host = u.hostname.toLowerCase();
-    const allowed = host === 'checkout.paystack.com' || host === 'paystack.com' ||
-      host.endsWith('.paystack.com') || host === 'wa.me' || host === 'api.whatsapp.com';
+    const allowed = host === 'paystack.com' || host.endsWith('.paystack.com') ||
+      host === 'paystack.co' || host.endsWith('.paystack.co') ||
+      host === 'wa.me' || host === 'api.whatsapp.com';
     if (!allowed) return false;
     await shell.openExternal(u.href);
     return true;
