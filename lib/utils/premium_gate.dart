@@ -8,29 +8,24 @@ import '../services/remote_config.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 
-/// Movies are open for everyone to browse, but Play and Download are for
-/// Premium members. Everyone else is sent to the upgrade page.
+/// Everyone can browse the movie catalogue and watch three distinct titles.
+/// Further Play / Alternate player / Download actions require Premium.
 class PremiumGate {
   PremiumGate._();
 
-  /// True when Play / Download must send this person to upgrade.
-  /// (Never locks when subscriptions are not set up, so nobody gets stuck.)
+  /// True when a non-Premium account has no more movie access.
   static bool get locked =>
       AppConfig.moviesPremiumOnly &&
       SubscriptionService.instance.enabled &&
-      !SubscriptionService.instance.isPremium &&
-      !AdUnlock.instance.isUnlocked;
+      !SubscriptionService.instance.isPremium;
 
-  /// True when Download must send this person to upgrade. Downloads are
-  /// Premium only: unlike Play, the "watch an ad" unlock does NOT open them.
-  /// (Never locks when subscriptions are not set up, so nobody gets stuck.)
+  /// True when a non-Premium account has reached the shared three-title limit.
   static bool get downloadLocked =>
       AppConfig.moviesPremiumOnly &&
       SubscriptionService.instance.enabled &&
       !SubscriptionService.instance.isPremium;
 
-  /// True when Decoder features must send this person to upgrade. Everyone
-  /// can open the Smart Decoder page; only the items inside it are locked.
+  /// The Smart Decoder hub and its features are Premium-only.
   static bool get decoderLocked =>
       SubscriptionService.instance.enabled &&
       !SubscriptionService.instance.isPremium;
@@ -60,6 +55,12 @@ class PremiumGate {
     if (!AppConfig.moviesPremiumOnly || !SubscriptionService.instance.enabled ||
         SubscriptionService.instance.isPremium) return true;
     final access = await SubscriptionService.instance.consumeMovieAccess(movieKey, action: action);
+    if (!access.verified) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not verify your free movie allowance. Please try again when connected.')),
+      );
+      return false;
+    }
     if (access.allowed) return true;
     return _gate(
       context,
