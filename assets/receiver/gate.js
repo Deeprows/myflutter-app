@@ -394,11 +394,12 @@
     const now = Date.now() + serverOffset;
     const remaining = active && expiry ? Math.max(0, Math.ceil((expiry - now) / 86400000)) : 0;
     const date = expiry ? new Date(expiry).toLocaleString() : 'Not available';
-    const label = active ? 'ACTIVE' : 'INACTIVE';
+    const expiring = active && expiry && remaining <= 3;
+    const label = !active ? 'INACTIVE' : (expiring ? 'EXPIRING SOON' : 'ACTIVE');
     return '<section class="gate-substatus" id="gateSubStatus">' +
-      '<div class="status-head"><span>My subscription</span><span class="status-pill ' + (active ? '' : 'expired') + '">' + label + '</span></div>' +
+      '<div class="status-head"><span>My subscription</span><span class="status-pill ' + (active && !expiring ? '' : 'expired') + '">' + label + '</span></div>' +
       (active
-        ? '<div class="status-days">' + remaining + ' day' + (remaining === 1 ? '' : 's') + ' remaining</div>'
+        ? '<div class="status-days" style="' + (expiring ? 'color:#fca5a5' : '') + '">' + remaining + ' day' + (remaining === 1 ? '' : 's') + ' remaining</div>'
         : '<div class="status-days" style="color:#fca5a5">No active Premium</div>') +
       '<div class="status-grid">' +
         '<div class="status-item"><small>Expiry date</small><b>' + escapeHtml(date) + '</b></div>' +
