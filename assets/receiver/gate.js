@@ -364,108 +364,18 @@
   function closeModal() { modal.classList.remove('open'); modalOpen = false; }
   modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 
-  function channelsForMethod() {
-    if (method === 'card') return ['card'];
-    if (method === 'ussd') return ['ussd'];
-    if (method === 'bank_transfer') return ['bank_transfer'];
-    return [];
-  }
-  async function startCheckout() {
-    const email = String($('gateEmail').value || '').trim();
-    const status = $('gateStatus');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
-      status.textContent = 'Enter a valid e-mail address for your receipt.'; status.classList.add('err'); return;
-    }
-    status.classList.remove('err'); status.textContent = 'Creating your secure Paystack checkout…';
-    try { localStorage.setItem('deeprowss_receiver_email', email); } catch (_) {}
-    // Reserve a browser tab synchronously for normal browsers before awaiting
-    // the Worker; native EXE / Android TV bridges open the checkout externally.
-    let checkoutWindow = null;
-    if (!(window.DeeprowssTv && typeof window.DeeprowssTv.openExternal === 'function') &&
-        !(window.deeprowssDesktop && typeof window.deeprowssDesktop.openExternal === 'function')) {
-      try { checkoutWindow = window.open('about:blank', '_blank'); } catch (_) {}
-    }
-    const result = await api('/receiver/sub/start', 'POST', {
-      install_id: deviceId(), email: email, recurring: method === 'card' && autoRenew,
-      period: period, channels: channelsForMethod()
-    });
-    if (!result.ok || !result.data.authorization_url) {
-      try { if (checkoutWindow) checkoutWindow.close(); } catch (_) {}
-      status.classList.add('err');
-      status.textContent = result.status === 404 || result.status === 503 || result.status === 0
-        ? 'The Premium payment service needs its latest server update. Please use the WhatsApp helpline for now.'
-        : (result.data.error || 'Could not start payment. Use the WhatsApp helpline.');
-      return;
-    }
-    try { localStorage.setItem(PENDING_KEY, result.data.reference || ''); } catch (_) {}
-    status.textContent = 'Complete the Paystack payment in the opened page, then return here and tap Verify payment.';
-    const checkoutUrl = result.data.authorization_url;
-    let opened = false;
-    try {
-      if (window.DeeprowssTv && typeof window.DeeprowssTv.openExternal === 'function') {
-        window.DeeprowssTv.openExternal(checkoutUrl); opened = true;
-      } else if (window.deeprowssDesktop && typeof window.deeprowssDesktop.openExternal === 'function') {
-        const openedResult = await window.deeprowssDesktop.openExternal(checkoutUrl);
-        opened = openedResult !== false;
-      } else if (checkoutWindow) {
-        checkoutWindow.location.href = checkoutUrl;
-        try { checkoutWindow.opener = null; } catch (_) {}
-        opened = true;
-      } else {
-        const win = window.open(checkoutUrl, '_blank');
-        opened = !!win;
-        if (win) { try { win.opener = null; } catch (_) {} }
-      }
-    } catch (_) {}
-    if (!opened) {
-      try { if (checkoutWindow) checkoutWindow.close(); } catch (_) {}
-      status.textContent += ' The checkout page could not open on this device. Use the WhatsApp helpline for manual activation.';
-    }
-    startVerifyPolling();
-  }
-  function startVerifyPolling() {
-    if (verifyTimer) return;
-    verifyCount = 0;
-    verifyTimer = setInterval(async () => {
-      verifyCount++;
-      const done = await verifyPayment(true);
-      if (done || verifyCount >= 40) { clearInterval(verifyTimer); verifyTimer = null; }
-    }, 7000);
-  }
   async function issueGuestCode() {
     const result = await api('/receiver/decoder/issue', 'POST', { device_id: deviceId() });
     if (!result.ok || !result.data.active || !result.data.code) return false;
-    code = digits(result.data.code); unlocked = true; codeExpiry = Number(result.data.expires_at || 0);
-    try { localStorage.setItem(CODE_KEY, code); localStorage.removeItem(PENDING_KEY); } catch (_) {}
-    render(); return true;
+    code = digits(result.data.code);
+    unlocked = true;
+    codeExpiry = Number(result.data.expires_at || 0);
+    serverOffset = Number(result.data.now || Date.now()) - Date.now();
+    try { localStorage.setItem(CODE_KEY, code); } catch (_) {}
+    signalPremiumState();
+    render();
+    return true;
   }
-  async function verifyPayment(silent) {
-    const ref = localStorage.getItem(PENDING_KEY) || '';
-    const status = $('gateStatus');
-    if (!ref) {
-      if (status && !silent) status.textContent = 'No pending payment found. Start a subscription first.';
-      return false;
-    }
-    const result = await api('/receiver/sub/verify?reference=' + encodeURIComponent(ref));
-    if (result.ok && result.data.status === 'success') {
-      const ok = await issueGuestCode();
-      if (ok) {
-        if (status) status.textContent = 'Payment confirmed. Your new Decoder number is active.';
-        if (modalOpen) {
-          fillModal();
-          const s = $('gateStatus'); if (s) s.textContent = 'Premium is active. Your Decoder number: ' + pretty(code);
-        }
-        return true;
-      }
-      if (status) status.textContent = 'Payment received, but the Decoder number could not be issued yet. Tap Verify payment again.';
-      return false;
-    }
-    if (status && !silent) status.textContent = result.data.status === 'pending'
-      ? 'Payment is still processing. Please wait a moment and verify again.'
-      : (result.data.error || 'Payment has not been confirmed yet.');
-    return false;
-  }
-
   window.deeprowssMovieAccess = async function(movie, action) {
     const title = String((movie && (movie.title || movie.name)) || movie || 'movie').toLowerCase();
     const type = movie && (movie.type === 'tv' || movie.isSeries) ? 'tv' : 'movie';
