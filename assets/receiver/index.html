@@ -637,14 +637,18 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
 </script>
 
 <script>
-/* Adsterra popunder: initialise once as soon as this Deeprowss Pages document is ready.
-   The network/browser may only open the popunder after the visitor's first eligible gesture. */
+/* Adsterra popunder: load on receiver sections other than the homepage.
+   The landing view is intentionally excluded; other sections keep the existing ad. */
 (function () {
   if (location.hostname !== 'deeprowss.pages.dev' || window.__deeprowssPopunderLoaded) return;
-  window.__deeprowssPopunderLoaded = true;
+  function isHome() {
+    var view = location.hash.replace(/^#/, '').split('?')[0];
+    return !view || view === 'landing';
+  }
   function loadPopunder() {
-    if (window.__deeprowssPopunderScriptAdded) return;
+    if (isHome() || window.__deeprowssPopunderScriptAdded) return;
     window.__deeprowssPopunderScriptAdded = true;
+    window.__deeprowssPopunderLoaded = true;
     var s = document.createElement('script');
     s.setAttribute('data-cfasync', 'false');
     s.src = 'https://capitalhospitals.org/1/e5e505327285cf6306fe79dfac583467';
@@ -656,6 +660,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
   } else {
     loadPopunder();
   }
+  window.addEventListener('hashchange', loadPopunder);
 })();</script>
 
 <script>
