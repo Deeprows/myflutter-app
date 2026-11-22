@@ -7,8 +7,8 @@
   "license": "UNLICENSED",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win nsis portable --x64 --publish always",
-    "dist:build": "electron-builder --win nsis portable --x64 --publish never"
+    "dist": "electron-builder --win nsis --x64 --publish always",
+    "dist:build": "electron-builder --win nsis --x64 --publish never"
   },
   "devDependencies": {
     "electron": "^34.0.0",
@@ -37,12 +37,6 @@
           "arch": [
             "x64"
           ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
         }
       ]
     },
@@ -53,9 +47,6 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Deeprowss Cinema"
-    },
-    "portable": {
-      "artifactName": "Deeprowss-Cinema-Portable-${version}.${ext}"
     },
     "publish": {
       "provider": "github",
