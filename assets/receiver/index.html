@@ -571,7 +571,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     const routeName=()=>{const h=location.hash.replace('#','');return views[h]?h:'landing';};
     let pairingBusy=false;
     async function ensurePairing(){if(pairingBusy||relayActive||(socket&&socket.readyState===WebSocket.OPEN))return;pairingBusy=true;try{await createPairing();}finally{pairingBusy=false;}}
-    function closePlayer(){if(panel.style.display!=='block')return;const m=document.body.dataset.mode;if(m==='connect')remote('stop');else clearMedia();panel.style.display='none';join.style.display='block';}
+    function closePlayer(){if(panel.style.display!=='block')return;const m=document.body.dataset.mode;if(m==='connect')remote('stop');else clearMedia();document.body.classList.remove('fixture-streaming');panel.style.display='none';join.style.display='block';}
     function route(){closePlayer();const n=routeName();setView(n);if(n==='connect')ensurePairing();}
     function go(n){if(routeName()===n){route();return;}location.hash=n;}
     window.addEventListener('hashchange',route);
