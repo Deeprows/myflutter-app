@@ -1,28 +1,14 @@
-/* Deeprowss receiver · Download Apps page (website, Windows app, Android TV, webOS, Tizen).
-   Adds the 5th home tile and a page where visitors pick the Deeprowss app they want:
-   Mobile app, Android TV, LG webOS, Samsung Tizen or Windows.
-
-   Where the files come from (nothing to rebuild when a new version is released):
-   - Mobile app  : update.apkUrl (else share.link) in app_config.json.
-   - Everything else: the newest GitHub Release that contains the file.
-   - Manual links can be managed separately in assets/data/download_links.json (manual URL wins; use auto to use the existing automatic source, or off to hide an item).\n   - Any app can also be overridden in app_config.json:
-       "downloads": { "webos": "https://example.com/file.ipk", "tizen": "off", "windows": "auto" }
-     "auto" (or a missing key) = automatic, "off" = show "Coming soon", a https link = use that link.
-
-   On a TV (Android TV / webOS / Tizen) a browser cannot save files, so the button shows a QR code
-   instead: scan it with a phone and the file downloads there. In the Windows app the file is saved
-   to the Downloads folder and appears in the app's Downloads panel. */
+/* Deeprowss receiver · Download Apps page.
+   All app download destinations are controlled only by assets/data/download_links.json.
+   Put your own direct HTTPS download links in that JSON; no GitHub Releases lookup or app_config fallback is used. */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const desktop = window.deeprowssDesktop || null;
   const UA = navigator.userAgent || '';
-
-  const REPO = 'Deeprows/myflutter-app';
-  const RELEASES = 'https://github.com/' + REPO + '/releases';
-  const ROOT = 'https://raw.githubusercontent.com/' + REPO + '/main/assets/data/';
-  const CACHE_KEY = 'deeprowss_dl_assets_v1', CACHE_MS = 30 * 60 * 1000;
+  const ROOT = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/';
+  const CACHE_KEY = 'deeprowss_dl_assets_v2';
 
   /* ---------- the apps ---------- */
   const APPS = [
@@ -62,10 +48,10 @@
   };
 
   /* ---------- state ---------- */
-  let cfg = {}, cfgDone = false, manualLinks = {}, manualDone = false, assets = {}, assetsDone = false, started = false, modalOpen = false;
+  let manualLinks = {}, manualDone = false, started = false, modalOpen = false;
 
   /* ---------- helpers ---------- */
-  const safeUrl = u => { try { const x = new URL(String(u || '').trim()); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch (_) { return ''; } };
+  const safeUrl = u => { try { const x = new URL(String(u || '').trim()); return x.protocol === 'https:' ? x.href : ''; } catch (_) { return ''; } };
   const fmtSize = n => { n = Number(n) || 0; if (!n) return ''; const mb = n / 1048576; return (mb >= 100 ? mb.toFixed(0) : mb.toFixed(1)) + ' MB'; };
   const isTvDevice = () => document.documentElement.classList.contains('tv') || /Android TV|AFTT|BRAVIA|SMART-TV|SmartTV|Tizen|Web0S|WebOS|CrKey|GoogleTV/i.test(UA);
   function detect() {
@@ -77,76 +63,35 @@
     if (/Windows/i.test(UA)) return 'windows';
     return '';
   }
-  async function getJson(name) {
-    for (const u of [ROOT + name, 'data/' + name, '../data/' + name]) {
-      try { const r = await fetch(u + '?_d=' + Date.now(), { cache: 'no-store' }); if (r.ok) return await r.json(); } catch (_) {}
-    }
-    return null;
-  }
-
-  /* ---------- data: config + latest GitHub release ---------- */
-  function pickAssets(releases) {
-    const out = {};
-    for (const key of Object.keys(MATCH)) {
-      let found = null;
-      for (const rx of MATCH[key]) {
-        for (const rel of releases) {
-          if (!rel || rel.draft) continue;
-          const a = (rel.assets || []).find(x => rx.test(x.name || '') && !/\.(blockmap|yml|yaml)$/i.test(x.name || '') && !(key === 'windows' && /portable/i.test(x.name)));
-          if (a) { found = { url: a.browser_download_url, size: a.size, tag: rel.tag_name || '' }; break; }
-        }
-        if (found) break;
-      }
-      if (found) out[key] = found;
-    }
-    return out;
-  }
-  async function loadAssets() {
-    try {
-      const c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-      if (c && Date.now() - c.t < CACHE_MS && c.assets) { assets = c.assets; assetsDone = true; refresh(); return; }
-    } catch (_) {}
-    try {
-      const r = await fetch('https://api.github.com/repos/' + REPO + '/releases?per_page=10', { headers: { Accept: 'application/vnd.github+json' } });
-      if (r.ok) {
-        assets = pickAssets(await r.json());
-        try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), assets })); } catch (_) {}
-      }
-    } catch (_) {}
-    assetsDone = true; refresh();
-  }
-  async function loadConfig() {
-    const j = await getJson('app_config.json');
-    if (j && typeof j === 'object') cfg = j;
-    cfgDone = true; refresh();
-  }
   async function loadManualLinks() {
-    const j = await getJson('download_links.json');
-    if (j && typeof j === 'object' && !Array.isArray(j)) manualLinks = j;
-    manualDone = true; refresh();
+    manualDone = false;
+    try {
+      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+      if (cached && cached.links && typeof cached.links === 'object') manualLinks = cached.links;
+    } catch (_) {}
+    for (const u of [ROOT + 'download_links.json', 'data/download_links.json', '../data/download_links.json']) {
+      try {
+        const r = await fetch(u + '?_d=' + Date.now(), { cache: 'no-store' });
+        if (!r.ok) continue;
+        const j = await r.json();
+        if (j && typeof j === 'object' && !Array.isArray(j)) {
+          manualLinks = j;
+          try { localStorage.setItem(CACHE_KEY, JSON.stringify({ links: j, savedAt: Date.now() })); } catch (_) {}
+          break;
+        }
+      } catch (_) {}
+    }
+    manualDone = true;
+    refresh();
   }
 
-  /* ---------- what each button does ---------- */
+  /* ---------- only the URLs in download_links.json are used ---------- */
   function resolve(key) {
-    const manual = manualLinks[key];
-    if (typeof manual === 'string' && manual.trim() && manual.trim().toLowerCase() !== 'auto') {
-      if (manual.trim().toLowerCase() === 'off') return { state: 'off' };
-      const u = safeUrl(manual); if (u) return { state: 'ok', url: u, version: 'Manual link' };
-    }
-    const ov = cfg.downloads && cfg.downloads[key];
-    if (typeof ov === 'string' && ov.trim() && ov.trim().toLowerCase() !== 'auto') {
-      if (ov.trim().toLowerCase() === 'off') return { state: 'off' };
-      const u = safeUrl(ov); if (u) return { state: 'ok', url: u };
-    }
-    if (key === 'mobile') {
-      if (!cfgDone) return { state: 'loading' };
-      const u = safeUrl((cfg.update && cfg.update.apkUrl) || (cfg.share && cfg.share.link));
-      return u ? { state: 'ok', url: u, version: cfg.update && cfg.update.version } : { state: 'off' };
-    }
-    if (!assetsDone) return { state: 'loading' };
-    const a = assets[key];
-    if (a) return { state: 'ok', url: a.url, size: a.size, version: a.tag };
-    return { state: 'fallback', url: RELEASES + '/latest' };
+    if (!manualDone && !Object.prototype.hasOwnProperty.call(manualLinks, key)) return { state: 'loading' };
+    const value = manualLinks[key];
+    if (typeof value !== 'string' || !value.trim() || value.trim().toLowerCase() === 'off' || value.trim().toLowerCase() === 'auto') return { state: 'off' };
+    const url = safeUrl(value);
+    return url ? { state: 'ok', url, version: 'Custom link' } : { state: 'off' };
   }
   function showQr(url, name) {
     modal.innerHTML = '<div class="dl-pop"><button type="button" class="dl-x" id="dlX" aria-label="Close">✕</button>' +
@@ -168,7 +113,7 @@
   function activate(id, slot, qr) {
     const app = APPS.find(a => a.id === id); if (!app) return;
     const t = resolve(KEY_OF(id, slot));
-    if (t.state === 'off' || t.state === 'loading' || !t.url) return;
+    if (t.state !== 'ok' || !t.url) return;
     if (qr || isTvDevice()) { showQr(t.url, app.name + (slot === 'portable' ? ' (portable)' : '')); return; }
     if (desktop && desktop.openDownload) { desktop.openDownload(t.url); return; }
     const w = window.open(t.url, '_blank', 'noopener'); if (!w) location.href = t.url;
@@ -282,7 +227,6 @@
         b.disabled = t.state === 'off' || t.state === 'loading';
         span.textContent = t.state === 'off' ? 'Coming soon'
           : t.state === 'loading' ? 'Checking latest version…'
-          : t.state === 'fallback' ? (tv ? 'Show QR for releases page' : 'Open releases page')
           : (tv ? 'Show QR to download' : b.dataset.label);
         if (b.dataset.slot === 'main' && t.state === 'ok') meta = [t.version, fmtSize(t.size)].filter(Boolean).join(' · ');
       });
@@ -307,7 +251,7 @@
   /* ---------- start ---------- */
   function start() {
     if (started) return; started = true;
-    loadConfig(); loadManualLinks(); loadAssets();
+    loadManualLinks();
   }
   document.body.appendChild(modal);
   build();
