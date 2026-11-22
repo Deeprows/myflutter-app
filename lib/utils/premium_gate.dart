@@ -46,7 +46,7 @@ class PremiumGate {
       allowMovies(context, movieKey, action: 'download');
 
   /// One visitor may play / download three distinct titles. The Worker keeps
-  /// the count, so it is shared across the app and receiver when signed in.
+  /// the count against the app account or persistent guest / receiver ID.
   static Future<bool> allowMovies(
     BuildContext context,
     String movieKey, {
