@@ -154,7 +154,7 @@ const TRIAL_APP = "1234567890abcdef1234567890abcdef";
 const TRIAL_DEVICE = "abcdef1234567890abcdef1234567890";
 const TRIAL_GUEST = "abcdefabcdefabcdefabcdefabcdefab";
 for (const [id, prefix] of [[TRIAL_APP, "/sub/movie-access"], [TRIAL_GUEST, "/sub/movie-access-guest"], [TRIAL_DEVICE, "/receiver/movie-access"]]) {
-  const payload = key => prefix === "/sub/movie-access"
+  const payload = key => prefix.indexOf("/sub/") === 0
     ? { install_id: id, movie_key: key, action: "play" }
     : { device_id: id, movie_key: key, action: "play" };
   for (const key of ["movie:one", "movie:two", "movie:three"]) {
@@ -163,11 +163,11 @@ for (const [id, prefix] of [[TRIAL_APP, "/sub/movie-access"], [TRIAL_GUEST, "/su
   }
   j = await (await post(prefix, payload("movie:four"))).json();
   assert.equal(j.allowed, false);
-  const repeat = prefix === "/sub/movie-access"
+  const repeat = prefix.indexOf("/sub/") === 0
     ? { install_id: id, movie_key: "movie:one", action: "alternate" }
     : { device_id: id, movie_key: "movie:one", action: "alternate" };
   assert.equal((await (await post(prefix, repeat)).json()).allowed, true);
-  const fourthDownload = prefix === "/sub/movie-access"
+  const fourthDownload = prefix.indexOf("/sub/") === 0
     ? { install_id: id, movie_key: "movie:four", action: "download" }
     : { device_id: id, movie_key: "movie:four", action: "download" };
   assert.equal((await (await post(prefix, fourthDownload)).json()).allowed, false);
