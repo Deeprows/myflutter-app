@@ -627,6 +627,12 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
   })();
 </script>
 <script>
+/* Let the Premium gate confirm the subscription before the ad script runs. */
+window.__deeprowssPremiumReady = new Promise(function(resolve) {
+  window.__deeprowssPremiumResolve = resolve;
+});
+</script>
+<script>
 /* Loads the movie library next to this page (works at the site root and in /receiver/). */
 (function(){
   function load(src,fail,done){var s=document.createElement('script');s.src=src;if(fail)s.onerror=fail;if(done)s.onload=done;document.body.appendChild(s);}
@@ -653,7 +659,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     return !view || view === 'landing';
   }
   function loadPopunder() {
-    if (isHome() || window.__deeprowssPopunderScriptAdded) return;
+    if (isHome() || window.__deeprowssPremiumActive || window.__deeprowssPopunderScriptAdded) return;
     window.__deeprowssPopunderScriptAdded = true;
     window.__deeprowssPopunderLoaded = true;
     var s = document.createElement('script');
@@ -662,12 +668,22 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     s.async = true;
     document.head.appendChild(s);
   }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadPopunder, { once: true });
-  } else {
-    loadPopunder();
+  function maybeLoadPopunder() {
+    if (isHome() || window.__deeprowssPremiumActive) return;
+    if (window.__deeprowssPremiumReady && typeof window.__deeprowssPremiumReady.then === 'function') {
+      window.__deeprowssPremiumReady.then(function(active) { if (!active) loadPopunder(); });
+    } else loadPopunder();
   }
-  window.addEventListener('hashchange', loadPopunder);
+  if (window.__deeprowssPremiumReady && typeof window.__deeprowssPremiumReady.then === 'function') {
+    window.__deeprowssPremiumReady.then(function(active) { if (!active) maybeLoadPopunder(); });
+    window.setTimeout(function() { if (window.__deeprowssPremiumResolve) maybeLoadPopunder(); }, 5000);
+  } else {
+    window.setTimeout(maybeLoadPopunder, 3000);
+  }
+  window.addEventListener('hashchange', maybeLoadPopunder);
+  window.addEventListener('deeprowss-premium-change', function(e) {
+    if (!e.detail || !e.detail.active) maybeLoadPopunder();
+  });
 })();</script>
 
 <script>
