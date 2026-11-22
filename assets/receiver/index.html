@@ -580,7 +580,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     window.deeprowssGo=go;window.deeprowssShowJoin=()=>go('connect');window.deeprowssShowLibrary=()=>go('movies');
     if(params.get('host')||params.get('pin')||params.get('mode')==='connect')history.replaceState(null,'','#connect');
     /* ---- TV / remote-control support ---- */
-    const isTv=params.get('tv')==='1'||/Android TV|AFTT|BRAVIA|SMART-TV|SmartTV|Tizen|Web0S|WebOS|CrKey|GoogleTV/i.test(navigator.userAgent);
+    const forceDesktop=params.get('layout')==='desktop';const isTv=!forceDesktop&&(params.get('tv')==='1'||/Android TV|AFTT|BRAVIA|SMART-TV|SmartTV|Tizen|Web0S|WebOS|CrKey|GoogleTV/i.test(navigator.userAgent));
     if(isTv)document.documentElement.classList.add('tv');
     window.deeprowssHandleBack=()=>{
       if(panel.style.display==='block'){closePlayer();return true;}
