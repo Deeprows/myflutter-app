@@ -348,7 +348,9 @@
 
   /* ---------- details sheet ---------- */
   function closeDetails() { $('movieDetails').classList.remove('open'); $('detailTrailer').innerHTML = ''; activeMovie = null; }
-  function playTitle(movie, alt) {
+  async function playTitle(movie, alt) {
+    const gate = window.deeprowssMovieAccess;
+    if (gate && !await gate(movie, alt ? 'alternate' : 'play')) return;
     const id = idOf(movie), tv = isTv(movie);
     let url;
     if (alt) url = altEmbedBase + '/' + (tv ? 'tv' : 'movie') + '/' + id + (tv ? '/' + sel.s + '/' + sel.e : '');
@@ -403,7 +405,11 @@
     $('detailCast').innerHTML = ''; $('detailTrailer').innerHTML = ''; $('detailTrailerWrap').hidden = true;
     $('detailSimilar').innerHTML = ''; $('similarHead').hidden = true; $('detailEpisodes').hidden = true; $('detailAlt').hidden = true;
     const dl = safeUrl(movie.downloadUrl || movie.download_url || '');
-    $('detailDownload').hidden = !dl; $('detailDownload').onclick = () => { if (dl) openDl(dl); };
+    $('detailDownload').hidden = !dl; $('detailDownload').onclick = async () => {
+      const gate = window.deeprowssMovieAccess;
+      if (!dl || (gate && !await gate(movie, 'download'))) return;
+      openDl(dl);
+    };
     const refreshSave = () => { $('detailSave').textContent = isSaved(movie) ? '✓ Saved' : '＋ Watch later'; };
     refreshSave();
     $('detailSave').onclick = () => {
@@ -424,7 +430,15 @@
       const meta = [target.tv ? 'Series' : 'Movie', (d.release_date || d.first_air_date || '').slice(0, 4), d.vote_average ? '★ ' + Number(d.vote_average).toFixed(1) : '', runtime ? runtime + ' min' : '', movie.date && !movie.release_date ? 'Added ' + movie.date : '', ...(d.genres || []).map(g => g.name)];
       $('detailMeta').innerHTML = meta.filter(Boolean).map(x => '<span>' + esc(x) + '</span>').join('');
       $('detailOverview').textContent = d.overview || movie.overview || 'No overview available.';
-      if (!dl) { const u = safeUrl(downloadBase + '/' + type + '/' + target.id); $('detailDownload').hidden = !u; $('detailDownload').onclick = () => openDl(u); }
+      if (!dl) {
+        const u = safeUrl(downloadBase + '/' + type + '/' + target.id);
+        $('detailDownload').hidden = !u;
+        $('detailDownload').onclick = async () => {
+          const gate = window.deeprowssMovieAccess;
+          if (!u || (gate && !await gate(movie, 'download'))) return;
+          openDl(u);
+        };
+      }
       const cast = (d.credits?.cast || []).slice(0, 12);
       $('detailCast').innerHTML = cast.map(c => '<div class="person">' + (c.profile_path ? '<img loading="lazy" alt="" src="' + IMG + 'w185' + esc(c.profile_path) + '">' : '<span class="av">' + esc((c.name || '?')[0]) + '</span>') + '<b>' + esc(c.name) + '</b><small>' + esc(c.character || '') + '</small></div>').join('');
       if (target.tv) setupEpisodes(d.seasons);
