@@ -286,7 +286,11 @@
       period: period, channels: channelsForMethod()
     });
     if (!result.ok || !result.data.authorization_url) {
-      status.classList.add('err'); status.textContent = result.data.error || 'Could not start payment. Use the WhatsApp helpline.';
+      try { if (checkoutWindow) checkoutWindow.close(); } catch (_) {}
+      status.classList.add('err');
+      status.textContent = result.status === 404 || result.status === 503 || result.status === 0
+        ? 'The Premium payment service needs its latest server update. Please use the WhatsApp helpline for now.'
+        : (result.data.error || 'Could not start payment. Use the WhatsApp helpline.');
       return;
     }
     try { localStorage.setItem(PENDING_KEY, result.data.reference || ''); } catch (_) {}
@@ -297,7 +301,8 @@
       if (window.DeeprowssTv && typeof window.DeeprowssTv.openExternal === 'function') {
         window.DeeprowssTv.openExternal(checkoutUrl); opened = true;
       } else if (window.deeprowssDesktop && typeof window.deeprowssDesktop.openExternal === 'function') {
-        await window.deeprowssDesktop.openExternal(checkoutUrl); opened = true;
+        const openedResult = await window.deeprowssDesktop.openExternal(checkoutUrl);
+        opened = openedResult !== false;
       } else if (checkoutWindow) {
         checkoutWindow.location.href = checkoutUrl;
         try { checkoutWindow.opener = null; } catch (_) {}
