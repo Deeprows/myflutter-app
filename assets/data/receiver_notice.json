@@ -1,0 +1,13 @@
+{
+  "enabled": false,
+  "id": "",
+  "title": "",
+  "message": "",
+  "popup": true,
+  "beep": true,
+  "button_text": "",
+  "button_url": "",
+  "ok_text": "Close",
+  "expires": "",
+  "updated_at": ""
+}
