@@ -121,8 +121,9 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
           backgroundColor: Ui.card,
           title: Text('Your Decoder number', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900)),
           content: Text(
-            'This is your personal access code for the Deeprowss Windows app and the receiver page. '
-            'Enter it on their home screen to unlock movies and live TV there.',
+            'This is your Premium access code for the Deeprowss Windows app and receiver page. '
+            'Enter it on their home screen to unlock Premium movies and live TV. '
+            'The code expires with your subscription; resubscribe to receive a new one.',
             style: TextStyle(color: Ui.muted, height: 1.4),
           ),
           actions: [
