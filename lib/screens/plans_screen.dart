@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import '../utils/safe_error_message.dart';
 
 import 'package:flutter/material.dart';
@@ -11,7 +12,6 @@ import '../services/remote_config.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 import 'browser_screen.dart' show openExternally;
-import 'paystack_checkout_screen.dart';
 
 /// Builds the WhatsApp link for people who pay manually. The person's ID is
 /// added to the message so the new subscription can be switched on for the
@@ -39,13 +39,13 @@ class PlansScreen extends StatefulWidget {
 
 class _PlansScreenState extends State<PlansScreen> {
   final _sub = SubscriptionService.instance;
-  final _email = TextEditingController();
+  Map<String, dynamic> _paymentConfig = {};
+  String _manualMethod = 'opay';
 
   PlanInfo _plan = PlanInfo.fallback();
   String _installId = '';
   bool _auto = false;
   bool _yearly = false;
-  String _method = 'card'; // card | ussd | bank_transfer | any
   bool _busy = false;
   String? _error;
 
@@ -56,6 +56,7 @@ class _PlansScreenState extends State<PlansScreen> {
     super.initState();
     AdScheduler.instance.hold(); // no ad pop-up while choosing / paying
     _sub.addListener(_changed);
+    unawaited(_loadPaymentAccounts());
     _load();
   }
 
@@ -63,7 +64,6 @@ class _PlansScreenState extends State<PlansScreen> {
   void dispose() {
     _sub.removeListener(_changed);
     AdScheduler.instance.release();
-    _email.dispose();
     super.dispose();
   }
 
@@ -74,12 +74,8 @@ class _PlansScreenState extends State<PlansScreen> {
   Future<void> _load() async {
     // The ID shown to the admin (manual payments) is the Gmail account's.
     final id = _sub.accountId ?? await InstallId.get();
-    final mail = await _sub.savedEmail();
     if (!mounted) return;
-    setState(() {
-      _installId = id;
-      if (_email.text.isEmpty) _email.text = mail;
-    });
+    setState(() => _installId = id);
     final plan = await _sub.loadPlan();
     unawaited(_sub.refresh(force: true));
     if (mounted) setState(() => _plan = plan);
@@ -101,83 +97,91 @@ class _PlansScreenState extends State<PlansScreen> {
 
   // ------------------------------------------------------------- actions
 
-  Future<void> _subscribe() async {
-    if (_busy) return;
-    final mail = _email.text.trim();
-    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$').hasMatch(mail)) {
-      setState(() => _error = 'Enter a valid e-mail address (for your receipt)');
-      return;
-    }
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+  Future<void> _loadPaymentAccounts() async {
     try {
-      final start = await _sub.startCheckout(
-        email: mail,
-        recurring: _auto && _canAuto,
-        period: _yearly ? 'year' : 'month',
-        channels: _channels,
-      );
-      if (!mounted) return;
-      final doneUrl =
-          '${AppConfig.feedBase.trim().replaceAll(RegExp(r'/+$'), '')}/sub/done';
-      await Navigator.of(context).push<bool>(MaterialPageRoute<bool>(
-        fullscreenDialog: true,
-        builder: (_) => PaystackCheckoutScreen(
-          url: start.url,
-          doneUrlPrefix: doneUrl,
-        ),
-      ));
-      if (!mounted) return;
-      // Closed or finished: ask the Worker either way.
-      final result = await _sub.confirm(start.reference);
-      if (!mounted) return;
-      switch (result) {
-        case PaymentResult.active:
-          await _showAccessCode(start.reference, mail);
-        case PaymentResult.pending:
-          _toast('Your payment is still being confirmed. It switches on '
-              'by itself in a few minutes.');
-        case PaymentResult.failed:
-          _toast('No payment was received.');
+      final raw = await rootBundle.loadString('assets/data/payment_accounts.json');
+      final data = jsonDecode(raw);
+      if (data is Map<String, dynamic> && mounted) setState(() => _paymentConfig = data);
+    } catch (_) {}
+  }
+
+  Map<String, dynamic>? _paymentAccount(String id) {
+    final rows = _paymentConfig['accounts'];
+    if (rows is! List) return null;
+    for (final row in rows) {
+      if (row is Map && row['id'] == id && row['enabled'] != false) {
+        return Map<String, dynamic>.from(row);
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _error = safeErrorMessage(e));
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
+    }
+    return null;
+  }
+
+  Future<void> _copyPayment(String value, String label) async {
+    if (value.trim().isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (mounted) _toast('$label copied');
+  }
+
+  Future<void> _sendManualReceipt() async {
+    final account = _manualMethod == 'opay' ? _paymentAccount('opay') : _paymentAccount('wallet');
+    final network = (account?['network'] ?? 'TRC20').toString();
+    final method = _manualMethod == 'opay' ? 'OPay transfer' : 'USDT ' + network + ' wallet';
+    final days = _yearly ? 366 : 31;
+    final local = _shownLocal == null ? '' : ' (local estimate: $_shownLocal)';
+    final periodName = _yearly ? 'Yearly' : 'Monthly';
+    final message = 'Hello Deeprowss, I have made a manual Premium payment.\n'
+        'Plan: ' + periodName + ' (' + days.toString() + ' days)\n'
+        'Payment method: ' + method + '\n'
+        'Amount: $_shownPrice$local\n'
+        'Please confirm my payment and activate Premium. I will attach my receipt.';
+    final uri = buildWhatsappUri(AppConfig.receiptWhatsappUrl, message, _installId);
+    if (uri == null || !await openExternally(uri.toString())) {
+      if (mounted) _toast('Could not open WhatsApp');
     }
   }
 
-  /// Auto-renew exists only for cards and only when a plan code is set.
-  bool get _canAuto =>
-      _method == 'card' && (_yearly ? _plan.recurringYear : _plan.recurring);
-
-  List<String> get _channels => switch (_method) {
-        'card' => const ['card'],
-        'ussd' => const ['ussd'],
-        'bank_transfer' => const ['bank_transfer'],
-        _ => const [],
-      };
+  Future<void> _checkManualActivation() async {
+    if (_busy) return;
+    setState(() { _busy = true; _error = null; });
+    await _sub.refresh(force: true);
+    final active = _sub.isPremium;
+    final decoder = active ? await _sub.issueDecoderNumber() : null;
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (!active) {
+      _toast('Payment is not confirmed yet. Please send your receipt on WhatsApp first.');
+      return;
+    }
+    final display = decoder == null ? '' : decoder.substring(0,3) + ' ' + decoder.substring(3,6) + ' ' + decoder.substring(6);
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Ui.panel,
+        title: const Text('Premium activated 🎉'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Your Premium is active. Use this Decoder number on the EXE and Android TV:'),
+            const SizedBox(height: 10),
+            if (display.isNotEmpty) SelectableText(display, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 2))
+            else const Text('Open Smart Decoder to retrieve your Decoder number.'),
+          ],
+        ),
+        actions: [
+          if (decoder != null) TextButton(
+            onPressed: () async { await Clipboard.setData(ClipboardData(text: decoder)); if (ctx.mounted) Navigator.pop(ctx); if (mounted) _toast('Decoder number copied'); },
+            child: const Text('Copy Decoder number'),
+          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
+        ],
+      ),
+    );
+  }
 
   String get _shownPrice => _yearly ? _plan.yearPriceDisplay : _plan.priceDisplay;
   String? get _shownLocal => _yearly ? _plan.yearLocalDisplay : _plan.localDisplay;
   String get _perLabel => _yearly ? 'year' : 'month';
-
-  Future<void> _whatsapp() async {
-    final uri = buildWhatsappUri(
-        AppConfig.whatsappUrl, AppConfig.whatsappMessage, _installId);
-    if (uri == null) {
-      _toast('WhatsApp payment will be available soon.');
-      return;
-    }
-    if (!await openExternally(uri.toString()) && mounted) {
-      _toast('Could not open WhatsApp');
-    }
-  }
 
   Future<void> _restore() async {
     final mail = TextEditingController(text: _email.text);
