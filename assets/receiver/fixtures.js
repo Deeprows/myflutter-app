@@ -211,7 +211,7 @@
       '<div class="fx-match">' + logo(f.homeLogo, f.home) + '<span class="vs">VS</span>' + logo(f.awayLogo, f.away) + '</div>' +
       '<h2>' + esc(f.home) + ' vs ' + esc(f.away) + '</h2>' +
       '<p class="fx-meta">' + esc(f.league) + ' · ' + (live ? 'Live now' : esc(dayLabel(f.start)) + ', ' + esc(timeOf(f.start))) + '</p>' +
-      (allowAdPlayback ? '<div class="fx-stream-choices"><button type="button" class="fx-dl" id="fxWatchMain">▶ Main Stream</button>' + (f.altUrl ? '<button type="button" class="fx-dl secondary" id="fxWatchBackup">↗ Backup Stream</button>' : '') + '</div>' : '') +
+      (allowAdPlayback ? '<button type="button" class="fx-dl" id="fxWatchAds">▶ Continue watching with ads</button>' : '') +
       '<div class="fx-opts">' +
         '<div class="fx-opt"><span class="ic">📱</span><div><b>Watch on your phone</b><p>Get the Deeprowss app and open this match from Fixtures. Live streams, scores and match analysis are all there.</p></div></div>' +
         '<div class="fx-opt"><span class="ic">📺</span><div><b>Watch on ' + where() + '</b><p>In the app, open <b>Smart Decoder</b>, choose <b>Send to receiver page</b> and scan the QR code under <b>Connect with App</b> here. The match then plays on ' + where() + '.</p></div></div>' +
@@ -220,9 +220,7 @@
       '<button type="button" class="secondary fx-connect" id="fxConnect">Connect with App</button>' +
       (ver ? '<div class="fx-ver">LATEST VERSION ' + esc(ver) + '</div>' : '') + '</div>';
     $('fxX').onclick = closeModal;
-    const startFixture = useBackup => { closeModal(); if (window.deeprowssPlayFixture) window.deeprowssPlayFixture(f, !!useBackup); else { const s = document.getElementById('playState'); if (s) s.textContent = 'Player is unavailable. Please refresh and try again.'; } };
-    const watchMain = $('fxWatchMain'); if (watchMain) watchMain.onclick = () => startFixture(false);
-    const watchBackup = $('fxWatchBackup'); if (watchBackup) watchBackup.onclick = () => startFixture(true);
+    const watchAds = $('fxWatchAds'); if (watchAds) watchAds.onclick = () => { closeModal(); if (window.deeprowssPlayFixture) window.deeprowssPlayFixture(f, false); else { const s = document.getElementById('playState'); if (s) s.textContent = 'Player is unavailable. Please refresh and try again.'; } };
     $('fxConnect').onclick = () => { closeModal(); if (window.deeprowssGo) window.deeprowssGo('connect'); };
     const dl = $('fxDl'); if (dl) dl.onclick = () => openDl(url);
     modal.classList.add('open'); modalOpen = true;
