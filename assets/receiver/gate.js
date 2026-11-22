@@ -126,7 +126,7 @@
         if (r.ok) { cfg = await r.json(); break; }
       } catch (_) {}
     }
-    await loadPlans(currencyForLocale(), false);
+    await loadPlans(selectedCurrency === 'auto' ? currencyForLocale() : selectedCurrency, false);
     render();
   }
 
@@ -372,7 +372,7 @@
       '<label class="gate-field" for="gatePlan">Choose Premium duration (' + escapeHtml(pricingCurrency) + ')</label>' +
       '<select id="gatePlan" class="gate-plan-select">' +
         plans.map(p => '<option value="' + Number(p.days) + '"' + (Number(p.days) === selectedDays ? ' selected' : '') + '>' +
-          escapeHtml(planLabel(p)) + ' · ' + escapeHtml(p.local_display || p.ngn_display) + '</option>').join('') +
+          escapeHtml(planLabel(p)) + ' · ' + escapeHtml(p.local_display ? p.local_display + ' · ' + p.ngn_display : p.ngn_display) + '</option>').join('') +
       '</select>' +
       '<div class="gate-paystack"><span>Paystack online payment</span><b class="gate-coming">COMING SOON</b></div>' +
       '<div class="gate-field">Choose manual payment method</div>' +
