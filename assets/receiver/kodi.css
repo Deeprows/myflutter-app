@@ -299,3 +299,7 @@ input:focus{border-color:var(--accent)}
   .gate-code{margin-top:12px}
 }
 @media(max-width:820px){.gate-layout{display:block}.gate-left,.gate-right{min-width:0}.gate-left{margin-bottom:14px}}
+
+/* Keep the Connect scanner card side-by-side on Android TV and the Windows app, including narrower windows. */
+html.tv .join-layout,html.desktop-app .join-layout{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+html.tv #join,html.desktop-app #join{width:min(94vw,1040px)}
