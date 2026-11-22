@@ -22,7 +22,7 @@ self.addEventListener('fetch', event => {
     return;
   }
   // Library / TV / shell scripts and theme: always try the network first so updates show immediately, cache as offline fallback.
-  if (/\/(library|tv|shell|gate|fixtures|downloads|manualad)\.js$|\/kodi\.css$/.test(url.pathname)) {
+  if (/\/(library|tv|shell|gate|fixtures|downloads|manualad|adshield|tvplus)\.js$|\/kodi\.css$/.test(url.pathname)) {
     event.respondWith(fetch(request).then(response => {
       if (response.ok) caches.open(CACHE).then(cache => cache.put(request, response.clone()));
       return response;

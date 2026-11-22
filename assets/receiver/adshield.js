@@ -5,7 +5,7 @@
   if (window.__dwReceiverShield) return;
   window.__dwReceiverShield = true;
   const BAD = /(doubleclick|googlesyndication|googleadservices|googletagservices|imasdk|adnxs|adsterra|propellerads|popads|popcash|exoclick|exosrv|juicyads|trafficjunky|clickadu|hilltopads|adcash|taboola|outbrain|mgid|criteo|onclickads|onclkds|monetag|admaven|richpush|bidvertiser|tsyndicate|exdynsrv|popunder)/i;
-  const AD = /(^|\\b)(advertisement|sponsored|promoted|close ad|skip ad)(\\b|$)/i;
+  const AD = /(^|\b)(advertisement|sponsored|promoted|close ad|skip ad)(\b|$)/i;
   try { window.open = () => null; } catch (_) {}
   document.addEventListener('click', e => {
     const a = e.target && e.target.closest ? e.target.closest('a[target="_blank"],a[target="_new"]') : null;
