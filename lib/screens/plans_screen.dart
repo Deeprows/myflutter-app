@@ -627,6 +627,11 @@ class _PlansScreenState extends State<PlansScreen> {
   /// code (works with "Restore purchase" on any phone).
   Future<void> _showAccessCode(String reference, String email) async {
     if (reference.isEmpty) return;
+    final decoder = await _sub.issueDecoderNumber();
+    final decoderDisplay = decoder == null
+        ? null
+        : '${decoder.substring(0, 3)} ${decoder.substring(3, 6)} ${decoder.substring(6)}';
+    if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -636,38 +641,54 @@ class _PlansScreenState extends State<PlansScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Premium is on. Your access code:',
+            Text('Your Premium Decoder number for the Windows EXE and Android TV:',
                 style: TextStyle(color: Ui.muted, fontSize: 13)),
             const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Ui.bg,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Ui.line),
-              ),
-              child: SelectableText(reference,
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w800)),
-            ),
+            if (decoderDisplay != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Ui.bg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Ui.line),
+                ),
+                child: SelectableText(decoderDisplay,
+                    style: const TextStyle(fontSize: 19, letterSpacing: 2, fontWeight: FontWeight.w900)),
+              )
+            else
+              Text('Premium is active. Open Smart Decoder to refresh your Decoder number.',
+                  style: TextStyle(color: Ui.muted, fontSize: 13)),
+            const SizedBox(height: 14),
+            Text('Payment reference (keep this for Restore Premium):',
+                style: TextStyle(color: Ui.muted, fontSize: 12)),
+            const SizedBox(height: 6),
+            SelectableText(reference,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
-            Text(
-                'Your receipt was sent to $email. Keep this code: use '
-                '"Restore purchase" with it if you change phone.',
-                style: TextStyle(color: Ui.muted, fontSize: 12.5, height: 1.3)),
+            Text('Your receipt was sent to $email. The Decoder number expires with Premium; resubscribe after expiry to receive a new one.',
+                style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.3)),
           ],
         ),
         actions: [
-          TextButton(
+          if (decoder != null)
+            TextButton(
               onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: reference));
+                await Clipboard.setData(ClipboardData(text: decoder));
                 if (ctx.mounted) Navigator.pop(ctx);
-                if (mounted) _toast('Access code copied');
+                if (mounted) _toast('Decoder number copied');
               },
-              child: const Text('Copy')),
+              child: const Text('Copy Decoder number'),
+            ),
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: reference));
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) _toast('Payment reference copied');
+            },
+            child: const Text('Copy reference'),
+          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
         ],
       ),
     );
