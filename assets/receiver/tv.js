@@ -130,10 +130,11 @@
         let cat = 'other';
         for (const k of ORDER) if (cats.has(k)) { cat = CAT_MAP[k]; break; }
         const best = streams[0], alt = streams[1];
+        const allStreams = streams.map(x => ({ url: s(x.url), referer: s(x.referrer), ua: s(x.user_agent), quality: s(x.quality) })).filter(x => x.url);
         const o = {
           id: s(raw.id), name, url: s(best.url), category: cat, logo: s(raw.logo), country: s(raw.country),
           quality: s(best.quality) || s(raw.best_quality), score: typeof raw.score === 'number' ? raw.score : 0,
-          referer: s(best.referrer), userAgent: s(best.user_agent),
+          referer: s(best.referrer), userAgent: s(best.user_agent), streams: allStreams,
           altUrl: alt ? s(alt.url) : undefined, altReferer: alt ? s(alt.referrer) : undefined, altUserAgent: alt ? s(alt.user_agent) : undefined
         };
         Object.keys(o).forEach(k => o[k] === undefined && delete o[k]);
@@ -185,6 +186,7 @@
       country: opt(raw.country).toUpperCase() || undefined, quality: opt(raw.quality) || undefined, score: Number(raw.score) || 0,
       referer: opt(raw.referer) || undefined, userAgent: opt(raw.userAgent) || undefined,
       altUrl: opt(raw.altUrl) || undefined, altReferer: opt(raw.altReferer) || undefined, altUserAgent: opt(raw.altUserAgent) || undefined,
+      streams: Array.isArray(raw.streams) ? raw.streams.map(x => ({ url: opt(x && x.url), referer: opt(x && (x.referer || x.referrer)), ua: opt(x && (x.ua || x.userAgent || x.user_agent)) })).filter(x => x.url) : undefined,
       own: !!isOwn
     };
   }
@@ -197,9 +199,11 @@
     const out = a.map(c => {
       const n = byName.get(c.name.toLowerCase());
       if (!n) return c;
+      const ownStreams = streamList(c), providerStreams = streamList(n);
+      const mergedStreams = [...ownStreams, ...providerStreams.filter(x => !ownStreams.some(y => y.url === x.url))];
       const useAlt = !c.altUrl && n.url !== c.url;
       return { ...c, logo: n.logo || c.logo, country: n.country || c.country, quality: n.quality || c.quality, score: n.score || c.score,
-        altUrl: useAlt ? n.url : c.altUrl, altReferer: useAlt ? n.referer : c.altReferer, altUserAgent: useAlt ? n.userAgent : c.altUserAgent };
+        streams: mergedStreams, altUrl: useAlt ? n.url : c.altUrl, altReferer: useAlt ? n.referer : c.altReferer, altUserAgent: useAlt ? n.userAgent : c.altUserAgent };
     });
     for (const c of b) { if (ownNames.has(c.name.toLowerCase()) || ownUrls.has(c.url)) continue; out.push(c); }
     return out;
@@ -286,8 +290,29 @@
   }
 
   /* ---------- playback ---------- */
-  function streamOf(c, alt) {
-    return alt && c.altUrl ? { url: c.altUrl, referer: c.altReferer, ua: c.altUserAgent } : { url: c.url, referer: c.referer, ua: c.userAgent };
+  function streamList(c) {
+    if (!c) return [];
+    const out = [];
+    const add = (url, referer, ua) => {
+      const u = String(url || '').trim();
+      if (!/^https?:\\/\\//i.test(u) || out.some(x => x.url === u)) return;
+      out.push({ url: u, referer: String(referer || ''), ua: String(ua || '') });
+    };
+    if (Array.isArray(c.streams)) c.streams.forEach(x => x && add(x.url, x.referer || x.referrer, x.ua || x.userAgent || x.user_agent));
+    add(c.url, c.referer, c.userAgent || c.ua);
+    add(c.altUrl, c.altReferer, c.altUserAgent || c.altUa);
+    add(c.altUrl2, c.altReferer2, c.altUserAgent2 || c.altUa2);
+    add(c.altUrl3, c.altReferer3, c.altUserAgent3 || c.altUa3);
+    return out;
+  }
+  function streamIndexOf(c, choice) {
+    const list = streamList(c);
+    if (typeof choice === 'number' && Number.isFinite(choice)) return Math.max(0, Math.min(list.length - 1, Math.floor(choice)));
+    return choice ? Math.min(1, Math.max(0, list.length - 1)) : 0;
+  }
+  function streamOf(c, choice) {
+    const list = streamList(c);
+    return list[streamIndexOf(c, choice)] || list[0] || { url: '', referer: '', ua: '' };
   }
   /* The link as the phone app would open it as a web page (wrapper players such as anym3u8player / m3u8-player pages). */
   function wrapperOf(s, inner) {
@@ -318,16 +343,25 @@
   function clearWatchdog() { clearTimeout(watchdog); clearTimeout(fallbackWatchdog); watchdog = 0; fallbackWatchdog = 0; }
   function updateStreamButtons() {
     const main = $('mainStream'), backup = $('backupStream');
-    if (main) { main.disabled = !cur; main.classList.toggle('active', !!cur && !cur.alt); }
-    if (backup) { backup.disabled = !cur || !cur.c.altUrl; backup.classList.toggle('active', !!cur && !!cur.alt); }
+    const total = cur ? streamList(cur.c).length : 0, index = cur ? (cur.streamIndex || 0) : 0;
+    if (main) {
+      main.hidden = total < 2;
+      main.disabled = !cur || total < 2;
+      main.classList.toggle('active', total > 1);
+      const label = main.querySelector('.lbl');
+      if (label) label.textContent = 'Switch ' + (index + 1) + '/' + total;
+      main.title = total > 1 ? 'Switch stream ' + (index + 1) + ' of ' + total : 'No backup streams';
+      main.setAttribute('aria-label', total > 1 ? 'Switch stream ' + (index + 1) + ' of ' + total : 'No backup streams');
+    }
+    if (backup) { backup.hidden = true; backup.disabled = true; }
   }
-  function armEmbedFallback(token, c, alt) {
+  function armEmbedFallback(token, c, streamIndex) {
     clearTimeout(fallbackWatchdog);
-    if (alt || !c.altUrl) return;
+    if (streamIndex + 1 >= streamList(c).length) return;
     fallbackWatchdog = setTimeout(() => {
-      if (token !== playToken || !cur || cur.c !== c || cur.alt || cur.embedLoaded) return;
-      say('Main stream is taking too long. Switching to backup…');
-      play(c, true);
+      if (token !== playToken || !cur || cur.c !== c || cur.streamIndex !== streamIndex || cur.embedLoaded) return;
+      say('Stream is taking too long. Switching to backup ' + (streamIndex + 2) + '…');
+      play(c, streamIndex + 1);
     }, 18000);
   }
   /* A direct stream that cannot be read here (CORS, hotlink protection, geo): try the channel's own player page,
@@ -335,10 +369,10 @@
   function streamFailed(reason) {
     if (!cur || cur.mode !== 'media' || cur.failed || $('playerPanel').style.display !== 'block') return;
     cur.failed = true; clearWatchdog();
-    const c = cur.c, alt = cur.alt;
-    if (!alt && c.altUrl) { say('Main stream unavailable. Switching to backup…'); play(c, true); return; }
-    if (cur.wrapper) { say('Trying an alternate player…'); openEmbed(c, alt, cur.wrapper, 0, 'wrapper'); return; }
-    say('This channel could not be opened here. Try Backup stream or another channel.');
+    const c = cur.c, streamIndex = cur.streamIndex || 0;
+    if (streamIndex + 1 < streamList(c).length) { say('Stream unavailable. Switching to backup ' + (streamIndex + 2) + '…'); play(c, streamIndex + 1); return; }
+    if (cur.wrapper) { say('Trying an alternate player…'); openEmbed(c, streamIndex, cur.wrapper, 0, 'wrapper'); return; }
+    say('This channel could not be opened. Try another stream or channel.');
   }
   window.deeprowssTvFail = streamFailed;
   function armWatchdog(token) {
@@ -350,14 +384,14 @@
       streamFailed('no data');
     }, 15000);
   }
-  async function play(c, alt) {
-    const s = streamOf(c, alt), r = resolve(s.url);
+  async function play(c, choice) {
+    const streamIndex = streamIndexOf(c, choice), s = streamOf(c, streamIndex), r = resolve(s.url);
     if (r.kind === 'invalid') { say('This channel link is not valid.'); return; }
     let kind = r.kind;
     const token = ++playToken;
     clearWatchdog();
     if (kind === 'embed') { const k = await sniff(r.url); if (token !== playToken) return; if (k) kind = k; }
-    cur = { c, alt: !!alt && !!c.altUrl, idx: filtered.findIndex(x => keyOf(x) === keyOf(c)), mode: 'media', wrapper: '', failed: false };
+    cur = { c, streamIndex, alt: streamIndex > 0, idx: filtered.findIndex(x => keyOf(x) === keyOf(c)), mode: 'media', wrapper: '', failed: false };
     pushRecent(c);
     if (kind === 'embed') {
       /* Web channels get their own iframe page (not the movie iframe) and several ways to open it. */
@@ -369,7 +403,7 @@
       if (desktop && desktop.setStreamHeaders) desktop.setStreamHeaders({ referer: s.referer || '', userAgent: s.ua || '' });
       window.__tvKeep = true; // clearMedia() inside deeprowssPlay must not drop the headers we are about to set
       try { if (window.DeeprowssTv && window.DeeprowssTv.setStream) window.DeeprowssTv.setStream(s.referer || '', s.ua || '', true); } catch (_) {}
-      try { window.deeprowssPlay(r.url, kind, c.name + (cur.alt ? ' · Backup stream' : '')); } finally { window.__tvKeep = false; }
+      try { window.deeprowssPlay(r.url, kind, c.name + (streamIndex > 0 ? ' · Backup stream ' + (streamIndex + 1) : '')); } finally { window.__tvKeep = false; }
       const ps = $('playState'); if (ps) ps.textContent = 'LIVE';
       showTvButton(false);
       armWatchdog(token);
@@ -463,14 +497,16 @@
       io = new IntersectionObserver(es => { if (es.some(x => x.isIntersecting)) more(); }, { root: $('tvMain'), rootMargin: '600px' });
       io.observe($('tvSentinel'));
     } else $('tvMain').addEventListener('scroll', () => { const m = $('tvMain'); if (m.scrollTop + m.clientHeight > m.scrollHeight - 800) more(); });
-    $('mainStream').querySelector('.lbl').textContent = 'Switch 1';
-    $('mainStream').title = 'Switch to stream 1';
-    $('mainStream').setAttribute('aria-label', 'Switch to stream 1');
-    $('backupStream').querySelector('.lbl').textContent = 'Switch 2';
-    $('backupStream').title = 'Switch to stream 2';
-    $('backupStream').setAttribute('aria-label', 'Switch to stream 2');
-    $('mainStream').onclick = () => { if (cur) play(cur.c, false); };
-    $('backupStream').onclick = () => { if (cur && cur.c.altUrl) play(cur.c, true); };
+    $('mainStream').querySelector('.lbl').textContent = 'Switch 1/1';
+    $('backupStream').hidden = true;
+    $('mainStream').onclick = () => {
+      if (!cur) return;
+      const total = streamList(cur.c).length;
+      if (total > 1) play(cur.c, ((cur.streamIndex || 0) + 1) % total);
+    };
+    $('backupStream').onclick = () => {
+      if (cur && streamList(cur.c).length > 1) play(cur.c, ((cur.streamIndex || 0) + 1) % streamList(cur.c).length);
+    };
     if ($('tvMethod')) $('tvMethod').onclick = nextWay;
     $('prevCh').onclick = () => zap(-1);
     $('nextCh').onclick = () => zap(1);
@@ -478,7 +514,7 @@
       if (document.body.dataset.mode !== 'tv' || $('playerPanel').style.display !== 'block' || /input|textarea|select/i.test(e.target.tagName)) return;
       if (e.key === 'PageUp' || e.key === ']' ) { e.preventDefault(); zap(-1); }
       else if (e.key === 'PageDown' || e.key === '[') { e.preventDefault(); zap(1); }
-      else if (e.key.toLowerCase() === 'b') { if (cur && cur.c.altUrl) play(cur.c, !cur.alt); }
+      else if (e.key.toLowerCase() === 'b') { if (cur && streamList(cur.c).length > 1) play(cur.c, ((cur.streamIndex || 0) + 1) % streamList(cur.c).length); }
       else if (e.key.toLowerCase() === 'r') nextWay();
     });
   }
@@ -498,9 +534,12 @@
     const item = {
       id: 'fixture:' + String(fixture.id || fixture.home || 'match'),
       name: String(fixture.home || 'Home') + ' vs ' + String(fixture.away || 'Away'),
-      url: String(fixture.url), altUrl: String(fixture.altUrl || ''),
+      url: String(fixture.url), altUrl: String(fixture.altUrl || ''), altUrl2: String(fixture.altUrl2 || ''), altUrl3: String(fixture.altUrl3 || ''),
       referer: String(fixture.referer || ''), userAgent: String(fixture.ua || ''),
       altReferer: String(fixture.altReferer || ''), altUserAgent: String(fixture.altUa || ''),
+      altReferer2: String(fixture.altReferer2 || ''), altUserAgent2: String(fixture.altUa2 || ''),
+      altReferer3: String(fixture.altReferer3 || ''), altUserAgent3: String(fixture.altUa3 || ''),
+      streams: Array.isArray(fixture.streams) ? fixture.streams : undefined,
       category: 'sports', country: '', logo: ''
     };
     play(item, !!useBackup);
