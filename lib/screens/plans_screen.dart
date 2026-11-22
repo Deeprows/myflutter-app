@@ -722,6 +722,9 @@ class _PlansScreenState extends State<PlansScreen> {
               'on for you.',
               style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.25),
             ),
+            const SizedBox(height: 5),
+            const Text('WhatsApp helpline: +234 704 162 9630',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
