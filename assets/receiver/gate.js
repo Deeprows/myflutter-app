@@ -283,7 +283,7 @@
   // Preserve the receiver's mobile layout: the decoder entry stays hidden on
   // the pages.dev phone homepage, while channel taps still open the gate.
   css.textContent += '\n#landing .gate-box{display:none!important}';
-  css.textContent += '\nhtml.tv .gate-pop,html.desktop-app .gate-pop{width:min(94vw,1080px);max-height:92vh}html.tv .gate-layout,html.desktop-app .gate-layout{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:22px}html.tv .gate-left,html.desktop-app .gate-left{padding-right:18px;border-right:1px solid #26384c}html.tv .gate-right,html.desktop-app .gate-right{padding-right:4px}';
+  css.textContent += '\n@media(min-width:821px){.gate-pop{width:min(94vw,1080px);max-height:92vh}.gate-layout{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:22px}.gate-left{padding-right:18px;border-right:1px solid #26384c}.gate-right{padding-right:4px}}html.tv .gate-pop,html.desktop-app .gate-pop{width:min(94vw,1080px);max-height:92vh}html.tv .gate-layout,html.desktop-app .gate-layout{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:22px}html.tv .gate-left,html.desktop-app .gate-left{padding-right:18px;border-right:1px solid #26384c}html.tv .gate-right,html.desktop-app .gate-right{padding-right:4px}';
 
   const box = document.createElement('div');
   box.className = 'gate-box'; box.id = 'gateBox';
@@ -576,16 +576,32 @@
     return false;
   };
 
-  // Keep the Decoder-number gate for live TV channels. Movie cards themselves
-  // remain browsable; the three-title gate is applied to their action buttons.
-  document.addEventListener('click', e => {
-    if (!gateOn()) return;
-    const t = e.target && e.target.closest ? e.target : null;
-    if (!t || t.closest('#gateModal') || t.closest('.rm,.fav,[data-fav]')) return;
-    if (!t.closest('.ch') || activeUnlock()) return;
-    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+  // Visitors and non-Premium users can start ten distinct TV channels per UTC day.
+  // The Worker records each channel atomically; reopening one of today's channels is free.
+  window.deeprowssTvAccess = async function(channel) {
+    if (!gateOn() || activeUnlock()) return true;
+    const name = String(channel && channel.name || channel || 'TV channel').trim();
+    const key = String(channel && (channel.id || (name + '|' + (channel.category || '') + '|' + (channel.country || ''))) || name)
+      .toLowerCase().replace(/[^a-z0-9|:_-]+/g, '-').slice(0, 120);
+    const result = await api('/receiver/tv-access', 'POST', {
+      device_id: deviceId(), decoder_code: activeUnlock() ? code : '', channel_key: key
+    });
+    if (result.ok && result.data.allowed === true) return true;
     openModal();
-  }, true);
+    const status = $('gateStatus');
+    if (status) {
+      if (!result.ok) {
+        status.textContent = result.status === 0 || result.status === 404 || result.status === 503
+          ? 'Free TV access could not be verified. Please try again shortly.'
+          : (result.data.error || 'Could not verify TV access. Please try again.');
+      } else {
+        status.textContent = 'You have used all 10 free TV channels for today. Upgrade to Premium for unlimited live TV. Your free allowance resets at midnight UTC.';
+      }
+    }
+    return false;
+  };
+
+  // Movie cards remain browsable; their three-title gate is applied to their action buttons.
 
   document.addEventListener('keydown', e => {
     if (!modalOpen) return;
