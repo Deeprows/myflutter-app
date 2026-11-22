@@ -7,7 +7,8 @@ import 'premium_gate.dart';
 /// Opens the player page for a movie or series. Non-Premium people are sent to
 /// the upgrade page instead (see [PremiumGate]).
 Future<void> openMoviePlayer(BuildContext context, Movie m) async {
-  if (!await PremiumGate.allowMovies(context)) return;
+  final key = '${m.isSeries ? 'tv' : 'movie'}:${m.tmdbId ?? m.title.toLowerCase()}';
+  if (!await PremiumGate.allowMovies(context, key, action: 'play')) return;
   if (!context.mounted) return;
   Navigator.of(context).push(MaterialPageRoute<void>(
     builder: (_) => PlayerScreen(
