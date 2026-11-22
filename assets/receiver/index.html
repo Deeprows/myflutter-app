@@ -177,6 +177,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
       <b>Download Apps</b><small>Get Deeprowss on any device</small>
     </button>
   </nav>
+  <a class="home-app-promo" href="#downloads" aria-label="Get the Deeprowss app for an ad-free experience"><span class="promo-dot"></span><span>GET THE DEEPROWSS APP <b>· ENJOY AN AD-FREE EXPERIENCE</b></span><span class="promo-arrow">›</span></a>
   <div class="home-hint"><span><kbd>←</kbd><kbd>→</kbd>Navigate</span><span><kbd>Enter</kbd>Select</span><span><kbd>Esc</kbd>Back</span><span><kbd>F11</kbd>Full screen</span></div>
   <footer class="receiver-footer">© Deeprowss 2026</footer>
 </main>
@@ -632,13 +633,18 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
 </script>
 
 <script>
-/* Adsterra popunder: load only on the Cloudflare receiver after the page is fully ready.
-   The provider script handles click activation; it is not opened automatically on page load. */
+/* Adsterra popunder: wait for the page load and a deliberate eligible click.
+   Do not initialise it from the Download Apps screen or its home tile. */
 (function () {
   if (location.hostname !== 'deeprowss.pages.dev') return;
-  var loaded = false;
+  var loaded = false, ready = document.readyState === 'complete';
+  window.addEventListener('load', function () { ready = true; }, { once: true });
+  function isDownloadArea(target) {
+    return document.body.dataset.view === 'downloads' ||
+      (target && target.closest && (target.closest('#goDownloads') || target.closest('#downloadsView') || target.closest('#dlModal')));
+  }
   function loadPopunder() {
-    if (loaded) return;
+    if (loaded || !ready || document.body.dataset.view === 'downloads') return;
     loaded = true;
     var s = document.createElement('script');
     s.setAttribute('data-cfasync', 'false');
@@ -646,13 +652,11 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     s.async = true;
     document.head.appendChild(s);
   }
-  if (document.readyState === 'complete') {
-    window.setTimeout(loadPopunder, 1200);
-  } else {
-    window.addEventListener('load', function () {
-      window.setTimeout(loadPopunder, 1200);
-    }, { once: true });
-  }
+  document.addEventListener('click', function (event) {
+    if (!ready || isDownloadArea(event.target)) return;
+    // Load after this click so the first tap is not hijacked by a newly loaded ad.
+    window.setTimeout(loadPopunder, 900);
+  }, true);
 })();
 </script>
 </body></html>
