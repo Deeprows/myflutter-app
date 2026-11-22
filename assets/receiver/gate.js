@@ -187,6 +187,8 @@
     return unlocked;
   }
 
+  if (window.deeprowssDesktop) document.documentElement.classList.add('desktop-app');
+
   const css = document.createElement('style');
   css.textContent = [
     '.gate-box{position:relative;z-index:3;flex:0 1 430px;min-width:0;margin:2px 18px 0;text-shadow:none}',
