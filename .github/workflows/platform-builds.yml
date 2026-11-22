@@ -8,6 +8,8 @@ on:
       - 'v*'
     paths:
       - 'receiver/android-tv-app/**'
+      - 'assets/receiver/**'
+      - 'assets/data/payment_accounts.json'
       - '.github/workflows/platform-builds.yml'
   workflow_dispatch:
 
