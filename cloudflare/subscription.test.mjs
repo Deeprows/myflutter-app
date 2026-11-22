@@ -182,6 +182,14 @@ const decoderCode = j.code;
 j = await (await post("/receiver/decoder/validate", { code: decoderCode })).json();
 assert.equal(j.valid, true);
 assert.equal("owner_id" in j, false);
+// A renewal before expiry keeps the same code valid and extends its expiry.
+txs.set("DECODERRENEW", {
+  status: "success", reference: "DECODERRENEW", currency: "NGN", amount: 200000,
+  customer: { email: "decoder@example.com" }, metadata: { install_id: ID3, period: "month" }
+});
+j = await (await call("/sub/verify?reference=DECODERRENEW")).json();
+assert.equal(j.status, "success");
+assert.equal((await (await post("/receiver/decoder/validate", { code: decoderCode })).json()).valid, true);
 await call("/sub/admin", form({ token: "adm", install_id: ID3, days: "0" }));
 j = await (await post("/receiver/decoder/validate", { code: decoderCode })).json();
 assert.equal(j.valid, false);
