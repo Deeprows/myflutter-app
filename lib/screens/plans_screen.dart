@@ -145,10 +145,13 @@ class _PlansScreenState extends State<PlansScreen> {
     final method = _manualMethod == 'opay' ? 'OPay transfer' : 'USDT ' + network + ' wallet';
     final days = _plan.days;
     final local = _plan.localDisplay == null ? '' : ' (local estimate: ' + _plan.localDisplay! + ')';
+    final usd = _plan.usdDisplay ?? (_priced?.currency == 'USD' ? _plan.localDisplay : null);
+    final cryptoLine = _manualMethod == 'crypto' && usd != null ? 'USDT estimate: ' + usd + '\n' : '';
     final message = 'Hello Deeprowss, I have made a manual Premium payment.\n'
         'Plan: ' + _plan.label + ' (' + days.toString() + ' days)\n'
         'Payment method: ' + method + '\n'
         'Amount: ' + _plan.ngnDisplay + local + '\n'
+        + cryptoLine +
         'Please confirm my payment and activate Premium. I will attach my receipt.';
     final whatsapp = (_paymentConfig['receipt_whatsapp'] ?? AppConfig.receiptWhatsappUrl).toString();
     final uri = buildWhatsappUri(whatsapp, message, _installId);
@@ -420,7 +423,12 @@ class _PlansScreenState extends State<PlansScreen> {
               value: item.days,
               child: Row(children: [
                 Expanded(child: Text(item.label, style: const TextStyle(fontWeight: FontWeight.w700))),
-                Text(item.shownPrice, style: const TextStyle(fontWeight: FontWeight.w900)),
+                Text(
+                  item.usdDisplay != null
+                      ? item.shownPrice + ' ≈ ' + item.usdDisplay!
+                      : item.shownPrice,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
               ]),
             ),
         ],
@@ -541,7 +549,10 @@ class _PlansScreenState extends State<PlansScreen> {
               detail('Network', (wallet['network'] ?? 'TRC20').toString()),
               detail('Wallet name', (wallet['wallet_name'] ?? wallet['account_name'] ?? 'Taiwo').toString()),
               detail('Address', (wallet['wallet_address'] ?? wallet['address'] ?? '').toString(), copy: true),
-              Text('Send the USDT equivalent of ' + _plan.ngnDisplay + ' for ' + _plan.label + local + '. Use TRC20 only.',
+              Text(
+                'Send approximately ' +
+                    (_plan.usdDisplay ?? (_priced?.currency == 'USD' ? _plan.localDisplay : null) ?? _plan.ngnDisplay) +
+                    ' USDT for ' + _plan.label + ' (naira price: ' + _plan.ngnDisplay + local + '). Use TRC20 only.',
                 style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.35)),
             ],
           ]),
