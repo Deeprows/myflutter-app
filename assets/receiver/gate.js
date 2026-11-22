@@ -15,6 +15,16 @@
   let plan = { available: true, recurring: false, recurring_year: false, price_display: '₦2,000', year_price_display: '₦20,000' };
   let period = 'month', method = 'card', autoRenew = false, verifyTimer = null, verifyCount = 0;
 
+  function signalPremiumState() {
+    const active = !!(unlocked && (!codeExpiry || Date.now() + serverOffset < codeExpiry));
+    window.deeprowssPremiumActive = active;
+    window.dispatchEvent(new CustomEvent('deeprowss-premium-change', { detail: { active } }));
+    if (typeof window.__deeprowssPremiumResolve === 'function') {
+      window.__deeprowssPremiumResolve(active);
+      window.__deeprowssPremiumResolve = null;
+    }
+  }
+
   const digits = s => String(s || '').replace(/\D/g, '').slice(0, 10);
   const pretty = s => { const n = digits(s); return [n.slice(0,3), n.slice(3,6), n.slice(6)].filter(Boolean).join(' '); };
   const escapeHtml = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -84,7 +94,7 @@
       if (messageEl) { messageEl.classList.add('err'); messageEl.textContent = 'This Decoder number is invalid or its Premium subscription has expired.'; }
       return false;
     }
-    code = n; unlocked = true; codeExpiry = Number(result.expires_at || 0); serverOffset = Number(result.now || Date.now()) - Date.now();
+    code = n; unlocked = true; codeExpiry = Number(result.expires_at || 0); serverOffset = Number(result.now || Date.now()) - Date.now(); signalPremiumState();
     try { localStorage.setItem(CODE_KEY, code); } catch (_) {}
     if (messageEl) messageEl.textContent = 'Premium unlocked.';
     closeModal(); render();
@@ -96,7 +106,7 @@
       const result = await validateCode(saved);
       if (result.valid) {
         code = saved; unlocked = true; codeExpiry = Number(result.expires_at || 0); serverOffset = Number(result.now || Date.now()) - Date.now();
-        render(); return true;
+        signalPremiumState(); render(); return true;
       }
       try { localStorage.removeItem(CODE_KEY); } catch (_) {}
     }
@@ -118,7 +128,7 @@
     if (unlocked && codeExpiry && Date.now() + serverOffset >= codeExpiry) {
       unlocked = false; code = ''; codeExpiry = 0;
       try { localStorage.removeItem(CODE_KEY); } catch (_) {}
-      render();
+      signalPremiumState(); render();
     }
     return unlocked;
   }
@@ -423,6 +433,7 @@
     render();
     await loadConfig();
     await refreshEntitlement();
+    signalPremiumState();
     const pending = localStorage.getItem(PENDING_KEY);
     if (pending) startVerifyPolling();
   }
