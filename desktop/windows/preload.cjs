@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('deeprowssDesktop', {
   platform: process.platform,
   // Opens a movie download page in a clean window; files are saved to the Downloads folder.
   openDownload: (url) => ipcRenderer.invoke('dl:open', String(url || '')),
+  openExternal: (url) => ipcRenderer.invoke('external:open', String(url || '')),
   // Referer / User-Agent that a live TV stream needs (same as the Android native player).
   setStreamHeaders: (headers) => ipcRenderer.send('stream:headers', {
     referer: String((headers && headers.referer) || ''),
