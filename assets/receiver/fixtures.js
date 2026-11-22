@@ -385,17 +385,14 @@
 
   /* ---------- page ---------- */
   function leagues(list) { return ['All', ...Array.from(new Set(list.map(f => f.league))).sort()]; }
-  const scoreCell = (v, on) => '<span class="fx-sc' + (on ? '' : ' dim') + '">' + (on ? esc(v) : '\u2013') + '</span>';
   function cardHtml(f, now) {
-    const ph = cardPhase(f, now), m = espnFor(f, now), has = hasScore(m);
+    const ph = cardPhase(f, now), m = espnFor(f, now);
     const pill = m && m.state === 'post' ? 'FT' : (ph === 'live' ? '● LIVE' : esc(timeOf(f.start)));
-    return '<button type="button" class="fxcard ' + ph + '" data-id="' + esc(f.id) + '" aria-label="' + esc(f.home + ' vs ' + f.away + (has ? ', ' + m.hs + ' to ' + m.aw : '')) + '">' +
+    return '<button type="button" class="fxcard ' + ph + '" data-id="' + esc(f.id) + '" aria-label="' + esc(f.home + ' vs ' + f.away) + '">' +
       '<div class="fx-top"><span>' + esc(f.league) + '</span><span class="fx-pill">' + pill + '</span></div>' +
-      '<div class="fx-team">' + logo(f.homeLogo, f.home, m && m.homeLogo) + '<b>' + esc(f.home) + '</b>' + scoreCell(m && m.hs, has) + '</div>' +
-      '<div class="fx-team">' + logo(f.awayLogo, f.away, m && m.awayLogo) + '<b>' + esc(f.away) + '</b>' + scoreCell(m && m.aw, has) + '</div>' +
-      '<div class="fx-foot"><span class="fx-left"><span class="fx-when" data-id="' + esc(f.id) + '">' + esc(whenText(f, now)) + '</span>' +
-      (m ? '<span class="fx-src" title="Score from ESPN">ESPN</span>' : '') + '</span>' +
-      '<span class="fx-watch">▶ Watch</span></div></button>';
+      '<div class="fx-team">' + logo(f.homeLogo, f.home, m && m.homeLogo) + '<b>' + esc(f.home) + '</b></div>' +
+      '<div class="fx-team">' + logo(f.awayLogo, f.away, m && m.awayLogo) + '<b>' + esc(f.away) + '</div>' +
+      '<div class="fx-foot"><span></span><span class="fx-watch">▶ Watch</span></div></button>';
   }
   function render(force) {
     const root = $('fxList'); if (!root) return;
