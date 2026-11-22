@@ -150,7 +150,8 @@ class _PlansScreenState extends State<PlansScreen> {
         'Payment method: ' + method + '\n'
         'Amount: ' + _plan.ngnDisplay + local + '\n'
         'Please confirm my payment and activate Premium. I will attach my receipt.';
-    final uri = buildWhatsappUri(AppConfig.receiptWhatsappUrl, message, _installId);
+    final whatsapp = (_paymentConfig['receipt_whatsapp'] ?? AppConfig.receiptWhatsappUrl).toString();
+    final uri = buildWhatsappUri(whatsapp, message, _installId);
     if (uri == null || !await openExternally(uri.toString())) {
       if (mounted) _toast('Could not open WhatsApp');
     }
