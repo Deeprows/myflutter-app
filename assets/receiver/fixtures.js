@@ -391,7 +391,7 @@
     return '<button type="button" class="fxcard ' + ph + '" data-id="' + esc(f.id) + '" aria-label="' + esc(f.home + ' vs ' + f.away) + '">' +
       '<div class="fx-top"><span>' + esc(f.league) + '</span><span class="fx-pill">' + pill + '</span></div>' +
       '<div class="fx-team">' + logo(f.homeLogo, f.home, m && m.homeLogo) + '<b>' + esc(f.home) + '</b></div>' +
-      '<div class="fx-team">' + logo(f.awayLogo, f.away, m && m.awayLogo) + '<b>' + esc(f.away) + '</div>' +
+      '<div class="fx-team">' + logo(f.awayLogo, f.away, m && m.awayLogo) + '<b>' + esc(f.away) + '</b></div>' +
       '<div class="fx-foot"><span></span><span class="fx-watch">▶ Watch</span></div></button>';
   }
   function render(force) {
