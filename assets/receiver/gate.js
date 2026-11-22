@@ -368,7 +368,15 @@
     if (result.ok && result.data.allowed === true) return true;
     openModal();
     const status = $('gateStatus');
-    if (status) status.textContent = 'You have used your 3 free movie titles. Upgrade to Premium to continue.';
+    if (status) {
+      if (!result.ok) {
+        status.textContent = result.status === 404 || result.status === 503 || result.status === 0
+          ? 'Premium access is being prepared on the server. Please try again shortly.'
+          : (result.data.error || 'Could not verify movie access. Please try again.');
+      } else {
+        status.textContent = 'You have used your 3 free movie titles. Upgrade to Premium to continue.';
+      }
+    }
     return false;
   };
 
