@@ -5,7 +5,7 @@
    Where the files come from (nothing to rebuild when a new version is released):
    - Mobile app  : update.apkUrl (else share.link) in app_config.json.
    - Everything else: the newest GitHub Release that contains the file.
-   - Any app can be overridden in app_config.json:
+   - Manual links can be managed separately in assets/data/download_links.json (manual URL wins; use auto to use the existing automatic source, or off to hide an item).\n   - Any app can also be overridden in app_config.json:
        "downloads": { "webos": "https://example.com/file.ipk", "tizen": "off", "windows": "auto" }
      "auto" (or a missing key) = automatic, "off" = show "Coming soon", a https link = use that link.
 
@@ -62,7 +62,7 @@
   };
 
   /* ---------- state ---------- */
-  let cfg = {}, cfgDone = false, assets = {}, assetsDone = false, started = false, modalOpen = false;
+  let cfg = {}, cfgDone = false, manualLinks = {}, manualDone = false, assets = {}, assetsDone = false, started = false, modalOpen = false;
 
   /* ---------- helpers ---------- */
   const safeUrl = u => { try { const x = new URL(String(u || '').trim()); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch (_) { return ''; } };
@@ -120,9 +120,19 @@
     if (j && typeof j === 'object') cfg = j;
     cfgDone = true; refresh();
   }
+  async function loadManualLinks() {
+    const j = await getJson('download_links.json');
+    if (j && typeof j === 'object' && !Array.isArray(j)) manualLinks = j;
+    manualDone = true; refresh();
+  }
 
   /* ---------- what each button does ---------- */
   function resolve(key) {
+    const manual = manualLinks[key];
+    if (typeof manual === 'string' && manual.trim() && manual.trim().toLowerCase() !== 'auto') {
+      if (manual.trim().toLowerCase() === 'off') return { state: 'off' };
+      const u = safeUrl(manual); if (u) return { state: 'ok', url: u, version: 'Manual link' };
+    }
     const ov = cfg.downloads && cfg.downloads[key];
     if (typeof ov === 'string' && ov.trim() && ov.trim().toLowerCase() !== 'auto') {
       if (ov.trim().toLowerCase() === 'off') return { state: 'off' };
@@ -297,7 +307,7 @@
   /* ---------- start ---------- */
   function start() {
     if (started) return; started = true;
-    loadConfig(); loadAssets();
+    loadConfig(); loadManualLinks(); loadAssets();
   }
   document.body.appendChild(modal);
   build();
