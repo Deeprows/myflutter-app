@@ -24,11 +24,11 @@
     const b = document.getElementById(id);
     if (b && !b.disabled && b.offsetParent !== null) b.click();
   }
-  document.addEventListener('keydown', e => {
+  window.addEventListener('keydown', e => {
     const k = String(e.key || '').toLowerCase();
     const code = String(e.code || '').toLowerCase();
-    const prev = ['channel_down','channelup_prev','mediatrackprevious'].includes(k) || code === 'mediatrackprevious' || k === 'channelup' && e.shiftKey;
-    const next = ['channel_up','channelup','mediatracknext'].includes(k) || code === 'mediatracknext' || k === 'channelup';
+    const prev = ['channel_down','channeldown','mediatrackprevious'].includes(k) || code === 'mediatrackprevious';
+    const next = ['channel_up','channelup','mediatracknext'].includes(k) || code === 'mediatracknext';
     if (prev || next) {
       e.preventDefault(); e.stopImmediatePropagation();
       channel(prev ? -1 : 1);
