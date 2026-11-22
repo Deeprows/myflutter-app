@@ -120,7 +120,8 @@ binding: `decoder_codes` and `movie_trials`. New Worker routes:
 - `POST /receiver/sub/start`, `GET /receiver/sub/verify`, `GET /receiver/sub/status`
 - `POST /receiver/decoder/issue`, `POST /receiver/decoder/validate`
 - `POST /receiver/movie-access`
-- `POST /sub/decoder/issue`, `POST /sub/movie-access` (signed-in app account)
+- `POST /sub/decoder/issue`, `POST /sub/movie-access` (signed-in app account),
+  and `POST /sub/movie-access-guest` (app guest install ID)
 
 **Deploy the updated `cloudflare/worker.js` to the existing Worker** before
 expecting the new gate or Decoder numbers to work. The receiver page and app
