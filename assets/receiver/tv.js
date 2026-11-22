@@ -478,8 +478,9 @@
   window.addEventListener('hashchange', () => { if (location.hash === '#tv') enter(); });
   if (location.hash === '#tv') enter();
   // Public bridge for the fixture popup. Reuses the same TV player and failover logic as channel playback.
-  window.deeprowssPlayFixture = fixture => {
-    if (!fixture || !/^https?:\/\//i.test(String(fixture.url || ''))) return false;
+  window.deeprowssPlayFixture = (fixture, useBackup) => {
+    const selectedUrl = useBackup ? fixture && fixture.altUrl : fixture && fixture.url;
+    if (!fixture || !/^https?:\/\//i.test(String(selectedUrl || ''))) return false;
     build();
     const item = {
       id: 'fixture:' + String(fixture.id || fixture.home || 'match'),
@@ -489,7 +490,7 @@
       altReferer: String(fixture.altReferer || ''), altUserAgent: String(fixture.altUa || ''),
       category: 'sports', country: '', logo: ''
     };
-    play(item, false);
+    play(item, !!useBackup);
     return true;
   };
   window.deeprowssTvRemote = command => {
