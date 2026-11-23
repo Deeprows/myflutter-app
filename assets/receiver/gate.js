@@ -218,6 +218,108 @@
 
   if (window.deeprowssDesktop) document.documentElement.classList.add('desktop-app');
 
+
+  const GATE_MODAL_CSS = `
+.gate-sheet{z-index:100;align-items:center;padding:14px;background:radial-gradient(900px 500px at 15% 10%,#1b3a6b55,transparent 60%),radial-gradient(800px 500px at 90% 90%,#f59e0b26,transparent 60%),#04070dd9;backdrop-filter:blur(14px) saturate(1.2)}
+.gate-pop{--g-line:#ffffff14;--g-soft:#ffffff0a;--g-text:#eaf1fb;--g-mute:#93a4ba;--g-gold:#ffc94d;--g-gold2:#f59e0b;--g-cyan:#38bdf8;--g-green:#34d399;
+  position:relative;display:flex;flex-direction:column;width:min(100%,520px);max-height:94vh;margin:auto;padding:0;text-align:left;color:var(--g-text);
+  background:linear-gradient(180deg,#0f1726f2,#090e18f7);border:1px solid #ffffff1f;border-radius:28px;overflow:hidden;
+  box-shadow:0 40px 120px #000d,0 0 0 1px #00000066,inset 0 1px 0 #ffffff14;animation:up .28s cubic-bezier(.2,.8,.2,1) both}
+.gate-pop *{box-sizing:border-box}
+.gate-pop .gate-x{position:absolute;z-index:6;top:14px;right:14px;width:38px;height:38px;padding:0;display:grid;place-items:center;border-radius:50%;background:#ffffff0f;border:1px solid var(--g-line);color:#fff;font-size:14px;cursor:pointer;transition:.18s}
+.gate-pop .gate-x:hover{background:#ffffff1f;transform:rotate(90deg)}
+.gate-layout{flex:1;min-height:0;display:block;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#ffffff2a transparent}
+.gate-left,.gate-right{min-width:0;padding:26px 22px}
+.gate-left{position:relative;background:radial-gradient(520px 320px at 0% 0%,#ffc94d1f,transparent 65%),radial-gradient(420px 300px at 100% 100%,#38bdf81c,transparent 65%),#ffffff05;border-bottom:1px solid var(--g-line)}
+.gate-brand{display:inline-flex;align-items:center;gap:7px;padding:6px 12px 6px 8px;border-radius:99px;background:linear-gradient(110deg,#ffc94d26,#f59e0b14);border:1px solid #ffc94d40;color:var(--g-gold);font-size:11px;font-weight:900;letter-spacing:.14em}
+.gate-brand i{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--g-gold),var(--g-gold2));color:#2a1a02;font-style:normal;font-size:11px}
+.gate-pop h2{margin:14px 48px 10px 0;font-size:30px;font-weight:900;line-height:1.1;letter-spacing:-.02em;background:linear-gradient(100deg,#fff 30%,#ffd98a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.gate-pop p{margin:0;font-size:13.5px;line-height:1.6;color:var(--g-mute)}
+.gate-features{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:18px 0 18px;padding:0;list-style:none}
+.gate-features li{display:flex;align-items:center;gap:9px;padding:10px 11px;font-size:12px;font-weight:700;line-height:1.25;color:#dbe6f3;border:1px solid var(--g-line);border-radius:13px;background:var(--g-soft)}
+.gate-features li::before{content:"✓";flex:none;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#34d3991f;border:1px solid #34d39966;color:var(--g-green);font-size:11px;font-weight:900}
+.gate-substatus{position:relative;margin:0 0 14px;padding:16px;border-radius:20px;border:1px solid #34d3994d;background:linear-gradient(145deg,#0f2a22cc,#0a1712cc);overflow:hidden}
+.gate-substatus::before{content:"";position:absolute;right:-50px;top:-50px;width:160px;height:160px;border-radius:50%;background:radial-gradient(#34d39933,transparent 70%);pointer-events:none}
+.gate-substatus.is-warn{border-color:#fb923c55;background:linear-gradient(145deg,#2c1a0fcc,#170e08cc)}
+.gate-substatus.is-warn::before{background:radial-gradient(#fb923c33,transparent 70%)}
+.gate-substatus.is-off{border-color:#ffffff1f;background:linear-gradient(145deg,#141c2ccc,#0c121dcc)}
+.gate-substatus.is-off::before{display:none}
+.gate-substatus .status-head{position:relative;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;font-size:13px;font-weight:800;color:#f2f7f4}
+.gate-substatus .status-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:99px;background:#34d3992b;color:#6ee7b7;font-size:10px;font-weight:900;letter-spacing:.08em}
+.gate-substatus .status-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}
+.gate-substatus.is-warn .status-pill{background:#fb923c2b;color:#fdba74}
+.gate-substatus.is-off .status-pill{background:#ffffff14;color:#aab8cb}
+.gate-substatus .status-main{position:relative;display:flex;align-items:center;gap:14px}
+.gate-substatus .status-num{flex:none;display:grid;place-items:center;align-content:center;width:68px;height:68px;border-radius:50%;background:radial-gradient(circle,#0c1c16 62%,transparent 63%),conic-gradient(var(--g-green) var(--pct,0%),#ffffff14 0);font-size:24px;font-weight:900;color:#a7f3d0;line-height:1}
+.gate-substatus.is-warn .status-num{background:radial-gradient(circle,#170e08 62%,transparent 63%),conic-gradient(#fb923c var(--pct,0%),#ffffff14 0);color:#fed7aa}
+.gate-substatus.is-off .status-num{background:radial-gradient(circle,#0c121d 62%,transparent 63%),conic-gradient(#ffffff22 0,#ffffff14 0);color:#6b7c92}
+.gate-substatus .status-days{font-size:20px;font-weight:900;line-height:1.2;color:#d1fae5}
+.gate-substatus.is-warn .status-days{color:#fed7aa}
+.gate-substatus.is-off .status-days{color:#cbd5e1}
+.gate-substatus .status-sub{margin-top:3px;font-size:11.5px;color:#9db3a8}
+.gate-substatus .status-grid{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.gate-substatus .status-item{min-width:0;padding:10px 11px;border-radius:12px;background:#ffffff0a;border:1px solid #ffffff0d}
+.gate-substatus .status-item small{display:block;margin-bottom:4px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#8ea39a}
+.gate-substatus .status-item b{display:block;font-size:12.5px;color:#f1f8f4;overflow-wrap:anywhere}
+.gate-substatus .status-note{position:relative;margin:12px 0 0;font-size:11.5px;line-height:1.5;color:#9db3a8}
+.gate-check{width:100%;min-height:44px;margin-top:10px;border:1px solid #ffffff1f;border-radius:13px;background:#ffffff0d;color:#eaf1fb;font-size:13px;font-weight:800;cursor:pointer;transition:.18s}
+.gate-check:hover:not(:disabled){background:#ffffff1a;border-color:#ffffff33}
+.gate-check:disabled{opacity:.55;cursor:wait}
+.gate-code{padding:16px;border:1px dashed #ffffff2b;border-radius:18px;background:#ffffff06}
+.gate-code .gate-field{margin:0 0 10px}
+.gate-field{display:block;margin:0 0 9px;font-size:12px;font-weight:800;line-height:1.4;color:#dbe6f3}
+.gate-code input{width:100%;padding:13px 14px;border:1px solid #ffffff1f;border-radius:13px;background:#05080e;color:#fff;font-size:16px;font-weight:800;letter-spacing:.14em;transition:.18s}
+.gate-code input::placeholder{letter-spacing:.02em;font-weight:500;color:#5d6e84}
+.gate-code input:focus{outline:none;border-color:var(--g-gold);box-shadow:0 0 0 4px #ffc94d1f}
+.gate-verify{width:100%;min-height:46px;margin-top:10px;border:0;border-radius:13px;background:linear-gradient(110deg,#ffd36b,var(--g-gold2));color:#241602;font-size:14px;font-weight:900;cursor:pointer;box-shadow:0 8px 24px #f59e0b33;transition:.18s}
+.gate-verify:hover{transform:translateY(-1px);box-shadow:0 12px 30px #f59e0b4d}
+.gate-step{display:flex;align-items:center;gap:10px;margin:0 0 11px;font-size:12px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#cfdbea}
+.gate-step i{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#ffffff14;border:1px solid var(--g-line);font-style:normal;font-size:11px;color:var(--g-gold)}
+.gate-total+.gate-step{margin-top:26px}
+.gate-plan-select{width:100%;padding:12px 40px 12px 14px;border:1px solid #ffffff1f;border-radius:13px;background:#05080e url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%2393a4ba' stroke-width='2'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E") no-repeat right 15px center;color:#fff;font-size:14px;font-weight:700;appearance:none;-webkit-appearance:none;cursor:pointer;margin:0}
+.gate-plan-select:focus{outline:none;border-color:var(--g-gold);box-shadow:0 0 0 4px #ffc94d1f}
+.gate-plans{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:9px;margin:12px 0 0}
+.gate-plan{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;padding:13px 12px 11px;border:1px solid #ffffff1a;border-radius:16px;background:#ffffff08;color:#dbe6f3;text-align:left;cursor:pointer;transition:.18s}
+.gate-plan:hover{background:#ffffff12;transform:translateY(-2px)}
+.gate-plan b{font-size:12px;font-weight:800;color:#b9c8da}
+.gate-plan .price{font-size:17px;font-weight:900;color:#fff;letter-spacing:-.01em;overflow-wrap:anywhere}
+.gate-plan small{font-size:10.5px;font-weight:600;color:#7f90a6;overflow-wrap:anywhere}
+.gate-plan.active{border-color:var(--g-gold);background:linear-gradient(160deg,#ffc94d24,#f59e0b0d);box-shadow:0 0 0 3px #ffc94d1f,0 10px 28px #f59e0b1f}
+.gate-plan.active b{color:var(--g-gold)}
+.gate-plan .tag{position:absolute;top:-9px;right:10px;padding:3px 8px;border-radius:99px;background:linear-gradient(110deg,#ffd36b,var(--g-gold2));color:#241602;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+.gate-total{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding:13px 15px;border-radius:15px;background:#ffffff0a;border:1px solid var(--g-line);font-size:12.5px;color:var(--g-mute)}
+.gate-total b{font-size:20px;font-weight:900;color:var(--g-gold);letter-spacing:-.01em}
+.gate-paystack{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px;padding:13px 15px;border:1px solid var(--g-line);border-radius:15px;background:#ffffff08;color:#dbe6f3;font-size:13px;font-weight:800;opacity:.9}
+.gate-coming{padding:5px 10px;border-radius:99px;background:#f59e0b24;color:#fbbf24;font-size:10px;font-weight:900;letter-spacing:.06em;white-space:nowrap}
+.gate-methods{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:0 0 12px;padding:4px;border-radius:15px;background:#05080e;border:1px solid var(--g-line)}
+.gate-choice{min-width:0;padding:11px 8px;border:0;border-radius:11px;background:transparent;color:#93a4ba;font-size:13px;font-weight:800;text-align:center;cursor:pointer;transition:.18s}
+.gate-choice:hover{color:#fff}
+.gate-choice.active{background:linear-gradient(110deg,#ffd36b,var(--g-gold2));color:#241602;box-shadow:0 6px 18px #f59e0b33}
+.gate-account{padding:6px 16px 14px;border:1px solid var(--g-line);border-radius:18px;background:linear-gradient(160deg,#ffffff0d,#ffffff04)}
+.gate-account-row{display:flex;align-items:center;gap:10px;padding:10px 0;font-size:12.5px;border-bottom:1px solid #ffffff0d}
+.gate-account-row span{width:96px;flex:none;color:var(--g-mute)}
+.gate-account-row b{min-width:0;flex:1;overflow-wrap:anywhere;font-size:13px;font-weight:800;color:#fff}
+.gate-account-row.is-key b{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12.5px;color:#fde7a8}
+.gate-copy{flex:none;padding:7px 12px;border:1px solid #ffc94d55;border-radius:99px;background:#ffc94d14;color:var(--g-gold);font-size:11px;font-weight:900;cursor:pointer;transition:.18s}
+.gate-copy:hover{background:#ffc94d2b}
+.gate-account p{margin:12px 0 0;padding:11px 12px;border-radius:12px;background:#38bdf812;border:1px solid #38bdf82e;font-size:12px;line-height:1.55;color:#bfe6fa}
+.gate-action{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:52px;margin-top:16px;border:0;border-radius:15px;background:linear-gradient(110deg,#2ee574,#16b85a);color:#04210f;font-size:15px;font-weight:900;cursor:pointer;box-shadow:0 10px 30px #22c55e40;transition:.18s}
+.gate-action:hover{transform:translateY(-1px);box-shadow:0 14px 36px #22c55e59}
+.gate-status{min-height:18px;margin:12px 2px 0;font-size:12px;line-height:1.5;color:#9fb0c6}
+.gate-helpline{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:14px;padding:12px 15px;border:1px solid #34d39933;border-radius:15px;background:#34d3990d;color:#c9f3df;font-size:12.5px}
+.gate-helpline a{margin:0;color:#6ee7b7;font-weight:900;text-decoration:none}
+.gate-helpline a:hover{text-decoration:underline}
+.gate-pop button:focus-visible,.gate-pop select:focus-visible,.gate-pop input:focus-visible{outline:3px solid var(--g-cyan);outline-offset:2px}
+.gate-pop *::-webkit-scrollbar{width:8px}.gate-pop *::-webkit-scrollbar-thumb{background:#ffffff26;border-radius:8px}
+@media(min-width:821px){.gate-sheet{padding:24px}.gate-pop{width:min(96vw,1080px);max-height:92vh}.gate-layout{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);overflow:hidden}.gate-left,.gate-right{overflow-y:auto;padding:34px 30px;scrollbar-width:thin;scrollbar-color:#ffffff2a transparent}.gate-left{border-bottom:0;border-right:1px solid var(--g-line)}}
+@media(min-width:700px){html.tv .gate-pop,html.desktop-app .gate-pop{width:min(96vw,1080px);max-height:92vh}
+html.tv .gate-layout,html.desktop-app .gate-layout{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);overflow:hidden}
+html.tv .gate-left,html.tv .gate-right,html.desktop-app .gate-left,html.desktop-app .gate-right{overflow-y:auto;padding:34px 30px}
+html.tv .gate-left,html.desktop-app .gate-left{border-bottom:0;border-right:1px solid var(--g-line)}}
+@media(max-width:420px){.gate-left,.gate-right{padding:22px 16px}.gate-pop h2{font-size:26px}.gate-features{grid-template-columns:1fr}.gate-account-row span{width:84px}}
+@media(prefers-reduced-motion:reduce){.gate-pop,.gate-pop *{animation:none!important;transition:none!important}}
+`;
+
   const css = document.createElement('style');
   css.textContent = [
     '.gate-box{position:relative;z-index:3;flex:0 1 430px;min-width:0;margin:2px 18px 0;text-shadow:none}',
@@ -234,56 +336,13 @@
     '.gate-ok b{display:block;font-size:14px;color:#7be8a4;letter-spacing:.04em}',
     '.gate-ok small{display:block;margin-top:2px;font-size:12px;letter-spacing:.14em;color:#b6c6d8}',
     '.gate-ok .gate-grow{flex:1;min-width:0}',
-    '.gate-sheet{z-index:100;align-items:center}',
-    '.gate-pop{position:relative;width:min(100%,520px);max-height:90vh;overflow:auto;margin:auto;padding:28px 24px 24px;text-align:left;background:#0d1520;border:1px solid #34485e;border-radius:24px;box-shadow:0 30px 90px #000c;animation:up .25s ease both}',
-    '.gate-pop .gate-x{position:absolute;top:10px;right:10px;width:36px;height:36px;padding:0;border-radius:50%;background:#16222f;border:1px solid #2c3d52;color:#fff;font-size:15px}',
-    '.gate-pop h2{margin:0 44px 8px 0;font-size:24px;font-weight:900;line-height:1.2;color:#fff}',
-    '.gate-pop p{margin:0 0 14px;font-size:14px;line-height:1.5;color:#aebdce}',
-    '.gate-features{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:14px 0 18px;padding:0;list-style:none}',
-    '.gate-features li{font-size:12px;color:#d7e1ec;padding:8px 9px;border:1px solid #293b50;border-radius:9px;background:#111d2a}',
-    '.gate-plans,.gate-methods{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap}',
-    '.gate-methods .gate-choice{flex:1 1 21%}',
-    '.gate-choice{flex:1;min-width:0;padding:11px 8px;border:1px solid #33465c;border-radius:12px;background:#101c2a;color:#dbe7f3;text-align:center;font-weight:800;cursor:pointer}',
-    '.gate-choice.active{border-color:#f3c76b;background:#f3c76b18;color:#ffe2a0}',
-    '.gate-choice small{display:block;margin-top:4px;font-size:11px;color:#9aabc0;font-weight:600}',
-    '.gate-plan-select{box-sizing:border-box;width:100%;padding:12px;border:1px solid #33465c;border-radius:10px;background:#060a10;color:#fff;font-size:14px;margin:4px 0 10px}',
-    '.gate-field{display:block;margin:12px 0 6px;font-size:12px;font-weight:800;color:#dceaf6}',
-    '.gate-pop input[type=email],.gate-pop input[type=text]{box-sizing:border-box;width:100%;min-width:0;padding:12px;border:1px solid #33465c;border-radius:10px;background:#060a10;color:#fff;font-size:15px}',
-    '.gate-toggle{display:flex;align-items:center;gap:8px;margin:10px 0;color:#b8c7d8;font-size:12px}',
-    '.gate-pay{width:100%;min-height:48px;margin-top:8px;border:0;border-radius:13px;background:linear-gradient(110deg,#f3c76b,#d99a32);color:#201707;font-size:15px;font-weight:900;cursor:pointer}',
-    '.gate-pay:disabled{opacity:.45;cursor:not-allowed}',
-    '.gate-verify{width:100%;min-height:42px;margin-top:8px;border:1px solid #52667d;border-radius:12px;background:#172536;color:#e6f0fa;font-weight:800;cursor:pointer}',
-    '.gate-status{min-height:18px;margin:8px 0;font-size:12px;line-height:1.4;color:#a9bad0}',
-    '.gate-substatus{margin:14px 0;padding:14px;border:1px solid #35533f;border-radius:14px;background:#0c1c16}',
-    '.gate-substatus .status-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px;color:#f2f7f4;font-weight:900}',
-    '.gate-substatus .status-pill{padding:5px 9px;border-radius:20px;background:#1b9b5528;color:#7be8a4;font-size:10px;font-weight:900}',
-    '.gate-substatus .status-pill.expired{background:#ef444422;color:#fca5a5}',
-    '.gate-substatus .status-days{font-size:25px;font-weight:900;color:#86efac;line-height:1.2}',
-    '.gate-substatus .status-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}',
-    '.gate-substatus .status-item{min-width:0;padding:9px;border-radius:9px;background:#ffffff08}',
-    '.gate-substatus .status-item small{display:block;color:#9eafa5;font-size:10px;margin-bottom:4px}',
-    '.gate-substatus .status-item b{display:block;color:#edf7f0;font-size:12px;overflow-wrap:anywhere}',
-    '.gate-substatus .status-note{margin:10px 0 0;color:#aabbb0;font-size:11px;line-height:1.45}',
-    '.gate-helpline{margin-top:16px;padding:12px;border:1px solid #24563b;border-radius:12px;background:#0c2118;color:#d6f6e3;font-size:13px}',
-    '.gate-helpline a{display:inline-block;margin-left:5px;color:#86efac;font-weight:900;text-decoration:underline}',
-    '.gate-paystack{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0;padding:10px 12px;border:1px solid #34485e;border-radius:12px;background:#101c2a;color:#dceaf6;font-size:12px;font-weight:800}',
-    '.gate-coming{padding:5px 9px;border-radius:20px;background:#f59e0b22;color:#fbbf24;font-size:10px;font-weight:900;white-space:nowrap}',
-    '.gate-account{margin:12px 0;padding:13px;border:1px solid #34485e;border-radius:13px;background:#080f18}',
-    '.gate-account-row{display:flex;align-items:flex-start;gap:8px;margin:7px 0;font-size:12px}',
-    '.gate-account-row span{width:92px;flex:none;color:#9aabc0}',
-    '.gate-account-row b{min-width:0;flex:1;overflow-wrap:anywhere;color:#fff}',
-    '.gate-copy{padding:4px 8px;border:1px solid #52667d;border-radius:8px;background:#172536;color:#e6f0fa;font-size:11px;font-weight:800}',
-    '.gate-action{width:100%;min-height:44px;margin-top:9px;border:0;border-radius:12px;background:#25d366;color:#fff;font-weight:900}',
-    '.gate-check{width:100%;min-height:42px;margin-top:8px;border:1px solid #52667d;border-radius:12px;background:#172536;color:#e6f0fa;font-weight:800}',
-    '.gate-code{margin-top:12px;padding:12px;border:1px solid #2c3d52;border-radius:12px;background:#080f18}',
-    '.gate-code button{margin-top:8px}',
-    '@media(max-width:860px){.home-top{flex-wrap:wrap;gap:12px}.gate-box{order:3;flex:1 1 100%;margin:0}.gate-features{grid-template-columns:1fr 1fr}}'
+    '@media(max-width:860px){.home-top{flex-wrap:wrap;gap:12px}.gate-box{order:3;flex:1 1 100%;margin:0}}'
   ].join('');
   document.head.appendChild(css);
   // Preserve the receiver's mobile layout: the decoder entry stays hidden on
   // the pages.dev phone homepage, while channel taps still open the gate.
   css.textContent += '\n#landing .gate-box{display:none!important}';
-  css.textContent += '\n@media(min-width:821px){.gate-pop{width:min(94vw,1080px);max-height:92vh}.gate-layout{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:22px}.gate-left{padding-right:18px;border-right:1px solid #26384c}.gate-right{padding-right:4px}}html.tv .gate-pop,html.desktop-app .gate-pop{width:min(94vw,1080px);max-height:92vh}html.tv .gate-layout,html.desktop-app .gate-layout{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:22px}html.tv .gate-left,html.desktop-app .gate-left{padding-right:18px;border-right:1px solid #26384c}html.tv .gate-right,html.desktop-app .gate-right{padding-right:4px}';
+  css.textContent += GATE_MODAL_CSS;
 
   const box = document.createElement('div');
   box.className = 'gate-box'; box.id = 'gateBox';
@@ -339,9 +398,12 @@
           ['Wallet address', account.wallet_address || account.address || '']
         ];
     return '<div class="gate-account">' +
-      rows.map((r, i) => '<div class="gate-account-row"><span>' + escapeHtml(r[0]) + '</span><b>' + escapeHtml(r[1]) + '</b>' +
-        (i === rows.length - 1 ? '<button type="button" class="gate-copy" data-copy="' + escapeHtml(r[1]) + '">Copy</button>' : '') +
-        '</div>').join('') +
+      rows.map((r, i) => {
+        const last = i === rows.length - 1;
+        return '<div class="gate-account-row' + (last ? ' is-key' : '') + '"><span>' + escapeHtml(r[0]) + '</span><b>' + escapeHtml(r[1]) + '</b>' +
+          (last ? '<button type="button" class="gate-copy" data-copy="' + escapeHtml(r[1]) + '">Copy</button>' : '') +
+          '</div>';
+      }).join('') +
       '<p>' + (manualMethod === 'opay'
         ? 'Transfer ' + escapeHtml(amountLine()) + ' for the ' + escapeHtml(planLabel(selectedPlan())) + ' Premium plan.'
         : ((selectedPlan().usd_display || (pricingCurrency === 'USD' ? selectedPlan().local_display : ''))
@@ -397,11 +459,13 @@
     const date = expiry ? new Date(expiry).toLocaleString() : 'Not available';
     const expiring = active && expiry && remaining <= 3;
     const label = !active ? 'INACTIVE' : (expiring ? 'EXPIRING SOON' : 'ACTIVE');
-    return '<section class="gate-substatus" id="gateSubStatus">' +
-      '<div class="status-head"><span>My subscription</span><span class="status-pill ' + (active && !expiring ? '' : 'expired') + '">' + label + '</span></div>' +
-      (active
-        ? '<div class="status-days" style="' + (expiring ? 'color:#fca5a5' : '') + '">' + remaining + ' day' + (remaining === 1 ? '' : 's') + ' remaining</div>'
-        : '<div class="status-days" style="color:#fca5a5">No active Premium</div>') +
+    const tone = !active ? 'is-off' : (expiring ? 'is-warn' : '');
+    const pct = active ? Math.max(6, Math.min(100, Math.round(remaining / 30 * 100))) : 0;
+    return '<section class="gate-substatus ' + tone + '" id="gateSubStatus">' +
+      '<div class="status-head"><span>My subscription</span><span class="status-pill">' + label + '</span></div>' +
+      '<div class="status-main"><div class="status-num" style="--pct:' + pct + '%">' + (active ? remaining : '–') + '</div>' +
+        '<div><div class="status-days">' + (active ? (remaining + ' day' + (remaining === 1 ? '' : 's') + ' remaining') : 'No active Premium') + '</div>' +
+        '<div class="status-sub">' + (active ? (expiring ? 'Renew soon to stay connected' : 'Premium is running smoothly') : 'Subscribe to unlock everything') + '</div></div></div>' +
       '<div class="status-grid">' +
         '<div class="status-item"><small>Expiry date</small><b>' + escapeHtml(date) + '</b></div>' +
         '<div class="status-item"><small>Decoder number</small><b>' + escapeHtml(decoder ? pretty(decoder) : 'Not issued') + '</b></div>' +
@@ -453,40 +517,51 @@
     signalPremiumState();
     render();
   }
+  const CURRENCIES = [['NGN','Nigeria'],['EGP','Egypt'],['USD','United States'],['GBP','United Kingdom'],['GHS','Ghana'],['ZAR','South Africa'],['KES','Kenya'],['UGX','Uganda'],['TZS','Tanzania'],['AED','UAE'],['SAR','Saudi Arabia'],['INR','India'],['CAD','Canada'],['AUD','Australia']];
+  function bestValueDays() {
+    let best = 0, bestRate = Infinity;
+    plans.forEach(p => {
+      const n = Number(String(p.ngn_display || '').replace(/[^\d]/g, ''));
+      const d = Number(p.days);
+      if (n > 0 && d > 0 && n / d < bestRate) { bestRate = n / d; best = d; }
+    });
+    return plans.length > 2 ? best : 0;
+  }
+  function planCardsMarkup() {
+    const best = bestValueDays();
+    return '<div class="gate-plans" role="radiogroup" aria-label="Premium duration">' + plans.map(p => {
+      const days = Number(p.days);
+      const main = p.local_display || p.ngn_display;
+      const sub = [p.local_display ? p.ngn_display : '', p.usd_display || ''].filter(Boolean).join(' · ');
+      const on = days === selectedDays;
+      return '<button type="button" class="gate-plan' + (on ? ' active' : '') + '" data-plan="' + days + '" role="radio" aria-checked="' + on + '">' +
+        (days === best ? '<span class="tag">Best value</span>' : '') +
+        '<b>' + escapeHtml(planLabel(p)) + '</b><span class="price">' + escapeHtml(main) + '</span>' +
+        (sub ? '<small>' + escapeHtml(sub) + '</small>' : '') + '</button>';
+    }).join('') + '</div>';
+  }
   function modalMarkup() {
+    const active = !!(unlocked && (!codeExpiry || Date.now() + serverOffset < codeExpiry));
     return '<div class="gate-pop">' +
       '<button type="button" class="gate-x" id="gateX" aria-label="Close">✕</button>' +
       '<div class="gate-layout">' +
       '<section class="gate-left">' +
+      '<span class="gate-brand"><i>★</i>PREMIUM</span>' +
       '<h2>Deeprowss Premium</h2>' +
       '<p>Enjoy unlimited live TV, movies, alternate players, downloads and Smart Decoder access. Visitors get 10 TV channels each day and 3 free movie titles.</p>' +
-      '<ul class="gate-features"><li>✓ Unlimited live TV channels</li><li>✓ No pop-ups</li><li>✓ Unlimited movies and downloads</li><li>✓ Smart Decoder access</li></ul>' +
-      statusPanelMarkup(!!(unlocked && (!codeExpiry || Date.now() + serverOffset < codeExpiry)), codeExpiry, code) +
+      '<ul class="gate-features"><li>Unlimited live TV channels</li><li>No pop-ups</li><li>Unlimited movies and downloads</li><li>Smart Decoder access</li></ul>' +
+      statusPanelMarkup(active, codeExpiry, code) +
       '<div class="gate-code"><label class="gate-field" for="gateModalCode">Have a Premium activation token from Deeprowss on WhatsApp?</label><input id="gateModalCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Enter your 10-digit token"><button type="button" class="gate-verify" id="gateModalUnlock">Activate Premium</button></div>' +
       '</section><section class="gate-right">' +
+      '<div class="gate-step"><i>1</i>Choose your plan</div>' +
       '<label class="gate-field" for="gateCurrency">Pricing currency</label>' +
       '<select id="gateCurrency" class="gate-plan-select">' +
         '<option value="auto"' + (selectedCurrency === 'auto' ? ' selected' : '') + '>Automatic (device region)</option>' +
-        '<option value="NGN"' + (selectedCurrency === 'NGN' ? ' selected' : '') + '>Nigeria · NGN</option>' +
-        '<option value="EGP"' + (selectedCurrency === 'EGP' ? ' selected' : '') + '>Egypt · EGP</option>' +
-        '<option value="USD"' + (selectedCurrency === 'USD' ? ' selected' : '') + '>United States · USD</option>' +
-        '<option value="GBP"' + (selectedCurrency === 'GBP' ? ' selected' : '') + '>United Kingdom · GBP</option>' +
-        '<option value="GHS"' + (selectedCurrency === 'GHS' ? ' selected' : '') + '>Ghana · GHS</option>' +
-        '<option value="ZAR"' + (selectedCurrency === 'ZAR' ? ' selected' : '') + '>South Africa · ZAR</option>' +
-        '<option value="KES"' + (selectedCurrency === 'KES' ? ' selected' : '') + '>Kenya · KES</option>' +
-        '<option value="UGX"' + (selectedCurrency === 'UGX' ? ' selected' : '') + '>Uganda · UGX</option>' +
-        '<option value="TZS"' + (selectedCurrency === 'TZS' ? ' selected' : '') + '>Tanzania · TZS</option>' +
-        '<option value="AED"' + (selectedCurrency === 'AED' ? ' selected' : '') + '>UAE · AED</option>' +
-        '<option value="SAR"' + (selectedCurrency === 'SAR' ? ' selected' : '') + '>Saudi Arabia · SAR</option>' +
-        '<option value="INR"' + (selectedCurrency === 'INR' ? ' selected' : '') + '>India · INR</option>' +
-        '<option value="CAD"' + (selectedCurrency === 'CAD' ? ' selected' : '') + '>Canada · CAD</option>' +
-        '<option value="AUD"' + (selectedCurrency === 'AUD' ? ' selected' : '') + '>Australia · AUD</option>' +
+        CURRENCIES.map(c => '<option value="' + c[0] + '"' + (selectedCurrency === c[0] ? ' selected' : '') + '>' + c[1] + ' · ' + c[0] + '</option>').join('') +
       '</select>' +
-      '<label class="gate-field" for="gatePlan">Choose Premium duration (' + escapeHtml(pricingCurrency) + ')</label>' +
-      '<select id="gatePlan" class="gate-plan-select">' +
-        plans.map(p => '<option value="' + Number(p.days) + '"' + (Number(p.days) === selectedDays ? ' selected' : '') + '>' +
-          escapeHtml(planLabel(p)) + ' · ' + escapeHtml((p.local_display ? p.local_display + ' · ' : '') + p.ngn_display + (p.usd_display ? ' · ' + p.usd_display : '')) + '</option>').join('') +
-      '</select>' +
+      planCardsMarkup() +
+      '<div class="gate-total"><span>Total · ' + escapeHtml(planLabel(selectedPlan())) + ' (' + escapeHtml(pricingCurrency) + ')</span><b>' + escapeHtml(shownPrice()) + '</b></div>' +
+      '<div class="gate-step"><i>2</i>Pay</div>' +
       '<div class="gate-paystack"><span>Paystack online payment</span><b class="gate-coming">COMING SOON</b></div>' +
       '<div class="gate-field">Choose manual payment method</div>' +
       '<div class="gate-methods">' +
@@ -497,7 +572,7 @@
       '<button type="button" class="gate-action" id="gateReceipt">Send payment receipt on WhatsApp</button>' +
       '<button type="button" class="gate-check" id="gateCheck">I have paid · Check Premium activation</button>' +
       '<div class="gate-status" id="gateStatus">Make your transfer, then send the payment screenshot to our WhatsApp helpline. Your receiver ID is included automatically.</div>' +
-      '<div class="gate-helpline">WhatsApp helpline: <a href="' + escapeHtml(manualHelpUrl()) + '" target="_blank" rel="noopener noreferrer">+234 704 162 9630</a></div>' +
+      '<div class="gate-helpline"><span>WhatsApp helpline</span><a href="' + escapeHtml(manualHelpUrl()) + '" target="_blank" rel="noopener noreferrer">+234 704 162 9630</a></div>' +
       '</section></div></div>';
   }
   function bindModal() {
@@ -509,8 +584,7 @@
       selectedCurrency = currencySelect.value || 'auto';
       loadPlans(selectedCurrency === 'auto' ? currencyForLocale() : selectedCurrency, true);
     };
-    const planSelect = $('gatePlan');
-    planSelect.onchange = () => { selectedDays = Number(planSelect.value) || 30; fillModal(); };
+    modal.querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click', () => { selectedDays = Number(b.dataset.plan) || 30; fillModal(); }));
     modal.querySelectorAll('[data-manual]').forEach(b => b.addEventListener('click', () => { manualMethod = b.dataset.manual; fillModal(); }));
     modal.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', () => copyManualValue(b.dataset.copy || '')));
     $('gateReceipt').onclick = () => openExternal(manualReceiptUrl());
@@ -533,7 +607,11 @@
       return !!win;
     } catch (_) { return false; }
   }
-  function fillModal() { modal.innerHTML = modalMarkup(); bindModal(); }
+  function fillModal() {
+    const keep = ['.gate-layout', '.gate-left', '.gate-right'].map(q => { const el = modal.querySelector(q); return el ? el.scrollTop : 0; });
+    modal.innerHTML = modalMarkup(); bindModal();
+    ['.gate-layout', '.gate-left', '.gate-right'].forEach((q, i) => { const el = modal.querySelector(q); if (el) el.scrollTop = keep[i]; });
+  }
   function openModal() {
     fillModal(); modal.classList.add('open'); modalOpen = true;
     refreshStatusPanel();
