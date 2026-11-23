@@ -263,7 +263,7 @@
   function renderStatus() {
     const el = $('tvStatus');
     if (st.loading) { el.innerHTML = '<span class="spin"></span>Updating online channels…'; return; }
-    const parts = [own.length + ' own', nexus.length ? nexus.length.toLocaleString() + ' online (IPTV Nexus)' : 'online list not loaded'];
+    const parts = [own.length + ' own', nexus.length ? nexus.length.toLocaleString() + ' online channels' : 'online list not loaded'];
     el.textContent = parts.join(' · ') + (st.nexusInfo ? ' · ' + st.nexusInfo : '') + (st.failed ? ' · update failed, showing saved copy' : '');
   }
   function render() {
