@@ -183,7 +183,6 @@
         '<div class="dl-actions">' + a.actions.map(x =>
           '<button type="button" class="dl-btn' + (x.alt ? ' secondary' : '') + '" data-app="' + a.id + '" data-slot="' + x.slot + '" data-label="' + esc(x.label) + '">' + DL_ICON + '<span></span></button>').join('') +
         '</div>' +
-        '<button type="button" class="dl-qr" data-app="' + a.id + '" data-slot="main" data-qr="1">Show QR code</button>' +
         '<div class="dl-note">' + esc(a.note) + '</div>' +
       '</article>').join('');
     const mine = detect();
@@ -203,8 +202,7 @@
         if (b.dataset.slot === 'main' && t.state === 'ok') meta = [t.version, fmtSize(t.size)].filter(Boolean).join(' · ');
       });
       const m = card.querySelector('[data-meta]'); if (m) m.textContent = meta;
-      const q = card.querySelector('.dl-qr'), main = resolve(a.id);
-      if (q) q.hidden = tv || main.state === 'off' || main.state === 'loading';
+
     });
   }
   const modal = document.createElement('div');
