@@ -601,3 +601,69 @@ html.tv #join,html.desktop-app #join{width:min(94vw,1040px)}
 @keyframes fdotfill{to{transform:scaleX(1)}}
 @media(max-width:820px){.home-feature .fcta{margin-top:12px;gap:14px}.fmore{height:36px;font-size:12.5px}.fdot{width:7px;height:7px}.fdot.on{width:26px}}
 @media(prefers-reduced-motion:reduce){.fa.on,.fa.on.rev,.fa.on.from-left{animation:none}.home-feature.anim>*{animation:none}.fdot.on::after{animation:none;transform:scaleX(1)}}
+
+
+/* ---------- connect page redesign ---------- */
+#join{width:min(94vw,1080px);padding:clamp(22px,3.4vw,44px);border:1px solid #2a3d54;border-top:3px solid var(--accent);border-radius:24px;background:radial-gradient(700px 360px at 8% 0,#1db4ea1c,transparent 70%),linear-gradient(150deg,#122033,#08101a);overflow:hidden;transition:border-top-color .5s,box-shadow .5s}
+#join[data-state=connected]{border-top-color:#2fd47a;box-shadow:0 30px 100px #000c,0 0 90px #2fd47a22}
+#join .join-layout{grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:clamp(24px,4vw,56px);align-items:center}
+#join[data-state=waiting] .only-ok,#join[data-state=connected] .only-wait{display:none!important}
+#join .join-intro{text-align:left}
+#join .join-intro>*{animation:jin .55s cubic-bezier(.2,.7,.2,1) both}
+#join .join-intro>:nth-child(2){animation-delay:.05s}#join .join-intro>:nth-child(3){animation-delay:.1s}#join .join-intro>:nth-child(4){animation-delay:.15s}
+#join[data-state=connected] .join-intro>*{animation-name:jinOk}
+@keyframes jin{from{opacity:0;transform:translateY(12px)}}
+@keyframes jinOk{from{opacity:0;transform:translateY(12px) scale(.98)}}
+.jchip{display:inline-flex;align-items:center;gap:9px;padding:7px 14px;border-radius:999px;border:1px solid #1db4ea55;background:#1db4ea1c;color:var(--accent2);font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.jchip.ok{border-color:#2fd47a66;background:#2fd47a1f;color:#5ee9a0}.jchip svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.jpulse{width:9px;height:9px;border-radius:50%;background:var(--accent2);box-shadow:0 0 0 0 #1db4ea99;animation:jpulse 1.6s infinite}
+@keyframes jpulse{70%{box-shadow:0 0 0 10px #1db4ea00}100%{box-shadow:0 0 0 0 #1db4ea00}}
+#join h1{margin:18px 0 12px;font-size:clamp(32px,4.6vw,56px);line-height:1.04;font-weight:800;letter-spacing:-.025em;color:#fff}
+#join[data-state=connected] h1{background:linear-gradient(100deg,#fff 45%,#7df0b3);-webkit-background-clip:text;background-clip:text;color:transparent}
+.jlead{margin:0 0 24px;max-width:34em;font-size:clamp(15px,1.5vw,18px);line-height:1.6;color:#b4c3d4}
+.jsteps{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.jsteps li{display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:14px;background:#ffffff0a;border:1px solid #ffffff14;transition:border-color .2s,background .2s}
+.jsteps li:hover{border-color:#1db4ea66;background:#1db4ea12}
+.jsteps li>span{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent2),#0b84b8);color:#031620;font-weight:900;font-size:15px}
+.jsteps b{display:block;font-size:15.5px}.jsteps small{display:block;margin-top:2px;font-size:12.5px;color:#8fa2b7}
+.jperks{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.jperks li{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:14px;background:#2fd47a12;border:1px solid #2fd47a33;font-weight:650;font-size:15px}
+.jperks svg{flex:none;width:22px;height:22px;fill:none;stroke:#5ee9a0;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+#join .join-controls{text-align:center;min-width:0}
+.jcard{padding:22px 22px 18px;border-radius:20px;background:#060d15b3;border:1px solid #ffffff1a;box-shadow:inset 0 1px 0 #ffffff10}
+.jstage{display:grid;place-items:center;min-height:250px}
+.join-qr{position:relative;display:grid;place-items:center;min-height:0;padding:12px}
+#pairQr{width:214px;height:214px;margin:0;padding:12px;background:#fff;border-radius:16px;display:grid;place-items:center;box-shadow:0 14px 40px #000a}
+#pairQr img,#pairQr canvas{max-width:100%!important;max-height:100%!important}
+.jc{position:absolute;width:30px;height:30px;border:3px solid var(--accent2);border-radius:6px;filter:drop-shadow(0 0 6px #1db4ea88)}
+.jc.tl{top:0;left:0;border-right:0;border-bottom:0}.jc.tr{top:0;right:0;border-left:0;border-bottom:0}.jc.bl{bottom:0;left:0;border-right:0;border-top:0}.jc.br{bottom:0;right:0;border-left:0;border-top:0}
+.jscan{position:absolute;left:18px;right:18px;top:18px;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--accent2),transparent);box-shadow:0 0 14px var(--accent2);animation:jscan 2.6s ease-in-out infinite alternate;pointer-events:none}
+@keyframes jscan{to{top:calc(100% - 20px)}}
+.jsuccess{gap:30px;align-content:center}.jsuccess .jring{margin:6px 0 4px}
+.jlink{display:flex;align-items:center;gap:14px;color:#cfe3f5}.jdev{width:46px;height:46px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.jwire{display:flex;gap:6px}.jwire i{width:8px;height:8px;border-radius:50%;background:#2fd47a;animation:jdot 1.2s infinite both}.jwire i:nth-child(2){animation-delay:.2s}.jwire i:nth-child(3){animation-delay:.4s}
+@keyframes jdot{0%,80%,100%{opacity:.2;transform:scale(.7)}40%{opacity:1;transform:scale(1.15)}}
+.jring{position:relative;width:96px;height:96px}
+.jring::before,.jring::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid #2fd47a;opacity:0;animation:jripple 2.4s ease-out infinite}.jring::after{animation-delay:1.2s}
+@keyframes jripple{from{transform:scale(.8);opacity:.7}to{transform:scale(1.7);opacity:0}}
+.jring svg{position:relative;width:100%;height:100%;overflow:visible}
+.jring circle{fill:#2fd47a1f;stroke:#2fd47a;stroke-width:3;stroke-dasharray:214;stroke-dashoffset:214;transform:rotate(-90deg);transform-origin:center;animation:jdraw .8s .1s ease-out forwards}
+.jring path{fill:none;stroke:#5ee9a0;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:60;stroke-dashoffset:60;animation:jdraw .5s .7s ease-out forwards}
+@keyframes jdraw{to{stroke-dashoffset:0}}
+.jok{font-size:22px;font-weight:800;color:#5ee9a0;letter-spacing:.02em}
+.jcode{margin-top:16px}.jcode .tag{font-size:11px;letter-spacing:.24em;color:#8fa2b7}
+#pairCode{margin:6px 0 0;font-size:clamp(18px,2.2vw,24px);font-weight:900;letter-spacing:.1em;white-space:nowrap;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#join[data-state=connected] #pairCode{font-size:17px;color:#9fb2c7}
+#join #statusJoin{display:flex;align-items:center;justify-content:center;gap:8px;min-height:20px;margin:12px 0 0;font-size:13px;color:#aebdce}
+#join #newPair{width:100%;margin-top:14px;min-height:50px;border-radius:14px;font-weight:700}
+#join[data-state=connected] #newPair{background:transparent;border:1px solid #ffffff2e}
+#join details{margin-top:12px;text-align:left;color:#aab2bf}
+#join details summary{text-align:center;color:#9fb2c7;font-size:14.5px;list-style:none}#join details summary::-webkit-details-marker{display:none}
+#join details summary::before{content:"\25B8  ";}#join details[open] summary::before{content:"\25BE  ";}
+#join details input{width:100%;margin-top:10px;min-height:48px}
+#join #connectPin{margin-top:10px;min-height:48px;width:100%;border-radius:12px}
+#join .hint{margin-top:16px;text-align:center;line-height:1.5}
+.badge{transition:color .3s,border-color .3s,background .3s}
+.badge.ok{color:#5ee9a0;border-color:#2fd47a88;background:#2fd47a1a}
+@media(max-width:820px){#join .join-layout{grid-template-columns:1fr;gap:22px}#join .jsteps,#join .jperks{gap:8px}.jstage{min-height:230px}}
+@media(prefers-reduced-motion:reduce){#join *,.jring::before,.jring::after{animation:none!important}.jring circle,.jring path{stroke-dashoffset:0}}
