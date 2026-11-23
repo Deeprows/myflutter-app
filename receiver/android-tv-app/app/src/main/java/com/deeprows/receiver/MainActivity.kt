@@ -433,7 +433,7 @@ class MainActivity : Activity() {
                     }
                     val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
                     if (Build.VERSION.SDK_INT >= 33) registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-                    else @Suppress("DEPRECATION") registerReceiver(receiver, filter)
+                    else { @Suppress("DEPRECATION") registerReceiver(receiver, filter) }
                 } catch (_: Exception) {}
             }
         }
