@@ -1,8 +1,8 @@
 {
   "_help": "OWNER-MANAGED APP DOWNLOAD LINKS. Edit this file to control the Downloads page in both Deeprowss Cinema for Windows EXE and the receiver website. Paste your own direct HTTPS file URL for each app. Leave a value empty or set it to off to show Coming soon. These links are the ONLY source used; no GitHub Releases or app_config.json fallback is used. Commit changes and refresh the Downloads page.",
-  "mobile": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.3/Deeprowss-v1.3.3.apk",
-  "androidTv": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.3/Deeprowss-Android-TV.apk",
-  "webos": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.3/Deeprowss-LG-webOS.ipk",
+  "mobile": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.5/Deeprowss-v1.3.5.apk",
+  "androidTv": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.5/Deeprowss-Android-TV.apk",
+  "webos": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.5/Deeprowss-LG-webOS.ipk",
   "tizen": "",
-  "windows": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.3/Deeprowss-Windows-Setup.exe"
+  "windows": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.5/Deeprowss-Windows-Setup.exe"
 }
