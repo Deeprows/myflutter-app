@@ -24,45 +24,56 @@ class XTabBar extends StatelessWidget {
       color: Ui.bg,
       border: Border(bottom: BorderSide(color: Ui.line, width: .6)),
     ),
-    child: Row(
-      children: [
-        for (var i = 0; i < labels.length; i++)
-          Expanded(
-            child: InkWell(
-              onTap: () => onTap(i),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 14),
-                child: Column(
-                  children: [
-                    Text(
-                      labels[i],
-                      maxLines: 1,
-                      style: TextStyle(
-                        fontSize: labels.length > 4 ? 13.5 : 15,
-                        fontWeight: i == index
-                            ? FontWeight.w900
-                            : FontWeight.w600,
-                        color: i == index
-                            ? Theme.of(context).colorScheme.onSurface
-                            : Ui.muted,
+    child: Padding(
+      // Keep the first and last tabs comfortably inside the tray edges.
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Expanded(
+              child: InkWell(
+                onTap: () => onTap(i),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: Text(
+                          labels[i],
+                          maxLines: 1,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: labels.length > 4 ? 13.5 : 15,
+                            fontWeight: i == index
+                                ? FontWeight.w900
+                                : FontWeight.w600,
+                            color: i == index
+                                ? Theme.of(context).colorScheme.onSurface
+                                : Ui.muted,
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 11),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      height: 4,
-                      width: i == index ? 56 : 0,
-                      decoration: BoxDecoration(
-                        color: Ui.red,
-                        borderRadius: BorderRadius.circular(4),
+                      const SizedBox(height: 11),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        height: 4,
+                        width: i == index ? 56 : 0,
+                        decoration: BoxDecoration(
+                          color: Ui.red,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     ),
   );
 }
