@@ -1,1 +1,44 @@
-
+[
+  {
+    "id": "1",
+    "home": "Brentford",
+    "away": "Everton",
+    "league": "Premier League - England",
+    "kickoff": "2026-11-23T21:00:00+01:00",
+    "duration": 130,
+    "url": "https://abisnews.com/skypremier.php",
+    "altUrl": "https://abisnews.com/skymainevent.php",
+    "altUrl2": "https://abisnews.com/canalsportplus1pl.php",
+    "altUrl3": "https://abisnews.com/arena1premiumserbia.php",
+    "homeLogo": "55",
+    "awayLogo": "45"
+  },
+  {
+    "id": "2",
+    "home": "Levante",
+    "away": "Elche",
+    "league": "LaLiga - Spain",
+    "kickoff": "2026-11-23T21:00:00+01:00",
+    "duration": 130,
+    "url": "https://abisnews.com/premiersports1ie.phpp",
+    "altUrl": "https://abisnews.com/espn.php",
+    "altUrl2": "https://abisnews.com/tv2sportpremium.php",
+    "altUrl3": "https://abisnews.com/magentasport3.php",
+    "homeLogo": "539",
+    "awayLogo": "797"
+  },
+  {
+    "id": "3",
+    "home": "Monza",
+    "away": "Fiorentina",
+    "league": "Serie A - Italy",
+    "kickoff": "2026-11-23T20:45:00+01:00",
+    "duration": 130,
+    "url": "https://abisnews.com/arena1premiumserbia.php",
+    "altUrl": "https://abisnews.com/digisport2.php",
+    "altUrl2": "https://abisnews.com/sporttv2.php",
+    "altUrl3": "https://abisnews.com/magentasport1.php",
+    "homeLogo": "1579",
+    "awayLogo": "502"
+  }
+]
