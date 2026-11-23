@@ -439,6 +439,34 @@ class MainActivity : Activity() {
             }
         }
 
+        /** Fetch an M3U playlist through Android networking, bypassing WebView CORS restrictions. */
+        @JavascriptInterface
+        fun fetchPlaylist(raw: String?): String {
+            val safe = cleanHttp(raw)
+            if (safe.isEmpty()) return JSONObject().put("ok", false).put("error", "Invalid playlist URL").toString()
+            var connection: HttpURLConnection? = null
+            return try {
+                connection = URL(safe).openConnection() as HttpURLConnection
+                connection.instanceFollowRedirects = true
+                connection.connectTimeout = 12000
+                connection.readTimeout = 20000
+                connection.setRequestProperty("Accept", "audio/x-mpegurl, application/vnd.apple.mpegurl, text/plain, */*")
+                val status = connection.responseCode
+                val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+                val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
+                if (body.length > 5_000_000) {
+                    JSONObject().put("ok", false).put("error", "Playlist file is too large").toString()
+                } else {
+                    JSONObject().put("ok", status in 200..299).put("status", status)
+                        .put("body", body).put("error", if (status in 200..299) "" else "HTTP $status").toString()
+                }
+            } catch (e: Exception) {
+                JSONObject().put("ok", false).put("error", e.message ?: "Could not fetch playlist").toString()
+            } finally {
+                try { connection?.disconnect() } catch (_: Exception) {}
+            }
+        }
+
         /** Open the approved payment / WhatsApp links outside the TV WebView. */
         @JavascriptInterface
         fun openExternal(raw: String?) {
