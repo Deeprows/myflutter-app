@@ -1,13 +1,22 @@
 package com.deeprows.receiver
 
 import android.app.Activity
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
+import android.os.Environment
 import android.os.SystemClock
+import android.provider.Settings
 import android.view.MotionEvent
+import androidx.core.content.FileProvider
+import java.io.File
 import android.webkit.JavascriptInterface
 import android.view.Gravity
 import android.view.View
@@ -387,6 +396,46 @@ class MainActivity : Activity() {
             streamUa = (ua ?: "").trim().take(500)
             streamOn = on
             if (on) frameUrl = ""
+        }
+
+        /** Download a new APK and hand it to Android's package installer. */
+        @JavascriptInterface
+        fun installUpdate(raw: String?) {
+            val safe = cleanHttp(raw)
+            if (safe.isEmpty() || !safe.substringBefore('?').lowercase().endsWith(".apk")) return
+            runOnUiThread {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+                    try { startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))) } catch (_: Exception) {}
+                    return@runOnUiThread
+                }
+                try {
+                    val request = DownloadManager.Request(Uri.parse(safe))
+                        .setTitle("Deeprowss TV update")
+                        .setDescription("Downloading the latest Deeprowss TV version")
+                        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        .setDestinationInExternalFilesDir(this@MainActivity, Environment.DIRECTORY_DOWNLOADS, "deeprowss-tv-update.apk")
+                    val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+                    val downloadId = manager.enqueue(request)
+                    val receiver = object : BroadcastReceiver() {
+                        override fun onReceive(context: Context?, intent: Intent?) {
+                            if (intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) != downloadId) return
+                            try { unregisterReceiver(this) } catch (_: Exception) {}
+                            try {
+                                val apk = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "deeprowss-tv-update.apk")
+                                if (!apk.exists() || apk.length() == 0L) return
+                                val contentUri = FileProvider.getUriForFile(this@MainActivity, "$packageName.fileprovider", apk)
+                                val install = Intent(Intent.ACTION_VIEW)
+                                    .setDataAndType(contentUri, "application/vnd.android.package-archive")
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                startActivity(install)
+                            } catch (_: Exception) {}
+                        }
+                    }
+                    val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+                    if (Build.VERSION.SDK_INT >= 33) registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                    else @Suppress("DEPRECATION") registerReceiver(receiver, filter)
+                } catch (_: Exception) {}
+            }
         }
 
         /** Open the approved payment / WhatsApp links outside the TV WebView. */
