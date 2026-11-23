@@ -302,7 +302,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 /* ---------- player ---------- */
 .tvonly{display:none}
 body[data-mode=tv] .tvonly{display:inline-block}
-body[data-mode=tv] #rewind,body[data-mode=tv] #forward,body[data-mode=tv] .progress{display:none}
+body[data-mode=tv] #rewind,body[data-mode=tv] #forward{display:none}
 body[data-mode=tv] .live{border-color:#7a2b3a;color:#ff7389}
 .noalt,.nomethod{display:none!important}
 .player-head{background:linear-gradient(#000e,transparent)}
@@ -319,7 +319,6 @@ body[data-mode=tv] .live{border-color:#7a2b3a;color:#ff7389}
 .player .controls #play{background:var(--accent);color:var(--ink);padding:0 16px}
 .player .controls #play:hover{filter:brightness(1.1)}
 .player .controls button:focus-visible{outline:2px solid #fff;outline-offset:1px}
-.player .progress{left:50%;right:auto;transform:translateX(-50%);width:min(720px,calc(100% - 32px));bottom:68px;padding:0}
 @media(max-width:700px){.player .controls button{padding:0 11px}.player .controls button svg{margin-right:0}.player .controls button .lbl{display:none}}
 .pback{background:#16222f}
 
@@ -543,3 +542,28 @@ html.tv #join,html.desktop-app #join{width:min(94vw,1040px)}
   #movieDetails .person{width:98px}
 }
 @media(prefers-reduced-motion:reduce){#movieDetails .sheet-card{animation:none}}
+
+
+/* ---------- player: seek row (real video only) + redesigned volume ---------- */
+.player .progress{left:auto;right:max(18px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));width:auto;padding:0;gap:0;flex-direction:column;align-items:flex-end;pointer-events:none}
+.player .progress>*{pointer-events:auto}
+.player .seekrow{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 52px);width:min(720px,calc(100% - 32px));display:flex;align-items:center;gap:12px;color:#dfe8f1;font-size:12px;font-variant-numeric:tabular-nums}
+.player .seekrow[hidden]{display:none}
+.player .seekrow input{flex:1;min-width:0}
+.volbox{display:flex;align-items:center;gap:8px;height:44px;padding:0 14px 0 6px;border-radius:999px;background:#0a1119e6;border:1px solid #ffffff20;backdrop-filter:blur(16px);box-shadow:0 10px 36px #000a;color:#e9f0f7}
+.volico{width:34px;height:34px;border:0;border-radius:50%;background:transparent;color:inherit;display:grid;place-items:center;padding:0;cursor:pointer;min-width:0}
+.volico:hover{background:#ffffff1c}.volico:focus-visible{outline:2px solid #fff;outline-offset:1px}
+.volico svg{width:18px;height:18px}
+.volbox.is-low .w2,.volbox.is-muted .w1,.volbox.is-muted .w2{display:none}
+.volbox.is-muted .volico{color:#ff7389}
+.volbox .volume{--v:100%;-webkit-appearance:none;appearance:none;width:112px;max-width:none;height:18px;margin:0;padding:0;background:transparent;border:0;cursor:pointer;outline:none}
+.volbox .volume::-webkit-slider-runnable-track{height:5px;border-radius:99px;background:linear-gradient(90deg,var(--accent) var(--v),#ffffff30 var(--v))}
+.volbox .volume::-moz-range-track{height:5px;border-radius:99px;background:#ffffff30}
+.volbox .volume::-moz-range-progress{height:5px;border-radius:99px;background:var(--accent)}
+.volbox .volume::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-4.5px;border-radius:50%;background:#fff;border:0;box-shadow:0 1px 6px #000a;transition:transform .12s}
+.volbox .volume::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#fff;border:0;box-shadow:0 1px 6px #000a}
+.volbox .volume:hover::-webkit-slider-thumb,.volbox .volume:focus-visible::-webkit-slider-thumb{transform:scale(1.25)}
+.volbox .volume:focus-visible{outline:2px solid #fff;outline-offset:3px;border-radius:99px}
+.volnum{min-width:24px;text-align:right;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:#c9d6e3}
+.player .seekrow input[type=range]{accent-color:var(--accent)}
+@media(max-width:700px){.player .progress{right:10px;bottom:calc(max(7px,env(safe-area-inset-bottom)) + 52px)}.volbox{height:38px}.volbox .volume{width:84px}.player .seekrow{bottom:calc(max(7px,env(safe-area-inset-bottom)) + 96px)}}
