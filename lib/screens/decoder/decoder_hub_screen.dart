@@ -11,6 +11,7 @@ import 'decoder_cast_page.dart';
 import 'decoder_channels_page.dart';
 import 'decoder_common.dart';
 import 'decoder_flows.dart';
+import 'decoder_guide_page.dart';
 import 'decoder_mirror_page.dart';
 import 'decoder_receiver_page.dart';
 import 'decoder_remote_page.dart';
@@ -252,6 +253,28 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
               ]),
             ])),
           decoderHeading('Connect', 'Pick how you want to use your TV or laptop.'),
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [Ui.red.withValues(alpha: .18), Ui.card]),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Ui.red.withValues(alpha: .5)),
+            ),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+              leading: Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(color: Ui.red.withValues(alpha: .16), borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.menu_book_rounded, color: Ui.red),
+              ),
+              title: Text('How to use Smart Decoder', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900)),
+              subtitle: Text('Step-by-step guide for LG, Samsung, Kodi, receiver and remote', style: TextStyle(color: Ui.muted, fontSize: 11)),
+              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute(builder: (_) => const DecoderGuidePage()),
+              ),
+            ),
+          ),
           _tile(Icons.cast_rounded, 'Cast to TV / Kodi', 'Smart TVs and Kodi on your Wi-Fi', () => _open(const DecoderCastPage(), 'cast')),
           _tile(Icons.screen_share_rounded, 'Screen mirroring', 'Show your phone screen', () => _open(const DecoderMirrorPage(), 'mirror')),
           _tile(Icons.web_rounded, 'Send to receiver page', 'Play channels in a laptop or TV browser', () => _open(const DecoderReceiverPage(), 'receiver')),
