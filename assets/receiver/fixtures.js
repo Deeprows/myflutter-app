@@ -279,7 +279,7 @@
   .fx-badge{position:absolute;right:18px;top:18px;display:none;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;background:#e5484d;color:#fff;font-size:11px;font-weight:900;letter-spacing:.12em}
   .fx-badge.on{display:inline-flex}.fx-badge i{width:7px;height:7px;border-radius:50%;background:#fff;animation:fxp 1.2s infinite}
   @keyframes fxp{50%{opacity:.25}}
-  #fixturesView .fx-body{max-width:1400px;margin:0 auto;padding:6px 20px 46px}
+  #fixturesView{background-image:linear-gradient(180deg,rgba(5,10,17,.76),rgba(5,10,17,.91)),url('https://res.cloudinary.com/hello-tickets/image/upload/c_limit%2Cf_auto%2Cq_auto%2Cw_1300/v1682598050/ajhi8tx2fabe6oeizrep.jpg');background-size:cover;background-position:center center;background-attachment:fixed;background-repeat:no-repeat}\n  #fixturesView .fx-body{max-width:1400px;margin:0 auto;padding:6px 20px 46px}
   .fx-sub{margin:0 0 4px;padding:4px 2px 0;font-size:15px;color:var(--muted,#8fa0b5)}
   .fx-chips{display:flex;gap:10px;overflow-x:auto;padding:12px 0 6px;scrollbar-width:none}.fx-chips::-webkit-scrollbar{display:none}
   .fx-day{display:flex;align-items:baseline;gap:12px;margin:22px 2px 12px}
@@ -390,7 +390,7 @@
     b.type = 'button'; b.className = 'tile'; b.id = 'goFixtures'; b.dataset.go = 'fixtures';
     b.innerHTML = '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M8 14h3M13 14h3M8 18h3"/></svg>' +
       '<span class="fx-badge" id="fxBadge"><i></i><span id="fxBadgeTxt">LIVE</span></span>' +
-      '<b>Fixtures</b><small>Upcoming live football matches</small>';
+      '<b>Live Football</b><small>Watch live and upcoming matches</small>';
     b.addEventListener('click', () => { if (window.deeprowssGo) window.deeprowssGo('fixtures'); else location.hash = 'fixtures'; });
     const connect = $('goConnect');
     nav.insertBefore(b, connect || null); // Movies, TV Channels, Fixtures, Connect with App
