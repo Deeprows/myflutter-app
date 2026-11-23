@@ -78,7 +78,7 @@ class DecoderGuidePage extends StatelessWidget {
           border: Border.all(color: Ui.red.withValues(alpha: .45)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Icon(Icons.connected_tv_rounded, size: 34, color: Ui.red),
+          Icon(Icons.connected_tv_rounded, size: 34, color: Ui.red),
           const SizedBox(height: 10),
           Text('Your screen. Your choice.', style: TextStyle(color: Ui.text, fontSize: 21, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
