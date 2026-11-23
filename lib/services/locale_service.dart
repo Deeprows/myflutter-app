@@ -10,8 +10,8 @@ class AppLanguage {
   const AppLanguage(this.code, this.native, this.english);
 }
 
-/// App language: follows the phone's language until the user picks one in
-/// the menu ("Automatic" goes back to following the phone).
+/// App language always follows the device locale. There is no manual
+/// language selector in the app.
 class AppLocale {
   static const supported = <AppLanguage>[
     AppLanguage('en', 'English', 'English'),
@@ -31,7 +31,7 @@ class AppLocale {
   static String _choice = auto;
   static _PhoneLocaleWatcher? _watcher;
 
-  /// What the user picked: [auto] or a language code.
+  /// Internal mode; kept as [auto] so the device locale is always followed.
   static String get choice => _choice;
   static String get code => notifier.value;
 
