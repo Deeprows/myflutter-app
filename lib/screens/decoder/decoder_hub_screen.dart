@@ -203,7 +203,10 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
           ),
         ),
       ),
-      body: ListenableBuilder(
+      body: SafeArea(
+        top: false,
+        bottom: true,
+        child: ListenableBuilder(
         listenable: Listenable.merge([svc, mirror]),
         builder: (context, _) => ListView(padding: const EdgeInsets.all(16), children: [
           if (svc.casting)
@@ -281,6 +284,7 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
           _tile(Icons.gamepad_rounded, 'TV remote', 'Roku, LG, Samsung and playback controls', () => _open(const DecoderRemotePage(), 'remote')),
           _tile(Icons.live_tv_rounded, 'Supported channels', 'See what works, then pick how to watch', () => _open(const DecoderChannelsPage(), 'channels')),
         ]),
+        ),
       ),
     );
   }
