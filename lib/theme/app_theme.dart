@@ -209,8 +209,9 @@ class ThemeController {
   static final ValueNotifier<int> index = ValueNotifier<int>(Palettes.defaultIndex);
 
   static Future<void> load() async {
-    final i = await Settings.themeIndex(Palettes.defaultIndex);
-    _apply(i.clamp(0, Palettes.all.length - 1));
+    // Theme selection was removed; keep the standard Deeprowss appearance.
+    await Settings.setThemeIndex(Palettes.defaultIndex);
+    _apply(Palettes.defaultIndex);
   }
 
   static void _apply(int i) {
