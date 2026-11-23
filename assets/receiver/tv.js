@@ -5,6 +5,27 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
+  // Remove only the visible provider label; leave channel data and playback untouched.
+  function removeProviderLabel(root) {
+    if (!root || !document.createTreeWalker) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      if (/IPTV\\s+Nexus/i.test(node.nodeValue || '')) {
+        node.nodeValue = node.nodeValue.replace(/IPTV\\s+Nexus/gi, '');
+      }
+    }
+  }
+  removeProviderLabel(document.body);
+  if (!window.__deeprowssProviderLabelObserver) {
+    window.__deeprowssProviderLabelObserver = new MutationObserver(records => {
+      for (const record of records) {
+        if (record.type === 'characterData') removeProviderLabel(record.target.parentNode);
+        else for (const added of record.addedNodes) if (added.nodeType === 1) removeProviderLabel(added);
+      }
+    });
+    window.__deeprowssProviderLabelObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+  }
   if (!document.getElementById('fixture-stream-control-style')) {
     const style = document.createElement('style');
     style.id = 'fixture-stream-control-style';
