@@ -645,6 +645,7 @@ window.__deeprowssPremiumReady = new Promise(function(resolve) {
   function load(src,fail,done){var s=document.createElement('script');s.src=src;if(fail)s.onerror=fail;if(done)s.onload=done;document.body.appendChild(s);}
   function both(n,done){load(n,function(){load('receiver/'+n,function(){if(done)done();},done);},done);}
   both('adshield.js');both('tvplus.js');both('tv.js');both('fixtures.js');both('downloads.js');both('manualad.js');
+  both('updater.js');
   // Load shell first so gate.js can wrap its Back handler, then load the
   // movie library only after the Premium check has been registered.
   both('shell.js',function(){both('gate.js',function(){
