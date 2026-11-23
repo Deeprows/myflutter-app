@@ -374,6 +374,12 @@ function createWindow() {
   win.loadURL(`${origin}/index.html`).catch(() => win.loadFile(path.join(__dirname, 'desktop.html')));
 }
 
+ipcMain.handle('app:update-check', async (event) => {
+  if (!trusted(event) || !app.isPackaged || process.env.PORTABLE_EXECUTABLE_DIR) return false;
+  try { await autoUpdater.checkForUpdates(); return true; }
+  catch (error) { console.error('Deeprowss update check failed:', error); return false; }
+});
+
 function configureAutoUpdates() {
   // Auto-update the installed NSIS build. Portable builds cannot safely
   // replace their running executable, so they remain manual-download builds.
