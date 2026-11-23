@@ -48,5 +48,7 @@
   };
   window.deeprowssUpdateStarted = () => { try { const pending = localStorage.getItem(PENDING) || ''; if (pending) localStorage.setItem(KEY + '_' + platform, pending); localStorage.removeItem(PENDING); } catch (_) {} };
   check();
+  setInterval(() => { if (!document.hidden) check(); }, 5 * 60 * 1000);
+  window.addEventListener('focus', check);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
 })();
