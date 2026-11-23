@@ -265,7 +265,7 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
               leading: Container(
                 width: 42, height: 42,
                 decoration: BoxDecoration(color: Ui.red.withValues(alpha: .16), borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.menu_book_rounded, color: Ui.red),
+                child: Icon(Icons.menu_book_rounded, color: Ui.red),
               ),
               title: Text('How to use Smart Decoder', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900)),
               subtitle: Text('Step-by-step guide for LG, Samsung, Kodi, receiver and remote', style: TextStyle(color: Ui.muted, fontSize: 11)),
