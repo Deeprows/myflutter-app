@@ -119,7 +119,7 @@ input{display:block;width:100%;padding:16px;border:1px solid #394657;border-radi
 /* ---- connect (QR) page: unchanged card ---- */
 #join{display:block;position:relative;width:min(92vw,520px);margin:14px auto 40px;padding:clamp(24px,5vw,42px);border-radius:24px;background:linear-gradient(145deg,#151e2b,#0a0e15);border:1px solid #344052;box-shadow:0 28px 90px #000b}
 #join h1{font-size:clamp(26px,5vw,38px);margin:0 0 12px;font-weight:950}
-#connect{width:100%;margin-top:4px;min-height:50px}#statusJoin,#statusPlayer{font-size:13px;color:#c1cad6;min-height:22px;margin-top:14px}.hint{font-size:12px;color:#8792a2;margin-top:18px}details summary{cursor:pointer;text-align:center;padding:8px}#pairQr img{max-width:190px!important;max-height:190px!important}
+#connectPin{width:100%;margin-top:4px;min-height:50px}#statusJoin,#statusPlayer{font-size:13px;color:#c1cad6;min-height:22px;margin-top:14px}.hint{font-size:12px;color:#8792a2;margin-top:18px}details summary{cursor:pointer;text-align:center;padding:8px}#pairQr img{max-width:190px!important;max-height:190px!important}
 
 /* ---- player ---- */
 .player{display:none;position:fixed;inset:0;width:100vw;height:100dvh;z-index:60;background:#000}
@@ -284,23 +284,46 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     <div style="flex:1"><div class="logo">DEEProWSS</div><div class="tag">VIDEO RECEIVER</div></div>
     <div class="badge" id="connectionBadge">NOT CONNECTED</div>
   </header>
-  <section id="join">
+  <section id="join" data-state="waiting">
     <div class="join-layout">
       <div class="join-intro">
-        <h1>Connect your phone</h1>
-        <p>Open Smart Decoder on your phone, choose <b>Scan to Connect</b>, and scan this QR code. Your video will play here.</p>
-        <div class="join-qr"><div id="pairQr" style="width:210px;height:210px;margin:10px auto;padding:10px;background:#fff;border-radius:14px;display:grid;place-items:center"></div></div>
+        <div class="jchip only-wait"><i class="jpulse"></i>Waiting for your phone</div>
+        <div class="jchip ok only-ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Phone linked</div>
+        <h1 class="only-wait">Connect your phone</h1>
+        <h1 class="only-ok">Now you&rsquo;re connected</h1>
+        <p class="jlead only-wait">Pair once and everything you pick on your phone plays on this screen.</p>
+        <p class="jlead only-ok">Your phone is paired with this screen. Choose a movie, channel or match in Smart Decoder and it will start playing here.</p>
+        <ol class="jsteps only-wait">
+          <li><span>1</span><div><b>Open Smart Decoder</b><small>On your phone</small></div></li>
+          <li><span>2</span><div><b>Choose Scan to Connect</b><small>From the menu</small></div></li>
+          <li><span>3</span><div><b>Scan the QR code</b><small>Point your camera at this screen</small></div></li>
+        </ol>
+        <ul class="jperks only-ok">
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Cast movies &amp; live TV</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Use your phone as a remote</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>Control volume &amp; playback</li>
+        </ul>
       </div>
       <div class="join-controls">
-        <div><div class="tag">PAIRING CODE</div><div id="pairCode" style="font-size:25px;font-weight:950;letter-spacing:4px;margin:8px 0">Preparing…</div></div>
-        <div id="statusJoin" role="status">Creating a secure connection…</div>
-        <button id="newPair" class="secondary" style="width:100%;margin-top:12px">Generate new QR code</button>
-        <details style="margin-top:18px;color:#aab2bf"><summary>Use manual connection (legacy)</summary>
+        <div class="jcard">
+          <div class="jstage only-wait">
+            <div class="join-qr"><div id="pairQr"></div><span class="jc tl"></span><span class="jc tr"></span><span class="jc bl"></span><span class="jc br"></span><span class="jscan"></span></div>
+          </div>
+          <div class="jstage only-ok jsuccess">
+            <div class="jlink"><svg class="jdev" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg><span class="jwire"><i></i><i></i><i></i></span><svg class="jdev" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+            <div class="jring"><svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34"/><path d="M26 41l10 10 19-21"/></svg></div>
+            <div class="jok">Connected</div>
+          </div>
+          <div class="jcode"><div class="tag only-wait">PAIRING CODE</div><div class="tag only-ok">SESSION</div><div id="pairCode">Preparing…</div></div>
+          <div id="statusJoin" role="status">Creating a secure connection…</div>
+        </div>
+        <button id="newPair" class="secondary" type="button"><span class="only-wait">Generate new QR code</span><span class="only-ok">Pair a different phone</span></button>
+        <details class="only-wait"><summary>Use manual connection (legacy)</summary>
           <input id="host" type="text" inputmode="url" autocomplete="off" placeholder="Phone address (e.g. 192.168.1.5:37027)" aria-label="Phone address">
           <input id="pin" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="Six-digit PIN" aria-label="Six-digit PIN">
-          <button id="connect" class="secondary" style="width:100%">Connect with PIN</button>
+          <button id="connectPin" class="secondary" type="button">Connect with PIN</button>
         </details>
-        <div class="hint">Private pairing · WebRTC video is sent directly between devices. The pairing service only carries connection messages.</div>
+        <div class="hint">Private pairing &middot; WebRTC video is sent directly between devices. The pairing service only carries connection messages.</div>
       </div>
     </div>
   </section>
@@ -561,10 +584,10 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
       showControls();reportState();
     }
         async function connect(){video.muted=false;video.volume=1;if(socket&&socket.readyState===WebSocket.OPEN)return;pendingCandidates.length=0;if(peer){peer.close();peer=null;}const pin=pinInput.value.trim();let host=hostInput.value.trim();if(host.startsWith('http://')||host.startsWith('https://')){try{host=new URL(host).host;}catch(_){host='';}}if(!host||!/^\d{6}$/.test(pin)){say('Enter the phone address and six-digit PIN.');return;}
-      $('connect').disabled=true;say('Connecting to Deeprowss…');socket=new WebSocket(`ws://${host}/ws?pin=${encodeURIComponent(pin)}`);
+      $('connectPin').disabled=true;say('Connecting to Deeprowss…');socket=new WebSocket(`ws://${host}/ws?pin=${encodeURIComponent(pin)}`);
       socket.onopen=()=>{reconnectAttempts=0;localStorage.setItem('deeprowss_receiver_host',host);localStorage.setItem('deeprowss_receiver_pin',pin);$('connectionBadge').textContent='CONNECTED';say('Connected. Waiting for media…');send({type:'ready'});};
-      socket.onerror=()=>{say('Could not connect. Check Wi-Fi, address and PIN.');$('connect').disabled=false;$('connectionBadge').textContent='OFFLINE';};
-      socket.onclose=()=>{$('connectionBadge').textContent='DISCONNECTED';$('connect').disabled=false;if(urlPlaying||iframePlaying){clearMedia();say('Receiver session ended. Playback stopped.');return;}showJoin('Connection closed. Reconnecting automatically…');if(reconnectAttempts<5){reconnectAttempts++;clearTimeout(reconnectTimer);reconnectTimer=setTimeout(()=>{if(hostInput.value&&pinInput.value&&(!socket||socket.readyState===WebSocket.CLOSED))connect();},Math.min(1200*reconnectAttempts,6000));}else say('Reconnect attempts stopped. Tap Connect to retry.');if(peer){peer.close();peer=null;}};
+      socket.onerror=()=>{say('Could not connect. Check Wi-Fi, address and PIN.');$('connectPin').disabled=false;$('connectionBadge').textContent='OFFLINE';};
+      socket.onclose=()=>{$('connectionBadge').textContent='DISCONNECTED';$('connectPin').disabled=false;if(urlPlaying||iframePlaying){clearMedia();say('Receiver session ended. Playback stopped.');return;}showJoin('Connection closed. Reconnecting automatically…');if(reconnectAttempts<5){reconnectAttempts++;clearTimeout(reconnectTimer);reconnectTimer=setTimeout(()=>{if(hostInput.value&&pinInput.value&&(!socket||socket.readyState===WebSocket.CLOSED))connect();},Math.min(1200*reconnectAttempts,6000));}else say('Reconnect attempts stopped. Tap Connect to retry.');if(peer){peer.close();peer=null;}};
       socket.onmessage=async event=>{try{await processSignal(JSON.parse(event.data));}catch(e){say('Receiver error: '+e.message);}};
     }
     async function processSignal(msg){try{if(msg.type==='play'&&typeof msg.url==='string'){if(desktop&&desktop.focus)desktop.focus(true);if(peer){peer.close();peer=null;}playUrl(msg.url,msg.kind||'video',msg.title||'Deeprowss media');}
@@ -573,8 +596,10 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
       else if(msg.type==='offer'){clearMedia();peer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]});peer.ontrack=e=>{video.srcObject=e.streams[0];video.muted=false;video.defaultMuted=false;video.volume=1;video.style.display='block';frame.style.display='none';panel.style.display='block';join.style.display='none';markMode();video.play().catch(()=>say('Mirroring video. Press Play once on the receiver to enable audio autoplay.'));showControls();};peer.onicecandidate=e=>{if(e.candidate)send({type:'candidate',candidate:e.candidate.toJSON()});};peer.onconnectionstatechange=()=>{if(peer.connectionState==='connected'){say('Screen mirroring connected');report('Screen mirroring connected');}if(['failed','disconnected'].includes(peer.connectionState))say('Video connection interrupted');};await peer.setRemoteDescription({type:msg.sdpType||'offer',sdp:msg.sdp});while(pendingCandidates.length)await peer.addIceCandidate(pendingCandidates.shift());const answer=await peer.createAnswer();await peer.setLocalDescription(answer);send({type:'answer',sdp:answer.sdp,sdpType:answer.type});}
       else if(msg.type==='candidate'){if(peer&&peer.remoteDescription)await peer.addIceCandidate(msg.candidate);else pendingCandidates.push(msg.candidate);}}
       catch(e){say('Receiver error: '+e.message);}}
-    $('connect').addEventListener('click',connect);pinInput.addEventListener('keydown',e=>{if(e.key==='Enter')connect();});
+    $('connectPin').addEventListener('click',connect);pinInput.addEventListener('keydown',e=>{if(e.key==='Enter')connect();});
     $('newPair').addEventListener('click',createPairing);
+    /* connect page: swap "Connect your phone" -> "Now you're connected" the moment the phone links up */
+    (()=>{const badge=$('connectionBadge'),jn=$('join');const apply=()=>{const ok=badge.textContent.trim().toUpperCase()==='CONNECTED';if((jn.dataset.state==='connected')!==ok)jn.dataset.state=ok?'connected':'waiting';badge.classList.toggle('ok',ok);};new MutationObserver(apply).observe(badge,{childList:true,characterData:true,subtree:true});apply();})();
     $('play').onclick=()=>remote('play');$('pause').onclick=()=>remote('pause');$('stop').onclick=()=>remote('stop');$('rewind').onclick=()=>remote('rewind');$('forward').onclick=()=>remote('forward');$('mute').onclick=()=>remote('togglemute');$('fullscreen').onclick=()=>remote('fullscreen');
     document.addEventListener('keydown',e=>{if(!urlPlaying&&!iframePlaying)return;const key=e.key.toLowerCase();const map={space:'playpause',' ':'playpause',enter:'playpause',k:'playpause',p:'pause',arrowleft:'rewind',arrowright:'forward',m:'togglemute',f:'fullscreen',escape:'controls',mediaplaypause:'playpause',mediaplay:'play',mediapause:'pause',mediafastforward:'forward',mediarewind:'rewind',mediatracknext:'forward',mediatrackprevious:'rewind',audiovolumemute:'togglemute','1':'mainstream','2':'backupstream'};const action=map[key];if(action){e.preventDefault();if(action==='controls')showControls();else remote(action);}});
     document.addEventListener('fullscreenchange',()=>{if(document.fullscreenElement){showControls();if(screen.orientation&&screen.orientation.lock)screen.orientation.lock('landscape').catch(()=>{});}else if(screen.orientation&&screen.orientation.unlock)screen.orientation.unlock();});
@@ -616,7 +641,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     };
     const focusables='button:not([hidden]):not([disabled]),input:not([type=hidden]):not([disabled]),select:not([disabled]),summary,[tabindex="0"]';
     function visible(e){const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden';}
-    function focusFirst(){const root=document.querySelector('.sheet.open')||document.querySelector('.view.active');if(!root)return;const el=root.querySelector('#goMovies')||root.querySelector('#libFilters .chip')||root.querySelector('#tvCats .cat.on')||[...root.querySelectorAll(focusables)].find(e=>visible(e)&&!e.closest('.bar')&&e.tagName!=='INPUT');if(el&&visible(el))el.focus({preventScroll:true});}
+    function focusFirst(){const root=document.querySelector('.sheet.open')||document.querySelector('.view.active');if(!root)return;const el=root.querySelector('#goMovies')||root.querySelector('#libFilters .chip')||root.querySelector('#tvCats .cat.on')||[...root.querySelectorAll(focusables)].find(e=>visible(e)&&!e.closest('.bar')&&e.tagName!=='INPUT'&&!(e.closest('details:not([open])')&&e.tagName!=='SUMMARY'));if(el&&visible(el))el.focus({preventScroll:true});}
     function spatial(dir){
       const root=document.querySelector('.sheet.open')||document.querySelector('.view.active');if(!root)return false;
       const list=[...root.querySelectorAll(focusables)].filter(visible);if(!list.length)return false;
