@@ -10,8 +10,8 @@ class AppLanguage {
   const AppLanguage(this.code, this.native, this.english);
 }
 
-/// App language always follows the device locale. There is no manual
-/// language selector in the app.
+/// App language: follows the phone's language until the user picks one in
+/// the menu ("Automatic" goes back to following the phone).
 class AppLocale {
   static const supported = <AppLanguage>[
     AppLanguage('en', 'English', 'English'),
@@ -31,7 +31,7 @@ class AppLocale {
   static String _choice = auto;
   static _PhoneLocaleWatcher? _watcher;
 
-  /// Internal mode; kept as [auto] so the device locale is always followed.
+  /// What the user picked: [auto] or a language code.
   static String get choice => _choice;
   static String get code => notifier.value;
 
@@ -90,10 +90,7 @@ class AppLocale {
 
   static Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    // Language selection was removed from the app UI. Always follow the
-    // device locale, including for users who previously selected a language.
-    _choice = auto;
-    await prefs.remove(_key);
+    _choice = prefs.getString(_key) ?? auto;
     notifier.value = _resolve();
     _ui = _resolveUi();
     await UiTranslator.prepare(_ui);
