@@ -658,16 +658,19 @@ window.__deeprowssPremiumReady = new Promise(function(resolve) {
 </script>
 
 <script>
-/* Adsterra popunder: load on receiver sections other than the homepage.
-   The landing view is intentionally excluded; other sections keep the existing ad. */
+/* Adsterra popunder: keep it off the homepage and Download Apps view
+   for every visitor. Other eligible receiver sections retain the existing ad. */
 (function () {
   if (location.hostname !== 'deeprowss.pages.dev' || window.__deeprowssPopunderLoaded) return;
-  function isHome() {
-    var view = location.hash.replace(/^#/, '').split('?')[0];
-    return !view || view === 'landing';
+  function currentView() {
+    return location.hash.replace(/^#/, '').split('?')[0];
+  }
+  function isExcludedView() {
+    var view = currentView();
+    return !view || view === 'landing' || view === 'downloads';
   }
   function loadPopunder() {
-    if (isHome() || window.__deeprowssPremiumActive || window.__deeprowssPopunderScriptAdded) return;
+    if (isExcludedView() || window.__deeprowssPremiumActive || window.__deeprowssPopunderScriptAdded) return;
     window.__deeprowssPopunderScriptAdded = true;
     window.__deeprowssPopunderLoaded = true;
     var s = document.createElement('script');
@@ -677,22 +680,26 @@ window.__deeprowssPremiumReady = new Promise(function(resolve) {
     document.head.appendChild(s);
   }
   function maybeLoadPopunder() {
-    if (isHome() || window.__deeprowssPremiumActive) return;
+    if (isExcludedView() || window.__deeprowssPremiumActive) return;
     if (window.__deeprowssPremiumResolve && window.__deeprowssPremiumReady &&
         typeof window.__deeprowssPremiumReady.then === 'function') {
-      window.__deeprowssPremiumReady.then(function(active) { if (!active) loadPopunder(); });
+      window.__deeprowssPremiumReady.then(function(active) {
+        if (!active && !isExcludedView()) loadPopunder();
+      });
     } else {
       loadPopunder();
     }
   }
   if (window.__deeprowssPremiumReady && typeof window.__deeprowssPremiumReady.then === 'function') {
-    window.__deeprowssPremiumReady.then(function(active) { if (!active) maybeLoadPopunder(); });
+    window.__deeprowssPremiumReady.then(function(active) {
+      if (!active && !isExcludedView()) maybeLoadPopunder();
+    });
   } else {
     window.setTimeout(maybeLoadPopunder, 3000);
   }
   window.addEventListener('hashchange', maybeLoadPopunder);
   window.addEventListener('deeprowss-premium-change', function(e) {
-    if (!e.detail || !e.detail.active) maybeLoadPopunder();
+    if ((!e.detail || !e.detail.active) && !isExcludedView()) maybeLoadPopunder();
   });
 })();</script>
 
