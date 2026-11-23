@@ -30,6 +30,11 @@ jobs:
         run: |
           node --check assets/receiver/gate.js
           node --check assets/receiver/library.js
+          node --check assets/receiver/updater.js
+          node --check assets/receiver/manualad.js
+          node --check assets/receiver/downloads.js
+          node --check assets/receiver/tv.js
+          node --check assets/receiver/fixtures.js
           node --check desktop/windows/main.cjs
           node --check desktop/windows/preload.cjs
       - name: Bundle receiver and remote data for offline fallback
