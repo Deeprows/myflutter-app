@@ -14,12 +14,13 @@
   const css = document.createElement('style');
   css.textContent = '.dw-update-shade{position:fixed;inset:0;z-index:9999;display:none;place-items:center;padding:24px;background:#000c}.dw-update-shade.open{display:grid}.dw-update-box{width:min(100%,480px);padding:28px;border:1px solid #34465d;border-radius:22px;background:#101a27;box-shadow:0 24px 80px #000c;color:#fff;text-align:center}.dw-update-box h3{margin:0 0 10px;font-size:25px}.dw-update-box p{color:#b6c4d4;line-height:1.6}.dw-update-actions{display:flex;gap:10px;margin-top:20px}.dw-update-actions button{flex:1;padding:13px 12px;border-radius:12px;font-weight:850}.dw-update-later{background:#263446;color:#fff}.dw-update-now{background:#ffc42e;color:#171100}';
   document.head.appendChild(css);
+  let candidateUrl = '';
   const shade = document.createElement('div');
   shade.className = 'dw-update-shade';
   shade.innerHTML = '<div class="dw-update-box" role="dialog" aria-modal="true" aria-labelledby="dwUpdateTitle"><div style="font-size:36px;margin-bottom:8px">⬆</div><h3 id="dwUpdateTitle">Deeprowss update available</h3><p>A newer version is ready for this device. Update now to get the latest improvements.</p><div class="dw-update-actions"><button type="button" class="dw-update-later" id="dwUpdateLater">Later</button><button type="button" class="dw-update-now" id="dwUpdateNow">Update now</button></div></div>';
   document.body.appendChild(shade);
   const close = () => shade.classList.remove('open');
-  shade.querySelector('#dwUpdateLater').onclick = () => { close(); try { localStorage.removeItem(PENDING); } catch (_) {} };
+  shade.querySelector('#dwUpdateLater').onclick = () => { close(); try { if (candidateUrl) localStorage.setItem(KEY + '_' + platform, candidateUrl); localStorage.removeItem(PENDING); } catch (_) {} };
   async function check() {
     try {
       const r = await fetch(ROOT + 'download_links.json?_update=' + Date.now(), {cache:'no-store'});
@@ -30,12 +31,13 @@
       const old = localStorage.getItem(KEY + '_' + platform) || '';
       if (!old) { localStorage.setItem(KEY + '_' + platform, url); return; }
       if (old === url) return;
-      localStorage.setItem(KEY + '_' + platform, url);
+      candidateUrl = url;
       shade.classList.add('open');
       shade.querySelector('#dwUpdateNow').onclick = () => {
         close();
-        if (platform === 'windows' && desktop && desktop.installUpdate) desktop.installUpdate(url);
-        else if (platform === 'androidTv' && tv && tv.installUpdate) { localStorage.setItem(PENDING, url); tv.installUpdate(url); }
+        if (platform === 'windows' && desktop && desktop.installUpdate) {
+          desktop.installUpdate(url).then(ok => { if (ok) localStorage.setItem(KEY + '_' + platform, url); }).catch(() => {});
+        } else if (platform === 'androidTv' && tv && tv.installUpdate) { localStorage.setItem(PENDING, url); tv.installUpdate(url); }
       };
     } catch (_) {}
   }
@@ -44,7 +46,7 @@
     const pending = localStorage.getItem(PENDING) || '';
     if (pending) tv.installUpdate(pending);
   };
-  window.deeprowssUpdateStarted = () => { try { localStorage.removeItem(PENDING); } catch (_) {} };
+  window.deeprowssUpdateStarted = () => { try { const pending = localStorage.getItem(PENDING) || ''; if (pending) localStorage.setItem(KEY + '_' + platform, pending); localStorage.removeItem(PENDING); } catch (_) {} };
   check();
   document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
 })();
