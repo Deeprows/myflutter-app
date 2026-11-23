@@ -90,7 +90,10 @@ class AppLocale {
 
   static Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    _choice = prefs.getString(_key) ?? auto;
+    // Language selection was removed from the app UI. Always follow the
+    // device locale, including for users who previously selected a language.
+    _choice = auto;
+    await prefs.remove(_key);
     notifier.value = _resolve();
     _ui = _resolveUi();
     await UiTranslator.prepare(_ui);
