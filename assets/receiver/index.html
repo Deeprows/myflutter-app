@@ -189,6 +189,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
 </main>
 
 <!-- 2. MOVIES -->
+<div class="mov-bg" id="movBg" aria-hidden="true"></div>
 <section class="view" id="moviesView" aria-label="Movies">
   <header class="bar">
     <button class="ibtn" id="movBack" type="button" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button>
@@ -325,7 +326,9 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
         <button class="secondary" id="detailAlt" type="button" hidden>Alternate player</button>
       </div>
       <div class="episodes" id="detailEpisodes" hidden><label>Season<select id="detailSeason"></select></label><label>Episode<select id="detailEpisode"></select></label></div>
+      <h4 class="sec-t">Storyline</h4>
       <p class="overview" id="detailOverview"></p>
+      <h4 class="sec-t" id="castHead" hidden>Top cast</h4>
       <div class="cast" id="detailCast"></div>
       <div id="detailTrailerWrap" hidden><h4>Trailer</h4><div id="detailTrailer"></div></div>
       <h4 id="similarHead" hidden>More like this</h4>
