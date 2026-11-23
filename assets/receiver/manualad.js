@@ -139,7 +139,7 @@
   /* ---------- when to show ---------- */
   const atHome = () => { const pp = $('playerPanel'); return document.body.dataset.view === 'landing' && !document.querySelector('.sheet.open') && !(pp && pp.style.display === 'block'); };
   async function check() {
-    if (busy || modalOpen) return;
+    if (busy || modalOpen || window.deeprowssPremiumActive) return;
     busy = true;
     try {
       const ad = await load();
@@ -149,6 +149,8 @@
       waiting = false; open(ad);
     } finally { busy = false; }
   }
+
+  window.addEventListener('deeprowss-premium-change', e => { if (e.detail && e.detail.active && modalOpen) closeModal(); });
 
   document.addEventListener('keydown', e => {
     if (!modalOpen) return;
