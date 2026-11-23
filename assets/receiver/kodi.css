@@ -388,14 +388,14 @@ html.tv #join,html.desktop-app #join{width:min(94vw,1040px)}
 .mov-bg.show{display:block}
 .mov-bg>img{position:relative}
 .mov-bg .mov-grid{position:absolute;inset:-10%;display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:12px;align-content:start;transform:rotate(-6deg) scale(1.08);animation:movdrift 90s linear infinite alternate;will-change:transform}
-.mov-bg .mov-grid img{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:14px;opacity:.6;filter:saturate(1.05) contrast(1.05) brightness(.9);animation:movfade .9s both}
+.mov-bg .mov-grid img{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:14px;opacity:.4;filter:saturate(.9) contrast(1.05) brightness(.75);animation:movfade .9s both}
 @keyframes movfade{from{opacity:0;transform:translateY(10px)}}
 @keyframes movdrift{to{transform:rotate(-6deg) scale(1.08) translateY(-7%)}}
 /* readable dim layer over the posters */
 .mov-bg::after{content:"";position:absolute;inset:0;
   background:
     radial-gradient(900px 520px at 12% -5%,#1db4ea26,transparent 62%),
-    linear-gradient(180deg,#060a10f0 0,#060a10c2 30%,#060a10c9 62%,#060a10e8 100%)}
+    linear-gradient(180deg,#060a10f5 0,#060a10dd 30%,#060a10e0 62%,#060a10f0 100%)}
 #moviesView .wrap{position:relative}
 
 /* top bar */
