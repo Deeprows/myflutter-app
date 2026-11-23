@@ -33,7 +33,6 @@ import '../services/app_updater.dart';
 import '../services/subscription_service.dart';
 import '../services/settings_service.dart';
 import '../utils/l10n.dart';
-import 'language_sheet.dart';
 import '../theme/app_theme.dart';
 
 void _toast(BuildContext c, String msg) =>
@@ -70,8 +69,7 @@ Future<void> _contactUs(BuildContext c) async {
 /// Side menu in the style of the X (Twitter) menu, tidied up:
 ///  * profile header (or a Sign in button when signed out) with follower stats
 ///  * content shortcuts grouped under small headings, rounded tap targets
-///  * a pinned bottom dock (Themes, Language, Alerts, More) so the most used
-///    settings are always one tap away and never scroll out of sight
+///  * a pinned bottom dock (Alerts and More) for quick access
 ///  * everything else lives in a "Settings and support" sheet
 class FootboliveDrawer extends StatefulWidget {
   final VoidCallback? onHome;
@@ -597,12 +595,6 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
                   children: [
                     Row(
                       children: [
-                        _dock(Icons.palette_outlined, 'Themes'.tr, showThemeSheet),
-                        _dock(
-                          Icons.language_rounded,
-                          'Language'.tr,
-                          showLanguageSheet,
-                        ),
                         _dock(
                           Icons.notifications_none_rounded,
                           'Alerts'.tr,
@@ -755,162 +747,6 @@ Future<void> showSettingsSheet(BuildContext context) {
 }
 
 // ------------------------------------------------------------------ dialogs
-
-Future<void> showThemeSheet(BuildContext context) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    elevation: 0,
-    // Lets the sheet grow to the screen height; the list scrolls inside it.
-    isScrollControlled: true,
-    useSafeArea: true,
-    constraints: BoxConstraints(
-      maxHeight: MediaQuery.sizeOf(context).height * 0.85,
-    ),
-    builder: (ctx) => ValueListenableBuilder<int>(
-      valueListenable: ThemeController.index,
-      builder: (_, selected, _) => Container(
-        // Painted here (not by the sheet) so it follows the chosen theme
-        // the moment a tile is tapped.
-        decoration: BoxDecoration(
-          color: Ui.panel,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            // Extra room at the bottom so the phone's navigation bar never
-            // covers the last theme.
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 14),
-                    decoration: BoxDecoration(
-                      color: Ui.line,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                Text(
-                  'Choose a theme'.tr,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: Ui.text,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                for (var i = 0; i < Palettes.all.length; i++)
-                  _ThemeTile(
-                    palette: Palettes.all[i],
-                    selected: i == selected,
-                    onTap: () => ThemeController.set(i),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-class _ThemeTile extends StatelessWidget {
-  final Palette palette;
-  final bool selected;
-  final VoidCallback onTap;
-  const _ThemeTile({
-    required this.palette,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Material(
-        color: palette.card,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: selected ? palette.accent : palette.line,
-                width: selected ? 2 : 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 64,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: palette.bg,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: palette.line),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      for (final c in [
-                        palette.accent,
-                        palette.accentSoft,
-                        palette.panel,
-                      ])
-                        Container(
-                          width: 14,
-                          height: 14,
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          decoration: BoxDecoration(
-                            color: c,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        palette.name,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: palette.text,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        palette.tagline,
-                        style: TextStyle(color: palette.muted, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                if (selected)
-                  Icon(Icons.check_circle_rounded, color: palette.accent),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 Future<void> showLowQualityDialog(BuildContext context) async {
   var on = await Settings.forceLowQuality();
