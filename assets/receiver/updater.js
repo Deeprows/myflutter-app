@@ -34,7 +34,7 @@
       shade.classList.add('open');
       shade.querySelector('#dwUpdateNow').onclick = () => {
         close();
-        if (platform === 'windows' && desktop && desktop.checkForUpdates) desktop.checkForUpdates();
+        if (platform === 'windows' && desktop && desktop.installUpdate) desktop.installUpdate(url);
         else if (platform === 'androidTv' && tv && tv.installUpdate) { localStorage.setItem(PENDING, url); tv.installUpdate(url); }
       };
     } catch (_) {}
