@@ -165,5 +165,10 @@
 
   /* ---------- start ---------- */
   document.body.appendChild(modal);
-  setTimeout(check, 2200);
+  const startAdChecks = () => setTimeout(check, 2200);
+  if (window.__deeprowssPremiumReady && typeof window.__deeprowssPremiumReady.then === 'function') {
+    window.__deeprowssPremiumReady.then(startAdChecks).catch(startAdChecks);
+  } else {
+    startAdChecks();
+  }
 })();
