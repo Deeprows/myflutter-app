@@ -132,7 +132,7 @@ class DecoderGuidePage extends StatelessWidget {
         const SizedBox(height: 8),
         Text('• Make sure both devices are on the same Wi-Fi network.\n• Turn off VPN or guest Wi-Fi isolation if devices cannot find each other.\n• Check the TV/Kodi IP address and allow local network access.\n• Some embedded streams cannot be cast directly; try the Receiver page or another supported stream.\n• Keep Deeprowss open while using the phone as a remote.',
           style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.6)),
-      ]),
+      ])),
       const SizedBox(height: 4),
       Text('Deeprowss · Let’s Go Deep', textAlign: TextAlign.center,
         style: TextStyle(color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w700)),
