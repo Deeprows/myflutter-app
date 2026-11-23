@@ -191,7 +191,8 @@
         items = items.slice(0, r.n || 20);
         ok++; fillRail(secs[i], items, r);
         if (r.id === 'trending' && items[0]) {
-          const feat = items.filter(x => x.backdrop_path).slice(0, 10).map(x => ({ backdrop: IMG + 'w1280' + x.backdrop_path, title: cleanTitle(x), year: yearOf(x), rating: ratingNum(x), overview: x.overview, tv: isTv(x) }));
+          const feat = items.filter(x => x.backdrop_path).slice(0, 10).map(x => ({ backdrop: IMG + 'w1280' + x.backdrop_path, title: cleanTitle(x), year: yearOf(x), rating: ratingNum(x), overview: x.overview, tv: isTv(x), movie: x }));
+          window.deeprowssOpenDetails = openDetails;
           window.deeprowssFeatureList = feat; window.dispatchEvent(new CustomEvent('deeprowss:feature', { detail: feat }));
           const bg = items.find(x => x.backdrop_path) || items[0];
           if (bg.backdrop_path) $('heroBg').style.backgroundImage = 'url(' + IMG + 'w1280' + bg.backdrop_path + ')';
