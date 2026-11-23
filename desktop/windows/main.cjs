@@ -3,6 +3,8 @@ const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
+const https = require('https');
+const { spawn } = require('child_process');
 
 const icon = path.join(__dirname, 'assets', 'deeprowss.ico');
 const firstExisting = (...dirs) => dirs.find((d) => { try { return fs.statSync(d).isDirectory(); } catch (_) { return false; } }) || dirs[0];
@@ -374,10 +376,45 @@ function createWindow() {
   win.loadURL(`${origin}/index.html`).catch(() => win.loadFile(path.join(__dirname, 'desktop.html')));
 }
 
-ipcMain.handle('app:update-check', async (event) => {
+function downloadHttpsFile(rawUrl, destination, redirects = 0) {
+  return new Promise((resolve, reject) => {
+    let url;
+    try { url = new URL(rawUrl); } catch (_) { reject(new Error('Invalid update URL')); return; }
+    if (url.protocol !== 'https:' || redirects > 5) { reject(new Error('Unsafe update URL')); return; }
+    const request = https.get(url, (response) => {
+      if ([301, 302, 303, 307, 308].includes(response.statusCode) && response.headers.location) {
+        response.resume();
+        const next = new URL(response.headers.location, url).toString();
+        downloadHttpsFile(next, destination, redirects + 1).then(resolve, reject);
+        return;
+      }
+      if (response.statusCode !== 200) { response.resume(); reject(new Error('Update download failed: HTTP ' + response.statusCode)); return; }
+      const output = fs.createWriteStream(destination);
+      response.pipe(output);
+      output.on('finish', () => output.close(() => resolve(destination)));
+      output.on('error', (error) => { try { fs.unlinkSync(destination); } catch (_) {} reject(error); });
+    });
+    request.on('error', reject);
+    request.setTimeout(120000, () => request.destroy(new Error('Update download timed out')));
+  });
+}
+
+ipcMain.handle('app:install-update', async (event, rawUrl) => {
   if (!trusted(event) || !app.isPackaged || process.env.PORTABLE_EXECUTABLE_DIR) return false;
-  try { await autoUpdater.checkForUpdates(); return true; }
-  catch (error) { console.error('Deeprowss update check failed:', error); return false; }
+  let url;
+  try { url = new URL(String(rawUrl || '')); } catch (_) { return false; }
+  if (url.protocol !== 'https:' || !/\\.exe$/i.test(url.pathname)) return false;
+  const installer = path.join(app.getPath('temp'), 'Deeprowss-Cinema-Update.exe');
+  try {
+    await downloadHttpsFile(url.toString(), installer);
+    const child = spawn(installer, [], { detached: true, stdio: 'ignore' });
+    child.unref();
+    setTimeout(() => app.quit(), 500);
+    return true;
+  } catch (error) {
+    console.error('Deeprowss direct update failed:', error);
+    return false;
+  }
 });
 
 function configureAutoUpdates() {
