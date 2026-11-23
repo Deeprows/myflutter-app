@@ -228,7 +228,7 @@
 .gate-pop *{box-sizing:border-box}
 .gate-pop .gate-x{position:absolute;z-index:6;top:14px;right:14px;width:38px;height:38px;padding:0;display:grid;place-items:center;border-radius:50%;background:#ffffff0f;border:1px solid var(--g-line);color:#fff;font-size:14px;cursor:pointer;transition:.18s}
 .gate-pop .gate-x:hover{background:#ffffff1f;transform:rotate(90deg)}
-.gate-layout{flex:1;min-height:0;display:block;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#ffffff2a transparent}
+.gate-layout{flex:1;min-height:0;display:block;overflow-y:auto}
 .gate-left,.gate-right{min-width:0;padding:26px 22px}
 .gate-left{position:relative;background:radial-gradient(520px 320px at 0% 0%,#ffc94d1f,transparent 65%),radial-gradient(420px 300px at 100% 100%,#38bdf81c,transparent 65%),#ffffff05;border-bottom:1px solid var(--g-line)}
 .gate-brand{display:inline-flex;align-items:center;gap:7px;padding:6px 12px 6px 8px;border-radius:99px;background:linear-gradient(110deg,#ffc94d26,#f59e0b14);border:1px solid #ffc94d40;color:var(--g-gold);font-size:11px;font-weight:900;letter-spacing:.14em}
@@ -310,8 +310,7 @@
 .gate-helpline a{margin:0;color:#6ee7b7;font-weight:900;text-decoration:none}
 .gate-helpline a:hover{text-decoration:underline}
 .gate-pop button:focus-visible,.gate-pop select:focus-visible,.gate-pop input:focus-visible{outline:3px solid var(--g-cyan);outline-offset:2px}
-.gate-pop *::-webkit-scrollbar{width:8px}.gate-pop *::-webkit-scrollbar-thumb{background:#ffffff26;border-radius:8px}
-@media(min-width:821px){.gate-sheet{padding:24px}.gate-pop{width:min(96vw,1080px);max-height:92vh}.gate-layout{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);overflow:hidden}.gate-left,.gate-right{overflow-y:auto;padding:34px 30px;scrollbar-width:thin;scrollbar-color:#ffffff2a transparent}.gate-left{border-bottom:0;border-right:1px solid var(--g-line)}}
+@media(min-width:821px){.gate-sheet{padding:24px}.gate-pop{width:min(96vw,1080px);max-height:92vh}.gate-layout{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);overflow:hidden}.gate-left,.gate-right{overflow-y:auto;padding:34px 30px;}.gate-left{border-bottom:0;border-right:1px solid var(--g-line)}}
 @media(min-width:700px){html.tv .gate-pop,html.desktop-app .gate-pop{width:min(96vw,1080px);max-height:92vh}
 html.tv .gate-layout,html.desktop-app .gate-layout{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);overflow:hidden}
 html.tv .gate-left,html.tv .gate-right,html.desktop-app .gate-left,html.desktop-app .gate-right{overflow-y:auto;padding:34px 30px}
