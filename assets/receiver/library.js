@@ -140,6 +140,27 @@
     }
   }
 
+  const movBgSeen = new Set();
+  (function watchMoviesView() {
+    const view = $('moviesView'), bg = $('movBg'); if (!view || !bg) return;
+    const sync = () => bg.classList.toggle('show', view.classList.contains('active'));
+    new MutationObserver(sync).observe(view, { attributes: true, attributeFilter: ['class'] }); sync();
+  })();
+  function addMovieBg(items) {
+    const host = $('movBg'); if (!host) return;
+    let root = host.querySelector('.mov-grid');
+    if (!root) { root = document.createElement('div'); root.className = 'mov-grid'; host.prepend(root); }
+    for (const m of items || []) {
+      if (movBgSeen.size >= 54) return;
+      const src = m.poster_path ? IMG + 'w342' + m.poster_path : '';
+      if (!src || movBgSeen.has(src)) continue;
+      movBgSeen.add(src);
+      const i = new Image(); i.alt = ''; i.decoding = 'async'; i.loading = 'lazy'; i.src = src;
+      i.style.animationDelay = (movBgSeen.size * 40) + 'ms';
+      root.append(i);
+    }
+  }
+
   const RAILS = [
     { id: 'trending', label: 'Trending Now', sub: 'THIS WEEK', kind: 'h', path: '/trending/all/week', n: 12 },
     { id: 'today', label: 'Top 10 Today', sub: 'TOP 10', ranked: 1, path: '/trending/all/day', n: 10 },
@@ -176,6 +197,7 @@
           if (bg.backdrop_path) $('heroBg').style.backgroundImage = 'url(' + IMG + 'w1280' + bg.backdrop_path + ')';
         }
         if (i < 3) addMosaic(items);
+        if (!r.trailers) addMovieBg(items);
         if (r.trailers) loadTrailers(items.slice(0, 10));
       } catch (_) { secs[i].remove(); }
       finally { done++; }
@@ -395,14 +417,15 @@
     ss.onchange = () => { sel.s = Number(ss.value); sel.e = 1; fillEpisodes(); };
     ee.onchange = () => { sel.e = Number(ee.value) || 1; };
   }
+  const metaChip = x => '<span' + (String(x).startsWith('★') ? ' class="rate"' : '') + '>' + esc(x) + '</span>';
   async function openDetails(movie) {
     activeMovie = movie; sel = { s: 1, e: 1 };
     const sheet = $('movieDetails'); sheet.classList.add('open'); $('sheetCard').scrollTop = 0;
     $('detailTitle').textContent = cleanTitle(movie);
     $('detailPoster').src = image(movie, 'w342') || ''; $('detailPoster').hidden = !image(movie, 'w342');
     $('detailBackdrop').hidden = true; $('detailOverview').textContent = movie.overview || 'Loading…';
-    $('detailMeta').innerHTML = [isTv(movie) ? 'Series' : 'Movie', yearOf(movie), ratingNum(movie) ? '★ ' + ratingNum(movie).toFixed(1) : '', movie.date && !movie.release_date ? 'Added ' + movie.date : ''].filter(Boolean).map(x => '<span>' + esc(x) + '</span>').join('');
-    $('detailCast').innerHTML = ''; $('detailTrailer').innerHTML = ''; $('detailTrailerWrap').hidden = true;
+    $('detailMeta').innerHTML = [isTv(movie) ? 'Series' : 'Movie', yearOf(movie), ratingNum(movie) ? '★ ' + ratingNum(movie).toFixed(1) : '', movie.date && !movie.release_date ? 'Added ' + movie.date : ''].filter(Boolean).map(metaChip).join('');
+    $('detailCast').innerHTML = ''; $('castHead').hidden = true; $('detailTrailer').innerHTML = ''; $('detailTrailerWrap').hidden = true;
     $('detailSimilar').innerHTML = ''; $('similarHead').hidden = true; $('detailEpisodes').hidden = true; $('detailAlt').hidden = true;
     const dl = safeUrl(movie.downloadUrl || movie.download_url || '');
     $('detailDownload').hidden = !dl; $('detailDownload').onclick = async () => {
@@ -428,7 +451,7 @@
       if (d.backdrop_path) { $('detailBackdrop').src = IMG + 'w1280' + d.backdrop_path; $('detailBackdrop').hidden = false; }
       const runtime = d.runtime || d.episode_run_time?.[0];
       const meta = [target.tv ? 'Series' : 'Movie', (d.release_date || d.first_air_date || '').slice(0, 4), d.vote_average ? '★ ' + Number(d.vote_average).toFixed(1) : '', runtime ? runtime + ' min' : '', movie.date && !movie.release_date ? 'Added ' + movie.date : '', ...(d.genres || []).map(g => g.name)];
-      $('detailMeta').innerHTML = meta.filter(Boolean).map(x => '<span>' + esc(x) + '</span>').join('');
+      $('detailMeta').innerHTML = meta.filter(Boolean).map(metaChip).join('');
       $('detailOverview').textContent = d.overview || movie.overview || 'No overview available.';
       if (!dl) {
         const u = safeUrl(downloadBase + '/' + type + '/' + target.id);
@@ -441,6 +464,7 @@
       }
       const cast = (d.credits?.cast || []).slice(0, 12);
       $('detailCast').innerHTML = cast.map(c => '<div class="person">' + (c.profile_path ? '<img loading="lazy" alt="" src="' + IMG + 'w185' + esc(c.profile_path) + '">' : '<span class="av">' + esc((c.name || '?')[0]) + '</span>') + '<b>' + esc(c.name) + '</b><small>' + esc(c.character || '') + '</small></div>').join('');
+      $('castHead').hidden = !cast.length;
       if (target.tv) setupEpisodes(d.seasons);
       $('detailAlt').hidden = false; $('detailAlt').onclick = () => playTitle(movie, true);
       const v = (d.videos?.results || []).filter(x => x.site === 'YouTube' && ['Trailer', 'Teaser'].includes(x.type) && x.key).sort((a, b) => (b.official === true) - (a.official === true) || (b.published_at || '').localeCompare(a.published_at || ''))[0];
