@@ -458,7 +458,8 @@ if (!app.requestSingleInstanceLock()) {
     loadAdBlock();
     configureNetwork(session.defaultSession);
     configureDownloads(session.defaultSession);
-    configureAutoUpdates();
+    // The receiver's URL-change updater handles Windows updates from download_links.json.
+    // Avoid a second GitHub-release popup competing with that in-app flow.
     createWindow();
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
   });
