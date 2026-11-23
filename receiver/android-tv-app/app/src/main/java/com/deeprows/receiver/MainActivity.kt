@@ -416,6 +416,7 @@ class MainActivity : Activity() {
                         .setDestinationInExternalFilesDir(this@MainActivity, Environment.DIRECTORY_DOWNLOADS, "deeprowss-tv-update.apk")
                     val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
                     val downloadId = manager.enqueue(request)
+                    webView?.evaluateJavascript("window.deeprowssUpdateStarted && window.deeprowssUpdateStarted()", null)
                     val receiver = object : BroadcastReceiver() {
                         override fun onReceive(context: Context?, intent: Intent?) {
                             if (intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) != downloadId) return
@@ -625,6 +626,9 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         webView?.onResume()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && packageManager.canRequestPackageInstalls()) {
+            webView?.evaluateJavascript("window.deeprowssRetryPendingUpdate && window.deeprowssRetryPendingUpdate()", null)
+        }
     }
 
     override fun onPause() {
