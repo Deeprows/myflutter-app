@@ -203,14 +203,14 @@ class Ui {
   static const radius = 16.0;
 }
 
-/// Applies the fixed Deeprowss theme across the app.
+/// Holds the selected theme, saves it, and repaints the whole app when it
+/// changes (without losing the current screen).
 class ThemeController {
   static final ValueNotifier<int> index = ValueNotifier<int>(Palettes.defaultIndex);
 
   static Future<void> load() async {
-    // Theme selection was removed; keep the standard Deeprowss appearance.
-    await Settings.setThemeIndex(Palettes.defaultIndex);
-    _apply(Palettes.defaultIndex);
+    final i = await Settings.themeIndex(Palettes.defaultIndex);
+    _apply(i.clamp(0, Palettes.all.length - 1));
   }
 
   static void _apply(int i) {
