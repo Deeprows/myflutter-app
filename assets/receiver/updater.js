@@ -5,6 +5,7 @@
   'use strict';
   const ROOT = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/';
   const KEY = 'deeprowss_platform_update_url_v1';
+  const PENDING = KEY + '_pending_' + (window.DeeprowssTv ? 'androidTv' : 'windows');
   const desktop = window.deeprowssDesktop || null;
   const tv = window.DeeprowssTv || null;
   const platform = desktop ? 'windows' : (tv ? 'androidTv' : '');
@@ -18,7 +19,7 @@
   shade.innerHTML = '<div class="dw-update-box" role="dialog" aria-modal="true" aria-labelledby="dwUpdateTitle"><div style="font-size:36px;margin-bottom:8px">⬆</div><h3 id="dwUpdateTitle">Deeprowss update available</h3><p>A newer version is ready for this device. Update now to get the latest improvements.</p><div class="dw-update-actions"><button type="button" class="dw-update-later" id="dwUpdateLater">Later</button><button type="button" class="dw-update-now" id="dwUpdateNow">Update now</button></div></div>';
   document.body.appendChild(shade);
   const close = () => shade.classList.remove('open');
-  shade.querySelector('#dwUpdateLater').onclick = close;
+  shade.querySelector('#dwUpdateLater').onclick = () => { close(); try { localStorage.removeItem(PENDING); } catch (_) {} };
   async function check() {
     try {
       const r = await fetch(ROOT + 'download_links.json?_update=' + Date.now(), {cache:'no-store'});
@@ -34,10 +35,16 @@
       shade.querySelector('#dwUpdateNow').onclick = () => {
         close();
         if (platform === 'windows' && desktop && desktop.checkForUpdates) desktop.checkForUpdates();
-        else if (platform === 'androidTv' && tv && tv.installUpdate) tv.installUpdate(url);
+        else if (platform === 'androidTv' && tv && tv.installUpdate) { localStorage.setItem(PENDING, url); tv.installUpdate(url); }
       };
     } catch (_) {}
   }
+  window.deeprowssRetryPendingUpdate = () => {
+    if (platform !== 'androidTv' || !tv || !tv.installUpdate) return;
+    const pending = localStorage.getItem(PENDING) || '';
+    if (pending) tv.installUpdate(pending);
+  };
+  window.deeprowssUpdateStarted = () => { try { localStorage.removeItem(PENDING); } catch (_) {} };
   check();
   document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
 })();
