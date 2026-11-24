@@ -19,24 +19,24 @@
     html.tv .dr-remote-ticker{height:40px;width:min(48vw,900px)}html.tv .dr-ticker-track span{font-size:18px}
     @media(max-width:600px){.dr-remote-ticker{left:12px;top:76px;transform:none;width:calc(100% - 24px);height:27px}.dr-ticker-track span{font-size:11px;padding:0 28px}}
     @media(prefers-reduced-motion:reduce){.dr-ticker-track{animation:none;white-space:normal;text-align:center}}
-    .dr-ad-slot{position:absolute;z-index:5;right:48px;top:110px;width:230px;height:51px;--h:51px;text-shadow:none;transition:width .35s ease,height .35s ease}
+    .dr-ad-slot{position:absolute;z-index:5;right:48px;top:110px;width:230px;height:300px;--w:230px;--h:300px;text-shadow:none;transition:width .35s ease,height .35s ease}
     .dr-ad-slot[hidden]{display:none}
-    .dr-ad{position:relative;display:block;width:100%;height:100%;overflow:hidden;border-radius:calc(var(--h)*.22);border:1px solid #6fd6fb40;background:#0a121d;color:#fff;text-decoration:none;cursor:pointer;box-shadow:0 10px 30px #0009,0 0 0 1px #00000040;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
-    .dr-ad:hover,.dr-ad:focus-visible{transform:translateY(-2px) scale(1.03);border-color:#6fd6fbcc;box-shadow:0 16px 38px #000b,0 0 26px #1db4ea55}
+    .dr-ad{position:relative;display:block;width:100%;height:100%;overflow:hidden;border-radius:calc(var(--w)*.075);border:1px solid rgba(var(--ar,29,180,234),.4);background:#0a121d;color:#fff;text-decoration:none;cursor:pointer;box-shadow:0 12px 34px #000a,0 0 0 1px #00000040;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+    .dr-ad:hover,.dr-ad:focus-visible{transform:translateY(-2px) scale(1.02);border-color:rgba(var(--ar,29,180,234),.8);box-shadow:0 18px 44px #000b,0 0 28px rgba(var(--ar,29,180,234),.35)}
     .dr-ad:focus-visible,html.tv .dr-ad:focus{outline:4px solid #fff;outline-offset:3px}
     .dr-ad-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .6s ease}
     .dr-ad-img.on{opacity:1}
-    .dr-ad-tag{position:absolute;z-index:2;left:calc(var(--h)*.1);top:calc(var(--h)*.09);padding:1px calc(var(--h)*.1);border-radius:5px;background:#050a12b3;backdrop-filter:blur(4px);font-weight:800;font-size:max(8px,calc(var(--h)*.14));line-height:1.35;letter-spacing:.18em;color:#cfe9f7;text-transform:uppercase;pointer-events:none}
-    .dr-ad-ph{position:absolute;inset:0;display:flex;align-items:center;gap:calc(var(--h)*.18);padding:0 calc(var(--h)*.2) 0 calc(var(--h)*.16);background:radial-gradient(120% 160% at 0% 0%,#1db4ea38,#0000 60%),linear-gradient(120deg,#0e1b2c,#08111d 70%)}
-    .dr-ad-ph::before{content:'';position:absolute;inset:4px;border:1.5px dashed #6fd6fb66;border-radius:calc(var(--h)*.16);pointer-events:none}
-    .dr-ad-ph::after{content:'';position:absolute;top:0;bottom:0;width:calc(var(--h)*.9);left:-80px;background:linear-gradient(100deg,#0000,#ffffff26,#0000);transform:skewX(-18deg);animation:drAdShine 5.5s ease-in-out infinite}
-    .dr-ad-ico{flex:none;width:calc(var(--h)*.6);height:calc(var(--h)*.6);border-radius:calc(var(--h)*.18);display:grid;place-items:center;background:linear-gradient(145deg,#6fd6fb,#0b84b8);box-shadow:0 6px 18px #1db4ea66}
-    .dr-ad-ico svg{width:55%;height:55%;fill:none;stroke:#03121b;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-    .dr-ad-txt{min-width:0;flex:1;display:flex;flex-direction:column;gap:calc(var(--h)*.05);text-align:left}
-    .dr-ad-txt b{font-size:calc(var(--h)*.23);line-height:1.1;font-weight:900;letter-spacing:.16em;color:#fff;white-space:nowrap}
-    .dr-ad-txt small{font-size:calc(var(--h)*.16);line-height:1.2;font-weight:600;letter-spacing:.03em;color:#9fb6c9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .dr-ad-go{margin-left:auto;flex:none;font-size:calc(var(--h)*.4);line-height:1;color:#6fd6fb;transition:transform .18s ease}
-    .dr-ad:hover .dr-ad-go,.dr-ad:focus-visible .dr-ad-go{transform:translateX(3px)}
+    .dr-ad-tag{position:absolute;z-index:2;left:calc(var(--w)*.045);top:calc(var(--w)*.045);padding:2px calc(var(--w)*.035);border-radius:5px;background:#050a12b3;backdrop-filter:blur(4px);font-weight:800;font-size:max(9px,calc(var(--w)*.045));line-height:1.35;letter-spacing:.18em;color:#cfe9f7;text-transform:uppercase;pointer-events:none}
+    .dr-ad-ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(var(--w)*.05);padding:calc(var(--w)*.1);text-align:center;background:radial-gradient(130% 80% at 50% 0%,rgba(var(--ar,29,180,234),.28),#0000 65%),linear-gradient(170deg,#0e1b2c,#08111d 75%)}
+    .dr-ad-ph::before{content:'';position:absolute;inset:6px;border:1.5px dashed rgba(var(--ar,29,180,234),.45);border-radius:calc(var(--w)*.06);pointer-events:none}
+    .dr-ad-ph::after{content:'';position:absolute;top:0;bottom:0;width:calc(var(--w)*.4);left:-80px;background:linear-gradient(100deg,#0000,#ffffff26,#0000);transform:skewX(-18deg);animation:drAdShine 5.5s ease-in-out infinite}
+    .dr-ad-ico{flex:none;width:calc(var(--w)*.28);height:calc(var(--w)*.28);border-radius:calc(var(--w)*.08);display:grid;place-items:center;background:linear-gradient(145deg,var(--accent2,#6fd6fb),var(--accent,#0b84b8));box-shadow:0 8px 22px rgba(var(--ar,29,180,234),.45)}
+    .dr-ad-ico svg{width:55%;height:55%;fill:none;stroke:var(--ink,#03121b);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .dr-ad-txt{min-width:0;display:flex;flex-direction:column;align-items:center;gap:calc(var(--w)*.03)}
+    .dr-ad-txt b{font-size:calc(var(--w)*.088);line-height:1.15;font-weight:900;letter-spacing:.12em;color:#fff}
+    .dr-ad-txt small{font-size:calc(var(--w)*.056);line-height:1.3;font-weight:600;letter-spacing:.02em;color:#9fb6c9}
+    .dr-ad-go{flex:none;margin-top:calc(var(--w)*.02);padding:calc(var(--w)*.02) calc(var(--w)*.07);border-radius:999px;background:var(--accent,#1db4ea);color:var(--ink,#03121b);font-size:calc(var(--w)*.06);font-weight:900;letter-spacing:.06em;line-height:1.3;transition:transform .18s ease}
+    .dr-ad:hover .dr-ad-go,.dr-ad:focus-visible .dr-ad-go{transform:scale(1.06)}
     @keyframes drAdShine{0%,55%{left:-80px}100%{left:110%}}
     @media(max-width:820px){.dr-ad-slot{display:none}}
     @media(prefers-reduced-motion:reduce){.dr-ad-ph::after{animation:none;display:none}.dr-ad,.dr-ad-img{transition:none}}
@@ -108,7 +108,7 @@
     const b = $('b'); b.textContent = String(data.placeholder_text || 'Advert here').toUpperCase();
     const sm = $('small'); sm.textContent = data.placeholder_sub || 'Your banner could be here';
     txt.append(b, sm); box.append(ico, txt);
-    if (url) { const go = $('span', 'dr-ad-go'); go.textContent = '\u203a'; box.appendChild(go); }
+    if (url) { const go = $('span', 'dr-ad-go'); go.textContent = 'Advertise with us'; box.appendChild(go); }
     a.appendChild(box);
     return a;
   }
@@ -161,7 +161,8 @@
     }
   }
 
-  /* Banner width always equals the width of the time above it (never longer), height follows a 4.5:1 ratio. */
+  /* Banner width always equals the width of the time above it. The height is now tall (portrait, about 1.3 x the width),
+     limited so it never runs down into the home tiles on shorter screens. */
   function sizeBanner() {
     const slot = document.querySelector('.dr-ad-slot'), t = document.getElementById('clockTime');
     if (!slot || !t || slot.hidden) return;
@@ -171,8 +172,11 @@
     rg.selectNodeContents(t);                            /* the time text's own box, exactly */
     const w = Math.floor(rg.getBoundingClientRect().width);
     if (w < 90) return;
-    const h = Math.max(34, Math.round(w / 4.5));
-    slot.style.width = w + 'px'; slot.style.height = h + 'px'; slot.style.setProperty('--h', h + 'px');
+    const top = parseFloat(window.getComputedStyle(slot).top) || 110;
+    const room = Math.round(window.innerHeight * 0.62 - top);
+    const h = Math.max(Math.round(w * 0.8), Math.min(Math.round(w * 1.3), room));
+    slot.style.width = w + 'px'; slot.style.height = h + 'px';
+    slot.style.setProperty('--w', w + 'px'); slot.style.setProperty('--h', h + 'px');
     const ct = t.parentNode && t.parentNode.getBoundingClientRect ? t.parentNode.getBoundingClientRect() : null;
     if (ct && ct.right) slot.style.right = Math.max(0, Math.round(window.innerWidth - ct.right)) + 'px';
   }
