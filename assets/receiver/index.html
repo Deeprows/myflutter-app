@@ -116,6 +116,14 @@ input{display:block;width:100%;padding:16px;border:1px solid #394657;border-radi
 .person b{display:block;font-size:12px;line-height:1.2}.person small{display:block;font-size:11px;color:var(--muted);margin-top:2px;line-height:1.2}
 #detailTrailer iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:16px;background:#000}.trailer-thumb{width:100%;padding:0;background:#000}
 
+/* Learn with AI shortcut at the top of Download Apps */
+.dl-learn-card{display:flex;align-items:center;gap:15px;width:100%;max-width:1120px;margin:0 auto 20px;padding:17px 20px;text-align:left;border:1px solid #397ba866;border-radius:18px;background:linear-gradient(105deg,#142a40,#172033 65%,#29233a);color:#fff;box-shadow:0 12px 36px #0005}
+.dl-learn-icon{display:grid;place-items:center;flex:none;width:46px;height:46px;border-radius:14px;background:#70d8ff20;color:#7edbff;font-size:27px}
+.dl-learn-copy{display:block;min-width:0;flex:1}.dl-learn-copy b{display:block;font-size:16px;font-weight:900}.dl-learn-copy small{display:block;margin-top:5px;color:#b3c4d8;font-size:12px;line-height:1.45}
+.dl-learn-action{display:flex;align-items:center;gap:10px;flex:none;color:#ffd166;font-size:13px;font-weight:900}.dl-learn-action b{font-size:20px}
+.dl-learn-card:hover,.dl-learn-card:focus-visible{border-color:#70d8ff;transform:translateY(-2px)}
+@media(max-width:600px){.dl-learn-card{gap:11px;padding:14px}.dl-learn-icon{width:40px;height:40px}.dl-learn-copy b{font-size:14px}.dl-learn-copy small{font-size:11px}.dl-learn-action{font-size:0;gap:0}.dl-learn-action b{font-size:22px}}
+ 
 /* ---- Learn with AI page (website landing only) ---- */
 #learnView{background:radial-gradient(ellipse at 50% -10%,#20334a 0,transparent 55%),#080d15}
 .learn-wrap{max-width:1120px;margin:0 auto;padding:clamp(18px,4vw,42px) clamp(16px,4vw,42px) 30px}
@@ -298,12 +306,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
       <svg viewBox="0 0 24 24"><path d="M12 3v12M7 11l5 5 5-5M4 20h16"/></svg>
       <b>Download Apps</b><small>Get Deeprowss on any device</small>
     </button>
-        <button class="tile" id="goLearn" type="button" data-go="learn">
-      <svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 5.5v15M8 7h8M8 11h8M8 15h5M16 21l2 2 4-4"/></svg>
-      <b>Learn with AI</b><small>Build websites &amp; apps in one day</small>
-    </button>
-    
-  </nav>
+</nav>
   <button class="subscription-fab" id="subscriptionOpen" type="button" aria-label="View Premium subscription">
     <span aria-hidden="true">♛</span><b>Subscription</b>
   </button>
@@ -389,6 +392,11 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     <h2><span class="tv-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 11l5 5 5-5M4 20h16"/></svg></span>Download Apps</h2>
   </header>
   <div class="dl-body">
+    <button class="dl-learn-card" type="button" data-go="learn" aria-label="Learn how to build websites and apps with AI">
+      <span class="dl-learn-icon" aria-hidden="true">✦</span>
+      <span class="dl-learn-copy"><b>Learn to build websites &amp; apps with AI</b><small>Turn your idea into a real project — even if you're a beginner.</small></span>
+      <span class="dl-learn-action">Explore lesson <b aria-hidden="true">→</b></span>
+    </button>
     <div class="dl-hero">
       <span class="dl-kicker">DOWNLOAD CENTER</span>
       <h1>Choose your <span>Deeprowss</span> app</h1>
