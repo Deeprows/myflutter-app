@@ -1,5 +1,5 @@
 /* Deeprowss receiver PWA service worker. Media and third-party embeds are never cached. */
-const CACHE = 'deeprowss-receiver-shell-v53';
+const CACHE = 'deeprowss-receiver-shell-v54';
 const SHELL = ['./', './index.html', './library.js', './tv.js', './shell.js', './adshield.js', './tvplus.js', './gate.js', './fixtures.js', './downloads.js', './manualad.js', './kodi.css', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-512-maskable.png'];
 self.addEventListener('install', event => {
   // Cache each file on its own so one missing file (e.g. library.js at the site root) never blocks the install.
