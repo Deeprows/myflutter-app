@@ -467,6 +467,17 @@ class MainActivity : Activity() {
             }
         }
 
+        /** Advert banner under the clock: open the advertiser's link (https/http/mailto) outside the WebView. */
+        @JavascriptInterface
+        fun openAd(raw: String?) {
+            val v = (raw ?: "").trim().take(2000)
+            if (!(v.startsWith("https://", true) || v.startsWith("http://", true) || v.startsWith("mailto:", true))) return
+            val uri = try { Uri.parse(v) } catch (_: Exception) { return }
+            runOnUiThread {
+                try { startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+            }
+        }
+
         /** Open the approved payment / WhatsApp links outside the TV WebView. */
         @JavascriptInterface
         fun openExternal(raw: String?) {
