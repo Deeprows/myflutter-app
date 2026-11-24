@@ -4,6 +4,7 @@
   const BASE = 'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/';
   const TICKER_URL = BASE + 'receiver_ticker.json';
   const NOTICE_URL = BASE + 'receiver_notice.json';
+  const BANNER_URL = BASE + 'receiver_banner.json';
   const $ = (tag, cls) => { const n = document.createElement(tag); if (cls) n.className = cls; return n; };
   const css = document.createElement('style');
   css.textContent = `
@@ -18,6 +19,30 @@
     html.tv .dr-remote-ticker{height:40px;width:min(48vw,900px)}html.tv .dr-ticker-track span{font-size:18px}
     @media(max-width:600px){.dr-remote-ticker{left:12px;top:76px;transform:none;width:calc(100% - 24px);height:27px}.dr-ticker-track span{font-size:11px;padding:0 28px}}
     @media(prefers-reduced-motion:reduce){.dr-ticker-track{animation:none;white-space:normal;text-align:center}}
+    .dr-ad-slot{position:absolute;z-index:5;right:48px;top:110px;width:320px;height:64px;text-shadow:none}
+    .dr-ad-slot[hidden]{display:none}
+    .dr-ad{position:relative;display:block;width:100%;height:100%;overflow:hidden;border-radius:14px;border:1px solid #6fd6fb40;background:#0a121d;color:#fff;text-decoration:none;cursor:pointer;box-shadow:0 10px 30px #0009,0 0 0 1px #00000040;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+    .dr-ad:hover,.dr-ad:focus-visible{transform:translateY(-2px) scale(1.025);border-color:#6fd6fbcc;box-shadow:0 16px 38px #000b,0 0 26px #1db4ea55}
+    .dr-ad:focus-visible,html.tv .dr-ad:focus{outline:4px solid #fff;outline-offset:3px}
+    .dr-ad-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .6s ease}
+    .dr-ad-img.on{opacity:1}
+    .dr-ad-tag{position:absolute;z-index:2;left:7px;top:6px;padding:2px 7px;border-radius:6px;background:#050a12b3;backdrop-filter:blur(4px);font-weight:800;font-size:9px;line-height:1.3;letter-spacing:.18em;color:#cfe9f7;text-transform:uppercase;pointer-events:none}
+    .dr-ad-ph{position:absolute;inset:0;display:flex;align-items:center;gap:12px;padding:0 14px 0 12px;background:radial-gradient(120% 160% at 0% 0%,#1db4ea38,#0000 60%),linear-gradient(120deg,#0e1b2c,#08111d 70%)}
+    .dr-ad-ph::before{content:'';position:absolute;inset:5px;border:1.5px dashed #6fd6fb66;border-radius:10px;pointer-events:none}
+    .dr-ad-ph::after{content:'';position:absolute;top:0;bottom:0;width:60px;left:-80px;background:linear-gradient(100deg,#0000,#ffffff26,#0000);transform:skewX(-18deg);animation:drAdShine 5.5s ease-in-out infinite}
+    .dr-ad-ico{flex:none;width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(145deg,#6fd6fb,#0b84b8);box-shadow:0 6px 18px #1db4ea66}
+    .dr-ad-ico svg{width:20px;height:20px;fill:none;stroke:#03121b;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .dr-ad-txt{min-width:0;display:flex;flex-direction:column;gap:3px;text-align:left}
+    .dr-ad-txt b{font-size:15px;font-weight:900;letter-spacing:.2em;color:#fff;white-space:nowrap}
+    .dr-ad-txt small{font-size:10.5px;font-weight:600;letter-spacing:.04em;color:#9fb6c9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .dr-ad-go{margin-left:auto;flex:none;font-size:22px;line-height:1;color:#6fd6fb;transition:transform .18s ease}
+    .dr-ad:hover .dr-ad-go,.dr-ad:focus-visible .dr-ad-go{transform:translateX(3px)}
+    @keyframes drAdShine{0%,55%{left:-80px}100%{left:110%}}
+    html.tv .dr-ad-slot{width:440px;height:88px;top:116px}
+    html.tv .dr-ad-ico{width:50px;height:50px}html.tv .dr-ad-ico svg{width:26px;height:26px}
+    html.tv .dr-ad-txt b{font-size:19px}html.tv .dr-ad-txt small{font-size:13px}html.tv .dr-ad-tag{font-size:11px}
+    @media(max-width:820px){.dr-ad-slot{display:none}}
+    @media(prefers-reduced-motion:reduce){.dr-ad-ph::after{animation:none;display:none}.dr-ad,.dr-ad-img{transition:none}}
   `;
   document.head.appendChild(css);
 
@@ -55,6 +80,89 @@
     for(let i=0;i<2;i++){const span=$('span');span.textContent=line;track.appendChild(span);}
     el.replaceChildren(track);
   }
+
+  /* ---------- Advert banner (under the clock) ---------- */
+  let bannerSig = '', bannerTimer = 0;
+  const MEGAPHONE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+  function safeUrl(u) {
+    const v = String(u || '').trim();
+    return /^(https?:\/\/|mailto:)/i.test(v) ? v : '';
+  }
+  function notExpired(x) {
+    if (!x || !x.expires) return true;
+    const e = /^\d{4}-\d{2}-\d{2}$/.test(String(x.expires)) ? Date.parse(String(x.expires) + 'T23:59:59') : Date.parse(x.expires);
+    return !Number.isFinite(e) || Date.now() <= e;
+  }
+  function openAd(url, ev) {
+    try {
+      if (window.DeeprowssTv && typeof window.DeeprowssTv.openAd === 'function') { ev.preventDefault(); window.DeeprowssTv.openAd(url); return; }
+      if (window.deeprowssDesktop && typeof window.deeprowssDesktop.openAd === 'function') { ev.preventDefault(); window.deeprowssDesktop.openAd(url); return; }
+    } catch (_) {}
+    /* Browser / LG webOS / Tizen: the anchor's own target=_blank handles it. */
+  }
+  function placeholder(data) {
+    const url = safeUrl(data.placeholder_url);
+    const a = $(url ? 'a' : 'div', 'dr-ad');
+    if (url) { a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.addEventListener('click', ev => openAd(url, ev)); }
+    a.setAttribute('aria-label', (data.placeholder_text || 'Advert here') + (url ? ' - advertise with us' : ''));
+    const box = $('div', 'dr-ad-ph');
+    const ico = $('span', 'dr-ad-ico'); ico.innerHTML = MEGAPHONE;
+    const txt = $('span', 'dr-ad-txt');
+    const b = $('b'); b.textContent = String(data.placeholder_text || 'Advert here').toUpperCase();
+    const sm = $('small'); sm.textContent = data.placeholder_sub || 'Your banner could be here';
+    txt.append(b, sm); box.append(ico, txt);
+    if (url) { const go = $('span', 'dr-ad-go'); go.textContent = '\u203a'; box.appendChild(go); }
+    a.appendChild(box);
+    return a;
+  }
+  function addBanner(data) {
+    const homeTop = document.querySelector('.home-top');
+    if (!homeTop) return;
+    let slot = document.querySelector('.dr-ad-slot');
+    if (data && data.enabled === false) { if (slot) slot.hidden = true; bannerSig = 'off'; return; }
+    const sig = JSON.stringify(data || {});
+    if (slot && sig === bannerSig) return;           /* unchanged: keep rotation running */
+    bannerSig = sig;
+    window.clearInterval(bannerTimer);
+    if (!slot) { slot = $('div', 'dr-ad-slot'); homeTop.appendChild(slot); }
+    slot.hidden = false;
+    const ads = (Array.isArray(data && data.ads) ? data.ads : [])
+      .filter(x => x && safeUrl(x.image_url) && notExpired(x));
+    if (!ads.length) { slot.replaceChildren(placeholder(data || {})); return; }
+
+    const first = ads[0], link = safeUrl(first.url);
+    const a = $(link ? 'a' : 'div', 'dr-ad');
+    const tag = $('span', 'dr-ad-tag'); tag.textContent = data.label || 'Ad';
+    const imgs = ads.map((x, i) => {
+      const im = $('img', 'dr-ad-img' + (i === 0 ? ' on' : ''));
+      im.alt = x.alt || 'Advertisement'; im.decoding = 'async'; im.referrerPolicy = 'no-referrer';
+      im.draggable = false; im.src = safeUrl(x.image_url);
+      return im;
+    });
+    let cur = 0, broken = 0;
+    const setLink = () => {
+      const x = ads[cur], u = safeUrl(x.url);
+      if (u) { a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer sponsored'; } else { a.removeAttribute('href'); }
+      a.setAttribute('aria-label', x.alt || 'Advertisement');
+    };
+    a.addEventListener('click', ev => { const u = safeUrl(ads[cur].url); if (u) openAd(u, ev); else ev.preventDefault(); });
+    imgs.forEach(im => im.addEventListener('error', () => {
+      broken++; im.remove();                           /* never show a broken image */
+      if (broken >= ads.length) slot.replaceChildren(placeholder(data));
+    }));
+    a.append(...imgs, tag); setLink();
+    slot.replaceChildren(a);
+    if (ads.length > 1) {
+      const secs = Math.max(4, Number(data.rotate_seconds) || 8);
+      bannerTimer = window.setInterval(() => {
+        const live = imgs.filter(im => im.isConnected);
+        if (live.length < 2) return;
+        const from = imgs[cur]; let n = cur;
+        do { n = (n + 1) % imgs.length; } while (!imgs[n].isConnected);
+        from.classList.remove('on'); imgs[n].classList.add('on'); cur = n; setLink();
+      }, secs * 1000);
+    }
+  }
   function showNotice(n) {
     if (!n || n.enabled !== true || !n.message || n.popup === false) return;
     if (n.expires) {
@@ -85,6 +193,7 @@
   async function refresh(){
     try { const t=await getJson(TICKER_URL); addTicker(t); } catch(_){}
     try { const n=await getJson(NOTICE_URL); showNotice(n); } catch(_){}
+    try { const b=await getJson(BANNER_URL); addBanner(b); } catch(_){ if(!bannerSig) addBanner({enabled:true,ads:[]}); }
   }
   refresh(); window.setInterval(refresh,60000);
 })();
