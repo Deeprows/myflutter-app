@@ -534,6 +534,14 @@ class MainActivity : Activity() {
             }
         }
 
+        /** Power button next to the settings icon: close the TV app completely. */
+        @JavascriptInterface
+        fun exitApp() {
+            runOnUiThread {
+                try { finishAndRemoveTask() } catch (_: Exception) { finish() }
+            }
+        }
+
         /** Advert banner under the clock: open the advertiser's link (https/http/mailto) outside the WebView. */
         @JavascriptInterface
         fun openAd(raw: String?) {
