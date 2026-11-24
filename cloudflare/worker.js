@@ -364,7 +364,7 @@ async function publicReleaseAsset(request, env, url) {
   const parts = url.pathname.slice("/public/releases/".length).split("/");
   if (parts.length !== 2) return json({ error: "not found" }, 404);
   const [tag, filename] = parts.map(decodeURIComponent);
-  if (!/^v[0-9]+\\.[0-9]+\\.[0-9]+$/.test(tag) || !(PUBLIC_RELEASE_FILES.has(filename) || /^Deeprowss-v[0-9]+\\.[0-9]+\\.[0-9]+\\.apk$/.test(filename))) return json({ error: "not found" }, 404);
+  if (!/^v[0-9]+\.[0-9]+\.[0-9]+$/.test(tag) || !(PUBLIC_RELEASE_FILES.has(filename) || /^Deeprowss-v[0-9]+\.[0-9]+\.[0-9]+\.apk$/.test(filename))) return json({ error: "not found" }, 404);
   try {
     const release = await fetch("https://api.github.com/repos/Deeprows/myflutter-app/releases/tags/" + encodeURIComponent(tag), {
       headers: repoHeaders(env, "application/vnd.github+json"), cf: { cacheTtl: 60 },
