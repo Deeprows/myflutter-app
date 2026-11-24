@@ -74,7 +74,7 @@ class _DecoderFixturesPageState extends State<DecoderFixturesPage>
       decoderToast(context, '$label is not available for this match.');
       return;
     }
-    await chooseConnectivity(context, CastTarget(title: '${fixture.title} · $label', url: clean));
+    await chooseConnectivity(context, CastTarget(title: fixture.title + ' · ' + label, url: clean));
   }
 
   String _status(Fixture f) {
@@ -82,19 +82,19 @@ class _DecoderFixturesPageState extends State<DecoderFixturesPage>
       case MatchPhase.live:
         final elapsed = _now.difference(f.kickoff);
         final minute = elapsed.isNegative ? 0 : elapsed.inMinutes;
-        return 'LIVE · $minute\\'';
+        return 'LIVE · $minute min';
       case MatchPhase.upcoming:
         final d = f.kickoff.difference(_now);
-        if (d.inDays > 0) return 'Starts in ${d.inDays}d ${d.inHours.remainder(24)}h';
-        if (d.inHours > 0) return 'Starts in ${d.inHours}h ${d.inMinutes.remainder(60)}m';
-        return 'Starts in ${d.inMinutes}m';
+        if (d.inDays > 0) return 'Starts in ' + d.inDays.toString() + 'd ' + d.inHours.remainder(24).toString() + 'h';
+        if (d.inHours > 0) return 'Starts in ' + d.inHours.toString() + 'h ' + d.inMinutes.remainder(60).toString() + 'm';
+        return 'Starts in ' + d.inMinutes.toString() + 'm';
       case MatchPhase.ended:
         return 'FULL TIME';
     }
   }
 
   Widget _team(String name, String logo, {required bool right}) {
-    final logoUrl = RegExp(r'^\\d+$').hasMatch(logo)
+    final logoUrl = RegExp(r'^\d+$').hasMatch(logo)
         ? 'https://media.api-sports.io/football/teams/$logo.png'
         : (logo.startsWith('http') ? logo : '');
     return Expanded(child: Column(
@@ -146,7 +146,7 @@ class _DecoderFixturesPageState extends State<DecoderFixturesPage>
     final ended = phase == MatchPhase.ended;
     final local = f.kickoff.toLocal();
     final time = TimeOfDay.fromDateTime(local).format(context);
-    final date = '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}';
+    final date = local.day.toString().padLeft(2, '0') + '/' + local.month.toString().padLeft(2, '0');
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.fromLTRB(11, 9, 11, 10),
