@@ -309,6 +309,13 @@ ipcMain.handle('dl:open', (event, url) => {
   } catch (_) { return false; }
 });
 
+// Power button next to the settings icon: closes the whole Windows app.
+ipcMain.handle('app:quit', (event) => {
+  if (!trusted(event)) return false;
+  setImmediate(() => app.quit());
+  return true;
+});
+
 // Advert banner under the clock: opens the advertiser's page in the user's default browser.
 ipcMain.handle('ad:open', async (event, url) => {
   if (!trusted(event)) return false;
