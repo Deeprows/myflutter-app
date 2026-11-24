@@ -754,6 +754,17 @@ html[data-dw-theme=amoled]{--bg:#000000;--s1:#0a0a0c;--s2:#101013;--line:#26262b
 .dw-theme:focus-visible{outline:none;transform:translateY(-3px);border-color:var(--accent);box-shadow:var(--glow)}
 .dw-theme[aria-pressed=true]{border-color:var(--accent);background:rgba(var(--ar),.1)}
 .dw-theme[aria-pressed=true]::after{content:"✓";position:absolute;bottom:14px;right:14px;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:var(--accent);color:var(--ink);font-size:14px;font-weight:900}
+.dw-langs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.dw-lang{position:relative;display:flex;flex-direction:column;gap:3px;min-height:64px;padding:13px 44px 13px 14px;border:2px solid #ffffff14;border-radius:14px;background:#ffffff08;color:var(--text);font-family:inherit;text-align:start;cursor:pointer;transition:transform .15s,border-color .15s,background .15s}
+.dw-lang b{font-size:16px}
+.dw-lang small{color:var(--muted);font-size:12px}
+.dw-lang:hover{background:#ffffff10}
+.dw-lang:focus-visible{outline:none;transform:translateY(-2px);border-color:var(--accent);box-shadow:var(--glow)}
+.dw-lang[aria-pressed=true]{border-color:var(--accent);background:rgba(var(--ar),.1)}
+.dw-lang[aria-pressed=true]::after{content:"✓";position:absolute;top:50%;inset-inline-end:12px;transform:translateY(-50%);width:22px;height:22px;display:grid;place-items:center;border-radius:50%;background:var(--accent);color:var(--ink);font-size:13px;font-weight:900}
+html.tv .dw-lang b{font-size:20px}
+html.tv .dw-lang small{font-size:15px}
+@media(max-width:900px){.dw-langs{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .dw-prev{position:relative;display:block;height:98px;overflow:hidden;border:1px solid #ffffff1f;border-radius:11px;background:radial-gradient(120% 100% at 0 0,var(--pg),transparent 65%),var(--pb)}
 .dw-prev i{position:absolute;display:block}
 .pv-logo{left:9px;top:9px;width:14px;height:14px;border-radius:4px;background:var(--pa)}
