@@ -104,7 +104,7 @@ assert.equal((await get("/analytics")).status, 404); // GET is not allowed
 // 7. public configuration and release proxy: public fallback + private-token mode
 r = await get("/public/data/app_config.json");
 assert.equal(r.status, 200);
-assert.match(r.headers.get("content-type"), /application\\/json/);
+assert.match(r.headers.get("content-type"), /application\/json/);
 assert.equal((await r.json())[0].name, "x");
 assert.equal((await get("/public/data/secret_keys.json")).status, 404);
 
