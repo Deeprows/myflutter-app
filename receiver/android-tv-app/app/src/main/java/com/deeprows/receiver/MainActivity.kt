@@ -254,7 +254,7 @@ class MainActivity : Activity() {
             isClickable = true
         }
         val logo = ImageView(this).apply {
-            setImageResource(R.drawable.deeprowss_splash)
+            setImageResource(R.drawable.deeprowss_icon)
             scaleType = ImageView.ScaleType.FIT_CENTER
             cameraDistance = 9000f * dm.density
         }
