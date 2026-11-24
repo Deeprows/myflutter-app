@@ -1056,12 +1056,74 @@ window.__deeprowssPremiumReady = new Promise(function(resolve) {
 <header class="dw-head"><span class="dw-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1a1.8 1.8 0 1 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3 .9v.2a1.8 1.8 0 1 1-3.6 0v-.2a1.8 1.8 0 0 0-3-.9l-.1.1a1.8 1.8 0 1 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-.9-3H3.7a1.8 1.8 0 1 1 0-3.6h.2a1.8 1.8 0 0 0 .9-3l-.1-.1a1.8 1.8 0 1 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3-.9v-.2a1.8 1.8 0 1 1 3.6 0v.2a1.8 1.8 0 0 0 3 .9l.1-.1a1.8 1.8 0 1 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 .9 3h.2a1.8 1.8 0 1 1 0 3.6h-.2a1.8 1.8 0 0 0-.9 3Z"/></svg></span><div><h2 id="dwTitle">Settings</h2><small id="dwDevice"></small></div><button id="dwClose" class="dw-close" type="button">Close ✕</button></header>
 <nav class="dw-side" aria-label="Settings sections">
 <button type="button" class="dw-cat on" data-pane="look"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.5 0 2-1 1.5-2-.6-1.2.2-2.5 1.6-2.5H17a4 4 0 0 0 4-4c0-5-4-9.5-9-9.5Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7" r="1"/></svg><span>Appearance</span></button>
+<button type="button" class="dw-cat" data-pane="guide"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M8 7h8M8 11h6"/></svg><span>How to use</span></button>
 <button type="button" class="dw-cat" data-pane="lists"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h12M4 12h12M4 18h8"/><path d="m17 15 4 3-4 3z"/></svg><span>Playlists</span></button>
 <button type="button" class="dw-cat" data-pane="play"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m10 8.5 5 3.5-5 3.5z"/></svg><span>Video quality</span></button>
 <button type="button" class="dw-cat" data-pane="about"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span>Deeprowss</span></button>
 </nav>
 <div class="dw-main">
 <section class="dw-pane on" data-pane="look"><h3>Appearance</h3><p class="dw-sub">Choose a look that suits your screen. It applies instantly and is remembered on this device.</p><div class="dw-themes" id="dwThemes" role="group" aria-label="Theme"></div></section>
+<section class="dw-pane" data-pane="guide"><h3>How to use Deeprowss</h3><p class="dw-sub">Everything this app can do, in one place. Press a section to open it.</p>
+<div class="hw-hero"><h4>Your screen. Your phone. One app.</h4><p>Install the Deeprowss app on your phone and use it as the decoder: whatever you pick there plays on this screen.</p>
+<div class="hw-flow"><div class="hw-step"><i>1</i><b>Get the phone app</b><small>Home screen &rarr; Download Apps &rarr; Mobile App.</small></div><div class="hw-step"><i>2</i><b>Link your phone</b><small>Home screen &rarr; Connect with App, then scan the QR code.</small></div><div class="hw-step"><i>3</i><b>Pick and watch</b><small>Choose a movie, channel or live match on your phone. It plays here.</small></div></div></div>
+<div class="hw-top"><button type="button" class="dw-btn" id="hwAll">Open all sections</button></div>
+
+<div class="hw-sec open"><button type="button" class="hw-head" aria-expanded="true"><span class="n">01</span><span class="t">Get started<small>The home screen and what each tile does</small></span><i class="chev"></i></button><div class="hw-body">
+<p>Deeprowss brings movies, live TV and live football to every screen you own. The home screen has five tiles:</p>
+<div class="hw-tiles"><div class="hw-tile"><b>Movies</b><span>Trending films and series, search, trailers and your watch list.</span></div><div class="hw-tile"><b>TV Channels</b><span>Live channels from around the world, with favourites and your own playlists.</span></div><div class="hw-tile"><b>Live Football</b><span>Live and upcoming matches with live scores. The red badge shows how many are on now.</span></div><div class="hw-tile"><b>Connect with App</b><span>Link your phone so it can send movies, channels and matches to this screen.</span></div><div class="hw-tile"><b>Download Apps</b><span>Get Deeprowss for your phone, Android TV, LG, Samsung and Windows.</span></div></div>
+<p>The line at the top is the Deeprowss notice bar and the advert under the clock is a sponsor. The gear opens these Settings and the power button closes the app.</p>
+</div></div>
+
+<div class="hw-sec"><button type="button" class="hw-head" aria-expanded="false"><span class="n">02</span><span class="t">Use your phone as the decoder<small>Send live football, TV and movies to this screen</small></span><i class="chev"></i></button><div class="hw-body">
+<p>The Deeprowss phone app includes <b>Smart Decoder</b>. Link it once and anything you choose on your phone starts playing on this screen.</p>
+<ol><li><b>Install the phone app.</b> On this screen open <b>Download Apps</b>, choose <b>Mobile App</b> and install it on your phone.</li><li><b>Open Smart Decoder</b> in the phone app.</li><li>From its menu choose <b>Scan to Connect</b>.</li><li>On this screen open <b>Connect with App</b>. A QR code and a pairing code appear. <b>Scan the QR code</b> with your phone.</li><li>The page changes to <b>Now you&rsquo;re connected</b>. Pick a movie, a TV channel or a live match in Smart Decoder and it plays here.</li></ol>
+<p>Once linked you can also use your phone as a remote and control volume and playback.</p>
+<div class="hw-chips"><span>Movies &amp; series</span><span>Live TV channels</span><span>Live football</span><span>Phone as remote</span></div>
+<p class="hw-tip">To link a different phone, open Connect with App and press <b>Pair a different phone</b>. If the code stops working, press <b>Generate new QR code</b>. A phone address with a PIN can still be entered under <b>Use manual connection</b>.</p>
+</div></div>
+
+<div class="hw-sec"><button type="button" class="hw-head" aria-expanded="false"><span class="n">03</span><span class="t">Live Football<small>Matches, scores and watching them</small></span><i class="chev"></i></button><div class="hw-body">
+<ul><li>Open <b>Live Football</b> to see matches that are on now and the ones coming up. The list refreshes by itself every couple of minutes.</li><li>Each match card shows the live score and the minute, half-time or full-time.</li><li>Tap a match to open its details.</li><li>To watch on this screen, find the match in <b>Smart Decoder</b> on your phone and play it. It is sent here. If a stream does not start, try the next stream number in the phone app.</li></ul>
+<p class="hw-tip">Streams come from third-party sources. If every stream fails, wait a little and try again. The match may not have started yet.</p>
+</div></div>
+
+<div class="hw-sec"><button type="button" class="hw-head" aria-expanded="false"><span class="n">04</span><span class="t">TV Channels<small>Browse, search, favourites and your own lists</small></span><i class="chev"></i></button><div class="hw-body">
+<ul><li>Channels are grouped by category. Use the <b>country filter</b> and <b>search</b> to find one faster.</li><li>Press the <b>heart</b> on a channel to save it under Favourites. Press it again to remove it. Recently watched channels are kept for quick return.</li><li>If a stream is slow or fails, Deeprowss switches to a <b>backup stream</b> automatically, and can try an alternate player.</li><li>While watching you can move to the next or previous channel without going back to the list.</li><li>Have your own channels? Add an <b>M3U / M3U8 playlist</b> under Settings &rarr; Playlists.</li></ul>
+</div></div>
+
+<div class="hw-sec"><button type="button" class="hw-head" aria-expanded="false"><span class="n">05</span><span class="t">Movies &amp; Series<small>Trending, Top 10, genres, trailers, watch list</small></span><i class="chev"></i></button><div class="hw-body">
+<ul><li>The front page shows <b>Trending</b>, <b>Top 10</b> and genre rows. Use search to find any movie or series.</li><li>Open a title for its story, rating, <b>trailer</b> and similar titles. For series choose a season and episode.</li><li>Save a title to <b>Watch Later</b>. Everything you open is kept in your <b>Watch history</b>.</li><li>Press <b>Play</b> to watch. On the Windows app you can also <b>Download</b> a title and find it later in the Downloads panel.</li></ul>
+</div></div>
+
+<div class="hw-sec"><button type="button" class="hw-head" aria-expanded="false"><span class="n">06</span><span class="t">Download Apps<small>One app for every screen</small></span><i class="chev"></i></button><div class="hw-body">
+<p>Open <b>Download Apps</b> on the home screen and pick the one for your device. They all work together, so you can cast from your phone to any of them.</p>
+<div class="hw-chips"><span>Mobile App &middot; phone &amp; tablet</span><span>Android TV &amp; Google TV</span><span>LG webOS</span><span>Samsung Tizen</span><span>Windows 10 &amp; 11</span></div>
+<p>To update this app, go to Settings &rarr; Deeprowss &rarr; <b>Update app</b>.</p>
+</div></div>
+
+<div class="hw-sec"><button type="button" class="hw-head" aria-expanded="false"><span class="n">07</span><span class="t">Free and Premium<small>What you get and how to subscribe</small></span><i class="chev"></i></button><div class="hw-body">
+<div class="hw-cmp"><div class="hw-col"><h5>Free</h5><ul><li>3 movie or series titles</li><li>10 TV channels each day (resets at midnight UTC)</li><li>Live football and the phone decoder</li></ul></div><div class="hw-col pro"><h5>Premium</h5><ul><li>Unlimited movies and series</li><li>Unlimited live TV</li><li>Alternate player and downloads</li></ul></div></div>
+<ol><li>Press <b>Subscribe</b> in the bottom bar of the home screen.</li><li>Choose a plan and pay. Manual payment is available: send your receipt on WhatsApp and access appears after confirmation.</li><li>The bar then shows <b>Subscribed</b>. It turns to <b>Expiring</b> when renewal is near.</li></ol>
+<p class="hw-tip">After Premium is active you get a <b>Decoder number</b>. Enter it on your other TV devices to use Premium there as well.</p>
+</div></div>
+
+<div class="hw-sec"><button type="button" class="hw-head" aria-expanded="false"><span class="n">08</span><span class="t">Remote, keyboard and mouse<small>Getting around</small></span><i class="chev"></i></button><div class="hw-body">
+<div class="hw-keys"><div class="hw-key"><kbd>&larr;</kbd><kbd>&rarr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd><span>Move around</span></div><div class="hw-key"><kbd>Enter</kbd><span>Select</span></div><div class="hw-key"><kbd>Esc</kbd><span>Go back (Backspace works too)</span></div><div class="hw-key"><kbd>F11</kbd><span>Full screen (Windows)</span></div></div>
+<p>On a TV use the remote&rsquo;s arrow keys, <b>OK</b> and <b>Back</b>. With a mouse or touch screen, just click or tap. The <b>gear</b> opens Settings and the <b>power</b> button exits the app.</p>
+</div></div>
+
+<div class="hw-sec"><button type="button" class="hw-head" aria-expanded="false"><span class="n">09</span><span class="t">Settings explained<small>What each section does</small></span><i class="chev"></i></button><div class="hw-body">
+<ul><li><b>Appearance</b>: choose from 12 themes. It changes instantly and is remembered on this device.</li><li><b>Playlists</b>: add your own M3U / M3U8 links, load one and play its channels.</li><li><b>Video quality</b>: Auto, 1080p, 720p, 480p or 360p. Lower it if videos buffer. It only applies to streams that offer several qualities.</li><li><b>Deeprowss</b>: join us on Telegram, check for an app update, and read the copyright notice.</li></ul>
+</div></div>
+
+<div class="hw-sec"><button type="button" class="hw-head" aria-expanded="false"><span class="n">10</span><span class="t">Troubleshooting<small>Quick fixes</small></span><i class="chev"></i></button><div class="hw-body">
+<ul><li><b>Phone will not connect:</b> press Generate new QR code and scan again. Make sure the phone app is the latest version and both devices are online.</li><li><b>Video keeps buffering:</b> lower the quality in Settings &rarr; Video quality, or try another channel or stream.</li><li><b>A channel will not open:</b> wait for the automatic backup stream, or choose a different channel.</li><li><b>No stream for a match yet:</b> streams usually appear close to kick-off. Check again a little later.</li><li><b>Premium not showing after payment:</b> wait a few minutes and send your receipt on WhatsApp if it still does not appear.</li></ul>
+</div></div>
+
+<div class="hw-sec"><button type="button" class="hw-head" aria-expanded="false"><span class="n">11</span><span class="t">Help and contact<small>We are here to help</small></span><i class="chev"></i></button><div class="hw-body">
+<ul><li>Installing, payments or a copyright claim? Use <b>Message Admin</b> at the bottom of the home screen to chat on WhatsApp.</li><li>News, updates and support are on Telegram. Open Settings &rarr; Deeprowss &rarr; <b>Join us on Telegram</b>.</li><li>Deeprowss does not host any of the channels, matches or videos shown here. All content belongs to its owners.</li></ul>
+</div></div>
+</section>
 <section class="dw-pane" data-pane="lists"><h3>Playlists</h3><p class="dw-sub">Add your own M3U / M3U8 playlists, then load one to browse and play its channels.</p>
 <div class="dw-form"><input id="dwName" placeholder="Playlist name"><input id="dwUrl" placeholder="M3U / M3U8 URL"><button class="dw-btn primary" id="dwAdd" type="button">Add playlist</button></div>
 <div id="dwList"></div>
@@ -1081,6 +1143,11 @@ window.__deeprowssPremiumReady = new Promise(function(resolve) {
  $('dwDevice').textContent=platform==='windows'?'Windows app':platform==='androidTv'?'Android TV':'LG webOS';
  const showPane=id=>{cats.forEach(c=>c.classList.toggle('on',c.dataset.pane===id));panes.forEach(p=>p.classList.toggle('on',p.dataset.pane===id));main.scrollTop=0};
  cats.forEach(c=>{c.onclick=()=>showPane(c.dataset.pane);c.addEventListener('focus',()=>showPane(c.dataset.pane))});
+ const hwSecs=[...shade.querySelectorAll('.hw-sec')],hwAll=$('hwAll');
+ const hwSet=(sec,open)=>{sec.classList.toggle('open',open);const b=sec.querySelector('.hw-head');if(b)b.setAttribute('aria-expanded',String(open))};
+ const hwLabel=()=>{hwAll.textContent=hwSecs.every(x=>x.classList.contains('open'))?'Close all sections':'Open all sections'};
+ hwSecs.forEach(sec=>{sec.querySelector('.hw-head').onclick=()=>{hwSet(sec,!sec.classList.contains('open'));hwLabel()}});
+ hwAll.onclick=()=>{const open=!hwSecs.every(x=>x.classList.contains('open'));hwSecs.forEach(x=>hwSet(x,open));hwLabel()};hwLabel();
  const themeBox=$('dwThemes');
  themeBox.innerHTML=THEMES.map(t=>`<button type="button" class="dw-theme" data-theme="${t.id}" aria-pressed="${t.id===s.theme}" style="--pa:${t.pa};--pb:${t.pb};--pc:${t.pc};--pg:${t.pg}"><span class="dw-prev"><i class="pv-logo"></i><i class="pv-title"></i><i class="pv-sub"></i><i class="pv-pill"></i><span class="pv-tiles"><i class="f"></i><i></i><i></i><i></i></span></span><b>${t.name}</b><small>${t.tag}${t.id===defTheme?' · default for this device':''}</small></button>`).join('');
  themeBox.querySelectorAll('[data-theme]').forEach(b=>b.onclick=()=>{applyTheme(b.dataset.theme);save();themeBox.querySelectorAll('[data-theme]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)))});
