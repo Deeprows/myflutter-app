@@ -99,6 +99,8 @@ export default {
       return json({ error: "method not allowed" }, 405);
     }
 
+    if(url.pathname.startsWith('/public/data/'))return publicRepoData(request,env,url);
+    if(url.pathname.startsWith('/public/releases/'))return publicReleaseAsset(request,env,url);
     if(url.pathname.startsWith('/receiver/'))return receiverAccess(request,env,url);
     if(url.pathname.startsWith('/cast/'))return castRelay(request,env,url);
     if(url.pathname==='/sports-news')return sportsNews(request,env,url,ctx);
@@ -310,6 +312,78 @@ async function analytics(request, env) {
   }
 }
 
+// ---------------------------------------------------- public/private repo bridge
+// Stable public URLs for approved app configuration and release downloads.
+// Public repo mode works without a secret. Before making the repo private,
+// add a read-only GitHub token as the Worker secret GITHUB_TOKEN.
+const PUBLIC_DATA_FILES = new Set([
+  "app_config.json", "download_links.json", "payment_accounts.json",
+  "notice.json", "manual_ad.json", "ticker.json", "reels_channels.json",
+  "receiver_banner.json", "receiver_notice.json", "receiver_ticker.json",
+  "fixtures.json", "highlights.json", "movies.json", "tv.json",
+]);
+const PUBLIC_RELEASE_FILES = new Set([
+  "Deeprowss-v1.3.7.apk", "Deeprowss-Android-TV.apk",
+  "Deeprowss-Windows-Setup.exe", "Deeprowss-LG-webOS.ipk",
+]);
+
+function repoHeaders(env, accept = "application/vnd.github.raw+json") {
+  const headers = { "user-agent": "deeprowss-public-asset-proxy", accept };
+  if (env.GITHUB_TOKEN) headers.authorization = "Bearer " + env.GITHUB_TOKEN;
+  return headers;
+}
+
+async function fetchRepoData(env, file, fallbackUrl) {
+  if (env.GITHUB_TOKEN) {
+    const apiUrl = "https://api.github.com/repos/Deeprows/myflutter-app/contents/assets/data/" + encodeURIComponent(file) + "?ref=main";
+    return fetch(apiUrl, { headers: repoHeaders(env), cf: { cacheTtl: 0 } });
+  }
+  return fetch(fallbackUrl, {
+    headers: { "user-agent": "deeprowss-feed-worker", accept: "application/json", "cache-control": "no-cache, no-store, max-age=0", pragma: "no-cache" },
+    cf: { cacheTtl: 0, cacheEverything: false },
+  });
+}
+
+async function publicRepoData(request, env, url) {
+  if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "method not allowed" }, 405);
+  const file = decodeURIComponent(url.pathname.slice("/public/data/".length));
+  if (!PUBLIC_DATA_FILES.has(file) || file.includes("/") || file.includes("..")) return json({ error: "not found" }, 404);
+  const fallback = "https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/" + encodeURIComponent(file);
+  try {
+    const upstream = await fetchRepoData(env, file, fallback);
+    if (!upstream.ok) return json({ error: "public asset unavailable", upstream: upstream.status }, upstream.status === 404 ? 404 : 502);
+    const headers = new Headers(CORS);
+    headers.set("content-type", "application/json; charset=utf-8");
+    headers.set("cache-control", "public, max-age=60, s-maxage=300");
+    return new Response(request.method === "HEAD" ? null : await upstream.arrayBuffer(), { status: 200, headers });
+  } catch (_) { return json({ error: "public asset unavailable" }, 502); }
+}
+
+async function publicReleaseAsset(request, env, url) {
+  if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "method not allowed" }, 405);
+  const parts = url.pathname.slice("/public/releases/".length).split("/");
+  if (parts.length !== 2) return json({ error: "not found" }, 404);
+  const [tag, filename] = parts.map(decodeURIComponent);
+  if (!/^v[0-9]+\\.[0-9]+\\.[0-9]+$/.test(tag) || !PUBLIC_RELEASE_FILES.has(filename)) return json({ error: "not found" }, 404);
+  try {
+    const release = await fetch("https://api.github.com/repos/Deeprows/myflutter-app/releases/tags/" + encodeURIComponent(tag), {
+      headers: repoHeaders(env, "application/vnd.github+json"), cf: { cacheTtl: 60 },
+    });
+    if (!release.ok) return json({ error: "release unavailable", upstream: release.status }, release.status === 404 ? 404 : 502);
+    const data = await release.json();
+    const asset = (data.assets || []).find(x => x.name === filename);
+    if (!asset || !asset.url) return json({ error: "asset not found" }, 404);
+    const download = await fetch(asset.url, { headers: repoHeaders(env, "application/octet-stream"), redirect: "follow" });
+    if (!download.ok) return json({ error: "download unavailable", upstream: download.status }, 502);
+    const headers = new Headers(CORS);
+    headers.set("content-type", asset.content_type || "application/octet-stream");
+    headers.set("content-disposition", 'attachment; filename="' + filename.replace(/["\\\\]/g, "") + '"');
+    headers.set("cache-control", "public, max-age=300, s-maxage=3600");
+    if (asset.size) headers.set("content-length", String(asset.size));
+    return new Response(request.method === "HEAD" ? null : download.body, { status: 200, headers });
+  } catch (_) { return json({ error: "release asset unavailable" }, 502); }
+}
+
 // ------------------------------------------------------------------ feed
 
 async function feed(request, env, ctx, file) {
@@ -358,25 +432,7 @@ async function feed(request, env, ctx, file) {
     cacheState = "MISS";
 
     try {
-      const upstream = await fetch(
-        origin,
-        {
-          headers: {
-            "user-agent":
-              "deeprowss-feed-worker",
-            accept:
-              "application/json",
-            "cache-control":
-              "no-cache, no-store, max-age=0",
-            pragma: "no-cache",
-          },
-
-          cf: {
-            cacheTtl: 0,
-            cacheEverything: false,
-          },
-        }
-      );
+      const upstream = await fetchRepoData(env, file, origin);
 
       if (!upstream.ok) {
         status = 502;
