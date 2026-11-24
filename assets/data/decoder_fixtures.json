@@ -1,0 +1,110 @@
+[
+  {
+    "id": "1",
+    "home": "Bodø/Glimt",
+    "away": "LASK",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T18:45:00+01:00",
+    "duration": 130,
+    "url": "https://flyembed.com/embed/1.php",
+    "altUrl": "https://abisnews.com/dazn2pt.php",
+    "homeLogo": "327",
+    "awayLogo": ""
+  },
+  {
+    "id": "2",
+    "home": "Galatasaray",
+    "away": "Aston Villa",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T18:45:00+01:00",
+    "duration": 130,
+    "url": "https://flyembed.com/embed/2.php",
+    "altUrl": "https://abisnews.com/digisport1.php",
+    "homeLogo": "645",
+    "awayLogo": "66"
+  },
+  {
+    "id": "3",
+    "home": "Arsenal",
+    "away": "Borussia Dortmund",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T21:00:00+01:00",
+    "duration": 130,
+    "url": "https://embedme.st/play/game-soccer_401915295.php",
+    "altUrl": "https://streamtp99a.sbs/global1.php?stream=espn3",
+    "homeLogo": "42",
+    "awayLogo": "165"
+  },
+  {
+    "id": "4",
+    "home": "Como 1907",
+    "away": "AEK Athens",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T21:00:00+01:00",
+    "duration": 130,
+    "url": "https://abisnews.com/digisport4.php",
+    "altUrl": "https://abisnews.com/magentasport2.php",
+    "homeLogo": "895",
+    "awayLogo": "553"
+  },
+  {
+    "id": "5",
+    "home": "Feyenoord",
+    "away": "FC Porto",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T21:00:00+01:00",
+    "duration": 130,
+    "url": "https://abisnews.com/magenta6gr.php",
+    "altUrl": "https://abisnews.com/sporttv5.php",
+    "homeLogo": "209",
+    "awayLogo": "212"
+  },
+  {
+    "id": "6",
+    "home": "Manchester City",
+    "away": "Napoli",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T21:00:00+01:00",
+    "duration": 130,
+    "url": "https://embedme.st/play/game-soccer_401915379.php",
+    "altUrl": "https://abisnews.com/matchora-embed.php?id=2594549",
+    "homeLogo": "50",
+    "awayLogo": "492"
+  },
+  {
+    "id": "7",
+    "home": "RB Leipzig",
+    "away": "Lens",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T21:00:00+01:00",
+    "duration": 130,
+    "url": "",
+    "altUrl": "",
+    "homeLogo": "173",
+    "awayLogo": "116"
+  },
+  {
+    "id": "8",
+    "home": "Real Madrid",
+    "away": "PSV Eindhoven",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T21:00:00+01:00",
+    "duration": 130,
+    "url": "https://embedme.st/play/game-soccer_401915298.php",
+    "altUrl": "https://abisnews.com/magenta5gr.php",
+    "homeLogo": "541",
+    "awayLogo": "197"
+  },
+  {
+    "id": "9",
+    "home": "Slovan Bratislava",
+    "away": "Real Betis",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T21:00:00+01:00",
+    "duration": 130,
+    "url": "https://embedme.st/play/game-soccer_401915297.php",
+    "altUrl": "https://streamhd247.space/source023.html",
+    "homeLogo": "",
+    "awayLogo": "543"
+  }
+]
