@@ -5,7 +5,7 @@ import '../../services/app_memory.dart';
 import '../../theme/app_theme.dart';
 
 /// Remembers which Decoder page was open so reopening the app returns there.
-/// Page ids: hub, cast, mirror, receiver, remote, channels.
+/// Page ids: hub, cast, mirror, receiver, remote, channels, fixtures, movies.
 class DecoderMemory {
   static const _key = 'decoder_last_page';
 
