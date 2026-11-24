@@ -189,6 +189,13 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
   .receiver-footer{display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
 \n.player .controls #backupStream{display:none!important}.player .controls #mainStream[hidden]{display:none!important}\n
+
+/* Advert banner directly below the home clock; scales to the receiver content width. */
+.receiver-ad-banner{display:block;width:min(100% - 36px,900px);margin:14px auto 18px;border:1px solid #ffffff20;border-radius:13px;overflow:hidden;background:#101b2a;box-shadow:0 8px 28px #0006;line-height:0;transition:transform .16s,border-color .16s}
+.receiver-ad-banner[hidden]{display:none!important}
+.receiver-ad-banner img{display:block;width:100%;height:auto;aspect-ratio:4.5/1;object-fit:cover}
+.receiver-ad-banner:hover,.receiver-ad-banner:focus-visible{transform:translateY(-2px);border-color:#70d8ff;outline:none}
+@media(min-width:900px){.receiver-ad-banner{margin-top:18px;margin-bottom:22px}}
 </style>
 <style>
 /* ---- Kodi-style launch splash: spinning app logo (Windows EXE, Android TV, LG/Samsung TV) ---- */
@@ -282,6 +289,9 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     <div class="brand"><span class="mark"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span><span><b>DEEPROWSS</b><small>CINEMA &amp; LIVE TV</small></span></div>
     <div class="clock"><div id="clockTime">--:--</div><div id="clockDate"></div></div>
   </div>
+  <a id="receiverAdBanner" class="receiver-ad-banner" href="https://wa.me/2347041629630" target="_blank" rel="noopener" hidden aria-label="Learn how to create websites and Android apps with AI in one day">
+    <img id="receiverAdImage" src="https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/ai-learning-ad.svg" alt="Learn how to create websites and Android apps with AI in one day">
+  </a>
   <div class="home-feature" id="homeFeature" hidden>
     <span class="kicker">TRENDING THIS WEEK</span>
     <h1 id="featTitle"></h1>
@@ -1122,6 +1132,33 @@ window.__deeprowssPremiumReady = new Promise(function(resolve) {
  const syncLists=()=>{try{const f=JSON.parse(localStorage.getItem(key)||'{}');if(f&&Array.isArray(f.playlists)){s.playlists=f.playlists;list()}}catch(_){}};
  window.addEventListener('deeprowss:playlists',syncLists);
  list();applyLanguage();langObserver.observe(document.body,{subtree:true,childList:true,characterData:true});
+})();
+</script>
+
+<script>
+/* Load the receiver advert configuration on web, desktop and TV builds. */
+(function(){
+  var banner=document.getElementById('receiverAdBanner');
+  var image=document.getElementById('receiverAdImage');
+  if(!banner||!image)return;
+  var candidates=['/data/receiver_banner.json','../data/receiver_banner.json','/assets/data/receiver_banner.json','assets/data/receiver_banner.json'];
+  function validUrl(value){try{var u=new URL(String(value||''),location.href);return /^https?:$/.test(u.protocol)?u.href:'';}catch(_){return '';}}
+  function show(config){
+    if(!config||config.enabled===false||!Array.isArray(config.ads))return false;
+    var now=Date.now(),ad=config.ads.find(function(item){return item&&validUrl(item.image_url)&&(!item.expires||Date.parse(item.expires)>now);});
+    if(!ad)return false;
+    var src=validUrl(ad.image_url),href=validUrl(ad.url||config.placeholder_url);
+    if(!src||!href)return false;
+    image.src=src;image.alt=ad.alt||'Advertisement';banner.href=href;
+    banner.setAttribute('aria-label',image.alt);banner.hidden=false;return true;
+  }
+  (async function(){
+    for(var i=0;i<candidates.length;i++){
+      try{var response=await fetch(candidates[i],{cache:'no-store'});if(!response.ok)continue;var config=await response.json();if(show(config))return;}catch(_){}
+    }
+    /* Keep the configured campaign visible even if a host has not exposed its JSON route. */
+    show({enabled:true,ads:[{image_url:'https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/ai-learning-ad.svg',url:'https://wa.me/2347041629630',alt:'Learn how to create websites and Android apps with AI in one day'}]});
+  })();
 })();
 </script>
 </body></html>
