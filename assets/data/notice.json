@@ -2,10 +2,10 @@
   "enabled": true,
   "id": "App Update",
   "title": "App Update",
-  "message": "🚨 New App Update! Kindly download latest Deeprowss App. If your current app is version 1.0.2024 with login page, Ignore.",
+  "message": "🚨 New App Update! Kindly download latest Deeprowss App. Ai Predictions, Cast screen. Turn app to decoder and watch all actions on your TV screen.",
   "popup": true,
   "button_text": "Download Now",
-  "button_url": "https://filemoon.org/en/user/files/download/5pVzNylJ37wv/Deeprowssv3.apk",
+  "button_url": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.7/Deeprowss-v1.3.7.apk",
   "ok_text": "Later",
   "expires": ""
 }
