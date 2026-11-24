@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('deeprowssDesktop', {
   openDownload: (url) => ipcRenderer.invoke('dl:open', String(url || '')),
   openExternal: (url) => ipcRenderer.invoke('external:open', String(url || '')),
   openAd: (url) => ipcRenderer.invoke('ad:open', String(url || '')),
+  quit: () => ipcRenderer.invoke('app:quit'),
   installUpdate: (url) => ipcRenderer.invoke('app:install-update', String(url || '')),
   // Referer / User-Agent that a live TV stream needs (same as the Android native player).
   setStreamHeaders: (headers) => ipcRenderer.send('stream:headers', {
