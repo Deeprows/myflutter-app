@@ -116,6 +116,43 @@ input{display:block;width:100%;padding:16px;border:1px solid #394657;border-radi
 .person b{display:block;font-size:12px;line-height:1.2}.person small{display:block;font-size:11px;color:var(--muted);margin-top:2px;line-height:1.2}
 #detailTrailer iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:16px;background:#000}.trailer-thumb{width:100%;padding:0;background:#000}
 
+/* ---- Learn with AI page (website landing only) ---- */
+#learnView{background:radial-gradient(ellipse at 50% -10%,#20334a 0,transparent 55%),#080d15}
+.learn-wrap{max-width:1120px;margin:0 auto;padding:clamp(18px,4vw,42px) clamp(16px,4vw,42px) 30px}
+.learn-hero{position:relative;isolation:isolate;overflow:hidden;text-align:center;padding:clamp(38px,7vw,82px) 20px clamp(30px,5vw,54px);border:1px solid #ffffff14;border-radius:30px;background:linear-gradient(145deg,#121f30eF,#0b111deF);box-shadow:0 28px 90px #0007}
+.learn-hero:before{content:"";position:absolute;z-index:-1;inset:0;background:radial-gradient(40% 70% at 50% 0%,#35b9ff26,transparent 75%),radial-gradient(30% 55% at 10% 80%,#a855f722,transparent 75%),radial-gradient(30% 55% at 90% 80%,#ffc42e18,transparent 75%)}
+.learn-orbit{position:absolute;z-index:-1;width:280px;height:280px;border:1px solid #6fd6fb18;border-radius:50%;pointer-events:none}
+.learn-orbit-a{left:-170px;top:-170px;box-shadow:0 0 0 28px #6fd6fb08,0 0 0 58px #6fd6fb06}
+.learn-orbit-b{right:-190px;bottom:-200px;width:360px;height:360px;border-color:#ffc42e20;box-shadow:0 0 0 30px #ffc42e08}
+.learn-eyebrow{display:inline-flex;align-items:center;gap:9px;color:#7edbff;font-size:11px;font-weight:900;letter-spacing:.19em}
+.learn-eyebrow i{width:7px;height:7px;border-radius:50%;background:#70dcff;box-shadow:0 0 14px #70dcff}
+.learn-hero h1{margin:20px 0 16px;font-size:clamp(36px,7vw,70px);line-height:1.02;letter-spacing:-.055em;font-weight:950}
+.learn-hero h1 em{font-style:normal;background:linear-gradient(90deg,#71d9ff,#a7a5ff 55%,#ffd166);color:transparent;background-clip:text;-webkit-background-clip:text}
+.learn-hero>p{max-width:650px;margin:0 auto 25px;color:#b5c4d5;font-size:clamp(15px,2vw,18px);line-height:1.7}
+.learn-cta{display:inline-flex;align-items:center;justify-content:center;gap:18px;min-height:52px;padding:0 24px;border-radius:15px;background:linear-gradient(110deg,#ffd166,#ffb938);color:#171006;text-decoration:none;font-weight:900;box-shadow:0 12px 32px #ffc42e2c;transition:transform .16s,filter .16s}
+.learn-cta:hover{transform:translateY(-2px);filter:brightness(1.06)}
+.learn-cta span{font-size:19px}
+.learn-proof{display:flex;justify-content:center;flex-wrap:wrap;gap:10px 22px;margin-top:26px;color:#9aabc0;font-size:12px;font-weight:700}
+.learn-content{padding:clamp(34px,6vw,62px) 2px 10px}
+.learn-intro{text-align:center;max-width:650px;margin:0 auto 28px}
+.learn-intro>span{color:#70d8ff;font-size:11px;font-weight:900;letter-spacing:.18em}
+.learn-intro h2{margin:12px 0;font-size:clamp(25px,4vw,38px);letter-spacing:-.035em}
+.learn-intro p,.learn-bottom p{color:#9eafc2;line-height:1.65}
+.learn-steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.learn-steps article{display:flex;align-items:flex-start;gap:16px;min-height:140px;padding:22px;border:1px solid #ffffff13;border-radius:20px;background:linear-gradient(145deg,#121c2a,#0d141f)}
+.learn-num{display:grid;place-items:center;flex:none;width:42px;height:42px;border-radius:13px;background:#6fd6fb16;color:#77dcff;font-size:13px}
+.learn-steps h3{margin:2px 0 7px;font-size:18px}
+.learn-steps p{margin:0;color:#9eafc2;font-size:13px;line-height:1.6}
+.learn-steps article>span{margin-left:auto;color:#ffd166;font-size:22px}
+.learn-bottom{display:flex;align-items:center;justify-content:space-between;gap:22px;margin-top:20px;padding:clamp(22px,4vw,34px);border:1px solid #4b9dc044;border-radius:22px;background:linear-gradient(110deg,#14283a,#151b2a)}
+.learn-bottom h2{margin:9px 0;font-size:clamp(22px,3vw,30px)}
+.learn-bottom p{margin:0;max-width:590px;font-size:14px}
+.learn-bottom .learn-cta{flex:none}
+.learn-footer{padding:28px 0 10px;text-align:center;color:#8191a5;font-size:11px;font-weight:850;letter-spacing:.15em}
+.learn-footer span{color:#ffd166}
+@media(max-width:650px){.learn-wrap{padding:14px 12px 24px}.learn-hero{border-radius:22px;padding:42px 18px 30px}.learn-hero h1{font-size:clamp(35px,10vw,50px)}.learn-proof{gap:8px 14px;font-size:11px}.learn-steps{grid-template-columns:1fr}.learn-steps article{min-height:unset;padding:18px}.learn-bottom{align-items:stretch;flex-direction:column}.learn-bottom .learn-cta{width:100%}.learn-intro{text-align:left}}
+@media(min-width:900px){.learn-wrap{padding-top:34px}.learn-steps article{min-height:154px}}
+
 /* ---- connect (QR) page: unchanged card ---- */
 #join{display:block;position:relative;width:min(92vw,520px);margin:14px auto 40px;padding:clamp(24px,5vw,42px);border-radius:24px;background:linear-gradient(145deg,#151e2b,#0a0e15);border:1px solid #344052;box-shadow:0 28px 90px #000b}
 #join h1{font-size:clamp(26px,5vw,38px);margin:0 0 12px;font-weight:950}
@@ -261,6 +298,10 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
       <svg viewBox="0 0 24 24"><path d="M12 3v12M7 11l5 5 5-5M4 20h16"/></svg>
       <b>Download Apps</b><small>Get Deeprowss on any device</small>
     </button>
+        <button class="tile" id="goLearn" type="button" data-go="learn">
+      <svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 5.5v15M8 7h8M8 11h8M8 15h5M16 21l2 2 4-4"/></svg>
+      <b>Learn with AI</b><small>Build websites &amp; apps in one day</small>
+    </button>
     
   </nav>
   <button class="subscription-fab" id="subscriptionOpen" type="button" aria-label="View Premium subscription">
@@ -356,6 +397,39 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     </div>
     <div class="dl-grid" id="dlGrid"></div>
     <p class="dl-foot">Need help installing or copyright claim? <a href="https://wa.me/2347041629630?text=Hello%20Deeprowss%20Admin%2C%20I%20need%20help%20installing%20the%20app%20or%20reporting%20a%20copyright%20claim." target="_blank" rel="noopener noreferrer">Message Admin</a>.</p>
+  </div>
+</section>
+
+<!-- LEARN WITH AI: website-only page, available from the web landing screen -->
+<section class="view" id="learnView" aria-label="Learn to build with AI">
+  <header class="bar">
+    <button class="ibtn" type="button" data-go="landing" aria-label="Back to home"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button>
+    <h2>Learn with AI</h2>
+    <span class="badge">START TODAY</span>
+  </header>
+  <div class="learn-wrap">
+    <section class="learn-hero">
+      <div class="learn-orbit learn-orbit-a"></div><div class="learn-orbit learn-orbit-b"></div>
+      <span class="learn-eyebrow"><i></i> YOUR IDEA. AI POWER. REAL RESULTS.</span>
+      <h1>Build a website or app<br><em>in just one day.</em></h1>
+      <p>Learn how to turn your ideas into real digital products using AI — even if you have never written a line of code.</p>
+      <a class="learn-cta" href="https://wa.me/2347041629630?text=Hello%20Deeprowss%20Admin%2C%20I%27m%20interested%20in%20learning%20how%20to%20create%20websites%20and%20apps%20with%20AI." target="_blank" rel="noopener noreferrer">Contact Admin <span>↗</span></a>
+      <div class="learn-proof"><span>✦ Beginner friendly</span><span>✦ Practical guidance</span><span>✦ Build as you learn</span></div>
+    </section>
+    <section class="learn-content">
+      <div class="learn-intro"><span>WHAT YOU'LL DISCOVER</span><h2>From an idea to something people can use.</h2><p>Follow a practical, AI-assisted workflow to plan, create and launch your own project.</p></div>
+      <div class="learn-steps">
+        <article><b class="learn-num">01</b><div><h3>Shape your idea</h3><p>Turn a simple idea into a clear plan, features and page structure with AI.</p></div><span>✧</span></article>
+        <article><b class="learn-num">02</b><div><h3>Design and build</h3><p>Create beautiful pages and app screens with help from AI coding tools.</p></div><span>⌘</span></article>
+        <article><b class="learn-num">03</b><div><h3>Test and improve</h3><p>Find issues, refine the experience and make your project work across devices.</p></div><span>✓</span></article>
+        <article><b class="learn-num">04</b><div><h3>Publish your work</h3><p>Learn the basics of putting your website or app online and sharing it.</p></div><span>↗</span></article>
+      </div>
+      <div class="learn-bottom">
+        <div><span class="learn-eyebrow">READY TO GET STARTED?</span><h2>Your next big idea could start today.</h2><p>Contact the Deeprowss admin to ask about learning, guidance and getting started.</p></div>
+        <a class="learn-cta" href="https://wa.me/2347041629630?text=Hello%20Deeprowss%20Admin%2C%20I%27d%20like%20to%20learn%20to%20create%20websites%20and%20apps%20with%20AI." target="_blank" rel="noopener noreferrer">Contact Admin <span>↗</span></a>
+      </div>
+    </section>
+    <footer class="learn-footer">DEE​PROWSS <span>·</span> Learn. Create. Launch.</footer>
   </div>
 </section>
 
@@ -461,7 +535,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
   (() => {
     const $ = id => document.getElementById(id);
     const desktop=window.deeprowssDesktop||null;let winFullscreen=false; // Windows app bridge (null on TVs / browsers)
-    const views={landing:$('landing'),movies:$('moviesView'),tv:$('tvView'),fixtures:$('fixturesView'),downloads:$('downloadsView'),connect:$('connectView')};const markMode=()=>{document.body.dataset.mode=views.movies.classList.contains('active')?'movies':(views.tv.classList.contains('active')?'tv':'connect');};
+    const views={landing:$('landing'),movies:$('moviesView'),tv:$('tvView'),fixtures:$('fixturesView'),downloads:$('downloadsView'),learn:$('learnView'),connect:$('connectView')};const markMode=()=>{document.body.dataset.mode=views.movies.classList.contains('active')?'movies':(views.tv.classList.contains('active')?'tv':'connect');};
     const pinInput=$('pin'),hostInput=$('host'),video=$('screen'),movieFrame=$('movieFrame'),tvFrame=$('tvFrame'),join=$('join'),panel=$('playerPanel');let frame=movieFrame; // frame = whichever iframe is on screen (movies use movieFrame, live TV uses its own tvFrame)
     let socket,peer,hls,dash,urlPlaying=false,iframePlaying=false,currentTitle='',reconnectAttempts=0,reconnectTimer,hideControlsTimer;const pendingCandidates=[];
     window.deeprowssSetVideoQuality=function(q){if(hls&&hls.levels){if(q==='auto'){hls.currentLevel=-1;return;}const cap=Number(q)||720;let best=-1;hls.levels.forEach((level,i)=>{if((Number(level.height)||0)<=cap)best=i;});hls.currentLevel=best>=0?best:0;}if(dash){try{dash.setAutoSwitchQualityFor('video',q==='auto');if(q!=='auto'&&dash.setMaxAllowedBitrateFor){const rates={1080:5000000,720:2800000,480:1200000,360:650000};dash.setMaxAllowedBitrateFor('video',rates[q]||2800000);}}catch(_){}}};
@@ -720,6 +794,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
       if(v==='tv'){go('landing');return true;}
       if(v==='fixtures'){go('landing');return true;}
       if(v==='downloads'){go('landing');return true;}
+      if(v==='learn'){go('landing');return true;}
       if(v==='connect'){go('landing');return true;}
       return false;
     };
