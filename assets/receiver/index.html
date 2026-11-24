@@ -546,7 +546,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="remote-announcements.js" defer></script>
+<script src="remote-announcements.js?v=tall1" defer></script>
 <script>
   (() => {
     const $ = id => document.getElementById(id);
@@ -998,7 +998,16 @@ window.__deeprowssPremiumReady = new Promise(function(resolve) {
  let stored={};try{stored=JSON.parse(localStorage.getItem(key)||'{}')||{}}catch(_){};const THEMES=[
   {id:'estuary',name:'Estuary Cyan',tag:'Windows app · classic Kodi look',dev:'windows',pa:'#1db4ea',pb:'#060a10',pc:'#0e151f',pg:'#10405f'},
   {id:'leanback',name:'Leanback Violet',tag:'Android TV · soft, rounded, big focus',dev:'androidTv',pa:'#8b7cff',pb:'#0a0b14',pc:'#14172a',pg:'#3b2f8f'},
-  {id:'webos',name:'webOS Crimson',tag:'LG TV · warm glass, white focus ring',dev:'webos',pa:'#e2335d',pb:'#0b0809',pc:'#1e1216',pg:'#7a1a3a'}];
+  {id:'webos',name:'webOS Crimson',tag:'LG TV · warm glass, white focus ring',dev:'webos',pa:'#e2335d',pb:'#0b0809',pc:'#1e1216',pg:'#7a1a3a'},
+  {id:'emerald',name:'Pitch Emerald',tag:'Stadium green · fresh glow',pa:'#22c55e',pb:'#070d09',pc:'#0d1912',pg:'#195730'},
+  {id:'gold',name:'Cinema Gold',tag:'Premiere night · champagne gold',pa:'#f5b301',pb:'#0d0c07',pc:'#19160d',pg:'#574419'},
+  {id:'sunset',name:'Sunset Orange',tag:'Warm ember glow',pa:'#ff7a1a',pb:'#0e0907',pc:'#1a110d',pg:'#573019'},
+  {id:'ocean',name:'Royal Ocean',tag:'Deep sea blue · crisp focus',pa:'#3b82f6',pb:'#07090e',pc:'#0c121a',pg:'#193157'},
+  {id:'rose',name:'Neon Rose',tag:'Hot pink on midnight',pa:'#ec4899',pb:'#0d070a',pc:'#190d14',pg:'#57193a'},
+  {id:'aurora',name:'Teal Aurora',tag:'Cool teal · calm and clean',pa:'#14b8a6',pb:'#070e0d',pc:'#0d1a18',pg:'#19574f'},
+  {id:'volt',name:'Lime Volt',tag:'Electric lime · high energy',pa:'#a3e635',pb:'#0b0d07',pc:'#15190d',pg:'#425719'},
+  {id:'mocha',name:'Coffee Mocha',tag:'Warm cocoa · cosy evenings',pa:'#d4a373',pb:'#0c0a08',pc:'#17130f',pg:'#573519'},
+  {id:'amoled',name:'AMOLED Black',tag:'Pure black · silver focus',pa:'#e5e7eb',pb:'#000000',pc:'#0a0a0c',pg:'#ffffff'}];
  const defTheme=(THEMES.find(t=>t.dev===platform)||THEMES[0]).id;
  let s={quality:stored.quality||'auto',playlists:Array.isArray(stored.playlists)?stored.playlists:[],theme:THEMES.some(t=>t.id===stored.theme)?stored.theme:defTheme};
  const applyTheme=id=>{s.theme=id;document.documentElement.setAttribute('data-dw-theme',id);const m=document.querySelector('meta[name=theme-color]'),t=THEMES.find(x=>x.id===id);if(m&&t)m.setAttribute('content',t.pb)};
