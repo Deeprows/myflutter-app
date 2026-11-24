@@ -1,37 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="200" viewBox="0 0 900 200">
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="320" viewBox="0 0 900 320">
 <defs>
  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#06132e"/><stop offset=".55" stop-color="#102c60"/><stop offset="1" stop-color="#071225"/></linearGradient>
  <linearGradient id="cyan" x1="0" x2="1"><stop stop-color="#38bdf8"/><stop offset="1" stop-color="#a5f3fc"/></linearGradient>
  <linearGradient id="gold" x1="0" x2="1"><stop stop-color="#ffd166"/><stop offset="1" stop-color="#f59e0b"/></linearGradient>
- <filter id="glow"><feGaussianBlur stdDeviation="10"/></filter>
+ <filter id="glow"><feGaussianBlur stdDeviation="12"/></filter>
 </defs>
-<rect width="900" height="200" rx="0" fill="url(#bg)"/>
-<circle cx="690" cy="90" r="130" fill="#168bff" opacity=".17" filter="url(#glow)"/>
-<path d="M580 0h320v200H580z" fill="#071a38" opacity=".48"/>
-<path d="M0 178Q210 150 410 182T900 160V200H0Z" fill="#0b2347" opacity=".75"/>
-<rect x="25" y="15" width="155" height="25" rx="12.5" fill="url(#gold)"/>
-<text x="39" y="32" font-family="Arial,sans-serif" font-size="13" font-weight="900" letter-spacing="1.2" fill="#09152c">LEARN WITH AI</text>
-<text x="25" y="78" font-family="Arial,sans-serif" font-size="35" font-weight="900" fill="#fff">CREATE WEBSITES</text>
-<text x="25" y="119" font-family="Arial,sans-serif" font-size="35" font-weight="900" fill="url(#cyan)">&amp; ANDROID APPS</text>
-<text x="26" y="158" font-family="Arial,sans-serif" font-size="27" font-weight="900" fill="#ffd166">WITH AI IN ONE DAY</text>
-<!-- laptop / app panels -->
-<g transform="translate(625 27)">
- <rect x="15" y="0" width="210" height="128" rx="12" fill="#142c50" stroke="#74d9ff" stroke-width="2"/>
- <rect x="25" y="12" width="190" height="106" rx="6" fill="#071426"/>
- <rect x="37" y="24" width="72" height="8" rx="4" fill="#38bdf8"/>
- <rect x="37" y="42" width="145" height="5" rx="2.5" fill="#426487"/>
- <rect x="37" y="54" width="120" height="5" rx="2.5" fill="#426487"/>
- <rect x="37" y="72" width="78" height="33" rx="5" fill="#123b65" stroke="#38bdf8"/>
- <rect x="124" y="72" width="78" height="33" rx="5" fill="#18375c" stroke="#ffd166"/>
- <path d="M0 132h240l-18 12H18Z" fill="#9bdff7"/>
- <rect x="96" y="132" width="50" height="4" rx="2" fill="#37658b"/>
- <rect x="177" y="58" width="55" height="91" rx="12" fill="#e8f7ff" stroke="#38bdf8" stroke-width="3"/>
- <rect x="183" y="68" width="43" height="70" rx="6" fill="#0b1e3b"/>
- <circle cx="204.5" cy="145" r="2" fill="#38bdf8"/>
- <path d="M192 88h25M192 98h25M192 108h17" stroke="#5bd3ff" stroke-width="3" stroke-linecap="round"/>
- <circle cx="204" cy="40" r="18" fill="#ffd166" opacity=".95"/>
- <path d="M197 40l5 5 10-12" fill="none" stroke="#10213b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect width="900" height="320" fill="url(#bg)"/>
+<circle cx="720" cy="150" r="190" fill="#168bff" opacity=".18" filter="url(#glow)"/>
+<path d="M590 0h310v320H590z" fill="#071a38" opacity=".42"/>
+<path d="M0 285Q210 250 430 288T900 270V320H0Z" fill="#0b2347" opacity=".8"/>
+<rect x="38" y="30" width="190" height="34" rx="17" fill="url(#gold)"/>
+<text x="56" y="53" font-family="Arial,sans-serif" font-size="17" font-weight="900" letter-spacing="1.4" fill="#09152c">LEARN WITH AI</text>
+<text x="38" y="125" font-family="Arial,sans-serif" font-size="53" font-weight="900" fill="#fff">CREATE WEBSITES</text>
+<text x="38" y="190" font-family="Arial,sans-serif" font-size="53" font-weight="900" fill="url(#cyan)">&amp; ANDROID APPS</text>
+<text x="40" y="245" font-family="Arial,sans-serif" font-size="38" font-weight="900" fill="#ffd166">WITH AI IN ONE DAY</text>
+<g transform="translate(640 58)">
+ <rect x="0" y="0" width="205" height="150" rx="15" fill="#142c50" stroke="#74d9ff" stroke-width="3"/>
+ <rect x="12" y="13" width="181" height="123" rx="7" fill="#071426"/>
+ <rect x="27" y="29" width="82" height="10" rx="5" fill="#38bdf8"/>
+ <rect x="27" y="51" width="145" height="6" rx="3" fill="#426487"/>
+ <rect x="27" y="67" width="120" height="6" rx="3" fill="#426487"/>
+ <rect x="27" y="91" width="66" height="31" rx="5" fill="#123b65" stroke="#38bdf8"/>
+ <rect x="104" y="91" width="70" height="31" rx="5" fill="#18375c" stroke="#ffd166"/>
+ <path d="M-18 155h242l-20 15H2Z" fill="#9bdff7"/>
+ <rect x="72" y="155" width="58" height="5" rx="2.5" fill="#37658b"/>
+ <rect x="180" y="90" width="62" height="108" rx="13" fill="#e8f7ff" stroke="#38bdf8" stroke-width="3"/>
+ <rect x="187" y="101" width="48" height="82" rx="7" fill="#0b1e3b"/>
+ <circle cx="211" cy="190" r="2.5" fill="#38bdf8"/>
+ <path d="M198 125h26M198 139h26M198 153h18" stroke="#5bd3ff" stroke-width="3.5" stroke-linecap="round"/>
+ <circle cx="211" cy="72" r="20" fill="#ffd166"/>
+ <path d="M203 72l6 6 11-14" fill="none" stroke="#10213b" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
-<rect x="690" y="166" width="185" height="26" rx="13" fill="#e11d2e" stroke="#fff" stroke-opacity=".5"/>
-<text x="782.5" y="184" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" font-weight="900" letter-spacing="1" fill="#fff">START TODAY</text>
+<rect x="665" y="260" width="205" height="36" rx="18" fill="#e11d2e" stroke="#fff" stroke-opacity=".5"/>
+<text x="767.5" y="284" text-anchor="middle" font-family="Arial,sans-serif" font-size="16" font-weight="900" letter-spacing="1.2" fill="#fff">START TODAY</text>
 </svg>
