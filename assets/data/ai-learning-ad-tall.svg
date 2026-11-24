@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="780" viewBox="0 0 600 780">
+<defs>
+ <linearGradient id="bg" x1="0" y1="0" x2="0.7" y2="1"><stop stop-color="#06132e"/><stop offset=".55" stop-color="#102c60"/><stop offset="1" stop-color="#071225"/></linearGradient>
+ <linearGradient id="cyan" x1="0" x2="1"><stop stop-color="#38bdf8"/><stop offset="1" stop-color="#a5f3fc"/></linearGradient>
+ <linearGradient id="gold" x1="0" x2="1"><stop stop-color="#ffd166"/><stop offset="1" stop-color="#f59e0b"/></linearGradient>
+ <linearGradient id="scr" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1e4f9a"/><stop offset="1" stop-color="#0b2a5c"/></linearGradient>
+ <filter id="glow"><feGaussianBlur stdDeviation="22"/></filter>
+</defs>
+<rect width="600" height="780" fill="url(#bg)"/>
+<circle cx="470" cy="520" r="230" fill="#168bff" opacity=".22" filter="url(#glow)"/>
+<circle cx="90" cy="120" r="150" fill="#38bdf8" opacity=".10" filter="url(#glow)"/>
+<rect x="40" y="38" width="214" height="40" rx="20" fill="url(#gold)"/>
+<text x="62" y="65" font-family="Arial,sans-serif" font-size="19" font-weight="900" letter-spacing="1.6" fill="#09152c">LEARN WITH AI</text>
+<text x="40" y="168" font-family="Arial,sans-serif" font-size="78" font-weight="900" fill="#fff">CREATE</text>
+<text x="40" y="248" font-family="Arial,sans-serif" font-size="78" font-weight="900" fill="#fff">WEBSITES</text>
+<text x="40" y="328" font-family="Arial,sans-serif" font-size="78" font-weight="900" fill="url(#cyan)">&amp; ANDROID</text>
+<text x="40" y="408" font-family="Arial,sans-serif" font-size="78" font-weight="900" fill="url(#cyan)">APPS</text>
+<text x="40" y="466" font-family="Arial,sans-serif" font-size="40" font-weight="900" fill="#ffd166">WITH AI IN ONE DAY</text>
+<!-- browser window -->
+<g transform="translate(40 500)">
+ <rect width="300" height="170" rx="16" fill="#0a1f45" stroke="#38bdf8" stroke-opacity=".55" stroke-width="2"/>
+ <path d="M0 16a16 16 0 0 1 16-16h268a16 16 0 0 1 16 16v26H0z" fill="#12306a"/>
+ <circle cx="22" cy="21" r="5" fill="#ff6b6b"/><circle cx="40" cy="21" r="5" fill="#ffd166"/><circle cx="58" cy="21" r="5" fill="#4ade80"/>
+ <rect x="80" y="14" width="190" height="14" rx="7" fill="#0a1f45"/>
+ <rect x="20" y="62" width="120" height="14" rx="7" fill="url(#cyan)"/>
+ <rect x="20" y="88" width="190" height="9" rx="4.5" fill="#fff" opacity=".55"/>
+ <rect x="20" y="106" width="160" height="9" rx="4.5" fill="#fff" opacity=".35"/>
+ <rect x="20" y="130" width="86" height="24" rx="12" fill="url(#gold)"/>
+ <rect x="190" y="60" width="90" height="94" rx="10" fill="url(#scr)"/>
+ <path d="M213 118l14-18 12 14 8-9 16 20z" fill="#38bdf8" opacity=".8"/>
+</g>
+<!-- phone -->
+<g transform="translate(372 478) rotate(6 80 110)">
+ <rect width="150" height="232" rx="26" fill="#08142b" stroke="#a5f3fc" stroke-opacity=".7" stroke-width="3"/>
+ <rect x="10" y="22" width="130" height="188" rx="16" fill="url(#scr)"/>
+ <rect x="52" y="9" width="46" height="7" rx="3.5" fill="#1e3a6e"/>
+ <path d="M44 74l22 14-22 14z" fill="#fff"/>
+ <circle cx="75" cy="88" r="38" fill="none" stroke="#38bdf8" stroke-width="4" opacity=".8"/>
+ <rect x="26" y="146" width="98" height="10" rx="5" fill="#fff" opacity=".6"/>
+ <rect x="40" y="166" width="70" height="10" rx="5" fill="#fff" opacity=".35"/>
+</g>
+<!-- call to action -->
+<rect x="40" y="694" width="520" height="62" rx="31" fill="url(#gold)"/>
+<text x="300" y="735" text-anchor="middle" font-family="Arial,sans-serif" font-size="29" font-weight="900" letter-spacing="2.4" fill="#09152c">START TODAY</text>
+</svg>
