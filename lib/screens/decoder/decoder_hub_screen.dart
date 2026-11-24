@@ -100,11 +100,13 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
           border: Border.all(color: Ui.line),
         ),
         child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          dense: true,
+          minVerticalPadding: 2,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
           leading: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(color: Ui.panel, borderRadius: BorderRadius.circular(12)),
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(color: Ui.panel, borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: Ui.red),
           ),
           title: Text(title, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 13)),
