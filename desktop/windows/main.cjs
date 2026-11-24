@@ -169,6 +169,17 @@ function setKeepAwake(on) {
   } catch (_) { awakeId = null; }
 }
 ipcMain.on('power:awake', (event, on) => { if (trusted(event)) setKeepAwake(!!on); });
+/* Language: the PC's display / preferred languages, so the UI can open in the user's language. */
+ipcMain.on('app:locales', (event) => {
+  let list = [];
+  try {
+    if (trusted(event)) {
+      if (typeof app.getPreferredSystemLanguages === 'function') list = list.concat(app.getPreferredSystemLanguages());
+      if (typeof app.getLocale === 'function') list.push(app.getLocale());
+    }
+  } catch (_) { list = []; }
+  event.returnValue = list.filter((x) => typeof x === 'string' && x);
+});
 ipcMain.handle('win:state', (event) => ({ fullscreen: !!(trusted(event) && mainWin && !mainWin.isDestroyed() && mainWin.isFullScreen()) }));
 ipcMain.handle('win:fullscreen', (event, mode) => {
   if (!trusted(event) || !mainWin || mainWin.isDestroyed()) return { fullscreen: false };
