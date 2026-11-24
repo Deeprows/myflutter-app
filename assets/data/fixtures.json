@@ -1,44 +1,96 @@
 [
   {
     "id": "1",
-    "home": "Brentford",
-    "away": "Everton",
-    "league": "Premier League - England",
-    "kickoff": "2026-11-23T21:00:00+01:00",
+    "home": "Bodø/Glimt",
+    "away": "LASK",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T18:45:00+01:00",
     "duration": 130,
     "url": "https://realembeds.xyz/embed/01a20809-75e4-76e9-8a53-3d024a0eeba7",
     "altUrl": "https://abisnews.com/skymainevent.php",
     "altUrl2": "https://ch.nexa.st/stream?id=10",
     "altUrl3": "https://abisnews.com/arena1premiumserbia.php",
-    "homeLogo": "55",
-    "awayLogo": "45"
+    "homeLogo": "327",
+    "awayLogo": ""
   },
   {
     "id": "2",
-    "home": "Levante",
-    "away": "Elche",
-    "league": "LaLiga - Spain",
-    "kickoff": "2026-11-23T21:00:00+01:00",
+    "home": "Galatasaray",
+    "away": "Aston Villa",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T18:45:00+01:00",
     "duration": 130,
-    "url": "https://abisnews.com/premiersports1ie.phpp",
-    "altUrl": "https://abisnews.com/espn.php",
-    "altUrl2": "https://abisnews.com/tv2sportpremium.php",
-    "altUrl3": "https://abisnews.com/magentasport3.php",
-    "homeLogo": "539",
-    "awayLogo": "797"
+    "homeLogo": "645",
+    "awayLogo": "66"
   },
   {
     "id": "3",
-    "home": "Monza",
-    "away": "Fiorentina",
-    "league": "Serie A - Italy",
-    "kickoff": "2026-11-23T20:45:00+01:00",
+    "home": "Arsenal",
+    "away": "Borussia Dortmund",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T21:00:00+01:00",
     "duration": 130,
-    "url": "https://abisnews.com/arena1premiumserbia.php",
-    "altUrl": "https://abisnews.com/digisport2.php",
-    "altUrl2": "https://abisnews.com/sporttv2.php",
-    "altUrl3": "https://abisnews.com/magentasport1.php",
-    "homeLogo": "1579",
-    "awayLogo": "502"
+    "homeLogo": "42",
+    "awayLogo": "165"
+  },
+  {
+    "id": "4",
+    "home": "Como 1907",
+    "away": "AEK Athens",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T21:00:00+01:00",
+    "duration": 130,
+    "homeLogo": "895",
+    "awayLogo": "553"
+  },
+  {
+    "id": "5",
+    "home": "Feyenoord",
+    "away": "FC Porto",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T21:00:00+01:00",
+    "duration": 130,
+    "homeLogo": "209",
+    "awayLogo": "212"
+  },
+  {
+    "id": "6",
+    "home": "Manchester City",
+    "away": "Napoli",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T21:00:00+01:00",
+    "duration": 130,
+    "homeLogo": "50",
+    "awayLogo": "492"
+  },
+  {
+    "id": "7",
+    "home": "RB Leipzig",
+    "away": "Lens",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T21:00:00+01:00",
+    "duration": 130,
+    "homeLogo": "173",
+    "awayLogo": "116"
+  },
+  {
+    "id": "8",
+    "home": "Real Madrid",
+    "away": "PSV Eindhoven",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T21:00:00+01:00",
+    "duration": 130,
+    "homeLogo": "541",
+    "awayLogo": "197"
+  },
+  {
+    "id": "9",
+    "home": "Slovan Bratislava",
+    "away": "Real Betis",
+    "league": "Champions League - League Stage",
+    "kickoff": "2026-11-24T21:00:00+01:00",
+    "duration": 130,
+    "homeLogo": "",
+    "awayLogo": "543"
   }
 ]
