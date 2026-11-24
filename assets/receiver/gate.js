@@ -630,7 +630,77 @@ html.tv .gate-left,html.desktop-app .gate-left{border-bottom:0;border-right:1px 
     render();
     return true;
   }
+  // On the public Deeprowss Pages website, every movie/TV play attempt offers
+  // an app-download route or ad-supported playback. Other app/receiver builds
+  // keep the existing Premium/free-allowance behaviour.
+  const showWebChoice = location.hostname === 'deeprowss.pages.dev';
+  let webChoiceResolve = null;
+  const webChoiceModal = document.createElement('div');
+  webChoiceModal.className = 'sheet web-choice-sheet';
+  webChoiceModal.id = 'webPlaybackChoice';
+  webChoiceModal.setAttribute('role', 'dialog');
+  webChoiceModal.setAttribute('aria-modal', 'true');
+  webChoiceModal.setAttribute('aria-label', 'Choose how to watch');
+  webChoiceModal.innerHTML =
+    '<section class="web-choice-pop">' +
+      '<button type="button" class="web-choice-close" id="webChoiceClose" aria-label="Close">✕</button>' +
+      '<div class="web-choice-mark">▶</div>' +
+      '<h2>Ready to watch?</h2>' +
+      '<p>Get the Deeprowss App for the best viewing experience, or continue here with ads.</p>' +
+      '<div class="web-choice-actions">' +
+        '<button type="button" class="web-choice-download" id="webChoiceDownload">⬇ Download Deeprowss App</button>' +
+        '<button type="button" class="web-choice-ads" id="webChoiceAds">▶ Continue watching with ads</button>' +
+      '</div>' +
+    '</section>';
+  const webChoiceStyle = document.createElement('style');
+  webChoiceStyle.textContent =
+    '.web-choice-sheet{z-index:120;align-items:center;justify-content:center;padding:18px;background:#02050bdc;backdrop-filter:blur(12px)}' +
+    '.web-choice-pop{position:relative;width:min(100%,440px);padding:34px 26px 26px;text-align:center;border:1px solid #ffffff20;border-radius:26px;background:radial-gradient(ellipse at 50% 0%,#ffc42e20,transparent 65%),#101722;box-shadow:0 28px 90px #000c}' +
+    '.web-choice-close{position:absolute;right:12px;top:12px;width:38px;height:38px;padding:0;border-radius:50%;background:#ffffff12;border:1px solid #ffffff20;color:#fff}' +
+    '.web-choice-mark{display:grid;place-items:center;width:58px;height:58px;margin:0 auto 15px;border-radius:18px;background:#ffc42e20;color:#ffd166;font-size:25px}' +
+    '.web-choice-pop h2{margin:0 0 10px;color:#fff;font-size:27px;font-weight:900}' +
+    '.web-choice-pop p{margin:0 auto 23px;max-width:340px;color:#aebbd0;font-size:14px;line-height:1.6}' +
+    '.web-choice-actions{display:grid;gap:11px}' +
+    '.web-choice-actions button{width:100%;min-height:52px;padding:13px 16px;border-radius:14px;font-size:14px;font-weight:900}' +
+    '.web-choice-download{background:#ffc42e;color:#1a1300;box-shadow:0 9px 25px #ffc42e2b}' +
+    '.web-choice-ads{background:#202c3b;border:1px solid #40536b;color:#fff}' +
+    '.web-choice-actions button:focus-visible,.web-choice-close:focus-visible{outline:3px solid #fff;outline-offset:3px}' +
+    '@media(max-width:420px){.web-choice-pop{padding:30px 18px 20px}.web-choice-pop h2{font-size:24px}}';
+  document.head.appendChild(webChoiceStyle);
+  document.body.appendChild(webChoiceModal);
+  function finishWebChoice(allow) {
+    webChoiceModal.classList.remove('open');
+    const resolve = webChoiceResolve;
+    webChoiceResolve = null;
+    if (resolve) resolve(!!allow);
+  }
+  function requestWebChoice() {
+    if (webChoiceResolve) return Promise.resolve(false);
+    return new Promise(resolve => {
+      webChoiceResolve = resolve;
+      webChoiceModal.classList.add('open');
+      setTimeout(() => { const b = $('webChoiceAds'); if (b) b.focus(); }, 30);
+    });
+  }
+  $('webChoiceClose').onclick = () => finishWebChoice(false);
+  $('webChoiceAds').onclick = () => finishWebChoice(true);
+  $('webChoiceDownload').onclick = () => {
+    finishWebChoice(false);
+    if (typeof window.deeprowssGo === 'function') window.deeprowssGo('downloads');
+    else location.hash = '#downloads';
+  };
+  webChoiceModal.addEventListener('click', e => {
+    if (e.target === webChoiceModal) finishWebChoice(false);
+  });
+  document.addEventListener('keydown', e => {
+    if (!webChoiceResolve) return;
+    if (e.key === 'Escape' || e.key === 'Backspace') {
+      e.preventDefault(); e.stopPropagation(); finishWebChoice(false);
+    }
+  }, true);
+
   window.deeprowssMovieAccess = async function(movie, action) {
+    if (showWebChoice && (action || 'play') !== 'download') return await requestWebChoice();
     const title = String((movie && (movie.title || movie.name)) || movie || 'movie').toLowerCase();
     const type = movie && (movie.type === 'tv' || movie.isSeries) ? 'tv' : 'movie';
     const key = type + ':' + title.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 100);
@@ -656,6 +726,7 @@ html.tv .gate-left,html.desktop-app .gate-left{border-bottom:0;border-right:1px 
   // Visitors and non-Premium users can start ten distinct TV channels per UTC day.
   // The Worker records each channel atomically; reopening one of today's channels is free.
   window.deeprowssTvAccess = async function(channel) {
+    if (showWebChoice) return await requestWebChoice();
     if (!gateOn() || activeUnlock()) return true;
     const name = String(channel && channel.name || channel || 'TV channel').trim();
     const key = String(channel && (channel.id || (name + '|' + (channel.category || '') + '|' + (channel.country || ''))) || name)
