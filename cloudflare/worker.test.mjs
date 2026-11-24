@@ -19,6 +19,18 @@ globalThis.fetch = async (url, opts) => {
       ? [{ app_opens: 1234, phones: 56 }] : [{ day: "2026-10-07 00:00:00", country: "NG", version: "1.0.9", file: "movies.json", requests: 10, phones: 3, app_opens: 7 }];
     return new Response(JSON.stringify({ data }), { status: 200 });
   }
+  if (u.includes("api.github.com/repos/Deeprows/myflutter-app/releases/tags/")) {
+    assert.match(opts.headers.authorization, /^Bearer ghp_test$/);
+    return new Response(JSON.stringify({ assets: [{ name: "Deeprowss-v1.3.7.apk", url: "https://api.github.com/assets/42", content_type: "application/vnd.android.package-archive", size: 8 }] }), { status: 200 });
+  }
+  if (u.includes("api.github.com/assets/42")) {
+    assert.match(opts.headers.authorization, /^Bearer ghp_test$/);
+    return new Response("APK-DATA", { status: 200 });
+  }
+  if (u.includes("api.github.com/repos/Deeprows/myflutter-app/contents/")) {
+    assert.match(opts.headers.authorization, /^Bearer ghp_test$/);
+    return new Response(JSON.stringify({ config: true }), { status: 200 });
+  }
   upstreamCalls++;
   if (upstreamStatus !== 200) return new Response("nope", { status: upstreamStatus });
   return new Response(JSON.stringify([{ name: "x", url: "u" }]), { status: 200 });
@@ -89,7 +101,25 @@ assert.equal(points.length, 1);
 assert.equal((await post("/analytics", { event: "app_open", installId: "p" }, {})).status, 503);
 assert.equal((await get("/analytics")).status, 404); // GET is not allowed
 
-// 7. health shows whether the Cloudflare setup is complete
+// 7. public configuration and release proxy: public fallback + private-token mode
+r = await get("/public/data/app_config.json");
+assert.equal(r.status, 200);
+assert.match(r.headers.get("content-type"), /application\\/json/);
+assert.equal((await r.json())[0].name, "x");
+assert.equal((await get("/public/data/secret_keys.json")).status, 404);
+
+const privateEnv = { GITHUB_TOKEN: "ghp_test" };
+r = await worker.fetch(new Request("https://f.example.com/public/data/app_config.json"), privateEnv, ctx);
+assert.equal(r.status, 200);
+assert.deepEqual(await r.json(), { config: true });
+r = await worker.fetch(new Request("https://f.example.com/public/releases/v1.3.7/Deeprowss-v1.3.7.apk"), privateEnv, ctx);
+assert.equal(r.status, 200);
+assert.equal(await r.text(), "APK-DATA");
+assert.match(r.headers.get("content-disposition"), /Deeprowss-v1.3.7.apk/);
+assert.equal((await worker.fetch(new Request("https://f.example.com/public/releases/v1.3.7/private.zip"), privateEnv, ctx)).status, 404);
+assert.equal((await worker.fetch(new Request("https://f.example.com/public/releases/v1.3.7/Deeprowss-v1.3.7.apk", { method: "POST" }), privateEnv, ctx)).status, 405);
+
+// 8. health shows whether the Cloudflare setup is complete
 let h = await (await get("/health")).json();
 assert.deepEqual([h.ok, h.analytics, h.stats], [true, true, true]);
 h = await (await worker.fetch(new Request("https://f.example.com/"), {}, ctx)).json();
