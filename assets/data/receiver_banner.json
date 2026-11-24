@@ -1,0 +1,18 @@
+{
+  "enabled": false,
+  "label": "Ad",
+  "rotate_seconds": 8,
+  "recommended_image_size": "900x200 px (4.5:1), JPG/PNG/WebP/SVG. Banner width automatically matches the clock width",
+  "placeholder_text": "Advert here",
+  "placeholder_sub": "Your banner could be here",
+  "placeholder_url": "https://wa.me/2347041629630",
+  "ads": [
+    {
+      "id": "ad-001",
+      "image_url": "https://raw.githubusercontent.com/Deeprows/myflutter-app/main/assets/data/ai-learning-ad.svg",
+      "url": "https://wa.me/2347041629630",
+      "alt": "Learn how to create websites and Android apps with AI in one day",
+      "expires": ""
+    }
+  ]
+}
