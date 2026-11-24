@@ -55,7 +55,7 @@ jobs:
       - name: Build Android TV release APK
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          if [[ "$GITHUB_REF" == "refs/heads/main" ]]; then VERSION="1.3.5"; fi
+          if [[ "$GITHUB_REF" == "refs/heads/main" ]]; then VERSION="1.3.7"; fi
           if [[ "$GITHUB_REF" != refs/tags/v* && "$GITHUB_REF" != "refs/heads/main" ]]; then VERSION="1.0.${GITHUB_RUN_NUMBER}"; fi
           gradle -p receiver/android-tv-app :app:assembleRelease --no-daemon \
             -PappVersionName="$VERSION" -PappVersionCode="${GITHUB_RUN_NUMBER}"
@@ -180,7 +180,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           name: Deeprowss Receiver ${{ github.ref_name }}
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v1.3.5' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v1.3.7' }}
           files: |
             release-assets/Deeprowss-Android-TV.apk
             release-assets/Deeprowss-Windows-Setup.exe
