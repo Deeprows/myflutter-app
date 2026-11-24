@@ -399,7 +399,7 @@ function downloadHttpsFile(rawUrl, destination, redirects = 0) {
     let url;
     try { url = new URL(rawUrl); } catch (_) { reject(new Error('Invalid update URL')); return; }
     if (url.protocol !== 'https:' || redirects > 5) { reject(new Error('Unsafe update URL')); return; }
-    const request = https.get(url, (response) => {
+    const request = https.get(url, { headers: { 'User-Agent': 'Deeprowss-Cinema-Updater' } }, (response) => {
       if ([301, 302, 303, 307, 308].includes(response.statusCode) && response.headers.location) {
         response.resume();
         const next = new URL(response.headers.location, url).toString();
@@ -421,13 +421,14 @@ ipcMain.handle('app:install-update', async (event, rawUrl) => {
   if (!trusted(event) || !app.isPackaged || process.env.PORTABLE_EXECUTABLE_DIR) return false;
   let url;
   try { url = new URL(String(rawUrl || '')); } catch (_) { return false; }
-  if (url.protocol !== 'https:' || !/\\.exe$/i.test(url.pathname)) return false;
-  const installer = path.join(app.getPath('temp'), 'Deeprowss-Cinema-Update.exe');
+  if (url.protocol !== 'https:' || !/\.exe$/i.test(url.pathname)) return false;
+  const installer = path.join(app.getPath('temp'), 'Deeprowss-Cinema-Update-' + Date.now() + '.exe');
   try {
     await downloadHttpsFile(url.toString(), installer);
-    const child = spawn(installer, [], { detached: true, stdio: 'ignore' });
-    child.unref();
-    setTimeout(() => app.quit(), 500);
+    // ShellExecute handles the Windows admin (UAC) prompt; a plain spawn fails silently for elevated installers.
+    const failure = await shell.openPath(installer);
+    if (failure) throw new Error(failure);
+    setTimeout(() => app.quit(), 1500);
     return true;
   } catch (error) {
     console.error('Deeprowss direct update failed:', error);
