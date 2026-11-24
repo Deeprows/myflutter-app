@@ -4,6 +4,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('deeprowssDesktop', {
   platform: process.platform,
+  // PC display / preferred languages (best first); the page picks its language from this.
+  locales: (() => { try { const v = ipcRenderer.sendSync('app:locales'); return Array.isArray(v) ? v.map(String) : []; } catch (_) { return []; } })(),
   // Opens a movie download page in a clean window; files are saved to the Downloads folder.
   openDownload: (url) => ipcRenderer.invoke('dl:open', String(url || '')),
   openExternal: (url) => ipcRenderer.invoke('external:open', String(url || '')),
