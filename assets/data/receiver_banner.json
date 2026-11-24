@@ -1,5 +1,5 @@
 {
-  "enabled": false,
+  "enabled": true,
   "label": "Ad",
   "rotate_seconds": 8,
   "recommended_image_size": "900x200 px (4.5:1), JPG/PNG/WebP/SVG. Banner width automatically matches the clock width",
