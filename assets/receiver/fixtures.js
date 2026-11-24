@@ -457,7 +457,7 @@
     const u = (cfg.update && cfg.update.apkUrl) || (cfg.share && cfg.share.link) || '';
     try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch (_) { return ''; }
   };
-  const openDl = u => { if (window.deeprowssDesktop && window.deeprowssDesktop.openDownload) window.deeprowssDesktop.openDownload(u); else window.open(u, '_blank', 'noopener'); };
+  const openDl = () => { if (window.deeprowssGo) window.deeprowssGo('downloads'); else location.hash = '#downloads'; };
   const where = () => window.deeprowssDesktop ? 'this Windows app' : 'this screen';
   function openModal(f) {
     const url = appUrl(), ver = cfg.update && cfg.update.version, now = Date.now(), live = phase(f, now) === 'live';
@@ -485,7 +485,7 @@
     const play = backup => () => { closeModal(); if (window.deeprowssPlayFixture) window.deeprowssPlayFixture(f, backup); else { const s = document.getElementById('playState'); if (s) s.textContent = 'Player is unavailable. Please refresh and try again.'; } };
     const watchAds = $('fxWatchAds'); if (watchAds) watchAds.onclick = play(false);
     $('fxConnect').onclick = () => { closeModal(); if (window.deeprowssGo) window.deeprowssGo('connect'); };
-    const dl = $('fxDl'); if (dl) dl.onclick = () => openDl(url);
+    const dl = $('fxDl'); if (dl) dl.onclick = () => openDl();
     modal.classList.add('open'); modalOpen = true;
     setTimeout(() => { const el = $('fxWatchAds') || $('fxDl') || $('fxConnect'); if (el) el.focus(); }, 40);
   }
