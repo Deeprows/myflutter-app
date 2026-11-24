@@ -309,6 +309,17 @@ ipcMain.handle('dl:open', (event, url) => {
   } catch (_) { return false; }
 });
 
+// Advert banner under the clock: opens the advertiser's page in the user's default browser.
+ipcMain.handle('ad:open', async (event, url) => {
+  if (!trusted(event)) return false;
+  try {
+    const u = new URL(String(url).trim().slice(0, 2000));
+    if (!['https:', 'http:', 'mailto:'].includes(u.protocol)) return false;
+    await shell.openExternal(u.href);
+    return true;
+  } catch (_) { return false; }
+});
+
 ipcMain.handle('external:open', async (event, url) => {
   if (!trusted(event)) return false;
   try {
