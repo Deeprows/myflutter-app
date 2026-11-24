@@ -1,5 +1,7 @@
 package com.deeprows.receiver
 
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
@@ -37,7 +39,10 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import org.json.JSONObject
@@ -134,6 +139,8 @@ class MainActivity : Activity() {
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private lateinit var container: FrameLayout
+    private var splashView: View? = null
+    private var splashSpin: ObjectAnimator? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -211,6 +218,10 @@ class MainActivity : Activity() {
                     return super.shouldInterceptRequest(view, request)
                 }
 
+                override fun onPageCommitVisible(view: WebView?, url: String?) {
+                    removeNativeSplash(true)
+                }
+
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                     if (request?.isForMainFrame == true) showOfflineScreen()
                 }
@@ -224,8 +235,64 @@ class MainActivity : Activity() {
             view,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
+        showNativeSplash()
         view.loadUrl(url)
         view.requestFocus()
+    }
+
+    // ------------------------------------------------------------------ splash
+
+    /** Kodi-style splash: the app logo spins until the receiver page paints its first frame. */
+    private fun showNativeSplash() {
+        removeNativeSplash(false)
+        val dm = resources.displayMetrics
+        val size = (minOf(dm.widthPixels, dm.heightPixels) * 0.24f).toInt().coerceAtLeast((120 * dm.density).toInt())
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.rgb(8, 10, 16))
+            isClickable = true
+        }
+        val logo = ImageView(this).apply {
+            setImageResource(R.drawable.deeprowss_splash)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            cameraDistance = 9000f * dm.density
+        }
+        box.addView(logo, LinearLayout.LayoutParams(size, size))
+        box.addView(
+            label("DEEPROWSS", 26f, Color.WHITE, true).apply { letterSpacing = 0.34f },
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = (size * 0.22f).toInt() }
+        )
+        box.addView(
+            label("CINEMA & LIVE TV", 13f, Color.rgb(111, 214, 251), true).apply { letterSpacing = 0.32f },
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = 10 }
+        )
+        splashSpin = ObjectAnimator.ofFloat(logo, View.ROTATION_Y, 0f, 360f).apply {
+            duration = 2400
+            interpolator = AccelerateDecelerateInterpolator()
+            repeatCount = ValueAnimator.INFINITE
+            start()
+        }
+        splashView = box
+        container.addView(box, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        // Safety net: never leave the splash up if the page is slow or fails.
+        box.postDelayed({ if (splashView === box) removeNativeSplash(true) }, 9000)
+    }
+
+    private fun removeNativeSplash(animate: Boolean) {
+        val v = splashView ?: return
+        splashView = null
+        val spin = splashSpin
+        splashSpin = null
+        if (animate && v.isAttachedToWindow) {
+            v.animate().alpha(0f).setDuration(350).setInterpolator(LinearInterpolator()).withEndAction {
+                spin?.cancel()
+                try { container.removeView(v) } catch (_: Exception) {}
+            }.start()
+        } else {
+            spin?.cancel()
+            try { container.removeView(v) } catch (_: Exception) {}
+        }
     }
 
     /** Updates the ad-host list from the hosted receiver/adblock.json without needing a new APK. */
