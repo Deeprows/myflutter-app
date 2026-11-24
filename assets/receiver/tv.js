@@ -196,6 +196,137 @@
     };
   })();
 
+  /* ---------- My playlists (shared with Settings > Playlists) ---------- */
+  const PL_KEY = (() => {
+    const ua = navigator.userAgent || '';
+    if (window.deeprowssDesktop) return 'deeprowss_exe_settings';
+    if (window.DeeprowssTv || /Android TV|AFTT|BRAVIA|GoogleTV|CrKey/i.test(ua)) return 'deeprowss_androidTv_settings';
+    if (/Web0S|WebOS|webOS/i.test(ua)) return 'deeprowss_webos_settings';
+    return 'deeprowss_web_settings';
+  })();
+  const plData = new Map(), plState = new Map();           /* url -> channels[] / {loading, error, at} */
+  function plList() {
+    try { const o = JSON.parse(localStorage.getItem(PL_KEY) || '{}') || {}; return Array.isArray(o.playlists) ? o.playlists.filter(p => p && p.name && p.url) : []; } catch (_) { return []; }
+  }
+  function plSave(list) {
+    let o = {}; try { o = JSON.parse(localStorage.getItem(PL_KEY) || '{}') || {}; } catch (_) {}
+    o.playlists = list; try { localStorage.setItem(PL_KEY, JSON.stringify(o)); } catch (_) {}
+    window.dispatchEvent(new Event('deeprowss:playlists'));
+  }
+  const isPl = () => String(st.cat).startsWith('pl:');
+  const curPl = () => (isPl() ? plList()[Number(String(st.cat).slice(3))] || null : null);
+  function parseM3u(body, base) {
+    const out = []; let name = '', group = '', logo = '', country = '', referer = '', ua = '';
+    for (const raw of String(body || '').replace(/^\uFEFF/, '').split(/\r?\n/)) {
+      const line = raw.trim(); if (!line) continue;
+      if (line.startsWith('#EXTINF')) {
+        const comma = line.lastIndexOf(',');
+        name = comma >= 0 ? line.slice(comma + 1).trim() : '';
+        group = (line.match(/group-title="([^"]*)"/i) || [])[1] || '';
+        logo = (line.match(/tvg-logo="([^"]*)"/i) || [])[1] || '';
+        country = ((line.match(/tvg-country="([^"]*)"/i) || [])[1] || '').split(/[;,]/)[0].trim().toUpperCase();
+        if (!name) name = (line.match(/tvg-name="([^"]*)"/i) || [])[1] || '';
+      } else if (line.startsWith('#EXTGRP:')) group = line.slice(8).trim();
+      else if (/^#EXTVLCOPT:http-referrer=/i.test(line)) referer = line.split('=').slice(1).join('=').trim();
+      else if (/^#EXTVLCOPT:http-user-agent=/i.test(line)) ua = line.split('=').slice(1).join('=').trim();
+      else if (!line.startsWith('#')) {
+        let url = ''; try { url = new URL(line, base).href; } catch (_) {}
+        if (/^https?:/i.test(url)) out.push({ name: name || url.split('/').pop().split('?')[0] || 'Channel ' + (out.length + 1), url, category: 'other', group: group || undefined,
+          logo: /^https?:/i.test(logo) ? logo : undefined, country: /^[A-Z]{2}$/.test(country) ? country : undefined, referer: referer || undefined, userAgent: ua || undefined, own: false, pl: true });
+        name = ''; group = ''; logo = ''; country = ''; referer = ''; ua = '';
+      }
+    }
+    return out;
+  }
+  async function fetchText(url) {
+    if (window.DeeprowssTv && window.DeeprowssTv.fetchPlaylist) {
+      const native = JSON.parse(window.DeeprowssTv.fetchPlaylist(url));
+      if (!native.ok) throw Error(native.error || 'HTTP ' + native.status);
+      return String(native.body || '');
+    }
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw Error('HTTP ' + r.status);
+    return r.text();
+  }
+  async function loadPl(p, force) {
+    if (!p) return;
+    const stt = plState.get(p.url) || {};
+    if (stt.loading) return;
+    if (!plData.has(p.url)) {                              /* instant display from the saved copy */
+      const cached = await idb.get('pl:' + p.url);
+      if (cached && Array.isArray(cached.rows) && cached.rows.length) { plData.set(p.url, cached.rows); plState.set(p.url, { at: cached.at || 0 }); if (curPl() && curPl().url === p.url) render(); else renderSide(); }
+    }
+    const have = plData.has(p.url), age = Date.now() - ((plState.get(p.url) || {}).at || 0);
+    if (have && !force && age < 3600000) return;
+    plState.set(p.url, { ...(plState.get(p.url) || {}), loading: true, error: '' });
+    if (curPl() && curPl().url === p.url) render();
+    try {
+      const rows = parseM3u(await fetchText(p.url), p.url);
+      if (!rows.length) throw Error('No channels found in this playlist.');
+      plData.set(p.url, rows); plState.set(p.url, { at: Date.now() });
+      idb.set('pl:' + p.url, { at: Date.now(), rows });
+    } catch (e) {
+      plState.set(p.url, { ...(plState.get(p.url) || {}), loading: false, error: (e && e.message) || 'Could not load this playlist.' });
+      if (!have) plData.delete(p.url);
+    }
+    if (isPl()) render(); else renderSide();
+  }
+  function plModal() {
+    let m = $('tvPlModal');
+    if (!m) {
+      const css = document.createElement('style');
+      css.textContent = '#tvPlModal{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:#02060bcc;backdrop-filter:blur(6px)}#tvPlModal.open{display:flex}' +
+        '#tvPlModal .box{width:min(560px,92vw);padding:26px;border-radius:22px;background:linear-gradient(160deg,#141c2b,#0b111b);border:1px solid #ffffff1c;box-shadow:0 30px 80px #000c;color:#fff}' +
+        '#tvPlModal h3{margin:0 0 6px;font-size:22px}#tvPlModal p{margin:0 0 16px;color:#8da0b6;font-size:13.5px;line-height:1.45}' +
+        '#tvPlModal input{display:block;width:100%;box-sizing:border-box;margin:0 0 12px;padding:13px 15px;border-radius:13px;border:1px solid #ffffff22;background:#060a11;color:#fff;font:inherit;font-size:15px}' +
+        '#tvPlModal input:focus{outline:2px solid var(--accent2,#6fd6fb);outline-offset:1px}#tvPlModal .row{display:flex;gap:10px;justify-content:flex-end;margin-top:6px}' +
+        '#tvPlModal button{padding:11px 20px;border-radius:99px;border:1px solid #ffffff26;background:#ffffff10;color:#fff;font:inherit;font-weight:700;cursor:pointer}#tvPlModal button.go{background:linear-gradient(135deg,var(--accent2,#6fd6fb),#3b7bff);color:#04121c;border-color:transparent}' +
+        '#tvPlModal button:focus-visible{outline:3px solid #fff;outline-offset:2px}#tvPlModal .err{min-height:18px;margin:0 0 6px;color:#ff9cac;font-size:13px}' +
+        '#tvPlBar{display:flex;gap:10px;flex-wrap:wrap;padding:0 28px 10px}#tvPlBar[hidden]{display:none}#tvPlBar button{padding:8px 16px;border-radius:99px;border:1px solid #ffffff22;background:#ffffff0d;color:#d6e2ee;font:inherit;font-size:13px;font-weight:700;cursor:pointer}#tvPlBar button:focus-visible,#tvPlBar button:hover{border-color:var(--accent2,#6fd6fb);color:#fff}' +
+        '.cat.pl-add .ci{background:linear-gradient(135deg,var(--accent2,#6fd6fb),#3b7bff);color:#04121c;font-weight:900;font-size:18px}';
+      document.head.appendChild(css);
+      m = document.createElement('div'); m.id = 'tvPlModal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+      m.innerHTML = '<div class="box"><h3>Add your playlist</h3><p>Paste the name and link of your M3U / M3U8 playlist. It will appear under “My playlists” and in Settings › Playlists.</p>' +
+        '<input id="tvPlName" placeholder="Playlist name" autocomplete="off"><input id="tvPlUrl" placeholder="https://example.com/playlist.m3u" inputmode="url" autocomplete="off"><div class="err" id="tvPlErr"></div>' +
+        '<div class="row"><button type="button" id="tvPlCancel">Cancel</button><button type="button" class="go" id="tvPlAdd">Add playlist</button></div></div>';
+      document.body.appendChild(m);
+      const close = () => { m.classList.remove('open'); const b = document.querySelector('#tvCats .pl-add'); if (b) b.focus(); };
+      const submit = () => {
+        const name = $('tvPlName').value.trim(), raw = $('tvPlUrl').value.trim(); let u;
+        try { u = new URL(raw); if (!/^https?:$/.test(u.protocol)) throw 0; } catch (_) { $('tvPlErr').textContent = 'Enter a valid playlist link starting with http:// or https://'; return; }
+        const list = plList();
+        if (list.some(p => p.url === u.href)) { $('tvPlErr').textContent = 'This playlist is already added.'; return; }
+        list.push({ name: name || u.hostname, url: u.href }); plSave(list);
+        $('tvPlName').value = ''; $('tvPlUrl').value = ''; $('tvPlErr').textContent = '';
+        m.classList.remove('open');
+        st.cat = 'pl:' + (list.length - 1); try { localStorage.setItem(LAST_CAT_KEY, st.cat); } catch (_) {}
+        render(); loadPl(list[list.length - 1], true);
+      };
+      $('tvPlCancel').onclick = close; $('tvPlAdd').onclick = submit;
+      m.addEventListener('click', e => { if (e.target === m) close(); });
+      m.addEventListener('keydown', e => {
+        if (e.key === 'Escape' || e.key === 'Backspace' && !/INPUT/.test(e.target.tagName)) { e.preventDefault(); e.stopPropagation(); close(); }
+        else if (e.key === 'Enter' && e.target.id === 'tvPlUrl') { e.preventDefault(); submit(); }
+      }, true);
+    }
+    $('tvPlErr').textContent = ''; m.classList.add('open'); setTimeout(() => $('tvPlName').focus(), 40);
+  }
+  function renderPlBar() {
+    let bar = $('tvPlBar');
+    if (!bar) { bar = document.createElement('div'); bar.id = 'tvPlBar'; bar.hidden = true; const s0 = $('tvStatus'); s0.parentNode.insertBefore(bar, s0.nextSibling); plModal(); $('tvPlModal').classList.remove('open'); }
+    const p = curPl(); bar.hidden = !p; if (!p) return;
+    bar.innerHTML = '<button type="button" data-pl="reload">↻ Reload playlist</button><button type="button" data-pl="remove">🗑 Remove playlist</button>';
+    bar.onclick = e => {
+      const b = e.target.closest('[data-pl]'); if (!b) return;
+      if (b.dataset.pl === 'reload') { loadPl(p, true); return; }
+      if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Press again to remove'; setTimeout(() => { if (b.isConnected) { b.dataset.armed = ''; b.textContent = '🗑 Remove playlist'; } }, 4000); return; }
+      const list = plList().filter(x => x.url !== p.url); plSave(list); plData.delete(p.url); plState.delete(p.url);
+      st.cat = 'all'; try { localStorage.setItem(LAST_CAT_KEY, 'all'); } catch (_) {}
+      render();
+    };
+  }
+  window.addEventListener('deeprowss:playlists', () => { if (isPl() && !curPl()) st.cat = 'all'; if (built) { try { render(); } catch (_) {} } });
+
   /* ---------- channel lists ---------- */
   function parseChannel(raw, isOwn) {
     if (!raw || typeof raw !== 'object') return null;
@@ -248,7 +379,11 @@
   function renderSide() {
     const n = counts(), side = $('tvCats');
     const row = (id, icon, label) => '<button type="button" class="cat' + (st.cat === id ? ' on' : '') + '" data-cat="' + id + '"><span class="ci">' + icon + '</span><span>' + esc(label) + '</span><span class="n">' + (n[id] || 0) + '</span></button>';
-    let h = '<h4>BROWSE</h4>' + row('all', '📡', 'All channels') + row('fav', '♥', 'Favourites') + row('recent', '🕘', 'Recently watched') + '<h4 style="margin-top:18px">CATEGORIES</h4>';
+    let h = '<h4>BROWSE</h4>' + row('all', '📡', 'All channels') + row('fav', '♥', 'Favourites') + row('recent', '🕘', 'Recently watched');
+    h += '<h4 style="margin-top:18px">MY PLAYLISTS</h4>';
+    plList().forEach((p, i) => { const id = 'pl:' + i, rows = plData.get(p.url); n[id] = rows ? rows.length : 0; h += row(id, '🎞', p.name).replace('<span class="n">0</span>', '<span class="n">' + (rows ? rows.length.toLocaleString() : '↻') + '</span>'); });
+    h += '<button type="button" class="cat pl-add" data-cat="pl-add"><span class="ci">+</span><span>Add playlist</span></button>';
+    h += '<h4 style="margin-top:18px">CATEGORIES</h4>';
     for (const c of CATS) if (n[c.id]) h += row(c.id, c.icon, c.label);
     side.innerHTML = h;
   }
@@ -261,39 +396,42 @@
   }
   function applyFilter() {
     let base = baseForCountry();
-    if (st.cat === 'fav') { const f = new Set(favs().map(keyOf)); base = base.filter(c => f.has(keyOf(c))); const have = new Set(base.map(keyOf)); if (!st.country) favs().forEach(c => { if (!have.has(keyOf(c))) base.push(c); }); }
+    if (isPl()) { const p = curPl(); base = p ? (plData.get(p.url) || []) : []; }
+    else if (st.cat === 'fav') { const f = new Set(favs().map(keyOf)); base = base.filter(c => f.has(keyOf(c))); const have = new Set(base.map(keyOf)); if (!st.country) favs().forEach(c => { if (!have.has(keyOf(c))) base.push(c); }); }
     else if (st.cat === 'recent') { const rec = readList(RECENT_KEY); base = rec.filter(c => !st.country || c.country === st.country); }
     else if (st.cat !== 'all') base = base.filter(c => c.category === st.cat);
     const q = st.q.toLowerCase();
-    if (q) base = base.filter(c => c.name.toLowerCase().includes(q) || (c.country && (c.country.toLowerCase() === q || countryName(c.country).toLowerCase().includes(q))) || catLabel(c.category).toLowerCase().includes(q));
+    if (q) base = base.filter(c => c.name.toLowerCase().includes(q) || (c.group && c.group.toLowerCase().includes(q)) || (c.country && (c.country.toLowerCase() === q || countryName(c.country).toLowerCase().includes(q))) || catLabel(c.category).toLowerCase().includes(q));
     filtered = base;
   }
   function cardHtml(c, i) {
     const q = qualityLabel(c.quality), fav = isFav(c);
     return '<div class="chw"><button type="button" class="ch" data-i="' + i + '" aria-label="' + esc(c.name) + '"><span class="lg"><span class="ini">' + esc(initials(c.name)) + '</span>' +
       (c.logo ? '<img loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" src="' + esc(c.logo) + '">' : '') + '<span class="lv">LIVE</span></span>' +
-      '<span class="bd"><span class="nm">' + esc(c.name) + '</span><span class="mt"><span class="p2">' + esc(catLabel(c.category)) + '</span>' +
+      '<span class="bd"><span class="nm">' + esc(c.name) + '</span><span class="mt"><span class="p2">' + esc(c.group || catLabel(c.category)) + '</span>' +
       (c.country ? '<span class="p2">' + esc(c.country) + '</span>' : '') + (q ? '<span class="p2 q">' + q + '</span>' : '') + '</span></span></button>' +
       '<button type="button" class="fav' + (fav ? ' on' : '') + '" data-fav="' + i + '" aria-label="' + (fav ? 'Remove from favourites' : 'Add to favourites') + '">' + (fav ? '♥' : '♡') + '</button></div>';
   }
   function title() {
     if (st.q) return 'Search';
+    if (isPl()) { const p = curPl(); return p ? p.name : 'My playlist'; }
     if (st.cat === 'all') return 'All channels'; if (st.cat === 'fav') return 'Favourites'; if (st.cat === 'recent') return 'Recently watched';
     return catLabel(st.cat);
   }
   function renderStatus() {
     const el = $('tvStatus');
+    if (isPl()) { const p = curPl(), x = (p && plState.get(p.url)) || {}; el.textContent = !p ? '' : x.loading ? 'Loading playlist…' : x.error ? x.error + (plData.has(p.url) ? ' · showing saved copy' : '') : 'Your playlist · ' + (plData.has(p.url) ? plData.get(p.url).length.toLocaleString() + ' channels' : 'not loaded yet'); return; }
     if (st.loading) { el.innerHTML = '<span class="spin"></span>Updating online channels…'; return; }
     const parts = [own.length + ' own', nexus.length ? nexus.length.toLocaleString() + ' online channels' : 'online list not loaded'];
     el.textContent = parts.join(' · ') + (st.nexusInfo ? ' · ' + st.nexusInfo : '') + (st.failed ? ' · update failed, showing saved copy' : '');
   }
   function render() {
-    renderSide(); applyFilter(); renderStatus();
+    renderSide(); applyFilter(); renderStatus(); renderPlBar();
     $('tvTitle').textContent = title();
     $('tvCount').textContent = filtered.length.toLocaleString() + ' channels';
     const grid = $('tvGrid'); grid.innerHTML = ''; shown = 0;
     if (!filtered.length) {
-      grid.innerHTML = '<div class="tv-empty">' + (st.loading ? 'Loading channels…' : st.cat === 'fav' ? 'No favourites yet. Tap the heart on any channel.' : st.cat === 'recent' ? 'Nothing watched yet.' : 'No channels found.') + '</div>';
+      grid.innerHTML = '<div class="tv-empty">' + (isPl() ? (((curPl() && (plState.get(curPl().url) || {}).loading)) ? 'Loading your playlist…' : ((curPl() && (plState.get(curPl().url) || {}).error) || 'No channels found.')) : st.loading ? 'Loading channels…' : st.cat === 'fav' ? 'No favourites yet. Tap the heart on any channel.' : st.cat === 'recent' ? 'Nothing watched yet.' : 'No channels found.') + '</div>';
       return;
     }
     more();
@@ -406,7 +544,7 @@
     }, 15000);
   }
   async function play(c, choice) {
-    if (typeof window.deeprowssTvAccess === 'function') {
+    if (!c.pl && typeof window.deeprowssTvAccess === 'function') {
       const allowed = await window.deeprowssTvAccess(c);
       if (!allowed) return;
     }
@@ -496,8 +634,10 @@
     if (built) return; built = true;
     $('tvCats').addEventListener('click', e => {
       const b = e.target.closest('[data-cat]'); if (!b) return;
+      if (b.dataset.cat === 'pl-add') { plModal(); return; }
       st.cat = b.dataset.cat; try { localStorage.setItem(LAST_CAT_KEY, st.cat); } catch (_) {}
       render(); $('tvMain').scrollTo({ top: 0 });
+      if (isPl()) loadPl(curPl(), false);
     });
     $('tvGrid').addEventListener('click', e => {
       const f = e.target.closest('[data-fav]');
@@ -545,6 +685,7 @@
   }
   function enter() {
     build();
+    if (isPl()) { if (curPl()) loadPl(curPl(), false); else st.cat = 'all'; }
     if (!all.length && !st.loading) { render(); load(false); }
     else { render(); const stale = !st.loading && nexusAge() > cfg.refreshMin * 60000; if (stale) load(false); }
   }
