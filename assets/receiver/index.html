@@ -174,11 +174,48 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
   var app=!!(window.deeprowssDesktop||window.DeeprowssTv)||/Web0S|WebOS|Tizen/i.test(ua)||q.get('splash')==='1';
   if(!app||q.get('nosplash')==='1'){el.parentNode.removeChild(el);return;}
   el.className='on';
-  var t0=Date.now(),MIN=2000,MAX=7000,done=false,loaded=document.readyState==='complete';
+  var t0=Date.now(),MIN=2600,MAX=7000,done=false,loaded=document.readyState==='complete',snd=null;
+
+  /* Signature launch sound, synthesised (no audio file): sub boom, rising whoosh while the logo spins, bright chime as it lands. */
+  function sting(){
+    try{
+      var off=q.get('nosound')==='1';try{if(localStorage.getItem('dr_splash_sound')==='off')off=true;}catch(_){}
+      var AC=window.AudioContext||window.webkitAudioContext;if(off||!AC)return;
+      var c=new AC(),t=c.currentTime+0.06,m=c.createGain(),lim=c.createDynamicsCompressor();
+      m.gain.value=.9;m.connect(lim);lim.connect(c.destination);snd={c:c,m:m};
+      var tone=function(type,f1,f2,st,dur,vol,atk){
+        var o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.setValueAtTime(f1,t+st);
+        if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+st+dur);
+        g.gain.setValueAtTime(.0001,t+st);g.gain.exponentialRampToValueAtTime(vol,t+st+(atk||.02));g.gain.exponentialRampToValueAtTime(.0001,t+st+dur);
+        o.connect(g);g.connect(m);o.start(t+st);o.stop(t+st+dur+.05);
+      };
+      tone('sine',95,38,0,.9,.5,.01);                         /* sub boom as the logo appears */
+      tone('triangle',180,1500,0,1.7,.1,.7);                  /* rising sweep while it spins */
+      tone('sine',360,3000,.05,1.65,.05,.8);
+      var len=Math.floor(c.sampleRate*1.9),buf=c.createBuffer(1,len,c.sampleRate),d=buf.getChannelData(0);
+      for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+      var n=c.createBufferSource(),bp=c.createBiquadFilter(),ng=c.createGain();
+      n.buffer=buf;bp.type='bandpass';bp.Q.value=1.1;
+      bp.frequency.setValueAtTime(300,t);bp.frequency.exponentialRampToValueAtTime(4200,t+1.7);
+      ng.gain.setValueAtTime(.0001,t);ng.gain.exponentialRampToValueAtTime(.13,t+1.45);ng.gain.exponentialRampToValueAtTime(.0001,t+1.85);
+      n.connect(bp);bp.connect(ng);ng.connect(m);n.start(t);n.stop(t+1.9);
+      [659.25,987.77,1318.5,1661.2].forEach(function(f,i){      /* chime when the spin lands */
+        tone('sine',f,0,1.72+i*.07,1.5,.17/(1+i*.4),.005);
+        tone('sine',f*2.01,0,1.72+i*.07,.7,.035,.005);
+      });
+      if(c.state==='suspended'){                              /* sound blocked until the first key/click */
+        var unlock=function(){['keydown','pointerdown','click','touchstart'].forEach(function(n){window.removeEventListener(n,unlock,true);});
+          if(done){try{c.close();}catch(_){}return;}try{c.resume();}catch(_){}};
+        ['keydown','pointerdown','click','touchstart'].forEach(function(n){window.addEventListener(n,unlock,true);});
+        try{c.resume();}catch(_){}
+      }
+    }catch(_){}
+  }
   var block=function(e){e.stopPropagation();e.preventDefault();};
   ['keydown','keyup','keypress','click','mousedown','pointerdown','touchstart'].forEach(function(n){window.addEventListener(n,block,true);});
   function finish(){
     if(done)return;done=true;el.className='on out';
+    if(snd){try{var g=snd.m.gain;g.cancelScheduledValues(snd.c.currentTime);g.setValueAtTime(g.value,snd.c.currentTime);g.linearRampToValueAtTime(0,snd.c.currentTime+.5);}catch(_){}setTimeout(function(){try{snd.c.close();}catch(_){}},800);}
     ['keydown','keyup','keypress','click','mousedown','pointerdown','touchstart'].forEach(function(n){window.removeEventListener(n,block,true);});
     setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},700);
   }
@@ -188,6 +225,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     setTimeout(check,Math.max(60,Math.min(250,MIN-age)));
   }
   window.addEventListener('load',function(){loaded=true;});
+  sting();
   check();
 })();
 </script>
