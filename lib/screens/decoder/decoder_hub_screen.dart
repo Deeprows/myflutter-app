@@ -8,6 +8,8 @@ import '../../services/webrtc_mirror_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/premium_gate.dart';
 import 'decoder_cast_page.dart';
+import 'decoder_fixtures_page.dart';
+import 'decoder_movies_page.dart';
 import 'decoder_channels_page.dart';
 import 'decoder_common.dart';
 import 'decoder_flows.dart';
@@ -74,6 +76,10 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
         return (const DecoderRemotePage(), 'remote');
       case 'channels':
         return (const DecoderChannelsPage(), 'channels');
+      case 'fixtures':
+        return (const DecoderFixturesPage(), 'fixtures');
+      case 'movies':
+        return (const DecoderMoviesPage(), 'movies');
     }
     return null;
   }
@@ -87,10 +93,10 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
   }
 
   Widget _tile(IconData icon, String title, String subtitle, VoidCallback onTap) => Container(
-        margin: const EdgeInsets.only(bottom: 10),
+        margin: const EdgeInsets.only(bottom: 7),
         decoration: BoxDecoration(
           color: Ui.card,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(13),
           border: Border.all(color: Ui.line),
         ),
         child: ListTile(
@@ -101,9 +107,9 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
             decoration: BoxDecoration(color: Ui.panel, borderRadius: BorderRadius.circular(12)),
             child: Icon(icon, color: Ui.red),
           ),
-          title: Text(title, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)),
-          subtitle: Text(subtitle, style: TextStyle(color: Ui.muted, fontSize: 12)),
-          trailing: const Icon(Icons.chevron_right),
+          title: Text(title, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 13)),
+          subtitle: Text(subtitle, style: TextStyle(color: Ui.muted, fontSize: 10.5)),
+          trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: onTap,
         ),
       );
@@ -255,34 +261,35 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
                 ),
               ]),
             ])),
-          decoderHeading('Connect', 'Pick how you want to use your TV or laptop.'),
-          Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [Ui.red.withValues(alpha: .18), Ui.card]),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Ui.red.withValues(alpha: .5)),
-            ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
-              leading: Container(
+          decoderPanel(
+            Row(children: [
+              Container(
                 width: 42, height: 42,
                 decoration: BoxDecoration(color: Ui.red.withValues(alpha: .16), borderRadius: BorderRadius.circular(12)),
-                child: Icon(Icons.menu_book_rounded, color: Ui.red),
+                child: Icon(Icons.settings_input_antenna_rounded, color: Ui.red, size: 24),
               ),
-              title: Text('How to use Smart Decoder', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900)),
-              subtitle: Text('Step-by-step guide for LG, Samsung, Kodi, receiver and remote', style: TextStyle(color: Ui.muted, fontSize: 11)),
-              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-              onTap: () => Navigator.of(context).push<void>(
-                MaterialPageRoute(builder: (_) => const DecoderGuidePage()),
-              ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('SMART DECODER CONSOLE', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900, letterSpacing: .8, fontSize: 13)),
+                const SizedBox(height: 3),
+                Text('Choose content, select a screen and enjoy.', style: TextStyle(color: Ui.muted, fontSize: 11)),
+              ])),
+              Icon(Icons.power_settings_new_rounded, color: Ui.red),
+            ]),
+            bottom: 12,
           ),
-          _tile(Icons.cast_rounded, 'Cast to TV / Kodi', 'Smart TVs and Kodi on your Wi-Fi', () => _open(const DecoderCastPage(), 'cast')),
-          _tile(Icons.screen_share_rounded, 'Screen mirroring', 'Show your phone screen', () => _open(const DecoderMirrorPage(), 'mirror')),
-          _tile(Icons.web_rounded, 'Send to receiver page', 'Play channels in a laptop or TV browser', () => _open(const DecoderReceiverPage(), 'receiver')),
+          decoderHeading('WATCH ON YOUR SCREEN', 'Cast live football or find a movie.'),
+          _tile(Icons.sports_soccer_rounded, 'Live Fixtures', 'Two cast streams per match · main and backup', () => _open(const DecoderFixturesPage(), 'fixtures')),
+          _tile(Icons.movie_filter_rounded, 'Pick a Movie & Watch', 'Search the movie library and cast a title', () => _open(const DecoderMoviesPage(), 'movies')),
+          decoderHeading('DECODER TOOLS', 'Connect and control your display.'),
+          _tile(Icons.cast_rounded, 'Cast to TV / Kodi', 'Find compatible screens on your Wi-Fi', () => _open(const DecoderCastPage(), 'cast')),
+          _tile(Icons.screen_share_rounded, 'Screen mirroring', 'Mirror your phone screen', () => _open(const DecoderMirrorPage(), 'mirror')),
+          _tile(Icons.web_rounded, 'Send to receiver page', 'Use a browser screen as your receiver', () => _open(const DecoderReceiverPage(), 'receiver')),
           _tile(Icons.gamepad_rounded, 'TV remote', 'Roku, LG, Samsung and playback controls', () => _open(const DecoderRemotePage(), 'remote')),
-          _tile(Icons.live_tv_rounded, 'Supported channels', 'See what works, then pick how to watch', () => _open(const DecoderChannelsPage(), 'channels')),
+          _tile(Icons.live_tv_rounded, 'Supported channels', 'Browse compatible channel sources', () => _open(const DecoderChannelsPage(), 'channels')),
+          _tile(Icons.menu_book_rounded, 'How to use Smart Decoder', 'Setup guide for TVs, Kodi and receiver', () => Navigator.of(context).push<void>(
+            MaterialPageRoute(builder: (_) => const DecoderGuidePage()),
+          )),
         ]),
         ),
       ),
