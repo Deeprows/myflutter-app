@@ -9,6 +9,7 @@ import 'services/locale_service.dart';
 import 'services/push_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_watermark.dart';
+import 'widgets/launch_splash.dart';
 
 class FootboliveApp extends StatelessWidget {
   const FootboliveApp({super.key});
@@ -34,13 +35,17 @@ class FootboliveApp extends StatelessWidget {
           navigatorKey: AppNav.key,
           scaffoldMessengerKey: PushService.messengerKey,
           theme: buildTheme(),
-          builder: (context, child) => AppLockOverlay(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                child ?? const SizedBox.shrink(),
-                const ThemeWatermark(),
-              ],
+          // Spinning logo + launch sound on every cold start (same as the
+          // Windows EXE, Android TV and web receiver).
+          builder: (context, child) => LaunchSplash(
+            child: AppLockOverlay(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  child ?? const SizedBox.shrink(),
+                  const ThemeWatermark(),
+                ],
+              ),
             ),
           ),
           home: const AuthGate(),
