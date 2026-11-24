@@ -205,9 +205,21 @@
       try { new Notification(n.title||'Deeprowss Notice',{body:n.message,tag:id}); } catch (_) {}
     }
   }
+  /* Plain GET (no custom headers) so browsers never need a CORS preflight to raw.githubusercontent.com;
+     if GitHub is unreachable, the same file is read from the jsDelivr mirror. */
+  const MIRROR = 'https://cdn.jsdelivr.net/gh/Deeprows/myflutter-app@main/assets/data/';
   async function getJson(url) {
-    const r=await fetch(url+'?v='+Date.now(),{cache:'no-store',headers:{'Cache-Control':'no-cache'}});
-    if(!r.ok) throw new Error('HTTP '+r.status);return r.json();
+    const stamp = '?v=' + Date.now();
+    try {
+      const r = await fetch(url + stamp, { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.json();
+    } catch (e) {
+      const name = url.slice(url.lastIndexOf('/') + 1);
+      const r2 = await fetch(MIRROR + name + stamp, { cache: 'no-store' });
+      if (!r2.ok) throw e;
+      return r2.json();
+    }
   }
   async function refresh(){
     try { const t=await getJson(TICKER_URL); addTicker(t); } catch(_){}
