@@ -645,6 +645,7 @@
       const b = e.target.closest('.ch'); if (b) play(filtered[Number(b.dataset.i)], false);
     });
     $('tvGrid').addEventListener('error', e => { if (e.target && e.target.tagName === 'IMG') e.target.remove(); }, true);
+    $('tvGrid').addEventListener('load', e => { if (e.target && e.target.tagName === 'IMG') { const lg = e.target.closest('.lg'); if (lg) lg.classList.add('has'); } }, true);
     $('tvGrid').addEventListener('keydown', e => {
       if (e.key.toLowerCase() !== 'f' || e.ctrlKey || e.altKey || e.metaKey) return;
       const b = e.target.closest('.ch'); if (!b) return;
