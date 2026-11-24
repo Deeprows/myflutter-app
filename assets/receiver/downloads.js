@@ -97,11 +97,9 @@
     modal.classList.remove('open'); modalOpen = false;
     const b = document.querySelector('#dlGrid .dl-btn:not(:disabled)'); if (b && document.body.dataset.view === 'downloads') b.focus({ preventScroll: true });
   }
-  function activate(id, slot, qr) {
-    const app = APPS.find(a => a.id === id); if (!app) return;
+  function activate(id, slot) {
     const t = resolve(KEY_OF(id, slot));
     if (t.state !== 'ok' || !t.url) return;
-    if (qr || isTvDevice()) { showQr(t.url, app.name); return; }
     if (desktop && desktop.openDownload) { desktop.openDownload(t.url); return; }
     const w = window.open(t.url, '_blank', 'noopener'); if (!w) location.href = t.url;
   }
@@ -227,8 +225,7 @@
           '<ul>' + a.points.map(p => '<li>' + esc(p) + '</li>').join('') + '</ul>' +
           '<div class="dl-meta" data-meta></div>' +
           '<div class="dl-actions">' + a.actions.map(x =>
-            '<button type="button" class="dl-btn' + (x.alt ? ' secondary' : '') + '" data-app="' + a.id + '" data-slot="' + x.slot + '" data-label="' + esc(x.label) + '">' + DL_ICON + '<span></span></button>' +
-            '<button type="button" class="dl-btn secondary dl-qrbtn" data-app="' + a.id + '" data-slot="' + x.slot + '" data-qr="1" title="Show QR code" aria-label="Show QR code for ' + esc(a.name) + '">' + QR_ICON + '</button>').join('') +
+            '<button type="button" class="dl-btn' + (x.alt ? ' secondary' : '') + '" data-app="' + a.id + '" data-slot="' + x.slot + '" data-label="' + esc(x.label) + '">' + DL_ICON + '<span></span></button>').join('') +
           '</div>' +
           '<details class="dl-tips"><summary>Install tips</summary><div class="dl-note">' + esc(a.note) + '</div></details>' +
         '</div>' +
@@ -236,11 +233,10 @@
     const mine = detect();
     if (mine) { const c = $('dl-' + mine); if (c) { c.classList.add('mine', 'feature'); c.querySelector('.dl-rec').hidden = false; grid.insertBefore(c, grid.firstChild); } }
     grid.style.setProperty('--cols', String(Math.min(5, APPS.length - (mine && $('dl-' + mine) ? 1 : 0))));
-    grid.addEventListener('click', e => { const b = e.target.closest('[data-app]'); if (!b || b.disabled) return; activate(b.dataset.app, b.dataset.slot, !!b.dataset.qr); });
+    grid.addEventListener('click', e => { const b = e.target.closest('[data-app]'); if (!b || b.disabled) return; activate(b.dataset.app, b.dataset.slot); });
     refresh();
   }
   function refresh() {
-    const tv = isTvDevice();
     APPS.forEach(a => {
       const card = $('dl-' + a.id); if (!card) return;
       let meta = '', off = false;
@@ -249,7 +245,7 @@
         b.disabled = t.state === 'off' || t.state === 'loading';
         if (b.dataset.qr) { b.hidden = tv; return; } // on a TV the main button already opens the QR code
         const span = b.querySelector('span');
-        span.textContent = t.state === 'off' ? 'Coming soon' : t.state === 'loading' ? 'Loading download links…' : (tv ? 'Show QR to download' : b.dataset.label);
+        span.textContent = t.state === 'off' ? 'Coming soon' : t.state === 'loading' ? 'Loading download links…' : b.dataset.label;
         if (b.dataset.slot === 'main') {
           if (t.state === 'ok') meta = '<span class="ok">Ready to download</span>' + (fmtSize(t.size) ? '<span>' + esc(fmtSize(t.size)) + '</span>' : '');
           else if (t.state === 'off') { off = true; meta = '<span class="soon">Not available yet</span>'; }
@@ -257,7 +253,6 @@
       });
       card.classList.toggle('soon', off);
       const m = card.querySelector('[data-meta]'); if (m) m.innerHTML = meta;
-      const tips = card.querySelector('.dl-tips'); if (tips && tv) tips.open = true;
     });
   }
   const modal = document.createElement('div');
