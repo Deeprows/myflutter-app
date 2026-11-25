@@ -190,10 +190,10 @@ class _DecoderFixturesPageState extends State<DecoderFixturesPage>
     appBar: AppBar(
       backgroundColor: Ui.panel,
       title: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Live Fixtures', style: TextStyle(fontWeight: FontWeight.w900)),
+        Text('Live Events', style: TextStyle(fontWeight: FontWeight.w900)),
         Text('Choose a stream and cast to your screen', style: TextStyle(fontSize: 10, color: Colors.white60)),
       ]),
-      actions: [IconButton(onPressed: _loading ? null : _load, tooltip: 'Refresh fixtures',
+      actions: [IconButton(onPressed: _loading ? null : _load, tooltip: 'Refresh events',
         icon: const Icon(Icons.refresh_rounded))],
     ),
     body: _loading ? const Center(child: CircularProgressIndicator())
