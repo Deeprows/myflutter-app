@@ -534,6 +534,23 @@ class MainActivity : Activity() {
             }
         }
 
+        /** The TV's system languages (best first), e.g. "fr-FR,en-US", so the page opens in the TV's language. */
+        @JavascriptInterface
+        fun getLocales(): String {
+            return try {
+                val cfg = android.content.res.Resources.getSystem().configuration
+                val tags = ArrayList<String>()
+                if (Build.VERSION.SDK_INT >= 24) {
+                    val list = cfg.locales
+                    for (i in 0 until list.size()) tags.add(list.get(i).toLanguageTag())
+                } else {
+                    @Suppress("DEPRECATION")
+                    tags.add(cfg.locale.toLanguageTag())
+                }
+                tags.filter { it.isNotBlank() && it != "und" }.joinToString(",")
+            } catch (_: Exception) { "" }
+        }
+
         /** Power button next to the settings icon: close the TV app completely. */
         @JavascriptInterface
         fun exitApp() {
