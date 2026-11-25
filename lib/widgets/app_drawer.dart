@@ -11,6 +11,7 @@ import '../screens/browser_screen.dart';
 import '../screens/fan_profile_screen.dart';
 import '../screens/fan_widgets.dart';
 import '../screens/guide_screen.dart';
+import '../screens/legal_screen.dart';
 import '../screens/content_shortcut_screen.dart';
 import '../screens/highlights_screen.dart';
 import '../screens/notifications_screen.dart';
@@ -73,7 +74,10 @@ Future<void> _contactUs(BuildContext c) async {
 ///  * everything else lives in a "Settings and support" sheet
 class FootboliveDrawer extends StatefulWidget {
   final VoidCallback? onHome;
-  const FootboliveDrawer({super.key, this.onHome});
+
+  /// Opens the Thread section (given where the bottom bar has no Thread tab).
+  final VoidCallback? onThread;
+  const FootboliveDrawer({super.key, this.onHome, this.onThread});
 
   @override
   State<FootboliveDrawer> createState() => _FootboliveDrawerState();
@@ -432,6 +436,16 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
                         'Profile'.tr,
                         (c) => _push(c, FanProfileScreen(userId: user.id)),
                       ),
+                    if (widget.onThread != null)
+                      _row(
+                        Icons.forum_outlined,
+                        'Thread'.tr,
+                        (c) async {
+                          if (!await ensureSignedIn(c)) return;
+                          if (!c.mounted) return;
+                          widget.onThread!();
+                        },
+                      ),
                     _row(
                       Icons.bookmark_border_rounded,
                       'Bookmarks'.tr,
@@ -699,6 +713,16 @@ Future<void> showSettingsSheet(BuildContext context) {
                 Icons.copyright_rounded,
                 'Copyright'.tr,
                 showCopyrightDialog,
+              ),
+              item(
+                Icons.gavel_rounded,
+                'Terms of Use'.tr,
+                showTermsOfUse,
+              ),
+              item(
+                Icons.privacy_tip_outlined,
+                'Privacy Policy'.tr,
+                showPrivacyPolicy,
               ),
               Divider(height: 18, color: Ui.line),
               item(
