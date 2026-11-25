@@ -65,7 +65,7 @@ class _DecoderCastPageState extends State<DecoderCastPage> {
     final t = widget.target;
     if (t == null || !t.canCast) {
       await svc.saveDevice(d);
-      if (mounted) decoderToast(context, '${d.name} saved. Pick a channel from Supported channels to play on it.');
+      if (mounted) decoderToast(context, '${d.name} saved. Pick a channel from TV Channels to play on it.');
       return;
     }
     if (!alreadyAllowed && !await PremiumGate.allowCast(context)) return;
