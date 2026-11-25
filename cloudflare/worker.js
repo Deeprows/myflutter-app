@@ -1245,19 +1245,21 @@ const RECEIVER_FREE_CAST_SESSIONS = 5;
 async function recordCastTrial(env, ownerId, action) {
   if (!receiverIdOk(ownerId)) return { allowed: false, used: 0, remaining: 0 };
   const now = Date.now();
+  let consumed = false;
   if (action !== "check") {
-    await env.DB.prepare(
+    const inserted = await env.DB.prepare(
       "INSERT OR IGNORE INTO cast_trials (owner_id, slot, created_at) " +
       "SELECT ?, COALESCE(MAX(slot), 0) + 1, ? FROM cast_trials WHERE owner_id = ? " +
       "HAVING COALESCE(MAX(slot), 0) < ?"
     ).bind(ownerId, now, ownerId, RECEIVER_FREE_CAST_SESSIONS).run();
+    consumed = Number(inserted?.meta?.changes || 0) > 0;
   }
   const row = await env.DB.prepare(
     "SELECT COUNT(*) AS used FROM cast_trials WHERE owner_id = ?"
   ).bind(ownerId).first();
   const used = Number(row?.used || 0);
   return {
-    allowed: action === "check" ? used < RECEIVER_FREE_CAST_SESSIONS : used <= RECEIVER_FREE_CAST_SESSIONS,
+    allowed: action === "check" ? used < RECEIVER_FREE_CAST_SESSIONS : consumed,
     used,
     remaining: Math.max(0, RECEIVER_FREE_CAST_SESSIONS - used),
     limit: RECEIVER_FREE_CAST_SESSIONS,
