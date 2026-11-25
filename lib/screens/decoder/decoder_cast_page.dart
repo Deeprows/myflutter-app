@@ -6,6 +6,7 @@ import '../../models/cast_target.dart';
 import '../../services/cast_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/premium_gate.dart';
+import '../../services/subscription_service.dart';
 import 'decoder_common.dart';
 
 /// Cast to TV / Kodi: find TVs on the Wi-Fi and play on them.
@@ -84,6 +85,8 @@ class _DecoderCastPageState extends State<DecoderCastPage> {
     }
     if (!mounted) return;
     if (ok) {
+      // Only a successful TV start uses one of the five free casts.
+      await SubscriptionService.instance.consumeCastAccess(consume: true);
       widget.onCastStarted?.call();
       decoderToast(context, 'Playing on ${d.name}');
     } else {
