@@ -1254,6 +1254,14 @@ async function subCastAccess(request, env) {
   if (expires > Date.now()) {
     return json({ allowed: true, premium: true, used: 0, remaining: FREE_CAST_USES, expires_at: expires, now: Date.now() });
   }
+  // Check before starting playback; only commit a use after the TV accepts it.
+  if (body.action === "check") {
+    const row = await env.DB.prepare(
+      "SELECT used FROM cast_trials WHERE owner_id = ?"
+    ).bind(ownerId).first();
+    const used = Number(row?.used || 0);
+    return json({ allowed: used < FREE_CAST_USES, used, remaining: Math.max(0, FREE_CAST_USES - used), premium: false, limit: FREE_CAST_USES, now: Date.now() });
+  }
   const result = await recordCastTrial(env, ownerId);
   return json({ ...result, premium: false, limit: FREE_CAST_USES, now: Date.now() });
 }
