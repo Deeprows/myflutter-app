@@ -494,6 +494,7 @@ void main() {
       expect(c.altUrl, 'http://h/low.m3u8');
       expect(c.country, 'US');
       expect(c.flag, isNotEmpty);
+      expect(c.working, isTrue);
     });
 
     test('merge folds a same-name Nexus channel into yours', () {
@@ -509,18 +510,24 @@ void main() {
             url: 'https://nx/espn.m3u8',
             category: ChannelCategory.sports,
             quality: '1080p',
-            country: 'US'),
+            country: 'US',
+            working: true,
+            score: 92),
         Channel(
             name: 'Other',
             url: 'https://nx/o.m3u8',
-            category: ChannelCategory.general),
+            category: ChannelCategory.general,
+            working: true),
       ];
       final m = mergeChannels(own, nexus);
       expect(m.length, 2);
       expect(m.first.url, 'https://mine/espn.m3u8');
       expect(m.first.altUrl, 'https://nx/espn.m3u8');
       expect(m.first.qualityLabel, 'FHD');
+      expect(m.first.working, isTrue);
+      expect(m.first.score, 92);
       expect(m.last.name, 'Other');
+      expect(m.last.working, isTrue);
     });
 
     test('native player headers and routing', () {
