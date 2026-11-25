@@ -66,7 +66,7 @@ class DecoderGuidePage extends StatelessWidget {
     backgroundColor: Ui.bg,
     appBar: AppBar(
       backgroundColor: Ui.panel,
-      title: const Text('How to use Smart Decoder', style: TextStyle(fontWeight: FontWeight.w900)),
+      title: const Text('Decoder Manual', style: TextStyle(fontWeight: FontWeight.w900)),
     ),
     body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 28), children: [
       Container(
