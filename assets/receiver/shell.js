@@ -14,6 +14,47 @@
   }
   tick(); setInterval(tick, 15000);
 
+  /* ---------- location above the clock ----------
+     Approximate city + country, no GPS permission. Asked from the Deeprowss worker's /geo
+     (Cloudflare edge data) first, then a public IP lookup. Remembered for 6 hours; the last
+     known place is shown when offline. Same on the website, the Windows app and Android TV. */
+  const GEO_KEY = 'dw_geo_v1', GEO_TTL = 6 * 3600 * 1000, GEO_API = 'https://deeprowss-feed.deeprows.workers.dev';
+  const PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
+  function placeText(g) {
+    if (!g || !g.country) return '';
+    let country = g.country;
+    try { country = new Intl.DisplayNames([navigator.language || 'en'], { type: 'region' }).of(String(g.country).toUpperCase()) || g.country; } catch (_) {}
+    return g.city ? g.city + ', ' + country : country;
+  }
+  function showPlace(g) {
+    const el = $('clockPlace'); if (!el) return;
+    const t = placeText(g);
+    if (!t) { el.hidden = true; return; }
+    el.innerHTML = PIN + '<span>' + esc(t) + '</span>'; el.hidden = false;
+  }
+  async function getJson(u) {
+    const c = new AbortController(), t = setTimeout(() => c.abort(), 8000);
+    try { const r = await fetch(u, { cache: 'no-store', signal: c.signal }); return r.ok ? await r.json() : null; }
+    catch (_) { return null; } finally { clearTimeout(t); }
+  }
+  async function loadPlace() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(GEO_KEY) || 'null'); } catch (_) {}
+    if (saved && saved.g) showPlace(saved.g);
+    if (saved && saved.g && Date.now() - saved.at < GEO_TTL) return;
+    let g = await getJson(GEO_API + '/geo');
+    if (!g || !g.country || g.country === '??') {
+      const x = await getJson('https://ipwho.is/');
+      g = x && x.success !== false && x.country_code ? { city: x.city || '', country: x.country_code } : null;
+    }
+    if (!g || !g.country) return;
+    showPlace(g);
+    try { localStorage.setItem(GEO_KEY, JSON.stringify({ at: Date.now(), g })); } catch (_) {}
+  }
+  loadPlace();
+  window.addEventListener('online', loadPlace);
+  setInterval(loadPlace, GEO_TTL);
+
   /* ---------- fanart carousel (TMDB trending backdrops sent by library.js) ----------
      Animated: Ken-Burns pan (alternating direction), cross-fade, staggered text, auto-advance progress dots.
      Clickable: tap the backdrop, the title block or "More info" to open that title; dots jump to a slide;
