@@ -15,6 +15,7 @@ class HomeScreen extends StatelessWidget {
       MaterialPageRoute<void>(
         builder: (_) => ShellScreen(
           threadOnly: thread,
+          liveOnly: !thread,
           initialTab: thread ? 3 : 0,
           restoreLastTab: false,
           onHome: () => Navigator.of(context).pop(),
