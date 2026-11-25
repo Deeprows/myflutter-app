@@ -774,6 +774,19 @@ class MainActivity : Activity() {
      * that Chromium does not handle.
      */
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        // BlueStacks and some TV emulators deliver a physical mouse click as a
+        // generic button-release event rather than a touch ACTION_UP. Native
+        // fallback buttons (including the renderer recovery screen) otherwise
+        // receive hover but never activate.
+        if (event.action == MotionEvent.ACTION_BUTTON_RELEASE &&
+            event.isFromSource(InputDevice.SOURCE_MOUSE)
+        ) {
+            val focused = container.findFocus()
+            if (focused != null && focused !== container && focused.isEnabled && focused.isClickable) {
+                if (focused.performClick()) return true
+            }
+        }
+
         val target = webView
         if (target != null && target.visibility == View.VISIBLE &&
             (event.source and InputDevice.SOURCE_CLASS_POINTER) == InputDevice.SOURCE_CLASS_POINTER
