@@ -41,12 +41,14 @@ import '../utils/l10n.dart';
 class ShellScreen extends StatefulWidget {
   final VoidCallback? onHome;
   final bool threadOnly;
+  final bool liveOnly;
   final int initialTab;
   final bool restoreLastTab;
   const ShellScreen({
     super.key,
     this.onHome,
     this.threadOnly = false,
+    this.liveOnly = false,
     this.initialTab = 0,
     this.restoreLastTab = true,
   });
@@ -59,9 +61,11 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   int _index = 0;
   // Stack slots keep their old numbers so notification targets still work.
   // The Thread entry point hides Live and exposes only its five community tabs.
-  List<int> get _order => widget.threadOnly
-      ? const [3, 4, 6, 9, 8]
-      : const [0, 3, 4, 6, 9, 8];
+  List<int> get _order => widget.liveOnly
+      ? const [0]
+      : widget.threadOnly
+          ? const [3, 4, 6, 9, 8]
+          : const [0, 3, 4, 6, 9, 8];
   static const _tvTab = 6;
   static const _searchTab = 8;
   static const _profileTab = 9;
@@ -92,7 +96,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
       });
     }
     // Each entry point remembers its own selected tab.
-    _index = widget.threadOnly ? 3 : widget.initialTab;
+    _index = widget.liveOnly ? 0 : (widget.threadOnly ? 3 : widget.initialTab);
     final savedTab = AppMemory.getInt(widget.threadOnly ? 'thread_tab' : 'tab');
     if (widget.restoreLastTab &&
         AuthService.instance.signedIn &&
@@ -518,16 +522,20 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
 
   List<NavigationDestination> _navDestinations() {
     final items = <(IconData, IconData, String)>[];
-    if (!widget.threadOnly) {
-      items.add((Icons.sensors_rounded, Icons.sensors_rounded, 'Live'.tr));
+    if (widget.liveOnly) {
+      items.add((Icons.sensors_rounded, Icons.sensors_rounded, 'Live Events'));
+    } else {
+      if (!widget.threadOnly) {
+        items.add((Icons.sensors_rounded, Icons.sensors_rounded, 'Live'.tr));
+      }
+      items.addAll([
+        (Icons.forum_rounded, Icons.forum_rounded, 'Thread'.tr),
+        (Icons.auto_awesome_rounded, Icons.auto_awesome_rounded, 'AI Predict'.tr),
+        (Icons.groups_rounded, Icons.groups_rounded, 'Match Room'.tr),
+        (Icons.person_rounded, Icons.person_rounded, 'Profile'.tr),
+        (Icons.search_rounded, Icons.search_rounded, 'Search'.tr),
+      ]);
     }
-    items.addAll([
-      (Icons.forum_rounded, Icons.forum_rounded, 'Thread'.tr),
-      (Icons.auto_awesome_rounded, Icons.auto_awesome_rounded, 'AI Predict'.tr),
-      (Icons.groups_rounded, Icons.groups_rounded, 'Match Room'.tr),
-      (Icons.person_rounded, Icons.person_rounded, 'Profile'.tr),
-      (Icons.search_rounded, Icons.search_rounded, 'Search'.tr),
-    ]);
     return [
       for (final it in items)
         NavigationDestination(
