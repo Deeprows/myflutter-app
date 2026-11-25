@@ -42,11 +42,13 @@ class ShellScreen extends StatefulWidget {
   final VoidCallback? onHome;
   final bool threadOnly;
   final int initialTab;
+  final bool restoreLastTab;
   const ShellScreen({
     super.key,
     this.onHome,
     this.threadOnly = false,
     this.initialTab = 0,
+    this.restoreLastTab = true,
   });
 
   @override
@@ -92,7 +94,8 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     // Each entry point remembers its own selected tab.
     _index = widget.threadOnly ? 3 : widget.initialTab;
     final savedTab = AppMemory.getInt(widget.threadOnly ? 'thread_tab' : 'tab');
-    if (AuthService.instance.signedIn &&
+    if (widget.restoreLastTab &&
+        AuthService.instance.signedIn &&
         savedTab != null &&
         _order.contains(savedTab)) {
       _index = savedTab;
