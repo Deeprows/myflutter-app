@@ -16,6 +16,7 @@ class HomeScreen extends StatelessWidget {
         builder: (_) => ShellScreen(
           threadOnly: thread,
           initialTab: thread ? 3 : 0,
+          restoreLastTab: false,
           onHome: () => Navigator.of(context).pop(),
         ),
       ),
