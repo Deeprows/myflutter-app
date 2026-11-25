@@ -12,7 +12,7 @@ import 'package:screen_share_plugin/screen_share_plugin.dart' show ScreenSharePl
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'background_playback.dart';
-import 'stream_resolver.dart' show StreamKind;
+import 'stream_resolver.dart' show StreamKind, StreamResolver;
 
 /// Streams the Android display to a browser / Deeprowss TV Receiver over a
 /// local-network WebRTC connection. Signalling stays on the phone; the video
@@ -96,6 +96,9 @@ class DeeprowssMirrorService extends ChangeNotifier {
   int receiverVolume = 100;
   // Live state reported by the receiver page / Android TV app.
   bool receiverPlaying = true;
+
+  /// True while the receiver holds an unused backup stream for this event.
+  bool receiverHasBackup = false;
   bool receiverMuted = false;
   bool receiverPlayerOpen = false;
   bool receiverFullscreen = false;
@@ -352,6 +355,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
           receiverPlatform = (message['platform'] as String?) ?? receiverPlatform;
           receiverPlayerOpen = message['playerOpen'] == true;
           receiverPlaying = message['playing'] != false;
+          receiverHasBackup = message['hasBackup'] == true;
           receiverMuted = message['muted'] == true;
           receiverFullscreen = message['fullscreen'] == true;
           final vol = (message['volume'] as num?)?.round();
@@ -445,8 +449,15 @@ class DeeprowssMirrorService extends ChangeNotifier {
     StreamKind? kind,
     String? referer,
     String? userAgent,
+    String? backupUrl,
+    StreamKind? backupKind,
   }) async {
     if (url.trim().isEmpty || kind == StreamKind.invalid) return false;
+    // A link with no stated type used to be sent as a video file, so web pages
+    // (live match embeds) landed in the <video> tag and showed "paused".
+    kind ??= StreamResolver.kindOfUrl(url);
+    final backup = (backupUrl ?? '').trim();
+    final bKind = backup.isEmpty ? null : (backupKind ?? StreamResolver.kindOfUrl(backup));
     if (!running) {
       try { await start(captureScreen: false); } catch (_) { return false; }
     }
@@ -454,13 +465,18 @@ class DeeprowssMirrorService extends ChangeNotifier {
       'type': 'play',
       'url': url,
       'title': title,
-      'kind': kind?.name ?? 'video',
+      'kind': kind.name,
+      if (backup.isNotEmpty) ...{
+        'backupUrl': backup,
+        'backupKind': bKind!.name,
+        'backupMode': bKind == StreamKind.embed ? 'iframe' : 'media',
+      },
       if ((referer ?? '').trim().isNotEmpty) 'referer': referer!.trim(),
       if ((userAgent ?? '').trim().isNotEmpty) 'userAgent': userAgent!.trim(),
       'mode': kind == StreamKind.embed ? 'iframe' : 'media',
     };
     nowPlayingTitle = title;
-    nowPlayingKind = kind?.name ?? 'video';
+    nowPlayingKind = kind.name;
     // Keep a foreground media notification alive while the remote receiver
     // plays. Notification actions are forwarded over the same receiver socket.
     BackgroundPlayback.castActive = true;
@@ -551,6 +567,9 @@ class DeeprowssMirrorService extends ChangeNotifier {
     }
     return ok;
   }
+
+  /// Asks the receiver to switch to the event's backup stream.
+  bool switchToBackup() => sendRemoteCommand('backupstream');
 
   /// Toggles play / pause on the receiver.
   bool toggleReceiverPlay() {
@@ -689,6 +708,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
     nowPlayingTitle = '';
     nowPlayingKind = '';
     receiverPlaying = true;
+    receiverHasBackup = false;
     receiverMuted = false;
     receiverPlayerOpen = false;
     receiverMode = 'idle';
