@@ -174,7 +174,32 @@ for (const [id, prefix] of [[TRIAL_APP, "/sub/movie-access"], [TRIAL_GUEST, "/su
   assert.equal((await (await post(prefix, fourthDownload)).json()).allowed, false);
 }
 
-// 12. Decoder numbers are server-issued and stop working when Premium expires.
+// 12. Free casting is limited to five actual cast attempts per account/install.
+for (const [id, path] of [
+  ["1234567890abcdef1234567890abcdef", "/sub/cast-access"],
+  ["abcdefabcdefabcdefabcdefabcdefab", "/sub/cast-access-guest"],
+]) {
+  for (let n = 1; n <= 5; n++) {
+    j = await (await post(path, { install_id: id })).json();
+    assert.equal(j.allowed, true);
+    assert.equal(j.used, n);
+    assert.equal(j.remaining, 5 - n);
+  }
+  j = await (await post(path, { install_id: id })).json();
+  assert.equal(j.allowed, false);
+  assert.equal(j.used, 5);
+  assert.equal(j.remaining, 0);
+}
+
+// Premium accounts bypass the free casting counter.
+await call("/sub/admin", form({ token: "adm", install_id: ID3, days: "30" }));
+for (let n = 0; n < 7; n++) {
+  j = await (await post("/sub/cast-access", { install_id: ID3 })).json();
+  assert.equal(j.allowed, true);
+  assert.equal(j.premium, true);
+}
+
+// 13. Decoder numbers are server-issued and stop working when Premium expires.
 const decoderGrant = await (await call("/sub/admin", form({ token: "adm", install_id: ID3, days: "30" }))).text();
 assert.match(decoderGrant, /Premium until/);
 assert.match(decoderGrant, /Decoder number: [0-9]{10}/);
