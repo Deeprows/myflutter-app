@@ -327,7 +327,7 @@
   .fx-opts{display:grid;gap:10px;margin:0 0 16px}
   .fx-opt{display:flex;gap:13px;align-items:flex-start;padding:13px 14px;border-radius:16px;background:#101b28;border:1px solid #233246}
   .fx-opt .ic{flex:none;width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-size:19px;background:#1db4ea1f;border:1px solid #1db4ea44}
-  .fx-opt b{display:block;font-size:15px;margin-bottom:2px}.fx-opt p{margin:0;font-size:13px;line-height:1.5;color:#aebdce}
+  .fx-opt>div>b{display:block;font-size:15px;margin-bottom:2px}.fx-opt p{margin:0;font-size:13px;line-height:1.5;color:#aebdce}.fx-opt p b{display:inline;font-size:inherit;color:#fff;font-weight:800}.fx-tip{margin:9px 0 0!important;padding:9px 11px;border-radius:11px;background:#e8365d14;border:1px solid #e8365d44;color:#d6dfeb!important}.fx-tip b{color:#ff9bb0!important}
   .fx-pop .fx-dl{width:100%;min-height:52px;font-size:16px;margin-bottom:10px}
   .fx-stream-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
   .fx-stream-choices .fx-dl{margin:0}
@@ -476,7 +476,9 @@
       '<p class="fx-meta">' + esc(f.league) + ' · ' + (has || live ? esc(whenText(f, now)) : esc(dayLabel(f.start)) + ', ' + esc(timeOf(f.start))) + '</p>' +
       '<div class="fx-opts">' +
         '<div class="fx-opt"><span class="ic">📱</span><div><b>Watch on your phone</b><p>Get the Deeprowss app and open this match from Fixtures. Live streams, scores and match analysis are all there.</p></div></div>' +
-        '<div class="fx-opt"><span class="ic">📺</span><div><b>Watch on ' + where() + '</b><p>In the app, open <b>Smart Decoder</b>, choose <b>Send to receiver page</b> and scan the QR code under <b>Connect with App</b> here. The match then plays on ' + where() + '.</p></div></div>' +
+        '<div class="fx-opt"><span class="ic">📺</span><div><b>Watch on ' + where() + '</b>' +
+          '<p>Open <b>Smart Decoder</b> in the app, tap <b>Send to receiver page</b>, then scan the QR code under <b>Connect with App</b> here. The match will then play on ' + where() + '.</p>' +
+          '<p class="fx-tip"><b>For the best streaming,</b> use the <b>Live Fixtures</b> option in your Decoder page to cast live football to your screen. The <b>Live Events</b> page in the app is only a backup.</p></div></div>' +
       '</div></section><section class="fx-actions">' +
       download + watch +
       '<button type="button" class="secondary fx-connect" id="fxConnect">Connect with App</button>' +
