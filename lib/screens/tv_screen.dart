@@ -119,6 +119,19 @@ class _TvScreenState extends State<TvScreen> {
     });
   }
 
+  /// Keep confirmed online streams at the top without changing the order
+  /// of channels whose health status is unknown or tied.
+  List<Channel> _workingFirst(Iterable<Channel> channels) {
+    final indexed = channels.toList().asMap().entries.toList();
+    indexed.sort((a, b) {
+      final working = (b.value.working ? 1 : 0).compareTo(a.value.working ? 1 : 0);
+      if (working != 0) return working;
+      final score = b.value.score.compareTo(a.value.score);
+      return score != 0 ? score : a.key.compareTo(b.key);
+    });
+    return indexed.map((entry) => entry.value).toList();
+  }
+
   static const int _freeChannelsPerDay = 2;
 
   String _todayKey() {
@@ -356,16 +369,15 @@ class _TvScreenState extends State<TvScreen> {
     final allFavs = _all
         .where((c) => favKeys.contains(FavoriteChannels.keyOf(c)))
         .toList();
-    final favs = allFavs
-        .where((c) => q.isEmpty || c.name.toLowerCase().contains(q))
-        .toList();
+    final favs = _workingFirst(allFavs
+        .where((c) => q.isEmpty || c.name.toLowerCase().contains(q)));
 
     final filtered = _favOnly
         ? favs
-        : base.where((c) {
+        : _workingFirst(base.where((c) {
             if (_cat != null && c.category != _cat) return false;
             return q.isEmpty || c.name.toLowerCase().contains(q);
-          }).toList();
+          }));
 
     final groups = <ChannelCategory, List<Channel>>{};
     for (final c in filtered) {
