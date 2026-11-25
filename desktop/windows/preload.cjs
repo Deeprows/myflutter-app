@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('deeprowssDesktop', {
   openAd: (url) => ipcRenderer.invoke('ad:open', String(url || '')),
   quit: () => ipcRenderer.invoke('app:quit'),
   installUpdate: (url) => ipcRenderer.invoke('app:install-update', String(url || '')),
+  // Windows-only audible + native warning when Premium has 3 days or less left.
+  notifySubscriptionExpiring: (expiresAt) => ipcRenderer.send('subscription:expiring', Number(expiresAt)),
   // Referer / User-Agent that a live TV stream needs (same as the Android native player).
   setStreamHeaders: (headers) => ipcRenderer.send('stream:headers', {
     referer: String((headers && headers.referer) || ''),
