@@ -15,8 +15,6 @@ import '../screens/content_shortcut_screen.dart';
 import '../screens/highlights_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/live_screen.dart';
-import '../screens/movies_screen.dart';
-import '../screens/tv_screen.dart';
 import '../screens/network_stream_screen.dart';
 import '../screens/playlists_screen.dart';
 import '../screens/plans_screen.dart';
@@ -490,42 +488,12 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
                       },
                     ),
                     _row(
-                      Icons.live_tv_rounded,
-                      'TV Channels'.tr,
-                      (c) async {
-                        if (!await ensureSignedIn(c)) return;
-                        if (!c.mounted) return;
-                        await _push(
-                          c,
-                          const ContentShortcutScreen(
-                            title: 'TV Channels',
-                            child: TvScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    _row(
                       Icons.cast_connected_rounded,
                       'Smart Decoder'.tr,
                       (c) async {
-                        // Open to everyone: the items inside ask for Premium.
-                        if (!c.mounted) return;
-                        await _push(c, const CastScreen());
-                      },
-                    ),
-                    _row(
-                      Icons.movie_outlined,
-                      'Movies'.tr,
-                      (c) async {
                         if (!await ensureSignedIn(c)) return;
                         if (!c.mounted) return;
-                        await _push(
-                          c,
-                          const ContentShortcutScreen(
-                            title: 'Movies',
-                            child: MoviesScreen(),
-                          ),
-                        );
+                        await _push(c, const CastScreen());
                       },
                     ),
                     _heading('Scores'.tr),
