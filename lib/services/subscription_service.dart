@@ -497,12 +497,12 @@ class SubscriptionService extends ChangeNotifier {
 
   /// Consumes one of the five free cast attempts. Premium users are unlimited.
   /// The Worker stores usage against the signed-in account or anonymous install ID.
-  Future<CastAccessResult> consumeCastAccess() async {
+  Future<CastAccessResult> consumeCastAccess({bool consume = false}) async {
     if (!enabled || isPremium) return const CastAccessResult(allowed: true, premium: true, remaining: 5);
     try {
       final id = accountId ?? await InstallId.get();
       final path = accountId == null ? '/sub/cast-access-guest' : '/sub/cast-access';
-      final payload = jsonEncode({'install_id': id});
+      final payload = jsonEncode({'install_id': id, 'action': consume ? 'consume' : 'check'});
       final r = accountId == null
           ? await http.post(_uri(path), headers: {'content-type': 'application/json'}, body: payload)
           : await _signed((h) => http.post(_uri(path), headers: h, body: payload), json: true);
