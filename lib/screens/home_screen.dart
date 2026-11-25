@@ -179,14 +179,12 @@ class HomeScreen extends StatelessWidget {
               onTap: () => _openSection(context, thread: false),
             ),
             _featureCard(
-              context: context,
               icon: Icons.forum_rounded,
               title: 'DEEPROWSS THREAD',
               subtitle: 'Join the conversation, AI predictions and Match Room.',
               onTap: () => _openSection(context, thread: true),
             ),
             _featureCard(
-              context: context,
               icon: Icons.cast_connected_rounded,
               title: 'SMART DECODER',
               subtitle: 'Connect your TV, Kodi or browser receiver.',
