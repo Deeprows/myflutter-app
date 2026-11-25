@@ -992,8 +992,10 @@ window.__deeprowssPremiumReady = new Promise(function(resolve) {
  const androidTv=!!window.DeeprowssTv||/Android TV|AFTT|BRAVIA|GoogleTV|CrKey/i.test(ua);
  const lgWebOS=/Web0S|WebOS|webOS/i.test(ua);
  const isReceiverDevice=androidTv||lgWebOS;
- if(!desktop&&!isReceiverDevice)return;
- const platform=desktop?'windows':(androidTv?'androidTv':'webos');
+ /* The public Pages site uses the desktop receiver UI without an Electron bridge. */
+ const isDesktopWeb=!desktop&&!isReceiverDevice&&document.documentElement.classList.contains('desktop-layout');
+ if(!desktop&&!isReceiverDevice&&!isDesktopWeb)return;
+ const platform=desktop?'windows':(androidTv?'androidTv':(lgWebOS?'webos':'webDesktop'));
  const $=id=>document.getElementById(id),key=desktop?'deeprowss_exe_settings':'deeprowss_'+platform+'_settings';
  let stored={};try{stored=JSON.parse(localStorage.getItem(key)||'{}')||{}}catch(_){};const THEMES=[
   {id:'estuary',name:'Estuary Cyan',tag:'Windows app · classic Kodi look',dev:'windows',pa:'#1db4ea',pb:'#060a10',pc:'#0e151f',pg:'#10405f'},
@@ -1051,6 +1053,8 @@ window.__deeprowssPremiumReady = new Promise(function(resolve) {
  document.head.appendChild(pcss);
  const pwr=document.createElement('button');pwr.id='dwPowerOpen';pwr.type='button';pwr.setAttribute('aria-label','Exit Deeprowss');pwr.title='Exit';
  pwr.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8"/><path d="M6.4 6.6a8 8 0 1 0 11.2 0"/></svg>';
+ /* A browser tab cannot close itself; keep Exit exclusive to installed apps. */
+ if(isDesktopWeb)pwr.hidden=true;
  const quitApp=()=>{
   try{if(window.deeprowssDesktop&&typeof window.deeprowssDesktop.quit==='function'){window.deeprowssDesktop.quit();return;}}catch(_){}
   try{if(window.DeeprowssTv&&typeof window.DeeprowssTv.exitApp==='function'){window.DeeprowssTv.exitApp();return;}}catch(_){}
