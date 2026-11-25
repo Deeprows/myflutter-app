@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/ad_scheduler.dart';
 import '../theme/app_theme.dart';
-import 'shell_screen.dart';
+import 'home_screen.dart';
 
 /// Signed-in users choose the live-football or community experience.
 class AuthGate extends StatefulWidget {
@@ -66,11 +66,11 @@ class _AuthGateState extends State<AuthGate> {
         body: const Center(child: CircularProgressIndicator()),
       );
     }
-    // Visitors open straight onto Live Events. The login page appears only
-    // when they tap something else (see ensureSignedIn).
+    // The landing page is the first in-app screen after the splash finishes.
+    // Guests can browse Live Events; protected areas request sign-in.
     return KeyedSubtree(
       key: ValueKey(auth.user?.id ?? 'guest'),
-      child: const ShellScreen(),
+      child: const HomeScreen(),
     );
   }
 }
