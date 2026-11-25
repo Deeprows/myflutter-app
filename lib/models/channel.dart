@@ -83,6 +83,7 @@ class Channel {
   final String? country; // ISO code, e.g. "US"
   final String? quality; // e.g. "1080p"
   final double score; // 0-100 health score (0 when unknown)
+  final bool working; // confirmed online by the IPTV health feed
 
   /// Headers some hosts require. [referer] is used as the player page origin.
   final String? referer;
@@ -102,6 +103,7 @@ class Channel {
     this.country,
     this.quality,
     this.score = 0,
+    this.working = false,
     this.referer,
     this.userAgent,
     this.altUrl,
@@ -136,6 +138,7 @@ class Channel {
       country: _opt(raw['country']),
       quality: _opt(raw['quality']),
       score: raw['score'] is num ? (raw['score'] as num).toDouble() : 0,
+      working: raw['working'] == true,
       referer: _opt(raw['referer']),
       userAgent: _opt(raw['userAgent']),
       altUrl: _opt(raw['altUrl']),
@@ -153,6 +156,7 @@ class Channel {
         if (country != null) 'country': country,
         if (quality != null) 'quality': quality,
         if (score > 0) 'score': score,
+        if (working) 'working': true,
         if (referer != null) 'referer': referer,
         if (userAgent != null) 'userAgent': userAgent,
         if (altUrl != null) 'altUrl': altUrl,
@@ -165,6 +169,7 @@ class Channel {
     String? country,
     String? quality,
     double? score,
+    bool? working,
     String? altUrl,
     String? altReferer,
     String? altUserAgent,
@@ -178,6 +183,7 @@ class Channel {
         country: country ?? this.country,
         quality: quality ?? this.quality,
         score: score ?? this.score,
+        working: working ?? this.working,
         referer: referer,
         userAgent: userAgent,
         altUrl: altUrl ?? this.altUrl,
