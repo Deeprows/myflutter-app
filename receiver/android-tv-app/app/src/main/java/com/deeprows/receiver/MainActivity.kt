@@ -17,6 +17,7 @@ import android.os.Environment
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.MotionEvent
+import android.view.InputDevice
 import androidx.core.content.FileProvider
 import java.io.File
 import android.webkit.JavascriptInterface
@@ -28,6 +29,7 @@ import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceResponse
 import java.io.ByteArrayInputStream
 import java.io.FilterInputStream
@@ -224,6 +226,13 @@ class MainActivity : Activity() {
 
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                     if (request?.isForMainFrame == true) showOfflineScreen()
+                }
+
+                // Android 8+ can kill a WebView renderer independently of the app process.
+                // Recover with a native screen rather than leaving a dead WebView on screen.
+                override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                    if (view === webView) runOnUiThread { showRendererCrashScreen() }
+                    return true
                 }
             }
         }
@@ -646,6 +655,33 @@ class MainActivity : Activity() {
         )
     }
 
+    private fun showRendererCrashScreen() {
+        val retry = Button(this).apply {
+            text = "RELOAD DEEPROWSS"
+            textSize = 18f
+            isFocusable = true
+            isFocusableInTouchMode = true
+            setOnClickListener { openSite(null, null) }
+        }
+        val exit = Button(this).apply {
+            text = "EXIT APP"
+            textSize = 16f
+            isFocusable = true
+            isFocusableInTouchMode = true
+            setOnClickListener { finish() }
+        }
+        val screen = newScreen()
+        screen.addView(label("DEEPROWSS", 30f, Color.rgb(255, 196, 46), true), LinearLayout.LayoutParams(-1, -2))
+        screen.addView(
+            label("The receiver player stopped unexpectedly. Reload the page to continue.", 18f, Color.LTGRAY),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = 18; bottomMargin = 28 }
+        )
+        screen.addView(retry, LinearLayout.LayoutParams(520, -2))
+        screen.addView(exit, LinearLayout.LayoutParams(520, -2).apply { topMargin = 14 })
+        showScreen(screen)
+        retry.requestFocus()
+    }
+
     private fun showOfflineScreen() {
         val screen = newScreen()
         val retry = Button(this).apply {
@@ -730,7 +766,40 @@ class MainActivity : Activity() {
         openSite(host, pin)
     }
 
-    // ------------------------------------------------------------------ remote control
+    // ------------------------------------------------------------------ remote control and pointer input
+
+    /**
+     * Some Android TV launchers/emulators report a mouse as generic pointer motion.
+     * Route pointer events to the full-screen WebView first; do not consume events
+     * that Chromium does not handle.
+     */
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        val target = webView
+        if (target != null && target.visibility == View.VISIBLE &&
+            (event.source and InputDevice.SOURCE_CLASS_POINTER) == InputDevice.SOURCE_CLASS_POINTER
+        ) {
+            if (target.dispatchGenericMotionEvent(event)) return true
+        }
+        return super.dispatchGenericMotionEvent(event)
+    }
+
+    /**
+     * Keep the WebView eligible for TV remote navigation. OK/Enter and directional
+     * events are not consumed here, so Chromium and embedded player controls can handle them.
+     */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+            when (event.keyCode) {
+                android.view.KeyEvent.KEYCODE_DPAD_UP,
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT,
+                android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (webView?.hasFocus() != true) webView?.requestFocus()
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
