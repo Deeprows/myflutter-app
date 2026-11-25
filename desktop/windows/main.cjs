@@ -149,6 +149,38 @@ function configureNetwork(ses) {
 
 const trusted = (event) => !!origin && !!event.senderFrame && event.senderFrame === event.sender.mainFrame && String(event.senderFrame.url || '').startsWith(origin);
 
+/* Premium expiry warning: one audible Windows alert per subscription expiry. */
+const subscriptionWarningFile = () => path.join(app.getPath('userData'), 'subscription-warning.json');
+ipcMain.on('subscription:expiring', (event, rawExpiry) => {
+  if (!trusted(event) || process.platform !== 'win32') return;
+  const expiry = Number(rawExpiry);
+  const remaining = expiry - Date.now();
+  if (!Number.isFinite(expiry) || remaining <= 0 || remaining > 3 * 86400000) return;
+  const marker = String(expiry);
+  try {
+    const previous = JSON.parse(fs.readFileSync(subscriptionWarningFile(), 'utf8'));
+    if (previous && previous.expiry === marker) return;
+  } catch (_) {}
+  try { fs.writeFileSync(subscriptionWarningFile(), JSON.stringify({ expiry: marker, notifiedAt: Date.now() })); } catch (_) {}
+  const days = Math.max(1, Math.ceil(remaining / 86400000));
+  if (Notification.isSupported()) {
+    const notice = new Notification({
+      title: 'Deeprowss Premium is expiring soon',
+      body: `Your subscription expires in ${days} day${days === 1 ? '' : 's'}. Renew now to keep Premium access.`,
+      icon
+    });
+    notice.show();
+  }
+  // A short two-tone system beep, independent of browser audio/autoplay settings.
+  try {
+    const sound = spawn('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      '[console]::beep(880,220); Start-Sleep -Milliseconds 90; [console]::beep(1100,260)'
+    ], { windowsHide: true, stdio: 'ignore' });
+    sound.unref();
+  } catch (_) {}
+});
+
 ipcMain.on('stream:headers', (event, headers) => {
   if (!trusted(event)) return;
   const referer = String((headers && headers.referer) || '').slice(0, 2000);
