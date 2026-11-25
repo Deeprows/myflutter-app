@@ -30,8 +30,8 @@ class PremiumGate {
       SubscriptionService.instance.enabled &&
       !SubscriptionService.instance.isPremium;
 
-  /// Decoder, casting, receiver and mirroring are Premium-only. Unlike movie
-  /// playback, there is no ad-based temporary unlock for these features.
+  /// The full Decoder, receiver and mirroring features are Premium-only.
+  /// Direct TV casting has its own five-use free allowance below.
   static Future<bool> allowDecoder(BuildContext context) => _gate(
         context,
         isLocked: () => decoderLocked,
