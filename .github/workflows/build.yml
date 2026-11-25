@@ -443,10 +443,9 @@ jobs:
           # Publish the installable PWA receiver and the public app download centre.
           cp -R assets/receiver/. site/receiver/
           cp downloads/index.html site/downloads/index.html
-          touch site/.nojekyll
 
       - name: Upload receiver website
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: site
 
