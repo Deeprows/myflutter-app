@@ -83,6 +83,11 @@ class CastService extends ChangeNotifier {
   DateTime? sleepEndsAt;
   String? error;
 
+  /// Backup stream for the current cast. When the main stream stops on the
+  /// TV, this one is cast to the same TV automatically.
+  CastTarget? _backup;
+  void armBackup(CastTarget? backup) => _backup = backup;
+
   /// The last channel / video that could be cast. The Decoder keeps it so
   /// opening the Decoder again (or from another page) still knows what to play.
   CastTarget? lastTarget;
@@ -864,6 +869,7 @@ class CastService extends ChangeNotifier {
 
   /// Stops the TV and ends casting.
   Future<void> stop() async {
+    _backup = null; // the person stopped it: no automatic backup
     final d = device;
     if (d != null && _kodiMode && _kodiPort != null) {
       try {
@@ -1047,8 +1053,19 @@ class CastService extends ChangeNotifier {
   }
 
   void _finish(String message) {
+    final d = device;
+    final b = _backup;
+    _backup = null;
     _log(message);
     _cleanup();
+    if (d != null && b != null && (b.url ?? '').trim().isNotEmpty) {
+      _log('Main stream stopped. Switching to the backup stream.');
+      error = null;
+      notifyListeners();
+      unawaited(castUrl(d, b.url!.trim(),
+          title: b.title, kind: b.kind, referer: b.referer, userAgent: b.userAgent));
+      return;
+    }
     error = message;
     notifyListeners();
   }
