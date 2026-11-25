@@ -27,12 +27,12 @@ class PremiumGate {
       SubscriptionService.instance.enabled &&
       !SubscriptionService.instance.isPremium;
 
-  /// Smart Decoder is available to registered users. Non-Premium users have
-  /// five server-counted cast / receiver uses; Premium users are unlimited.
-  static bool get decoderLocked => !AuthService.instance.signedIn;
+  /// Decoder browsing is open to guests. Sign-in is requested only by
+  /// account-specific features; casting limits are enforced by allowCast and
+  /// consumeReceiverAccess when the user actually starts a cast.
+  static bool get decoderLocked => false;
 
-  static Future<bool> allowDecoder(BuildContext context) =>
-      ensureSignedIn(context);
+  static Future<bool> allowDecoder(BuildContext context) async => true;
 
   /// A receiver action consumes one of the same five free uses as TV casting.
   static Future<bool> consumeReceiverAccess(BuildContext context) async {
