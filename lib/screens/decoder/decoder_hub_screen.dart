@@ -92,27 +92,52 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
     DecoderMemory.save('hub');
   }
 
-  Widget _tile(IconData icon, String title, String subtitle, VoidCallback onTap) => Container(
+  Widget _tile(IconData icon, String title, String subtitle, VoidCallback onTap, {String? badge}) => Container(
         margin: const EdgeInsets.only(bottom: 7),
         decoration: BoxDecoration(
-          color: Ui.card,
           borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: Ui.line),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .25), blurRadius: 8, offset: const Offset(0, 3))],
         ),
-        child: ListTile(
-          dense: true,
-          minVerticalPadding: 2,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-          leading: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(color: Ui.panel, borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: Ui.red),
+        child: Material(
+          color: Colors.transparent,
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: Ui.line),
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [Color.alphaBlend(Ui.red.withValues(alpha: .09), Ui.card), Ui.card],
+              ),
+            ),
+            child: ListTile(
+              dense: true,
+              minVerticalPadding: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+              leading: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: Ui.panel,
+                  border: Border.all(color: Ui.red.withValues(alpha: .35)),
+                ),
+                child: Icon(icon, color: Ui.red, size: 20),
+              ),
+              title: Text(title, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 13)),
+              subtitle: Text(subtitle, style: TextStyle(color: Ui.muted, fontSize: 10.5)),
+              trailing: badge == null
+                  ? Icon(Icons.chevron_right, size: 18, color: Ui.redSoft)
+                  : Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(color: Ui.red, borderRadius: BorderRadius.circular(99)),
+                      child: Text(badge,
+                          style: TextStyle(color: Ui.palette.onAccent, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: .6)),
+                    ),
+              onTap: onTap,
+            ),
           ),
-          title: Text(title, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 13)),
-          subtitle: Text(subtitle, style: TextStyle(color: Ui.muted, fontSize: 10.5)),
-          trailing: const Icon(Icons.chevron_right, size: 18),
-          onTap: onTap,
         ),
       );
 
@@ -263,11 +288,27 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
                 ),
               ]),
             ])),
-          decoderPanel(
-            Row(children: [
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Ui.red.withValues(alpha: .35)),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color.alphaBlend(Ui.red.withValues(alpha: .20), Ui.card), Ui.card],
+              ),
+            ),
+            child: Row(children: [
               Container(
-                width: 42, height: 42,
-                decoration: BoxDecoration(color: Ui.red.withValues(alpha: .16), borderRadius: BorderRadius.circular(12)),
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: Ui.red.withValues(alpha: .18),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Ui.red.withValues(alpha: .5)),
+                ),
                 child: Icon(Icons.settings_input_antenna_rounded, color: Ui.red, size: 24),
               ),
               const SizedBox(width: 12),
@@ -278,12 +319,23 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
               ])),
               Icon(Icons.power_settings_new_rounded, color: Ui.red),
             ]),
-            bottom: 12,
           ),
-          decoderHeading('WATCH ON YOUR SCREEN', 'Cast live football or find a movie.'),
-          _tile(Icons.sports_soccer_rounded, 'Live Fixtures', 'Two cast streams per match · main and backup', () => _open(const DecoderFixturesPage(), 'fixtures')),
+          decoderSectionHeader(
+            icon: Icons.live_tv_rounded,
+            kicker: '01 · Now showing',
+            title: 'Watch on your screen',
+            subtitle: 'Cast live football or find a movie.',
+            trailing: 'LIVE',
+          ),
+          _tile(Icons.sports_soccer_rounded, 'Live Fixtures', 'Two cast streams per match · main and backup', () => _open(const DecoderFixturesPage(), 'fixtures'), badge: 'LIVE'),
           _tile(Icons.movie_filter_rounded, 'Pick a Movie & Watch', 'Search the movie library and cast a title', () => _open(const DecoderMoviesPage(), 'movies')),
-          decoderHeading('DECODER TOOLS', 'Connect and control your display.'),
+          decoderSectionHeader(
+            icon: Icons.tune_rounded,
+            kicker: '02 · Control room',
+            title: 'Decoder tools',
+            subtitle: 'Connect and control your display.',
+            padding: const EdgeInsets.only(top: 12, bottom: 12),
+          ),
           _tile(Icons.cast_rounded, 'Cast to TV / Kodi', 'Find compatible screens on your Wi-Fi', () => _open(const DecoderCastPage(), 'cast')),
           _tile(Icons.screen_share_rounded, 'Screen mirroring', 'Mirror your phone screen', () => _open(const DecoderMirrorPage(), 'mirror')),
           _tile(Icons.web_rounded, 'Send to receiver page', 'Use a browser screen as your receiver', () => _open(const DecoderReceiverPage(), 'receiver')),
