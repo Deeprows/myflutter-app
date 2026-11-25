@@ -4,5 +4,5 @@
   "androidTv": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.8/Deeprowss-Android-TV.apk",
   "webos": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.8/Deeprowss-LG-webOS.ipk",
   "tizen": "",
-  "windows": "https://github.com/Deeprows/myflutter-app/actions/runs/45537116640/artifacts/14986764047"
+  "windows": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.8/Deeprowss-Windows-Setup.exe"
 }
