@@ -43,7 +43,7 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       DecoderMemory.save('hub');
-      // The Smart Decoder itself is Premium-only, not just its sub-pages.
+      // Smart Decoder requires registration; Premium is not required to enter.
       final allowed = await PremiumGate.allowDecoder(context);
       if (!mounted) return;
       if (!allowed) {
