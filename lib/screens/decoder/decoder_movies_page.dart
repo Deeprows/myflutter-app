@@ -329,7 +329,7 @@ class _DecoderMoviesPageState extends State<DecoderMoviesPage> {
       appBar: AppBar(
         backgroundColor: Ui.panel,
         title: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Pick a Movie & Watch', style: TextStyle(fontWeight: FontWeight.w900)),
+          Text('Moviebox', style: TextStyle(fontWeight: FontWeight.w900)),
           Text('Tap any title to cast it', style: TextStyle(fontSize: 11, color: Colors.white60)),
         ]),
       ),
