@@ -111,6 +111,9 @@ class StreamResolver {
     }
   }
 
+  /// Public classifier: hls / dash / video file, otherwise a web (embed) page.
+  static StreamKind kindOfUrl(String url) => _kindOf(url);
+
   static StreamKind _kindOf(String url) {
     final l = url.toLowerCase();
     if (l.contains('.m3u8')) return StreamKind.hls;
