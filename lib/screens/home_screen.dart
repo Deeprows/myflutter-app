@@ -32,7 +32,6 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _featureCard({
-    required BuildContext context,
     required IconData icon,
     required String title,
     required String subtitle,
@@ -173,7 +172,6 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 28),
             _featureCard(
-              context: context,
               icon: Icons.sensors_rounded,
               title: 'LIVE EVENTS',
               subtitle: 'Follow live matches, fixtures and football action.',
