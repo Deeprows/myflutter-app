@@ -168,6 +168,7 @@ Future<void> sendToReceiver(BuildContext context, CastTarget target) async {
     decoderToast(context, 'This item has no valid web address to send.');
     return;
   }
+  if (!await PremiumGate.consumeReceiverAccess(context) || !context.mounted) return;
   final mirror = DeeprowssMirrorService.instance;
   if (mirror.running && mirror.usingQrPairing) {
     final kind = target.kind == StreamKind.invalid ? StreamKind.embed : target.kind;
