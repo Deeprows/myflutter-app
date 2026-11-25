@@ -7,7 +7,7 @@ import '../services/ad_scheduler.dart';
 import '../theme/app_theme.dart';
 import 'home_screen.dart';
 
-/// Signed-in users choose the live-football or community experience.
+/// Restores authentication before showing the Deeprowss landing page.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
   @override
