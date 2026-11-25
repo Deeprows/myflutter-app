@@ -1122,6 +1122,9 @@ async function ensureSchema(env) {
     env.DB.prepare(
       "CREATE TABLE IF NOT EXISTS tv_trials (device_id TEXT NOT NULL, day_utc TEXT NOT NULL, channel_key TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(device_id, day_utc, channel_key))"
     ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS cast_trials (owner_id TEXT NOT NULL, slot INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(owner_id, slot))"
+    ),
   ]);
   // Older databases: remember which plan a phone asked for. Harmless when the
   // columns already exist.
@@ -1235,6 +1238,54 @@ async function recordTvTrial(env, deviceId, channelKey) {
   return { allowed: Boolean(seen), used, remaining: Math.max(0, RECEIVER_FREE_TV_CHANNELS - used), limit: RECEIVER_FREE_TV_CHANNELS, day };
 }
 
+// Five free successful cast sessions per account/install. Checking the picker
+// never consumes a slot; the client calls consume only after playback starts.
+const RECEIVER_FREE_CAST_SESSIONS = 5;
+
+async function recordCastTrial(env, ownerId, action) {
+  if (!receiverIdOk(ownerId)) return { allowed: false, used: 0, remaining: 0 };
+  const now = Date.now();
+  let consumed = false;
+  if (action !== "check") {
+    const inserted = await env.DB.prepare(
+      "INSERT OR IGNORE INTO cast_trials (owner_id, slot, created_at) " +
+      "SELECT ?, COALESCE(MAX(slot), 0) + 1, ? FROM cast_trials WHERE owner_id = ? " +
+      "HAVING COALESCE(MAX(slot), 0) < ?"
+    ).bind(ownerId, now, ownerId, RECEIVER_FREE_CAST_SESSIONS).run();
+    consumed = Number(inserted?.meta?.changes || 0) > 0;
+  }
+  const row = await env.DB.prepare(
+    "SELECT COUNT(*) AS used FROM cast_trials WHERE owner_id = ?"
+  ).bind(ownerId).first();
+  const used = Number(row?.used || 0);
+  return {
+    allowed: action === "check" ? used < RECEIVER_FREE_CAST_SESSIONS : consumed,
+    used,
+    remaining: Math.max(0, RECEIVER_FREE_CAST_SESSIONS - used),
+    limit: RECEIVER_FREE_CAST_SESSIONS,
+  };
+}
+
+async function subCastAccess(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const ownerId = String(body.install_id || "");
+  if (!receiverIdOk(ownerId)) return json({ error: "bad account id" }, 400);
+  const expires = await expiryOf(env, ownerId);
+  if (expires > Date.now()) {
+    return json({
+      allowed: true, premium: true, used: 0,
+      remaining: RECEIVER_FREE_CAST_SESSIONS,
+      limit: RECEIVER_FREE_CAST_SESSIONS, expires_at: expires, now: Date.now(),
+    });
+  }
+  const action = String(body.action || "consume").toLowerCase();
+  if (action !== "check" && action !== "consume") {
+    return json({ error: "bad cast action" }, 400);
+  }
+  const result = await recordCastTrial(env, ownerId, action);
+  return json({ ...result, premium: false, now: Date.now() });
+}
+
 async function subMovieAccess(request, env) {
   const body = await request.json().catch(() => ({}));
   const ownerId = String(body.install_id || "");
@@ -1338,6 +1389,8 @@ async function subscriptions(request, env, url) {
     path === "/sub/decoder/issue" ||
     path === "/sub/movie-access" ||
     path === "/sub/movie-access-guest" ||
+    path === "/sub/cast-access" ||
+    path === "/sub/cast-access-guest" ||
     path === "/sub/admin" ||
     path.startsWith("/sub/token/");
   if (!env.DB || (!env.PAYSTACK_SECRET_KEY && !dbOnly)) {
@@ -1355,6 +1408,7 @@ async function subscriptions(request, env, url) {
       path === "/sub/status" ||
       path === "/sub/decoder/issue" ||
       path === "/sub/movie-access" ||
+      path === "/sub/cast-access" ||
       path === "/sub/start" ||
       path === "/sub/restore" ||
       path.startsWith("/sub/token/");
@@ -1391,6 +1445,9 @@ async function subscriptions(request, env, url) {
     }
     if (path === "/sub/movie-access-guest" && request.method === "POST") {
       return subMovieAccess(request, env);
+    }
+    if ((path === "/sub/cast-access" || path === "/sub/cast-access-guest") && request.method === "POST") {
+      return subCastAccess(request, env);
     }
     if (path === "/sub/start" && request.method === "POST") {
       return subStart(request, env, url);

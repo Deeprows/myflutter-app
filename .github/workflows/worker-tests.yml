@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+      - 'fix/**'
+    paths:
+      - 'cloudflare/**'
+      - '.github/workflows/worker-tests.yml'
+  pull_request:
     paths:
       - 'cloudflare/**'
       - '.github/workflows/worker-tests.yml'
