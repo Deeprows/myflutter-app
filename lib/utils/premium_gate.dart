@@ -4,6 +4,8 @@ import '../config.dart';
 import '../screens/plans_screen.dart';
 import '../screens/remove_ads_screen.dart';
 import '../services/ad_unlock.dart';
+import '../services/auth_service.dart';
+import '../services/login_gate.dart';
 import '../services/remote_config.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
@@ -25,12 +27,12 @@ class PremiumGate {
       SubscriptionService.instance.enabled &&
       !SubscriptionService.instance.isPremium;
 
-  /// Decoder browsing is open to guests. Sign-in is requested only by
-  /// account-specific features; casting limits are enforced by allowCast and
-  /// consumeReceiverAccess when the user actually starts a cast.
-  static bool get decoderLocked => false;
+  /// Smart Decoder is available to registered users. Non-Premium users have
+  /// five server-counted cast / receiver uses; Premium users are unlimited.
+  static bool get decoderLocked => !AuthService.instance.signedIn;
 
-  static Future<bool> allowDecoder(BuildContext context) async => true;
+  static Future<bool> allowDecoder(BuildContext context) =>
+      ensureSignedIn(context);
 
   /// A receiver action consumes one of the same five free uses as TV casting.
   static Future<bool> consumeReceiverAccess(BuildContext context) async {
