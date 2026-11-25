@@ -768,7 +768,8 @@ html[data-dw-theme=amoled]{--bg:#000000;--s1:#0a0a0c;--s2:#101013;--line:#26262b
 html.tv .dw-lang b{font-size:20px}
 html.tv .dw-lang small{font-size:15px}
 @media(max-width:900px){.dw-langs{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.dw-prev{position:relative;display:block;height:98px;overflow:hidden;border:1px solid #ffffff1f;border-radius:11px;background:radial-gradient(120% 100% at 0 0,var(--pg),transparent 65%),var(--pb)}
+.dw-theme{align-items:stretch}
+.dw-prev{box-sizing:border-box;flex:none;align-self:stretch;width:100%;min-width:0;position:relative;display:block;height:98px;overflow:hidden;border:1px solid #ffffff1f;border-radius:11px;background:radial-gradient(120% 100% at 0 0,var(--pg),transparent 65%),var(--pb)}
 .dw-prev i{position:absolute;display:block}
 .pv-logo{left:9px;top:9px;width:14px;height:14px;border-radius:4px;background:var(--pa)}
 .pv-title{left:10px;top:35px;width:46%;height:9px;border-radius:3px;background:#ffffffe6}
