@@ -4,8 +4,6 @@ import '../config.dart';
 import '../screens/plans_screen.dart';
 import '../screens/remove_ads_screen.dart';
 import '../services/ad_unlock.dart';
-import '../services/auth_service.dart';
-import '../services/login_gate.dart';
 import '../services/remote_config.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
