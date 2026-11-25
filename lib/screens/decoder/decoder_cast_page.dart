@@ -87,6 +87,7 @@ class _DecoderCastPageState extends State<DecoderCastPage> {
     if (ok) {
       // Only a successful TV start uses one of the five free casts.
       await SubscriptionService.instance.consumeCastAccess(consume: true);
+      if (!mounted) return;
       widget.onCastStarted?.call();
       decoderToast(context, 'Playing on ${d.name}');
     } else {
