@@ -40,6 +40,26 @@ class PremiumGate {
         allowAd: false,
       );
 
+  /// Free accounts receive five cast attempts; opening the device list is free.
+  static Future<bool> allowCast(BuildContext context) async {
+    if (!SubscriptionService.instance.enabled || SubscriptionService.instance.isPremium) return true;
+    final access = await SubscriptionService.instance.consumeCastAccess();
+    if (!access.verified) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not verify your free casting allowance. Please try again when connected.')),
+      );
+      return false;
+    }
+    if (access.allowed) return true;
+    return _gate(
+      context,
+      isLocked: () => !SubscriptionService.instance.isPremium,
+      title: 'Your 5 free casts are used',
+      body: 'Upgrade to Premium for unlimited casting to TVs and Kodi.',
+      allowAd: false,
+    );
+  }
+
   /// Download button: true only for Premium members (or right after they
   /// upgrade). Everyone else sees the upgrade sheet, with no ad option.
   static Future<bool> allowDownload(BuildContext context, String movieKey) =>
