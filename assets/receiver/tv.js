@@ -154,7 +154,7 @@
         const allStreams = streams.map(x => ({ url: s(x.url), referer: s(x.referrer), ua: s(x.user_agent), quality: s(x.quality) })).filter(x => x.url);
         const o = {
           id: s(raw.id), name, url: s(best.url), category: cat, logo: s(raw.logo), country: s(raw.country),
-          quality: s(best.quality) || s(raw.best_quality), score: typeof raw.score === 'number' ? raw.score : 0,
+          quality: s(best.quality) || s(raw.best_quality), score: typeof raw.score === 'number' ? raw.score : 0, working: true,
           referer: s(best.referrer), userAgent: s(best.user_agent), streams: allStreams,
           altUrl: alt ? s(alt.url) : undefined, altReferer: alt ? s(alt.referrer) : undefined, altUserAgent: alt ? s(alt.user_agent) : undefined
         };
@@ -335,7 +335,7 @@
     const cat = opt(raw.category).toLowerCase();
     return {
       id: opt(raw.id) || undefined, name, url, category: CAT_IDS.has(cat) ? cat : 'other', logo: opt(raw.logo) || undefined,
-      country: opt(raw.country).toUpperCase() || undefined, quality: opt(raw.quality) || undefined, score: Number(raw.score) || 0,
+      country: opt(raw.country).toUpperCase() || undefined, quality: opt(raw.quality) || undefined, score: Number(raw.score) || 0, working: raw.working === true,
       referer: opt(raw.referer) || undefined, userAgent: opt(raw.userAgent) || undefined,
       altUrl: opt(raw.altUrl) || undefined, altReferer: opt(raw.altReferer) || undefined, altUserAgent: opt(raw.altUserAgent) || undefined,
       streams: Array.isArray(raw.streams) ? raw.streams.map(x => ({ url: opt(x && x.url), referer: opt(x && (x.referer || x.referrer)), ua: opt(x && (x.ua || x.userAgent || x.user_agent)) })).filter(x => x.url) : undefined,
@@ -355,7 +355,7 @@
       const mergedStreams = [...ownStreams, ...providerStreams.filter(x => !ownStreams.some(y => y.url === x.url))];
       const useAlt = !c.altUrl && n.url !== c.url;
       return { ...c, logo: n.logo || c.logo, country: n.country || c.country, quality: n.quality || c.quality, score: n.score || c.score,
-        streams: mergedStreams, altUrl: useAlt ? n.url : c.altUrl, altReferer: useAlt ? n.referer : c.altReferer, altUserAgent: useAlt ? n.userAgent : c.altUserAgent };
+        streams: mergedStreams, working: c.working === true || n.working === true, altUrl: useAlt ? n.url : c.altUrl, altReferer: useAlt ? n.referer : c.altReferer, altUserAgent: useAlt ? n.userAgent : c.altUserAgent };
     });
     for (const c of b) { if (ownNames.has(c.name.toLowerCase()) || ownUrls.has(c.url)) continue; out.push(c); }
     return out;
@@ -402,7 +402,11 @@
     else if (st.cat !== 'all') base = base.filter(c => c.category === st.cat);
     const q = st.q.toLowerCase();
     if (q) base = base.filter(c => c.name.toLowerCase().includes(q) || (c.group && c.group.toLowerCase().includes(q)) || (c.country && (c.country.toLowerCase() === q || countryName(c.country).toLowerCase().includes(q))) || catLabel(c.category).toLowerCase().includes(q));
-    filtered = base;
+    filtered = base.map((channel, index) => ({ channel, index }))
+      .sort((a, b) => Number(b.channel.working === true) - Number(a.channel.working === true)
+        || (Number(b.channel.score) || 0) - (Number(a.channel.score) || 0)
+        || a.index - b.index)
+      .map(item => item.channel);
   }
   function cardHtml(c, i) {
     const q = qualityLabel(c.quality), fav = isFav(c);
