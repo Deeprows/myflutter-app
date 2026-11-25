@@ -1,8 +1,8 @@
 {
-  "enabled": false,
+  "enabled": true,
   "id": "",
-  "title": "",
-  "message": "",
+  "title": "Welcome",
+  "message": "Thank you for choosing Deeprowss",
   "popup": true,
   "beep": true,
   "button_text": "",
