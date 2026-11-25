@@ -47,6 +47,77 @@ Widget decoderHeading(String title, String subtitle) => Padding(
       ]),
     );
 
+/// Distinct section header: icon badge, small kicker, two-tone title that
+/// ends in the accent colour, a fading rule and an optional trailing tag.
+Widget decoderSectionHeader({
+  required IconData icon,
+  required String kicker,
+  required String title,
+  String? subtitle,
+  String? trailing,
+  EdgeInsetsGeometry padding = const EdgeInsets.only(top: 6, bottom: 12),
+}) {
+  final words = title.split(' ');
+  final last = words.removeLast();
+  return Padding(
+    padding: padding,
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(11),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Ui.red, Ui.red.withValues(alpha: .55)],
+            ),
+            boxShadow: [BoxShadow(color: Ui.red.withValues(alpha: .35), blurRadius: 12, offset: const Offset(0, 3))],
+          ),
+          child: Icon(icon, size: 18, color: Ui.palette.onAccent),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(kicker.toUpperCase(),
+                style: TextStyle(color: Ui.redSoft, fontSize: 9.5, letterSpacing: 1.6, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 1),
+            Text.rich(
+              TextSpan(children: [
+                if (words.isNotEmpty) TextSpan(text: '${words.join(' ')} '),
+                TextSpan(text: last, style: TextStyle(color: Ui.red)),
+              ]),
+              style: TextStyle(color: Ui.text, fontSize: 19, height: 1.1, fontWeight: FontWeight.w900, letterSpacing: .2),
+            ),
+          ]),
+        ),
+        if (trailing != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(99),
+              border: Border.all(color: Ui.red.withValues(alpha: .55)),
+            ),
+            child: Text(trailing,
+                style: TextStyle(color: Ui.redSoft, fontSize: 9.5, letterSpacing: .8, fontWeight: FontWeight.w900)),
+          ),
+      ]),
+      const SizedBox(height: 9),
+      Container(
+        height: 1.5,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [Ui.red, Ui.red.withValues(alpha: .0)]),
+        ),
+      ),
+      if (subtitle != null) ...[
+        const SizedBox(height: 7),
+        Text(subtitle, style: TextStyle(color: Ui.muted, fontSize: 12)),
+      ],
+    ]),
+  );
+}
+
 /// Play / pause / stop, seek, volume and sleep timer for the TV that is
 /// currently playing.
 class DecoderNowPlaying extends StatelessWidget {
