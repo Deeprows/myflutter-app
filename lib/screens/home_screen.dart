@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/login_gate.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
 import 'cast_screen.dart';
@@ -24,6 +25,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   Future<void> _openDecoder(BuildContext context) async {
+    if (!await ensureSignedIn(context) || !context.mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(builder: (_) => const CastScreen()),
     );
