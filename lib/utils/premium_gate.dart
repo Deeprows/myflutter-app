@@ -4,6 +4,7 @@ import '../config.dart';
 import '../screens/plans_screen.dart';
 import '../screens/remove_ads_screen.dart';
 import '../services/ad_unlock.dart';
+import '../services/auth_service.dart';
 import '../services/login_gate.dart';
 import '../services/remote_config.dart';
 import '../services/subscription_service.dart';
@@ -28,7 +29,7 @@ class PremiumGate {
 
   /// Smart Decoder is available to registered users. Non-Premium users have
   /// five server-counted cast / receiver uses; Premium users are unlimited.
-  static bool get decoderLocked => false;
+  static bool get decoderLocked => !AuthService.instance.signedIn;
 
   static Future<bool> allowDecoder(BuildContext context) =>
       ensureSignedIn(context);
