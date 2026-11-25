@@ -66,45 +66,80 @@ Future<CastTarget?> prepareTarget(BuildContext context, CastTarget t) async {
   return fromFound(found.url, found.kind, found.referer, found.userAgent);
 }
 
-/// Bottom sheet that asks how a channel / movie should be watched.
-Future<void> chooseConnectivity(BuildContext context, CastTarget target) async {
+/// Bottom sheet that asks how a channel / movie should be watched: the two
+/// ways to put it on a bigger screen. [image] / [meta] dress the header.
+Future<void> chooseConnectivity(BuildContext context, CastTarget target, {String? image, String? meta}) async {
   final svc = CastService.instance;
+  Widget option(BuildContext ctx, IconData icon, String title, String sub, String value) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Material(
+          color: Colors.transparent,
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Ui.line),
+              color: Ui.card,
+            ),
+            child: ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(color: Ui.red.withValues(alpha: .16), borderRadius: BorderRadius.circular(11)),
+                child: Icon(icon, color: Ui.red),
+              ),
+              title: Text(title, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800)),
+              subtitle: Text(sub, style: TextStyle(color: Ui.muted, fontSize: 12)),
+              trailing: Icon(Icons.chevron_right, color: Ui.redSoft),
+              onTap: () => Navigator.pop(ctx, value),
+            ),
+          ),
+        ),
+      );
   final choice = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: Ui.panel,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
     builder: (ctx) => SafeArea(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const SizedBox(height: 10),
+        Container(width: 38, height: 4, decoration: BoxDecoration(color: Ui.line, borderRadius: BorderRadius.circular(9))),
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 2),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(target.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Ui.text, fontSize: 17, fontWeight: FontWeight.w900)),
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+          child: Row(children: [
+            if (image != null && image.startsWith('http'))
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: SizedBox(
+                    width: 52,
+                    height: 76,
+                    child: Image.network(image, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(color: Ui.card, child: const Icon(Icons.movie_outlined))),
+                  ),
+                ),
+              ),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('CAST THIS TITLE', style: TextStyle(color: Ui.redSoft, fontSize: 9.5, letterSpacing: 1.6, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 3),
+                Text(target.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Ui.text, fontSize: 17, height: 1.15, fontWeight: FontWeight.w900)),
+                if (meta != null && meta.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(meta, style: TextStyle(color: Ui.muted, fontSize: 12)),
+                ],
+              ]),
+            ),
+          ]),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text('How do you want to watch it?', style: TextStyle(color: Ui.muted, fontSize: 12)),
-          ),
-        ),
-        ListTile(
-          leading: Icon(Icons.cast_rounded, color: Ui.red),
-          title: const Text('Cast to TV / Kodi'),
-          subtitle: Text(svc.casting ? 'Now playing on ${svc.device?.name ?? 'TV'}' : 'Smart TVs and Kodi on your Wi-Fi'),
-          onTap: () => Navigator.pop(ctx, 'cast'),
-        ),
-        ListTile(
-          leading: Icon(Icons.web_rounded, color: Ui.red),
-          title: const Text('Send to receiver page'),
-          subtitle: const Text('Plays in a laptop or TV browser'),
-          onTap: () => Navigator.pop(ctx, 'receiver'),
-        ),
-        const SizedBox(height: 8),
+        option(ctx, Icons.cast_rounded, 'Cast to TV / Kodi',
+            svc.casting ? 'Now playing on ${svc.device?.name ?? 'TV'}' : 'Smart TVs and Kodi on your Wi-Fi', 'cast'),
+        option(ctx, Icons.web_rounded, 'Send to receiver page', 'Plays in a laptop or TV browser', 'receiver'),
+        const SizedBox(height: 6),
       ]),
     ),
   );
