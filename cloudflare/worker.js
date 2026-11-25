@@ -99,6 +99,19 @@ export default {
       return json({ error: "method not allowed" }, 405);
     }
 
+    // Approximate visitor location (city / region / country) from Cloudflare's
+    // own edge data. No third party, no GPS prompt; used by the receiver clock.
+    if (url.pathname === "/geo" && request.method === "GET") {
+      const cf = request.cf || {};
+      const res = json({
+        city: cf.city || "",
+        region: cf.region || "",
+        country: cf.country || "",
+      });
+      res.headers.set("cache-control", "no-store");
+      return res;
+    }
+
     if(url.pathname.startsWith('/public/data/'))return publicRepoData(request,env,url);
     if(url.pathname.startsWith('/public/releases/'))return publicReleaseAsset(request,env,url);
     if(url.pathname.startsWith('/receiver/'))return receiverAccess(request,env,url);
@@ -1107,9 +1120,6 @@ async function ensureSchema(env) {
       "CREATE TABLE IF NOT EXISTS movie_trials (owner_id TEXT NOT NULL, movie_key TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(owner_id, movie_key))"
     ),
     env.DB.prepare(
-      "CREATE TABLE IF NOT EXISTS cast_trials (owner_id TEXT PRIMARY KEY, used INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0)"
-    ),
-    env.DB.prepare(
       "CREATE TABLE IF NOT EXISTS tv_trials (device_id TEXT NOT NULL, day_utc TEXT NOT NULL, channel_key TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(device_id, day_utc, channel_key))"
     ),
   ]);
@@ -1225,47 +1235,6 @@ async function recordTvTrial(env, deviceId, channelKey) {
   return { allowed: Boolean(seen), used, remaining: Math.max(0, RECEIVER_FREE_TV_CHANNELS - used), limit: RECEIVER_FREE_TV_CHANNELS, day };
 }
 
-const FREE_CAST_USES = 5;
-
-async function recordCastTrial(env, ownerId) {
-  const now = Date.now();
-  await env.DB.prepare(
-    "INSERT OR IGNORE INTO cast_trials (owner_id, used, updated_at) VALUES (?, 0, ?)"
-  ).bind(ownerId, now).run();
-  const row = await env.DB.prepare(
-    "UPDATE cast_trials SET used = used + 1, updated_at = ? WHERE owner_id = ? AND used < ? RETURNING used"
-  ).bind(now, ownerId, FREE_CAST_USES).first();
-  if (!row) {
-    const current = await env.DB.prepare(
-      "SELECT used FROM cast_trials WHERE owner_id = ?"
-    ).bind(ownerId).first();
-    const used = Number(current?.used || FREE_CAST_USES);
-    return { allowed: false, used, remaining: 0 };
-  }
-  const used = Number(row.used || 0);
-  return { allowed: true, used, remaining: Math.max(0, FREE_CAST_USES - used) };
-}
-
-async function subCastAccess(request, env) {
-  const body = await request.json().catch(() => ({}));
-  const ownerId = String(body.install_id || "");
-  if (!receiverIdOk(ownerId)) return json({ error: "bad cast request" }, 400);
-  const expires = await expiryOf(env, ownerId);
-  if (expires > Date.now()) {
-    return json({ allowed: true, premium: true, used: 0, remaining: FREE_CAST_USES, expires_at: expires, now: Date.now() });
-  }
-  // Check before starting playback; only commit a use after the TV accepts it.
-  if (body.action === "check") {
-    const row = await env.DB.prepare(
-      "SELECT used FROM cast_trials WHERE owner_id = ?"
-    ).bind(ownerId).first();
-    const used = Number(row?.used || 0);
-    return json({ allowed: used < FREE_CAST_USES, used, remaining: Math.max(0, FREE_CAST_USES - used), premium: false, limit: FREE_CAST_USES, now: Date.now() });
-  }
-  const result = await recordCastTrial(env, ownerId);
-  return json({ ...result, premium: false, limit: FREE_CAST_USES, now: Date.now() });
-}
-
 async function subMovieAccess(request, env) {
   const body = await request.json().catch(() => ({}));
   const ownerId = String(body.install_id || "");
@@ -1369,8 +1338,6 @@ async function subscriptions(request, env, url) {
     path === "/sub/decoder/issue" ||
     path === "/sub/movie-access" ||
     path === "/sub/movie-access-guest" ||
-    path === "/sub/cast-access" ||
-    path === "/sub/cast-access-guest" ||
     path === "/sub/admin" ||
     path.startsWith("/sub/token/");
   if (!env.DB || (!env.PAYSTACK_SECRET_KEY && !dbOnly)) {
@@ -1388,7 +1355,6 @@ async function subscriptions(request, env, url) {
       path === "/sub/status" ||
       path === "/sub/decoder/issue" ||
       path === "/sub/movie-access" ||
-      path === "/sub/cast-access" ||
       path === "/sub/start" ||
       path === "/sub/restore" ||
       path.startsWith("/sub/token/");
@@ -1425,12 +1391,6 @@ async function subscriptions(request, env, url) {
     }
     if (path === "/sub/movie-access-guest" && request.method === "POST") {
       return subMovieAccess(request, env);
-    }
-    if (path === "/sub/cast-access" && request.method === "POST") {
-      return subCastAccess(request, env);
-    }
-    if (path === "/sub/cast-access-guest" && request.method === "POST") {
-      return subCastAccess(request, env);
     }
     if (path === "/sub/start" && request.method === "POST") {
       return subStart(request, env, url);
