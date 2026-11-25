@@ -40,7 +40,14 @@ import '../utils/l10n.dart';
 /// Live, predictions, weekly ranks, community posts and AI analysis.
 class ShellScreen extends StatefulWidget {
   final VoidCallback? onHome;
-  const ShellScreen({super.key, this.onHome});
+  final bool threadOnly;
+  final int initialTab;
+  const ShellScreen({
+    super.key,
+    this.onHome,
+    this.threadOnly = false,
+    this.initialTab = 0,
+  });
 
   @override
   State<ShellScreen> createState() => _ShellScreenState();
@@ -48,12 +55,11 @@ class ShellScreen extends StatefulWidget {
 
 class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   int _index = 0;
-  // Bottom bar order: Live, Thread, AI Predict, Match Room, Profile, Search.
-  // Stack slots keep their old numbers so notification targets still work:
-  // 0 Live, 3 Thread, 4 AI Predict, 6 TV, 8 Search, 9 Profile. Movies (7) is
-  // no longer a tab: it opens from the TV Channels header. Predict (1) opens
-  // from the Thread header; Highlights from the Live header.
-  static const _order = [0, 3, 4, 6, 9, 8];
+  // Stack slots keep their old numbers so notification targets still work.
+  // The Thread entry point hides Live and exposes only its five community tabs.
+  List<int> get _order => widget.threadOnly
+      ? const [3, 4, 6, 9, 8]
+      : const [0, 3, 4, 6, 9, 8];
   static const _tvTab = 6;
   static const _searchTab = 8;
   static const _profileTab = 9;
@@ -83,21 +89,24 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
         );
       });
     }
-    // Reopen on the tab the user was last on.
-    final savedTab = AppMemory.getInt('tab');
+    // Each entry point remembers its own selected tab.
+    _index = widget.threadOnly ? 3 : widget.initialTab;
+    final savedTab = AppMemory.getInt(widget.threadOnly ? 'thread_tab' : 'tab');
     if (AuthService.instance.signedIn &&
         savedTab != null &&
         _order.contains(savedTab)) {
       _index = savedTab;
-      _visited.add(savedTab);
     }
+    if (!_order.contains(_index)) _index = _order.first;
+    _visited.add(_index);
     // A notification tap that launched the app, or one tapped while open.
     final pending = PushService.instance.tabRequest.value;
     if (pending != null) {
       // Guests stay on Live; other targets ask them to sign in first.
-      _index = AuthService.instance.signedIn ? _tabFor(pending) : 0;
+      final requested = AuthService.instance.signedIn ? _tabFor(pending) : 0;
+      _index = _order.contains(requested) ? requested : _order.first;
       _visited.add(_index);
-      AppMemory.setInt('tab', _index);
+      AppMemory.setInt(widget.threadOnly ? 'thread_tab' : 'tab', _index);
       PushService.instance.tabRequest.value = null;
       if (pending == 1) _openHighlights();
       if (pending == 3) _openMovies();
@@ -301,7 +310,8 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     final tab = PushService.instance.tabRequest.value;
     if (tab == null) return;
     PushService.instance.tabRequest.value = null;
-    final target = _tabFor(tab);
+    final requested = _tabFor(tab);
+    final target = _order.contains(requested) ? requested : _order.first;
     if (!AuthService.instance.signedIn) {
       final needsLogin = target != 0 || tab == 1 || tab == 3;
       if (mounted && needsLogin) ensureSignedIn(context);
@@ -312,7 +322,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
         _index = target;
         _visited.add(target);
       });
-      AppMemory.setInt('tab', target);
+      AppMemory.setInt(widget.threadOnly ? 'thread_tab' : 'tab', target);
     }
     if (tab == 1) _openHighlights();
     if (tab == 3) _openMovies();
@@ -504,14 +514,17 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   }
 
   List<NavigationDestination> _navDestinations() {
-    final items = <(IconData, IconData, String)>[
-      (Icons.sensors_rounded, Icons.sensors_rounded, 'Live'.tr),
+    final items = <(IconData, IconData, String)>[];
+    if (!widget.threadOnly) {
+      items.add((Icons.sensors_rounded, Icons.sensors_rounded, 'Live'.tr));
+    }
+    items.addAll([
       (Icons.forum_rounded, Icons.forum_rounded, 'Thread'.tr),
       (Icons.auto_awesome_rounded, Icons.auto_awesome_rounded, 'AI Predict'.tr),
       (Icons.groups_rounded, Icons.groups_rounded, 'Match Room'.tr),
       (Icons.person_rounded, Icons.person_rounded, 'Profile'.tr),
       (Icons.search_rounded, Icons.search_rounded, 'Search'.tr),
-    ];
+    ]);
     return [
       for (final it in items)
         NavigationDestination(
@@ -624,7 +637,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     _index = target;
                     _visited.add(target);
                   });
-                  AppMemory.setInt('tab', target);
+                  AppMemory.setInt(widget.threadOnly ? 'thread_tab' : 'tab', target);
                   if (target == 3) _maybeShowFirstProfile();
                 },
                 destinations: _navDestinations(),
