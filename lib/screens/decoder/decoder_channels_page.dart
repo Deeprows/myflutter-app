@@ -8,6 +8,7 @@ import '../../services/cast_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/stream_resolver.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/open_channel.dart';
 import 'decoder_common.dart';
 import 'decoder_flows.dart';
 import 'stream_finder_page.dart';
@@ -24,7 +25,7 @@ class _Info {
   bool get direct => resolved.usesHtmlPlayer;
 }
 
-/// Supported channels: every channel with how it can be sent to Kodi, a TV or
+/// TV Channels: every channel, to watch in the app or send to Kodi, a TV or
 /// the receiver page. Tap one to choose how to watch it.
 class DecoderChannelsPage extends StatefulWidget {
   /// 'receiver' skips the question and sends straight to the receiver page.
@@ -112,7 +113,7 @@ class _DecoderChannelsPageState extends State<DecoderChannelsPage> {
     if (widget.only == 'receiver') {
       await sendToReceiver(context, t);
     } else {
-      await chooseConnectivity(context, t);
+      await chooseConnectivity(context, t, onWatchInApp: () => openChannelPlayer(context, c));
     }
   }
 
