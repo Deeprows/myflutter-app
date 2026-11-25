@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script>if(new URLSearchParams(location.search).get("layout")==="desktop"){const v=document.querySelector('meta[name="viewport"]');if(v)v.content="width=1280,initial-scale=1,viewport-fit=cover";document.documentElement.classList.add("desktop-layout");}</script>
+<script>(()=>{const p=new URLSearchParams(location.search),forced=p.get("layout")==="desktop",desktop=p.get("layout")!=="mobile"&&(forced||matchMedia("(min-width:821px) and (hover:hover) and (pointer:fine)").matches);if(desktop)document.documentElement.classList.add("desktop-layout");if(forced){const v=document.querySelector('meta[name="viewport"]');if(v)v.content="width=1280,initial-scale=1,viewport-fit=cover";}})();</script>
 <meta name="theme-color" content="#060a10"><meta name="color-scheme" content="dark">
 <link rel="manifest" href="manifest.webmanifest">
 <title>Deeprowss Cinema · Movies, TV &amp; Connect</title>
@@ -216,7 +216,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
 @keyframes drsPulse{0%,100%{opacity:.55;transform:scale(.94)}50%{opacity:1;transform:scale(1.06)}}
 @keyframes drsBar{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
 </style>
-<link rel="stylesheet" href="kodi.css">
+<link rel="stylesheet" href="kodi.css?v=desktop-parity-1">
 </head>
 <body data-view="landing" data-mode="connect">
 <div id="drSplash" aria-hidden="true"><div class="drs-logo"><span class="drs-glow"></span><span class="drs-ring"></span><img src="icons/splash-logo.png" width="256" height="256" alt="" decoding="async"></div><p class="drs-name"><b>DEEPROWSS</b><small>CINEMA &amp; LIVE TV</small></p><div class="drs-bar"><i></i></div></div>
