@@ -85,11 +85,15 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
   }
 
   Future<void> _open(Widget page, String id) async {
-    // Non-Premium visitors see the upgrade sheet instead of the page.
     if (!await PremiumGate.allowDecoder(context) || !mounted) return;
     DecoderMemory.save(id);
     await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => page));
     DecoderMemory.save('hub');
+  }
+
+  Future<void> _openReceiver() async {
+    if (!await PremiumGate.consumeReceiverAccess(context) || !mounted) return;
+    await _open(const DecoderReceiverPage(), 'receiver');
   }
 
   Widget _tile(IconData icon, String title, String subtitle, VoidCallback onTap, {String? badge}) => Container(
@@ -338,7 +342,7 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
           ),
           _tile(Icons.cast_rounded, 'Cast to TV / Kodi', 'Find compatible screens on your Wi-Fi', () => _open(const DecoderCastPage(), 'cast')),
           _tile(Icons.screen_share_rounded, 'Screen mirroring', 'Mirror your phone screen', () => _open(const DecoderMirrorPage(), 'mirror')),
-          _tile(Icons.web_rounded, 'Send to receiver page', 'Use a browser screen as your receiver', () => _open(const DecoderReceiverPage(), 'receiver')),
+          _tile(Icons.web_rounded, 'Send to receiver page', 'Use a browser screen as your receiver', _openReceiver),
           _tile(Icons.gamepad_rounded, 'TV remote', 'Roku, LG, Samsung and playback controls', () => _open(const DecoderRemotePage(), 'remote')),
           _tile(Icons.live_tv_rounded, 'Supported channels', 'Browse compatible channel sources', () => _open(const DecoderChannelsPage(), 'channels')),
           _tile(Icons.menu_book_rounded, 'How to use Smart Decoder', 'Setup guide for TVs, Kodi and receiver', () => Navigator.of(context).push<void>(
