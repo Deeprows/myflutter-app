@@ -11,7 +11,8 @@ import 'decoder_common.dart';
 /// Cast to TV / Kodi: find TVs on the Wi-Fi and play on them.
 class DecoderCastPage extends StatefulWidget {
   final CastTarget? target;
-  const DecoderCastPage({super.key, this.target});
+  final VoidCallback? onCastStarted;
+  const DecoderCastPage({super.key, this.target, this.onCastStarted});
 
   @override
   State<DecoderCastPage> createState() => _DecoderCastPageState();
@@ -83,6 +84,7 @@ class _DecoderCastPageState extends State<DecoderCastPage> {
     }
     if (!mounted) return;
     if (ok) {
+      widget.onCastStarted?.call();
       decoderToast(context, 'Playing on ${d.name}');
     } else {
       decoderToast(context, svc.error ?? svc.kodiHint ?? 'Could not start casting.');
