@@ -152,8 +152,9 @@ Future<void> chooseConnectivity(BuildContext context, CastTarget target, {String
 }
 
 Future<void> castToTv(BuildContext context, CastTarget target, {VoidCallback? onCastStarted}) async {
-  // Casting has its own five-use free allowance. Do not open the Premium-only
-  // Decoder dashboard just to show the available TV/device options.
+  // TV casting is available to registered users; non-Premium users have five
+  // successful casts before the Premium upgrade gate appears.
+  if (!await PremiumGate.allowDecoder(context) || !context.mounted) return;
   final ready = await prepareTarget(context, target);
   if (ready == null || !context.mounted) return;
   await Navigator.of(context).push<void>(MaterialPageRoute(
