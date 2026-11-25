@@ -34,6 +34,13 @@
     const label = button.querySelector('b');
     if (label) label.textContent = expiring ? 'Expiring' : (active ? 'Subscribed' : 'Subscribe');
     button.setAttribute('aria-label', expiring ? 'Premium subscription expiring soon' : (active ? 'Premium subscription active' : 'Subscribe to Deeprowss Premium'));
+    // The EXE reports the real server expiry to Electron; Android TV and the
+    // public website do not receive desktop beeps or Windows notifications.
+    if (active && expiring && codeExpiry && window.deeprowssDesktop &&
+        window.deeprowssDesktop.platform === 'win32' &&
+        typeof window.deeprowssDesktop.notifySubscriptionExpiring === 'function') {
+      window.deeprowssDesktop.notifySubscriptionExpiring(codeExpiry);
+    }
   }
   function placeSubscriptionButton() {
     const button = $('subscriptionOpen');
