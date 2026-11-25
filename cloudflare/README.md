@@ -115,6 +115,13 @@ The Deeprowss App uses `/sub/movie-access` for signed-in accounts,
 `/sub/movie-access-guest` for guest install IDs, and `/sub/decoder/issue`
 for Premium Decoder numbers. Decoder numbers are linked to the Premium expiry and
 stop working after it expires. A new number is issued after resubscribing
-following expiry. The receiver-only subscription flow is tied to that
+following expiry. The Deeprowss app also uses `/sub/cast-access` (signed-in Gmail accounts) and
+`/sub/cast-access-guest` (anonymous install IDs) to grant five successful
+TV/Kodi cast sessions to Free users. Opening the cast device picker does not
+consume a use; a use is recorded only after the TV accepts playback. Premium
+accounts have unlimited casting. The Worker creates the `cast_trials` table
+automatically when the current `cloudflare/worker.js` is deployed.
+
+The receiver-only subscription flow is tied to that
 receiver's stored device ID; include this ID in manual WhatsApp payment
 messages so the admin can activate the correct EXE / Android TV.
