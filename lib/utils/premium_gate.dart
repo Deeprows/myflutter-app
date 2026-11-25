@@ -4,6 +4,7 @@ import '../config.dart';
 import '../screens/plans_screen.dart';
 import '../screens/remove_ads_screen.dart';
 import '../services/ad_unlock.dart';
+import '../services/login_gate.dart';
 import '../services/remote_config.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
@@ -25,20 +26,35 @@ class PremiumGate {
       SubscriptionService.instance.enabled &&
       !SubscriptionService.instance.isPremium;
 
-  /// The Smart Decoder hub and its features are Premium-only.
-  static bool get decoderLocked =>
-      SubscriptionService.instance.enabled &&
-      !SubscriptionService.instance.isPremium;
+  /// Smart Decoder is available to registered users. Non-Premium users have
+  /// five server-counted cast / receiver uses; Premium users are unlimited.
+  static bool get decoderLocked => false;
 
-  /// The full Decoder, receiver and mirroring features are Premium-only.
-  /// Direct TV casting has its own five-use free allowance below.
-  static Future<bool> allowDecoder(BuildContext context) => _gate(
-        context,
-        isLocked: () => decoderLocked,
-        title: 'Deeprowss Decoder is for Premium members',
-        body: 'Upgrade to Premium to get your Decoder number and unlock the Smart Decoder, Windows EXE and Android TV receiver.',
-        allowAd: false,
+  static Future<bool> allowDecoder(BuildContext context) =>
+      ensureSignedIn(context);
+
+  /// A receiver action consumes one of the same five free uses as TV casting.
+  static Future<bool> consumeReceiverAccess(BuildContext context) async {
+    if (!await allowDecoder(context) || !context.mounted) return false;
+    final service = SubscriptionService.instance;
+    if (!service.enabled || service.isPremium) return true;
+    final access = await service.consumeCastAccess(consume: true);
+    if (!context.mounted) return false;
+    if (!access.verified) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not verify your free casting allowance. Please try again when connected.')),
       );
+      return false;
+    }
+    if (access.allowed) return true;
+    return _gate(
+      context,
+      isLocked: () => !SubscriptionService.instance.isPremium,
+      title: 'Your 5 free casts are used',
+      body: 'Upgrade to Premium for unlimited casting to TVs and Kodi receivers.',
+      allowAd: false,
+    );
+  }
 
   /// Free accounts receive five cast attempts; opening the device list is free.
   static Future<bool> allowCast(BuildContext context) async {
