@@ -172,7 +172,10 @@
     rg.selectNodeContents(t);                            /* the time text's own box, exactly */
     const w = Math.floor(rg.getBoundingClientRect().width);
     if (w < 90) return;
-    const top = parseFloat(window.getComputedStyle(slot).top) || 110;
+    /* Sit just under the whole clock block (place, time and date) so the banner never covers the date line. */
+    const ht = slot.parentNode, cb = t.parentNode && t.parentNode.getBoundingClientRect ? t.parentNode.getBoundingClientRect() : null;
+    if (ht && cb && ht.getBoundingClientRect) slot.style.top = Math.max(60, Math.round(cb.bottom - ht.getBoundingClientRect().top + 16)) + 'px';
+    const top = parseFloat(slot.style.top) || parseFloat(window.getComputedStyle(slot).top) || 110;
     const room = Math.round(window.innerHeight * 0.62 - top);
     const h = Math.max(Math.round(w * 0.8), Math.min(Math.round(w * 1.3), room));
     slot.style.width = w + 'px'; slot.style.height = h + 'px';
