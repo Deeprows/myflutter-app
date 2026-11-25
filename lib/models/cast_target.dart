@@ -20,6 +20,9 @@ class CastTarget {
   /// Resolves a local video file on the phone.
   final Future<File?> Function()? file;
 
+  /// Optional backup stream (live events): plays when the main one stops.
+  final CastTarget? backup;
+
   const CastTarget({
     required this.title,
     this.url,
@@ -27,6 +30,7 @@ class CastTarget {
     this.referer,
     this.userAgent,
     this.file,
+    this.backup,
   });
 
   /// True when there is something a TV can actually be sent.
