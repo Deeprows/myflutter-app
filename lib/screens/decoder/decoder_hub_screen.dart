@@ -96,50 +96,195 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
     await _open(const DecoderReceiverPage(), 'receiver');
   }
 
-  Widget _tile(IconData icon, String title, String subtitle, VoidCallback onTap, {String? badge}) => Container(
-        margin: const EdgeInsets.only(bottom: 7),
+  /// Square icon tile used by every card on this page.
+  Widget _iconTile(IconData icon, {double size = 46, bool solid = false}) => Container(
+        width: size,
+        height: size,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(13),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .25), blurRadius: 8, offset: const Offset(0, 3))],
+          borderRadius: BorderRadius.circular(size * .32),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: solid
+                ? [Ui.red, Ui.redSoft]
+                : [Ui.red.withValues(alpha: .26), Ui.red.withValues(alpha: .09)],
+          ),
+          border: Border.all(color: Ui.red.withValues(alpha: solid ? 0 : .30)),
+        ),
+        child: Icon(icon, color: solid ? Ui.palette.onAccent : Ui.red, size: size * .52),
+      );
+
+  Widget _arrowDot({bool accent = false}) => Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: accent ? Ui.red.withValues(alpha: .20) : Ui.text.withValues(alpha: .07),
+        ),
+        child: Icon(Icons.arrow_forward_rounded, size: 16, color: accent ? Ui.red : Ui.muted),
+      );
+
+  Widget _pill(String text) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+        decoration: BoxDecoration(
+          color: Ui.red,
+          borderRadius: BorderRadius.circular(99),
+        ),
+        child: Text(text,
+            style: TextStyle(color: Ui.palette.onAccent, fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: .8)),
+      );
+
+  /// Wide highlighted card: the main entry of the Watch category.
+  Widget _featuredCard(IconData icon, String title, String subtitle, VoidCallback onTap, {String? badge}) => Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [BoxShadow(color: Ui.red.withValues(alpha: Ui.isLight ? .14 : .20), blurRadius: 24, offset: const Offset(0, 8))],
         ),
         child: Material(
           color: Colors.transparent,
+          borderRadius: BorderRadius.circular(22),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Ink(
+              padding: const EdgeInsets.fromLTRB(16, 18, 14, 18),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Ui.red.withValues(alpha: .55), width: 1.2),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color.alphaBlend(Ui.red.withValues(alpha: .28), Ui.card),
+                    Color.alphaBlend(Ui.red.withValues(alpha: .05), Ui.panel),
+                  ],
+                ),
+              ),
+              child: Row(children: [
+                _iconTile(icon, size: 58, solid: true),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    if (badge != null) ...[_pill(badge), const SizedBox(height: 7)],
+                    Text(title, style: TextStyle(color: Ui.text, fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: .3)),
+                    const SizedBox(height: 3),
+                    Text(subtitle, style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.35)),
+                  ]),
+                ),
+                const SizedBox(width: 8),
+                _arrowDot(accent: true),
+              ]),
+            ),
+          ),
+        ),
+      );
+
+  /// Half-width card used in pairs.
+  Widget _gridCard(IconData icon, String title, String subtitle, VoidCallback onTap) => Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
           child: Ink(
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(color: Ui.line),
               gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [Color.alphaBlend(Ui.red.withValues(alpha: .09), Ui.card), Ui.card],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color.alphaBlend(Ui.red.withValues(alpha: .08), Ui.card), Ui.card],
               ),
             ),
-            child: ListTile(
-              dense: true,
-              minVerticalPadding: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-              leading: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: Ui.panel,
-                  border: Border.all(color: Ui.red.withValues(alpha: .35)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                _iconTile(icon, size: 44),
+                _arrowDot(),
+              ]),
+              const SizedBox(height: 14),
+              Text(title, style: TextStyle(color: Ui.text, fontSize: 15, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 3),
+              Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: Ui.muted, fontSize: 11.5, height: 1.35)),
+            ]),
+          ),
+        ),
+      );
+
+  /// One row inside the grouped Decoder tools card.
+  Widget _toolRow(IconData icon, String title, String subtitle, VoidCallback onTap) => InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(children: [
+            _iconTile(icon, size: 42),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: TextStyle(color: Ui.text, fontSize: 14, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: TextStyle(color: Ui.muted, fontSize: 11.5, height: 1.3)),
+              ]),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right_rounded, size: 22, color: Ui.muted),
+          ]),
+        ),
+      );
+
+  Widget _groupCard(List<Widget> rows) => Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Ui.line),
+          color: Ui.card,
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: Ui.isLight ? .05 : .22), blurRadius: 16, offset: const Offset(0, 6))],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(22),
+          clipBehavior: Clip.antiAlias,
+          child: Column(children: [
+            for (var i = 0; i < rows.length; i++) ...[
+              rows[i],
+              if (i != rows.length - 1)
+                Divider(height: 1, thickness: 1, indent: 70, endIndent: 14, color: Ui.line),
+            ],
+          ]),
+        ),
+      );
+
+  Widget _manualCard() => Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => Navigator.of(context).push<void>(
+              MaterialPageRoute(builder: (_) => const DecoderGuidePage()),
+            ),
+            child: Ink(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Ui.red.withValues(alpha: .35)),
+                gradient: LinearGradient(
+                  colors: [Color.alphaBlend(Ui.red.withValues(alpha: .14), Ui.card), Ui.card],
                 ),
-                child: Icon(icon, color: Ui.red, size: 20),
               ),
-              title: Text(title, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 13)),
-              subtitle: Text(subtitle, style: TextStyle(color: Ui.muted, fontSize: 10.5)),
-              trailing: badge == null
-                  ? Icon(Icons.chevron_right, size: 18, color: Ui.redSoft)
-                  : Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(color: Ui.red, borderRadius: BorderRadius.circular(99)),
-                      child: Text(badge,
-                          style: TextStyle(color: Ui.palette.onAccent, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: .6)),
-                    ),
-              onTap: onTap,
+              child: Row(children: [
+                _iconTile(Icons.menu_book_rounded, size: 44, solid: true),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Decoder Manual', style: TextStyle(color: Ui.text, fontSize: 14.5, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 2),
+                    Text('Setup guide for TVs, Kodi and receiver', style: TextStyle(color: Ui.muted, fontSize: 11.5)),
+                  ]),
+                ),
+                Icon(Icons.chevron_right_rounded, size: 22, color: Ui.redSoft),
+              ]),
             ),
           ),
         ),
@@ -171,48 +316,54 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
         ),
       );
 
-  /// Header strip under the title: the unique Decoder number (tap to copy).
+  /// Decoder number card at the top of the page (tap to copy).
   Widget _numberPill() {
     final n = _number;
-    return Material(
-      color: Colors.transparent,
-      child: Ink(
-        decoration: BoxDecoration(
-          color: Ui.card,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Ui.red.withValues(alpha: .7), width: 1.2),
-        ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [BoxShadow(color: Ui.red.withValues(alpha: Ui.isLight ? .10 : .16), blurRadius: 22, offset: const Offset(0, 8))],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(22),
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: _copyNumber,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 0, 2, 0),
-            child: Row(children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(color: Ui.red.withValues(alpha: .16), borderRadius: BorderRadius.circular(10)),
-                child: Icon(Icons.key_rounded, color: Ui.redSoft, size: 19),
+          child: Ink(
+            padding: const EdgeInsets.fromLTRB(14, 14, 6, 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Ui.red.withValues(alpha: .55), width: 1.2),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color.alphaBlend(Ui.red.withValues(alpha: .22), Ui.card), Ui.card],
               ),
-              const SizedBox(width: 10),
+            ),
+            child: Row(children: [
+              _iconTile(Icons.key_rounded, size: 46, solid: true),
+              const SizedBox(width: 14),
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Text('DECODER NUMBER · TAP TO COPY',
-                      style: TextStyle(color: Ui.muted, fontSize: 9.5, letterSpacing: .8, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 1),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('DECODER NUMBER',
+                      style: TextStyle(color: Ui.muted, fontSize: 10, letterSpacing: 1.4, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 2),
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
                     child: Text(n == null ? '···' : DecoderNumber.format(n),
-                        style: TextStyle(color: Ui.text, fontSize: 21, letterSpacing: 2.4, fontWeight: FontWeight.w900)),
+                        style: TextStyle(color: Ui.text, fontSize: 25, letterSpacing: 2.6, fontWeight: FontWeight.w900)),
                   ),
+                  const SizedBox(height: 2),
+                  Text('Tap to copy', style: TextStyle(color: Ui.redSoft, fontSize: 10.5, fontWeight: FontWeight.w700)),
                 ]),
               ),
               IconButton(
                 tooltip: 'What is this?',
-                visualDensity: VisualDensity.compact,
                 onPressed: _explainNumber,
-                icon: Icon(Icons.info_outline_rounded, color: Ui.muted, size: 20),
+                icon: Icon(Icons.info_outline_rounded, color: Ui.muted, size: 21),
               ),
             ]),
           ),
@@ -227,25 +378,19 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
     return Scaffold(
       backgroundColor: Ui.bg,
       appBar: AppBar(
-        backgroundColor: Ui.panel,
-        title: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Deeprowss Decoder', style: TextStyle(fontWeight: FontWeight.w900)),
-          Text('Watch on a bigger screen', style: TextStyle(fontSize: 11, color: Colors.white60)),
+        backgroundColor: Ui.bg,
+        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Deeprowss Decoder', style: TextStyle(fontWeight: FontWeight.w900, color: Ui.text)),
+          Text('Watch on a bigger screen', style: TextStyle(fontSize: 11, color: Ui.muted)),
         ]),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(64),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-            child: SizedBox(height: 50, child: _numberPill()),
-          ),
-        ),
       ),
       body: SafeArea(
         top: false,
         bottom: true,
         child: ListenableBuilder(
         listenable: Listenable.merge([svc, mirror]),
-        builder: (context, _) => ListView(padding: const EdgeInsets.all(16), children: [
+        builder: (context, _) => ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 28), children: [
+          _numberPill(),
           if (svc.casting)
             decoderPanel(Row(children: [
               Icon(Icons.cast_connected, color: Ui.red),
@@ -292,62 +437,48 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
                 ),
               ]),
             ])),
-          Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Ui.red.withValues(alpha: .35)),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color.alphaBlend(Ui.red.withValues(alpha: .20), Ui.card), Ui.card],
-              ),
-            ),
-            child: Row(children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: Ui.red.withValues(alpha: .18),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Ui.red.withValues(alpha: .5)),
-                ),
-                child: Icon(Icons.settings_input_antenna_rounded, color: Ui.red, size: 24),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('SMART DECODER CONSOLE', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900, letterSpacing: .8, fontSize: 13)),
-                const SizedBox(height: 3),
-                Text('Choose content, select a screen and enjoy.', style: TextStyle(color: Ui.muted, fontSize: 11)),
-              ])),
-              Icon(Icons.power_settings_new_rounded, color: Ui.red),
-            ]),
-          ),
           decoderSectionHeader(
             icon: Icons.live_tv_rounded,
-            kicker: '01 · Now showing',
+            kicker: '01 · Entertainment',
             title: 'Watch on your screen',
-            subtitle: 'Cast live football or find a movie.',
-            trailing: 'LIVE',
+            subtitle: 'Live events, movies and TV channels.',
+            padding: const EdgeInsets.only(top: 2, bottom: 12),
           ),
-          _tile(Icons.sports_soccer_rounded, 'Live Fixtures', 'Two cast streams per match · main and backup', () => _open(const DecoderFixturesPage(), 'fixtures'), badge: 'LIVE'),
-          _tile(Icons.movie_filter_rounded, 'Pick a Movie & Watch', 'Search the movie library and cast a title', () => _open(const DecoderMoviesPage(), 'movies')),
+          _featuredCard(
+            Icons.sports_soccer_rounded,
+            'Live Events',
+            'Cast live matches with a main and a backup stream.',
+            () => _open(const DecoderFixturesPage(), 'fixtures'),
+            badge: 'LIVE',
+          ),
+          Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(
+              child: _gridCard(Icons.movie_filter_rounded, 'Moviebox', 'Search the library and cast a title',
+                  () => _open(const DecoderMoviesPage(), 'movies')),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _gridCard(Icons.live_tv_rounded, 'TV Channels', 'Browse and play compatible channels',
+                  () => _open(const DecoderChannelsPage(), 'channels')),
+            ),
+          ]),
           decoderSectionHeader(
             icon: Icons.tune_rounded,
             kicker: '02 · Control room',
             title: 'Decoder tools',
             subtitle: 'Connect and control your display.',
-            padding: const EdgeInsets.only(top: 12, bottom: 12),
+            padding: const EdgeInsets.only(top: 26, bottom: 12),
           ),
-          _tile(Icons.cast_rounded, 'Cast to TV / Kodi', 'Find compatible screens on your Wi-Fi', () => _open(const DecoderCastPage(), 'cast')),
-          _tile(Icons.screen_share_rounded, 'Screen mirroring', 'Mirror your phone screen', () => _open(const DecoderMirrorPage(), 'mirror')),
-          _tile(Icons.web_rounded, 'Send to receiver page', 'Use a browser screen as your receiver', _openReceiver),
-          _tile(Icons.gamepad_rounded, 'TV remote', 'Roku, LG, Samsung and playback controls', () => _open(const DecoderRemotePage(), 'remote')),
-          _tile(Icons.live_tv_rounded, 'Supported channels', 'Browse compatible channel sources', () => _open(const DecoderChannelsPage(), 'channels')),
-          _tile(Icons.menu_book_rounded, 'How to use Smart Decoder', 'Setup guide for TVs, Kodi and receiver', () => Navigator.of(context).push<void>(
-            MaterialPageRoute(builder: (_) => const DecoderGuidePage()),
-          )),
+          _groupCard([
+            _toolRow(Icons.cast_rounded, 'Cast to TV / Kodi', 'Find compatible screens on your Wi-Fi',
+                () => _open(const DecoderCastPage(), 'cast')),
+            _toolRow(Icons.screen_share_rounded, 'Screen mirroring', 'Mirror your phone screen',
+                () => _open(const DecoderMirrorPage(), 'mirror')),
+            _toolRow(Icons.web_rounded, 'Send to receiver page', 'Use a browser screen as your receiver', _openReceiver),
+            _toolRow(Icons.gamepad_rounded, 'TV remote', 'Roku, LG, Samsung and playback controls',
+                () => _open(const DecoderRemotePage(), 'remote')),
+          ]),
+          _manualCard(),
         ]),
         ),
       ),
