@@ -1332,12 +1332,12 @@ window.__deeprowssPremiumReady = new Promise(function(resolve) {
  };
  const legalShade=document.createElement('div');legalShade.className='dw-legal-shade';legalShade.id='dwLegalShade';
  legalShade.innerHTML='<section class="dw-legal-panel" role="dialog" aria-modal="true" aria-labelledby="dwLegalTitle"><header class="dw-legal-head"><div><h2 id="dwLegalTitle">Terms of Use</h2><small>Deeprowss · Last updated: 25 November 2026</small></div><button class="dw-legal-close" id="dwLegalClose" type="button">Close ✕</button></header><div class="dw-legal-body" id="dwLegalBody"></div><footer class="dw-legal-actions"><button class="dw-legal-contact" id="dwLegalContact" type="button">Contact us on WhatsApp ↗</button><button class="dw-legal-close" id="dwLegalSwitch" type="button">Read Privacy Policy</button></footer></section>';
- shade.appendChild(legalShade);
+ document.body.appendChild(legalShade);
  const legalEsc=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
  let activeLegal='terms';
  const showLegal=doc=>{activeLegal=doc;const isTerms=doc==='terms';$('dwLegalTitle').textContent=isTerms?'Terms of Use':'Privacy Policy';$('dwLegalSwitch').textContent=isTerms?'Read Privacy Policy':'Read Terms of Use';$('dwLegalBody').innerHTML=LEGAL_DOCS[doc].map(x=>'<h3>'+legalEsc(x[0])+'</h3><p>'+legalEsc(x[1])+'</p>').join('');legalShade.classList.add('open');$('dwLegalClose').focus()};
  const closeLegal=()=>legalShade.classList.remove('open');
- $('dwTerms').onclick=()=>showLegal('terms');$('dwPrivacy').onclick=()=>showLegal('privacy');
+ $('dwTerms').addEventListener('click',e=>{e.preventDefault();e.stopPropagation();showLegal('terms')});$('dwPrivacy').addEventListener('click',e=>{e.preventDefault();e.stopPropagation();showLegal('privacy')});
  $('dwLegalClose').onclick=closeLegal;legalShade.addEventListener('click',e=>{if(e.target===legalShade)closeLegal()});
  $('dwLegalSwitch').onclick=()=>showLegal(activeLegal==='terms'?'privacy':'terms');
  $('dwLegalContact').onclick=()=>{const u='https://wa.me/2347041629630';if(!openLink(u))window.open(u,'_blank','noopener')};
