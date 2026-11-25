@@ -4,7 +4,7 @@ import '../models/cast_target.dart';
 
 // Preserve the previous import surface for player pages that use CastTarget.
 export '../models/cast_target.dart';
-import '../screens/cast_screen.dart';
+import '../screens/decoder/decoder_flows.dart';
 import '../services/cast_service.dart';
 import '../theme/app_theme.dart';
 
@@ -34,14 +34,9 @@ class CastButton extends StatelessWidget {
         return IconButton(
           tooltip: connected
               ? 'Casting to ${svc.device?.name ?? 'TV'}'
-              : 'Open decoder / cast to screen',
+              : 'Cast to screen',
           iconSize: size,
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-            builder: (_) => CastScreen(
-              target: target(),
-              onCastStarted: onCastStarted,
-            ),
-          )),
+          onPressed: () => castToTv(context, target(), onCastStarted: onCastStarted),
           icon: Icon(
             connected ? Icons.cast_connected_rounded : Icons.cast_rounded,
             color: connected ? Ui.red : color,
