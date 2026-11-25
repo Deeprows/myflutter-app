@@ -74,11 +74,20 @@ class _DecoderCastPageState extends State<DecoderCastPage> {
     bool ok = false;
     try {
       if (t.file != null) {
+        svc.armBackup(null);
         final File? f = await t.file!();
         if (f != null) ok = await svc.castFile(d, f, title: t.title);
       } else {
+        svc.armBackup(t.backup);
         ok = await svc.castUrl(d, t.url!,
             title: t.title, kind: t.kind, referer: t.referer, userAgent: t.userAgent);
+        final b = t.backup;
+        if (!ok && b != null && (b.url ?? '').trim().isNotEmpty && mounted) {
+          decoderToast(context, 'Main stream could not start. Trying the backup stream…');
+          svc.armBackup(null);
+          ok = await svc.castUrl(d, b.url!.trim(),
+              title: b.title, kind: b.kind, referer: b.referer, userAgent: b.userAgent);
+        }
       }
     } finally {
       if (mounted) setState(() => _busy = false);
