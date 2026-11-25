@@ -31,7 +31,8 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
       if (target != null && (target.url ?? '').trim().isNotEmpty) {
         await m.sendChannel(url: target.url!, title: target.title,
           kind: target.kind == StreamKind.invalid ? StreamKind.embed : target.kind,
-          referer: target.referer, userAgent: target.userAgent);
+          referer: target.referer, userAgent: target.userAgent,
+          backupUrl: target.backup?.url, backupKind: target.backup?.kind);
       }
       if (mounted) decoderToast(context, target == null ? 'Paired with receiver. Choose a video or channel to send.' : 'Sending ' + target.title + ' to your receiver.');
     } catch (_) {
@@ -129,6 +130,13 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
           onTap: playing ? () => m.stopPlayback() : null)),
       ]),
       const SizedBox(height: 8),
+      if (m.receiverHasBackup) ...[
+        Row(children: [
+          Expanded(child: _RemoteButton(icon: Icons.swap_horiz_rounded, label: 'Switch to backup stream',
+            onTap: () { HapticFeedback.selectionClick(); if (!m.switchToBackup()) decoderToast(context, 'Receiver is not connected yet.'); })),
+        ]),
+        const SizedBox(height: 8),
+      ],
       Row(children: [
         Expanded(child: _RemoteButton(
           icon: m.receiverMuted ? Icons.volume_up_rounded : Icons.volume_off_rounded,
