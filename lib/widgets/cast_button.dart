@@ -9,7 +9,8 @@ import '../services/cast_service.dart';
 import '../theme/app_theme.dart';
 
 /// Entry point used by channel, movie, trailer and local-video players.
-/// Every cast icon opens the same dedicated decoder dashboard.
+/// Every cast icon opens the same cast options sheet (TV / Kodi, receiver
+/// page, screen mirroring, remote).
 class CastButton extends StatelessWidget {
   final CastTarget Function() target;
   final VoidCallback? onCastStarted;
@@ -36,7 +37,7 @@ class CastButton extends StatelessWidget {
               ? 'Casting to ${svc.device?.name ?? 'TV'}'
               : 'Cast to screen',
           iconSize: size,
-          onPressed: () => castToTv(context, target(), onCastStarted: onCastStarted),
+          onPressed: () => showCastOptions(context, target(), onCastStarted: onCastStarted),
           icon: Icon(
             connected ? Icons.cast_connected_rounded : Icons.cast_rounded,
             color: connected ? Ui.red : color,
