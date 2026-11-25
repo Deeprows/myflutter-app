@@ -8,6 +8,7 @@ import '../../models/movie.dart';
 import '../../services/feed_service.dart';
 import '../../services/tmdb_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/open_movie.dart';
 import '../../widgets/movie_card.dart';
 import 'decoder_common.dart';
 import 'decoder_flows.dart';
@@ -133,10 +134,10 @@ class _DecoderMoviesPageState extends State<DecoderMoviesPage> {
     return keys.take(12).toList();
   }
 
-  /// Tap on any title: straight to the two cast options.
+  /// Tap on any title: watch it in the app, or cast it to a bigger screen.
   Future<void> _select(Movie movie) async {
     if (movie.url.trim().isEmpty) {
-      decoderToast(context, 'No cast link is available for this title.');
+      decoderToast(context, 'No video link is available for this title.');
       return;
     }
     final meta = [
@@ -149,6 +150,7 @@ class _DecoderMoviesPageState extends State<DecoderMoviesPage> {
       CastTarget(title: movie.title.isEmpty ? movie.name : movie.title, url: movie.url),
       image: movie.image,
       meta: meta,
+      onWatchInApp: () => openMoviePlayer(context, movie),
     );
   }
 
