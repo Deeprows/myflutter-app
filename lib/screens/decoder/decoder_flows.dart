@@ -32,6 +32,7 @@ Future<CastTarget?> prepareTarget(BuildContext context, CastTarget t) async {
         kind: kind,
         referer: ref ?? t.referer,
         userAgent: ua ?? t.userAgent,
+        backup: t.backup,
       );
 
   final cached = StreamFinderPage.cache[url];
@@ -209,21 +210,34 @@ Future<void> chooseConnectivity(
 
 /// What the cast icon on a player / movie page opens: every way of putting
 /// the video on a bigger screen, so the person picks the one they prefer.
-Future<void> showCastOptions(BuildContext context, CastTarget target, {VoidCallback? onCastStarted}) async {
+Future<void> showCastOptions(
+  BuildContext context,
+  CastTarget target, {
+  VoidCallback? onCastStarted,
+  String? meta,
+  String? image,
+}) async {
   final svc = CastService.instance;
   final mirror = DeeprowssMirrorService.instance;
   final url = (target.url ?? '').trim();
   final hasLink = target.file != null || url.isNotEmpty;
+  final hasBackup = (target.backup?.url ?? '').trim().isNotEmpty;
   final choice = await _showChoiceSheet(
     context,
     target,
     label: 'CAST TO SCREEN',
+    meta: meta,
+    image: image,
     options: [
       _SheetOption(Icons.cast_rounded, 'Cast to TV / Kodi',
-          svc.casting ? 'Now playing on ${svc.device?.name ?? 'TV'}' : 'Smart TVs and Kodi on your Wi-Fi', 'cast',
+          svc.casting
+              ? 'Now playing on ${svc.device?.name ?? 'TV'}'
+              : (hasBackup ? 'Main stream plays, backup takes over if it stops' : 'Smart TVs and Kodi on your Wi-Fi'),
+          'cast',
           highlight: true),
       if (url.startsWith(RegExp(r'https?://', caseSensitive: false)))
-        const _SheetOption(Icons.web_rounded, 'Send to receiver page', 'Plays in a laptop or TV browser', 'receiver'),
+        _SheetOption(Icons.web_rounded, 'Send to receiver page',
+            hasBackup ? 'Laptop or TV browser · backup stream ready' : 'Plays in a laptop or TV browser', 'receiver'),
       _SheetOption(Icons.screen_share_rounded, 'Screen mirroring',
           mirror.running ? 'Mirroring is on · tap to manage' : 'Show your whole phone screen on a TV or laptop', 'mirror'),
       const _SheetOption(Icons.gamepad_rounded, 'TV remote', 'Roku, LG, Samsung and playback controls', 'remote'),
@@ -271,7 +285,8 @@ Future<void> sendToReceiver(BuildContext context, CastTarget target) async {
   if (mirror.running && mirror.usingQrPairing) {
     final kind = target.kind == StreamKind.invalid ? StreamKind.embed : target.kind;
     final ok = await mirror.sendChannel(url: url, title: target.title, kind: kind,
-      referer: target.referer, userAgent: target.userAgent);
+      referer: target.referer, userAgent: target.userAgent,
+      backupUrl: target.backup?.url, backupKind: target.backup?.kind);
     if (!context.mounted) return;
     if (!ok) { decoderToast(context, mirror.error ?? 'Could not send this video.'); return; }
     await Navigator.of(context).push<void>(MaterialPageRoute(
