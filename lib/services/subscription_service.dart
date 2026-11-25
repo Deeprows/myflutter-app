@@ -183,6 +183,16 @@ class MovieAccessResult {
   const MovieAccessResult({required this.allowed, this.premium = false, this.verified = true, this.used = 0, this.remaining = 0});
 }
 
+/// Server decision for the five free cast attempts.
+class CastAccessResult {
+  final bool allowed;
+  final bool premium;
+  final bool verified;
+  final int used;
+  final int remaining;
+  const CastAccessResult({required this.allowed, this.premium = false, this.verified = true, this.used = 0, this.remaining = 0});
+}
+
 /// Free or Premium. The phone only keeps a copy of "premium until <date>";
 /// the truth lives in the Cloudflare Worker (D1), filled in by Paystack.
 class SubscriptionService extends ChangeNotifier {
@@ -482,6 +492,32 @@ class SubscriptionService extends ChangeNotifier {
       );
     } catch (_) {
       return const MovieAccessResult(allowed: false, verified: false);
+    }
+  }
+
+  /// Consumes one of the five free cast attempts. Premium users are unlimited.
+  /// The Worker stores usage against the signed-in account or anonymous install ID.
+  Future<CastAccessResult> consumeCastAccess({bool consume = false}) async {
+    if (!enabled || isPremium) return const CastAccessResult(allowed: true, premium: true, remaining: 5);
+    try {
+      final id = accountId ?? await InstallId.get();
+      final path = accountId == null ? '/sub/cast-access-guest' : '/sub/cast-access';
+      final payload = jsonEncode({'install_id': id, 'action': consume ? 'consume' : 'check'});
+      final r = accountId == null
+          ? await http.post(_uri(path), headers: {'content-type': 'application/json'}, body: payload)
+          : await _signed((h) => http.post(_uri(path), headers: h, body: payload), json: true);
+      if (r == null || r.statusCode != 200) {
+        return const CastAccessResult(allowed: false, verified: false);
+      }
+      final j = jsonDecode(r.body) as Map<String, dynamic>;
+      return CastAccessResult(
+        allowed: j['allowed'] == true,
+        premium: j['premium'] == true,
+        used: (j['used'] as num?)?.toInt() ?? 0,
+        remaining: (j['remaining'] as num?)?.toInt() ?? 0,
+      );
+    } catch (_) {
+      return const CastAccessResult(allowed: false, verified: false);
     }
   }
 

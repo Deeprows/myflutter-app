@@ -151,11 +151,14 @@ Future<void> chooseConnectivity(BuildContext context, CastTarget target, {String
   }
 }
 
-Future<void> castToTv(BuildContext context, CastTarget target) async {
-  if (!await PremiumGate.allowDecoder(context) || !context.mounted) return;
+Future<void> castToTv(BuildContext context, CastTarget target, {VoidCallback? onCastStarted}) async {
+  // Casting has its own five-use free allowance. Do not open the Premium-only
+  // Decoder dashboard just to show the available TV/device options.
   final ready = await prepareTarget(context, target);
   if (ready == null || !context.mounted) return;
-  await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => DecoderCastPage(target: ready)));
+  await Navigator.of(context).push<void>(MaterialPageRoute(
+    builder: (_) => DecoderCastPage(target: ready, onCastStarted: onCastStarted),
+  ));
 }
 
 Future<void> sendToReceiver(BuildContext context, CastTarget target) async {

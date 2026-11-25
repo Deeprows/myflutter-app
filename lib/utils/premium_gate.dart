@@ -30,8 +30,8 @@ class PremiumGate {
       SubscriptionService.instance.enabled &&
       !SubscriptionService.instance.isPremium;
 
-  /// Decoder, casting, receiver and mirroring are Premium-only. Unlike movie
-  /// playback, there is no ad-based temporary unlock for these features.
+  /// The full Decoder, receiver and mirroring features are Premium-only.
+  /// Direct TV casting has its own five-use free allowance below.
   static Future<bool> allowDecoder(BuildContext context) => _gate(
         context,
         isLocked: () => decoderLocked,
@@ -39,6 +39,26 @@ class PremiumGate {
         body: 'Upgrade to Premium to get your Decoder number and unlock the Smart Decoder, Windows EXE and Android TV receiver.',
         allowAd: false,
       );
+
+  /// Free accounts receive five cast attempts; opening the device list is free.
+  static Future<bool> allowCast(BuildContext context) async {
+    if (!SubscriptionService.instance.enabled || SubscriptionService.instance.isPremium) return true;
+    final access = await SubscriptionService.instance.consumeCastAccess();
+    if (!access.verified) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not verify your free casting allowance. Please try again when connected.')),
+      );
+      return false;
+    }
+    if (access.allowed) return true;
+    return _gate(
+      context,
+      isLocked: () => !SubscriptionService.instance.isPremium,
+      title: 'Your 5 free casts are used',
+      body: 'Upgrade to Premium for unlimited casting to TVs and Kodi.',
+      allowAd: false,
+    );
+  }
 
   /// Download button: true only for Premium members (or right after they
   /// upgrade). Everyone else sees the upgrade sheet, with no ad option.

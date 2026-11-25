@@ -5,12 +5,15 @@ import 'package:flutter/material.dart';
 import '../../models/cast_target.dart';
 import '../../services/cast_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/premium_gate.dart';
+import '../../services/subscription_service.dart';
 import 'decoder_common.dart';
 
 /// Cast to TV / Kodi: find TVs on the Wi-Fi and play on them.
 class DecoderCastPage extends StatefulWidget {
   final CastTarget? target;
-  const DecoderCastPage({super.key, this.target});
+  final VoidCallback? onCastStarted;
+  const DecoderCastPage({super.key, this.target, this.onCastStarted});
 
   @override
   State<DecoderCastPage> createState() => _DecoderCastPageState();
@@ -58,13 +61,15 @@ class _DecoderCastPageState extends State<DecoderCastPage> {
     if (mounted) decoderToast(context, '${d.name} added');
   }
 
-  Future<void> _cast(CastDevice d) async {
+  Future<void> _cast(CastDevice d, {bool alreadyAllowed = false}) async {
     final t = widget.target;
     if (t == null || !t.canCast) {
       await svc.saveDevice(d);
       if (mounted) decoderToast(context, '${d.name} saved. Pick a channel from Supported channels to play on it.');
       return;
     }
+    if (!alreadyAllowed && !await PremiumGate.allowCast(context)) return;
+    if (!mounted) return;
     setState(() => _busy = true);
     bool ok = false;
     try {
@@ -80,11 +85,15 @@ class _DecoderCastPageState extends State<DecoderCastPage> {
     }
     if (!mounted) return;
     if (ok) {
+      // Only a successful TV start uses one of the five free casts.
+      await SubscriptionService.instance.consumeCastAccess(consume: true);
+      if (!mounted) return;
+      widget.onCastStarted?.call();
       decoderToast(context, 'Playing on ${d.name}');
     } else {
       decoderToast(context, svc.error ?? svc.kodiHint ?? 'Could not start casting.');
       if (svc.kodiNeedsLogin && await decoderKodiLogin(context) && mounted) {
-        await _cast(d);
+        await _cast(d, alreadyAllowed: true);
       }
     }
   }
