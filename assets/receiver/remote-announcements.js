@@ -5,6 +5,9 @@
   const TICKER_URL = BASE + 'receiver_ticker.json';
   const NOTICE_URL = BASE + 'receiver_notice.json';
   const BANNER_URL = BASE + 'receiver_banner.json';
+  /* The scrolling ticker is switched off on the website (deeprowss.pages.dev). The Windows EXE and
+     Android TV receiver keep it, driven by receiver_ticker.json. */
+  const TICKER_OFF = /(^|\.)deeprowss\.pages\.dev$/i.test(location.hostname);
   const $ = (tag, cls) => { const n = document.createElement(tag); if (cls) n.className = cls; return n; };
   const css = document.createElement('style');
   css.textContent = `
@@ -238,7 +241,8 @@
     }
   }
   async function refresh(){
-    try { const t=await getJson(TICKER_URL); addTicker(t); } catch(_){}
+    if (TICKER_OFF) { document.querySelectorAll('.dr-remote-ticker').forEach(n => n.remove()); }
+    else { try { const t=await getJson(TICKER_URL); addTicker(t); } catch(_){} }
     try { const n=await getJson(NOTICE_URL); showNotice(n); } catch(_){}
     try { const b=await getJson(BANNER_URL); addBanner(b); try { localStorage.setItem('dr_banner_last', JSON.stringify(b)); } catch(_){} }
     catch(_){
