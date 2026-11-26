@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('deeprowssDesktop', {
   openDownload: (url) => ipcRenderer.invoke('dl:open', String(url || '')),
   openExternal: (url) => ipcRenderer.invoke('external:open', String(url || '')),
   openAd: (url) => ipcRenderer.invoke('ad:open', String(url || '')),
+  fetchImage: (url) => ipcRenderer.invoke('img:fetch', String(url || '')),
   quit: () => ipcRenderer.invoke('app:quit'),
   installUpdate: (url) => ipcRenderer.invoke('app:install-update', String(url || '')),
   // Windows-only audible + native warning when Premium has 3 days or less left.
