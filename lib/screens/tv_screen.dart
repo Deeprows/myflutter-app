@@ -47,7 +47,10 @@ const _cardHeight = 40.0; // compact channel cards for preview rows and category
 const _rowCardWidth = 140.0;
 
 class TvScreen extends StatefulWidget {
-  const TvScreen({super.key});
+  /// Overrides what happens when a channel is tapped (the Decoder uses this
+  /// to offer Watch / Cast). Null = open the in-app player as usual.
+  final Future<void> Function(BuildContext context, Channel channel)? onChannelTap;
+  const TvScreen({super.key, this.onChannelTap});
 
   @override
   State<TvScreen> createState() => _TvScreenState();
@@ -133,7 +136,9 @@ class _TvScreenState extends State<TvScreen> {
     return indexed.map((entry) => entry.value).toList();
   }
 
-  Future<void> _open(Channel c) => openChannelPlayer(context, c);
+  Future<void> _open(Channel c) => widget.onChannelTap != null
+      ? widget.onChannelTap!(context, c)
+      : openChannelPlayer(context, c);
 
   /// Country code -> channel count, biggest first.
   List<MapEntry<String, int>> get _countries {
