@@ -730,7 +730,7 @@ html.tv .gate-left,html.desktop-app .gate-left{border-bottom:0;border-right:1px 
     return false;
   };
 
-  // Visitors and non-Premium users can start ten distinct TV channels per UTC day.
+  // Visitors and non-Premium users can start four distinct TV channels per UTC day.
   // The Worker records each channel atomically; reopening one of today's channels is free.
   window.deeprowssTvAccess = async function(channel) {
     if (showWebChoice) return await requestWebChoice();
@@ -750,7 +750,7 @@ html.tv .gate-left,html.desktop-app .gate-left{border-bottom:0;border-right:1px 
           ? 'Free TV access could not be verified. Please try again shortly.'
           : (result.data.error || 'Could not verify TV access. Please try again.');
       } else {
-        status.textContent = 'You have used all 10 free TV channels for today. Upgrade to Premium for unlimited live TV. Your free allowance resets at midnight UTC.';
+        status.textContent = 'You have used all 4 free TV channels for today. Upgrade to Premium for unlimited live TV. Your free allowance resets at midnight UTC.';
       }
     }
     return false;
