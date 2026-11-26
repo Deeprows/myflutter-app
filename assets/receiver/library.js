@@ -484,6 +484,39 @@
   $('movieDetails').addEventListener('click', e => { if (e.target === $('movieDetails')) closeDetails(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('movieDetails').classList.contains('open')) closeDetails(); });
 
+  /* ---------- home-screen search bridge (used by search.js) ----------
+     Searches the Deeprowss catalogue (movies.json) and all of TMDB. A generic word such as
+     "movie" or "series" lists what is trending instead of looking for that word in titles. */
+  const MOVIE_GENERIC = /^(movies?|films?|series|tv shows?|shows?|cinema|latest|new|trending|popular|watch)$/i;
+  window.deeprowssMovies = {
+    async search(q) {
+      const ql = String(q || '').toLowerCase().trim();
+      if (!ql) return [];
+      const generic = MOVIE_GENERIC.test(ql);
+      if (!catalogue.length) { try { await loadCatalogue(); } catch (_) {} }
+      const out = [], seen = new Set();
+      const push = m => { if (!m) return; const k = keyOf(m); if (seen.has(k)) return; seen.add(k); out.push(m); };
+      catalogue.filter(m => generic || title(m).toLowerCase().includes(ql))
+        .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+        .slice(0, 8).forEach(push);
+      if (apiKey) {
+        try {
+          const d = generic ? await tmdb('/trending/all/week') : await tmdb('/search/multi', { query: q, include_adult: 'false', page: 1 });
+          mapList(d, null, 20).forEach(push);
+        } catch (_) { /* offline or TMDB error: still show the catalogue matches */ }
+      }
+      return out.slice(0, 12).map(m => ({
+        title: cleanTitle(m), poster: image(m, 'w185'), year: yearOf(m), rating: ratingNum(m), tv: isTv(m), movie: m
+      }));
+    },
+    open(it) {
+      const m = it && it.movie;
+      if (!m) return;
+      if (window.deeprowssGo) window.deeprowssGo('movies'); else location.hash = '#movies';
+      setTimeout(() => openDetails(m), 280);
+    }
+  };
+
   /* ---------- start ---------- */
   renderChips();
   (async () => {
