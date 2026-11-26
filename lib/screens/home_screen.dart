@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'games_screen.dart';
 
 import '../services/login_gate.dart';
 import '../theme/app_theme.dart';
@@ -55,12 +54,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!await ensureSignedIn(context) || !context.mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(builder: (_) => const CastScreen()),
-    );
-  }
-
-  void _openGames(BuildContext context) {
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => const GamesScreen()),
     );
   }
 
@@ -311,15 +304,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     title: 'SMART DECODER',
                     subtitle: 'Connect your TV, Kodi or browser receiver.',
                     onTap: () => _openDecoder(context),
-                  ),
-                ),
-                _reveal(
-                  4,
-                  _featureCard(
-                    icon: Icons.sports_esports_rounded,
-                    title: 'GAMES',
-                    subtitle: 'Play football, racing and arcade games.',
-                    onTap: () => _openGames(context),
                   ),
                 ),
               ],
