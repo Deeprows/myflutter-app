@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../theme/app_theme.dart';
@@ -61,6 +62,7 @@ class _GamesScreenState extends State<GamesScreen> {
       slug: 'soccer-orbit',
       gameId: 'a442e2eb310a4c64aa9e475a4fdd045d',
       icon: Icons.public_rounded,
+      landscape: true,
     ),
     _Game(
       title: 'Road Race 3D',
@@ -69,7 +71,6 @@ class _GamesScreenState extends State<GamesScreen> {
       slug: 'road-race-3d',
       gameId: '361861cb4a054a2eb13f0087013b4f83',
       icon: Icons.directions_car_rounded,
-      landscape: true,
     ),
     _Game(
       title: '3D Super Rolling Ball Race',
@@ -324,24 +325,71 @@ class _GamePlayerScreen extends StatefulWidget {
 
 class _GamePlayerScreenState extends State<_GamePlayerScreen> {
   late final WebViewController _controller;
+  bool _isLoading = true;
+  bool _hasError = false;
+  int _progress = 0;
+
+  List<DeviceOrientation> get _orientations => widget.game.landscape
+      ? const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
+      : const [DeviceOrientation.portraitUp];
 
   @override
   void initState() {
     super.initState();
+    SystemChrome.setPreferredOrientations(_orientations);
+    _createController();
+  }
+
+  void _createController() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF000000))
       ..setNavigationDelegate(
         NavigationDelegate(
+          onProgress: (progress) {
+            if (!mounted) return;
+            setState(() => _progress = progress);
+          },
+          onPageStarted: (_) {
+            if (!mounted) return;
+            setState(() {
+              _isLoading = true;
+              _hasError = false;
+              _progress = 0;
+            });
+          },
+          onPageFinished: (_) {
+            if (!mounted) return;
+            setState(() {
+              _isLoading = false;
+              _progress = 100;
+            });
+          },
           onWebResourceError: (error) {
             if (!mounted || error.isForMainFrame == false) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Unable to load this game.')),
-            );
+            setState(() {
+              _isLoading = false;
+              _hasError = true;
+            });
           },
         ),
       )
       ..loadRequest(Uri.parse(widget.game.embedUrl));
+  }
+
+  Future<void> _retry() async {
+    setState(() {
+      _hasError = false;
+      _isLoading = true;
+      _progress = 0;
+    });
+    await _controller.reload();
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setPreferredOrientations(const [DeviceOrientation.portraitUp]);
+    super.dispose();
   }
 
   @override
@@ -355,13 +403,73 @@ class _GamePlayerScreenState extends State<_GamePlayerScreen> {
         actions: [
           IconButton(
             tooltip: 'Reload game',
-            onPressed: () => _controller.reload(),
+            onPressed: _retry,
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
       body: SafeArea(
-        child: WebViewWidget(controller: _controller),
+        child: Stack(
+          children: [
+            WebViewWidget(controller: _controller),
+            if (_isLoading && !_hasError)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  value: _progress == 0 ? null : _progress / 100,
+                  minHeight: 3,
+                  color: Ui.red,
+                  backgroundColor: Colors.white12,
+                ),
+              ),
+            if (_hasError)
+              Positioned.fill(
+                child: ColoredBox(
+                  color: Colors.black,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(28),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.wifi_off_rounded,
+                              color: Colors.white70, size: 42),
+                          const SizedBox(height: 14),
+                          const Text(
+                            'Game could not be loaded',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 7),
+                          const Text(
+                            'Check your internet connection and try again.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white60),
+                          ),
+                          const SizedBox(height: 18),
+                          FilledButton.icon(
+                            onPressed: _retry,
+                            icon: const Icon(Icons.refresh_rounded),
+                            label: const Text('TRY AGAIN'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Ui.red,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
