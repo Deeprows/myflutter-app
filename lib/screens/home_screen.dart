@@ -196,25 +196,8 @@ class HomeScreen extends StatelessWidget {
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // Soft brand glow behind the header.
-          Positioned(
-            top: -140,
-            left: -60,
-            right: -60,
-            child: IgnorePointer(
-              child: Container(
-                height: 380,
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    colors: [
-                      Ui.red.withValues(alpha: Ui.isLight ? .10 : .22),
-                      Ui.red.withValues(alpha: 0),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+          // Layered brand backdrop: gradient, breathing glows, faint pitch lines.
+          const Positioned.fill(child: _HomeBackdrop()),
           // Logo sits lower, in the middle of the header area.
           SafeArea(
             child: IgnorePointer(
@@ -356,4 +339,135 @@ class _LiveBadgeState extends State<_LiveBadge>
       ),
     );
   }
+}
+
+/// Home background: a tinted gradient, two slowly breathing accent glows, faint
+/// football-pitch line art and a soft vignette. Follows the active theme
+/// colours (dark and light) and sits under the watermark and all content.
+class _HomeBackdrop extends StatefulWidget {
+  const _HomeBackdrop();
+
+  @override
+  State<_HomeBackdrop> createState() => _HomeBackdropState();
+}
+
+class _HomeBackdropState extends State<_HomeBackdrop>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 10),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final light = Ui.isLight;
+    final accent = Ui.red;
+    final tint = Color.lerp(Ui.bg, accent, light ? .10 : .16)!;
+    final deep = Color.lerp(Ui.bg, Colors.black, light ? .04 : .35)!;
+    return RepaintBoundary(
+      child: IgnorePointer(
+        child: AnimatedBuilder(
+          animation: _c,
+          builder: (context, _) {
+            final t = Curves.easeInOut.transform(_c.value);
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [tint, Ui.bg, deep],
+                      stops: const [0, .45, 1],
+                    ),
+                  ),
+                ),
+                // Main glow, behind the logo.
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: Alignment(0, -1.05 + .12 * t),
+                      radius: .95,
+                      colors: [
+                        accent.withValues(alpha: (light ? .16 : .30) + .05 * t),
+                        accent.withValues(alpha: 0),
+                      ],
+                    ),
+                  ),
+                ),
+                // Soft side glow low on the right.
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: Alignment(1.1 - .2 * t, .55),
+                      radius: .8,
+                      colors: [
+                        Ui.redSoft.withValues(alpha: light ? .07 : .12),
+                        Ui.redSoft.withValues(alpha: 0),
+                      ],
+                    ),
+                  ),
+                ),
+                CustomPaint(
+                  painter: _PitchPainter(
+                    Ui.text.withValues(alpha: light ? .07 : .05),
+                  ),
+                ),
+                // Vignette so the lower cards stay calm and readable.
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.transparent,
+                        Ui.bg.withValues(alpha: .75),
+                      ],
+                      stops: const [0, .65, 1],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// Very faint football-pitch markings (centre circle, halfway line and the
+/// penalty areas rising from the bottom edge).
+class _PitchPainter extends CustomPainter {
+  final Color color;
+  const _PitchPainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final line = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.3;
+    final w = size.width, h = size.height;
+    final cx = w / 2, cy = h * .72;
+    canvas.drawCircle(Offset(cx, cy), w * .36, line);
+    canvas.drawLine(Offset(0, cy), Offset(w, cy), line);
+    canvas.drawCircle(Offset(cx, cy), 3, Paint()..color = color);
+    // Penalty area and six-yard box at the bottom edge.
+    canvas.drawRect(Rect.fromLTWH(cx - w * .34, h - w * .30, w * .68, w * .31), line);
+    canvas.drawRect(Rect.fromLTWH(cx - w * .16, h - w * .12, w * .32, w * .13), line);
+    // Penalty area at the top edge.
+    canvas.drawRect(Rect.fromLTWH(cx - w * .34, -2, w * .68, w * .30), line);
+  }
+
+  @override
+  bool shouldRepaint(_PitchPainter old) => old.color != color;
 }
