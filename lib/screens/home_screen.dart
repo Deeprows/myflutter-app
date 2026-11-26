@@ -440,9 +440,9 @@ class _HomeBackdropState extends State<_HomeBackdrop> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    tint.withValues(alpha: .82),
-                    Ui.bg.withValues(alpha: .88),
-                    deep.withValues(alpha: .97),
+                    tint.withValues(alpha: .62),
+                    Ui.bg.withValues(alpha: .76),
+                    deep.withValues(alpha: .90),
                   ],
                   stops: const [0, .48, 1],
                 ),
