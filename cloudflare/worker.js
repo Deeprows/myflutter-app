@@ -1215,7 +1215,7 @@ async function recordMovieTrial(env, ownerId, movieKey) {
   return { allowed: Boolean(seen), used, remaining: Math.max(0, RECEIVER_FREE_MOVIES - used) };
 }
 
-const RECEIVER_FREE_TV_CHANNELS = 10;
+const RECEIVER_FREE_TV_CHANNELS = 4;
 
 async function recordTvTrial(env, deviceId, channelKey) {
   const key = String(channelKey || '').trim().slice(0, 120);
@@ -1223,7 +1223,7 @@ async function recordTvTrial(env, deviceId, channelKey) {
   const now = Date.now();
   const day = new Date(now).toISOString().slice(0, 10);
   // A unique key per device, UTC day and channel means repeats do not consume
-  // another slot. The conditional insert caps distinct channels at ten.
+  // another slot. The conditional insert caps distinct channels at four.
   await env.DB.prepare(
     "INSERT OR IGNORE INTO tv_trials (device_id, day_utc, channel_key, created_at) " +
     "SELECT ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM tv_trials WHERE device_id = ? AND day_utc = ?) < ?"
