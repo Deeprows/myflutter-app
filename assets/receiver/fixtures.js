@@ -500,6 +500,28 @@
   const prevBack = window.deeprowssHandleBack;
   window.deeprowssHandleBack = () => { if (modalOpen) { closeModal(); return true; } return prevBack ? prevBack() : false; };
 
+  /* ---------- home-screen search bridge (used by search.js) ----------
+     Searches the same live / upcoming list shown on the Fixtures page. Words such as
+     "football", "match" or "live" are treated as "show me everything". */
+  const sNorm = v => String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const FX_GENERIC = new Set(['football', 'soccer', 'match', 'matches', 'live', 'fixture', 'fixtures', 'game', 'games', 'vs', 'v', 'today', 'tonight', 'stream', 'streams', 'watch', 'free', 'score', 'scores', 'event', 'events']);
+  window.deeprowssFixtureSearch = {
+    async search(q) {
+      if (!loaded) { try { await load(); } catch (_) {} }
+      const now = Date.now();
+      const real = sNorm(q).split(' ').filter(w => w && !FX_GENERIC.has(w));
+      return visible(now)
+        .filter(f => { const hay = sNorm(f.home + ' ' + f.away + ' ' + f.league); return real.every(w => hay.includes(w)); })
+        .map(f => Object.assign({}, f, { live: cardPhase(f, now) === 'live' }));
+    },
+    open(it) {
+      const f = fixtures.find(x => x.id === (it && it.id)) || it;
+      if (!f) return;
+      if (window.deeprowssGo) window.deeprowssGo('fixtures'); else location.hash = '#fixtures';
+      setTimeout(() => openModal(f), 260);
+    }
+  };
+
   /* ---------- start ---------- */
   addTile();
   document.body.appendChild(modal);
