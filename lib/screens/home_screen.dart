@@ -221,7 +221,7 @@ class HomeScreen extends StatelessWidget {
               child: Align(
                 alignment: Alignment.topCenter,
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 46),
+                  padding: const EdgeInsets.only(top: 18),
                   child: Image.asset(
                     'assets/icon/logo_header.png',
                     height: 68,
