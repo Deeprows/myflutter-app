@@ -412,6 +412,14 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
           Text('Deeprowss Decoder', style: TextStyle(fontWeight: FontWeight.w900, color: Ui.text)),
           Text('Watch on a bigger screen', style: TextStyle(fontSize: 11, color: Ui.muted)),
         ]),
+        actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+            icon: const Icon(Icons.home_rounded),
+            label: const Text('Home'),
+          ),
+          const SizedBox(width: 6),
+        ],
       ),
       body: SafeArea(
         top: false,
