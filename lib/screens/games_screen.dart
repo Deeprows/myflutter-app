@@ -334,7 +334,7 @@ class _GamePlayerScreenState extends State<_GamePlayerScreen> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onWebResourceError: (error) {
-            if (!mounted || !error.isForMainFrame) return;
+            if (!mounted || error.isForMainFrame == false) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Unable to load this game.')),
             );
