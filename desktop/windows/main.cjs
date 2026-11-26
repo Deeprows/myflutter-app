@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, shell, dialog, ipcMain, Menu, Notification, powerSaveBlocker } = require('electron');
+const { app, BrowserWindow, session, shell, dialog, ipcMain, Menu, Notification, powerSaveBlocker, net } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
@@ -368,6 +368,31 @@ ipcMain.handle('ad:open', async (event, url) => {
     await shell.openExternal(u.href);
     return true;
   } catch (_) { return false; }
+});
+
+// Banner image fallback: if the page itself cannot load an advert image (blocked host, hot-link rules,
+// stale cache ...), the app downloads it here and hands the page a data: URL.
+ipcMain.handle('img:fetch', async (event, url) => {
+  if (!trusted(event)) return '';
+  try {
+    const u = new URL(String(url).trim().slice(0, 2000));
+    if (u.protocol !== 'https:' || isAdHost(u.hostname)) return '';
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    try {
+      const r = await net.fetch(u.href, { redirect: 'follow', signal: ctl.signal, headers: { Accept: 'image/*,*/*;q=0.8' } });
+      if (!r.ok) return '';
+      let type = String(r.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+      if (!type.startsWith('image/')) {
+        const ext = (u.pathname.match(/\.(png|jpe?g|gif|webp|avif|svg)$/i) || [])[1];
+        type = ext ? 'image/' + ({ jpg: 'jpeg', svg: 'svg+xml' }[ext.toLowerCase()] || ext.toLowerCase()) : '';
+      }
+      if (!type) return '';
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (!buf.length || buf.length > 6 * 1024 * 1024) return '';
+      return 'data:' + type + ';base64,' + buf.toString('base64');
+    } finally { clearTimeout(timer); }
+  } catch (_) { return ''; }
 });
 
 ipcMain.handle('external:open', async (event, url) => {
