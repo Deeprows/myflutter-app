@@ -13,8 +13,6 @@ import '../services/support_gate.dart';
 import '../widgets/status_pill.dart';
 import '../services/remote_config.dart';
 import 'player_screen.dart';
-import 'cast_screen.dart';
-import '../services/login_gate.dart';
 import 'notifications_screen.dart';
 import 'prediction_results_screen.dart';
 import '../theme/app_theme.dart';
@@ -530,10 +528,6 @@ class _FanZoneScreenState extends State<FanZoneScreen>
                 ),
               ),
             ),
-            _labeled(Icons.cast_connected_rounded, 'Decoder', () async {
-              if (!await ensureSignedIn(context) || !mounted) return;
-              await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => const CastScreen()));
-            }, bold: true),
             if (AuthService.instance.user != null)
               IconButton(
                 tooltip: 'Log out',
