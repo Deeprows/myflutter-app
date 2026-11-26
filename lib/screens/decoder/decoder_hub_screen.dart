@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/cast_target.dart';
+import '../../models/channel.dart';
 import '../../services/cast_service.dart';
 import '../../services/decoder_number.dart';
+import '../../services/stream_resolver.dart';
+import '../../utils/open_channel.dart';
+import '../content_shortcut_screen.dart';
+import '../tv_screen.dart';
 import '../../services/webrtc_mirror_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/premium_gate.dart';
@@ -76,6 +81,8 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
         return (const DecoderRemotePage(), 'remote');
       case 'channels':
         return (const DecoderChannelsPage(), 'channels');
+      case 'tvchannels':
+        return (ContentShortcutScreen(title: 'TV Channels', child: TvScreen(onChannelTap: _channelTapped)), 'tvchannels');
       case 'fixtures':
         return (const DecoderFixturesPage(), 'fixtures');
       case 'movies':
@@ -89,6 +96,28 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
     DecoderMemory.save(id);
     await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => page));
     DecoderMemory.save('hub');
+  }
+
+  /// The app's real TV Channels page. Tapping a channel opens the
+  /// Watch in App / Cast to TV / Send to receiver popup.
+  Future<void> _openTvChannels() => _open(
+        ContentShortcutScreen(
+          title: 'TV Channels',
+          child: TvScreen(onChannelTap: _channelTapped),
+        ),
+        'tvchannels',
+      );
+
+  Future<void> _channelTapped(BuildContext ctx, Channel c) {
+    final r = StreamResolver.resolve(c.url);
+    final target = CastTarget(
+      title: c.name,
+      url: r.url,
+      kind: r.kind,
+      referer: c.referer,
+      userAgent: c.userAgent,
+    );
+    return chooseConnectivity(ctx, target, onWatchInApp: () => openChannelPlayer(ctx, c));
   }
 
   Future<void> _openReceiver() async {
@@ -462,7 +491,7 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: _gridCard(Icons.live_tv_rounded, 'TV Channels', 'Browse and play compatible channels',
-                    () => _open(const DecoderChannelsPage(), 'channels')),
+                    _openTvChannels),
               ),
             ]),
           ),
