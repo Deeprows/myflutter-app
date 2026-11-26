@@ -64,7 +64,7 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
   List<int> get _order => widget.liveOnly
       ? const [0]
       : widget.threadOnly
-          ? const [3, 4, 6, 9, 8]
+          ? const [-1, 3, 4, 6, 9, 8]
           : const [0, 3, 4, 6, 9, 8];
   static const _tvTab = 6;
   static const _searchTab = 8;
@@ -525,6 +525,9 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
     if (widget.liveOnly) {
       items.add((Icons.sensors_rounded, Icons.sensors_rounded, 'Live Events'));
     } else {
+      if (widget.threadOnly) {
+        items.add((Icons.home_rounded, Icons.home_rounded, 'Home'));
+      }
       if (!widget.threadOnly) {
         items.add((Icons.sensors_rounded, Icons.sensors_rounded, 'Live'.tr));
       }
@@ -645,6 +648,10 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
                     : 0,
                 onDestinationSelected: (i) async {
                   final target = _order[i];
+                  if (target == -1) {
+                    widget.onHome?.call();
+                    return;
+                  }
                   // Live is open to everyone; every other tab needs login.
                   if (target != 0 && !AuthService.instance.signedIn) {
                     await ensureSignedIn(context);
