@@ -727,5 +727,46 @@
     if (command === 'next') { zap(1); return true; }
     return false;
   };
+  /* ---------- home-screen search bridge (used by search.js) ----------
+     The channel list is normally only loaded when the TV page is opened, so the bridge loads it
+     on demand (your own channels first, then the IPTV Nexus list) and searches by name, category
+     (e.g. "football" finds Sports channels), group and country. */
+  const sNorm = v => String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const TV_GENERIC = new Set(['tv', 'channel', 'channels', 'live', 'stream', 'watch', 'free', 'online', 'hd']);
+  const CAT_WORDS = { sports: ' sport sports football soccer', movies: ' movie movies film films cinema', news: ' news', kids: ' kids cartoon cartoons children', music: ' music', documentary: ' documentary documentaries', entertainment: ' entertainment', religious: ' religious church islamic' };
+  let poolP = null;
+  async function ensurePool() {
+    if (!poolP && !all.length) { build(); poolP = Promise.race([load(false), sleep(9000)]); }
+    if (poolP) { try { await poolP; } catch (_) {} }
+    const limit = Date.now() + 9000;
+    while (st.loading && Date.now() < limit) await sleep(150);
+  }
+  window.deeprowssTvSearch = {
+    async search(q) {
+      await ensurePool();
+      const pool = all.length ? all : own;
+      const real = sNorm(q).split(' ').filter(w => w && !TV_GENERIC.has(w));
+      const first = real[0] || '';
+      const rows = [];
+      pool.forEach((c, i) => {
+        const name = sNorm(c.name);
+        const hay = name + ' ' + sNorm(c.group) + ' ' + sNorm(catLabel(c.category)) + (CAT_WORDS[c.category] || '') + ' ' + sNorm(c.country) + ' ' + sNorm(c.country ? countryName(c.country) : '');
+        if (!real.every(w => hay.includes(w))) return;
+        const rank = !first ? 2 : name.startsWith(first) ? 0 : name.includes(first) ? 1 : 2;
+        rows.push({ c, rank, i });
+      });
+      rows.sort((a, b) => a.rank - b.rank || Number(b.c.working === true) - Number(a.c.working === true) || (Number(b.c.score) || 0) - (Number(a.c.score) || 0) || a.i - b.i);
+      return rows.slice(0, 30).map(r => Object.assign({}, r.c, { category: catLabel(r.c.category) }));
+    },
+    play(item) {
+      const c = (item && all.find(x => keyOf(x) === keyOf(item))) || item;
+      if (!c) return;
+      build();
+      if (window.deeprowssGo) window.deeprowssGo('tv'); else location.hash = '#tv';
+      // Let the page switch to the TV view first (it closes any open player), then start the channel.
+      setTimeout(() => { play(c, false); }, 280);
+    }
+  };
   window.deeprowssTv = { reload: () => load(true) };
 })();
