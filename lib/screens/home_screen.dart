@@ -227,7 +227,7 @@ class _HomeScreenState extends State<HomeScreen> {
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // Layered brand backdrop: gradient, breathing glows, faint pitch lines.
+          // Full-page rotating wallpaper with a dark readability overlay.
           const Positioned.fill(child: _HomeBackdrop()),
           // Logo sits lower, in the middle of the header area.
           SafeArea(
@@ -277,7 +277,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
                 const SizedBox(height: 26),
                 _reveal(
                   1,
