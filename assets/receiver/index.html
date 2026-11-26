@@ -216,7 +216,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
 @keyframes sh{to{background-position:-200% 0}}@keyframes fade{from{opacity:0}}@keyframes up{from{transform:translateY(30px);opacity:0}}@keyframes drift{to{transform:rotate(-8deg) scale(1.1) translateY(-8%)}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
   .receiver-footer{display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
-\n.player .controls #backupStream{display:none!important}.player .controls #mainStream[hidden]{display:none!important}\n
+.player .controls #backupStream{display:none!important}.player .controls #mainStream[hidden]{display:none!important}
 
 
 .dw-legal-shade{position:fixed;inset:0;z-index:10050;background:#02060de8;display:none;align-items:center;justify-content:center;padding:clamp(10px,3vw,28px)}
@@ -1261,6 +1261,16 @@ window.__deeprowssPremiumReady = new Promise(function(resolve) {
  }
  document.addEventListener('keydown',e=>{
   if(!shade.classList.contains('open'))return;
+  /* Terms / Privacy pop-up open: remote keys act on it, not on Settings underneath. */
+  const lg=document.getElementById('dwLegalShade');
+  if(lg&&lg.classList.contains('open')){
+   const k=e.key;
+   if(k==='Escape'||k==='Backspace'||k==='GoBack'||k==='BrowserBack'){e.preventDefault();e.stopPropagation();lg.classList.remove('open');const t=document.getElementById(document.getElementById('dwLegalTitle').textContent==='Terms of Use'?'dwTerms':'dwPrivacy');if(t)t.focus();return}
+   const body=document.getElementById('dwLegalBody'),btns=[...lg.querySelectorAll('button')].filter(x=>x.getClientRects().length),i=btns.indexOf(document.activeElement);
+   if(k==='ArrowDown'||k==='ArrowUp'){e.preventDefault();e.stopPropagation();if(body)body.scrollBy({top:(k==='ArrowDown'?1:-1)*140,behavior:'smooth'});return}
+   if(k==='ArrowRight'||k==='ArrowLeft'||k==='Tab'){e.preventDefault();e.stopPropagation();const d=(k==='ArrowLeft'||(k==='Tab'&&e.shiftKey))?-1:1;btns[(i+d+btns.length)%btns.length].focus();return}
+   e.stopPropagation();return
+  }
   const typing=/^(INPUT|TEXTAREA)$/i.test(e.target.tagName);
   if(e.key==='Escape'||(e.key==='Backspace'&&!typing)){e.preventDefault();e.stopPropagation();close();return}
   if(e.key==='Tab'){e.preventDefault();const f=focusables(),i=f.indexOf(document.activeElement);go(f[(i+(e.shiftKey?-1:1)+f.length)%f.length]);return}
