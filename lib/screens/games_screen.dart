@@ -235,7 +235,7 @@ class _LudoState extends State<_Ludo> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('PLAYERS', style: TextStyle(color: Ui.muted, fontSize: 10, fontWeight: FontWeight.w900)),
+                Text('PLAYERS', style: TextStyle(color: Ui.muted, fontSize: 10, fontWeight: FontWeight.w900)),
                 Wrap(
                   spacing: 8,
                   children: [2, 3, 4].map((value) => ChoiceChip(
