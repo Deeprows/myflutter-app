@@ -143,9 +143,22 @@
       a.setAttribute('aria-label', x.alt || 'Advertisement');
     };
     a.addEventListener('click', ev => { const u = safeUrl(ads[cur].url); if (u) openAd(u, ev); else ev.preventDefault(); });
-    imgs.forEach(im => im.addEventListener('error', () => {
-      broken++; im.remove();                           /* never show a broken image */
-      if (broken >= ads.length) slot.replaceChildren(placeholder(data));
+    /* If an image will not load, try other routes before giving up:
+       1) the jsDelivr copy (for GitHub raw links), 2) the Windows app downloading it itself. */
+    const mirrorOf = u => { const m = String(u).match(/^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/?#]+)\/([^?#]+)/i); return m ? 'https://cdn.jsdelivr.net/gh/' + m[1] + '/' + m[2] + '@' + m[3] + '/' + m[4] : ''; };
+    imgs.forEach((im, i) => im.addEventListener('error', () => {
+      const orig = safeUrl(ads[i].image_url), step = (im._dwStep || 0) + 1; im._dwStep = step;
+      const giveUp = () => { if (!im.isConnected || im._dwDead) return; im._dwDead = true; broken++; im.remove(); if (broken >= ads.length) slot.replaceChildren(placeholder(data)); };
+      const desk = window.deeprowssDesktop;
+      const viaApp = () => {
+        if (desk && typeof desk.fetchImage === 'function' && /^https:/i.test(orig)) {
+          Promise.resolve(desk.fetchImage(orig)).then(d => { if (d && im.isConnected) im.src = d; else giveUp(); }).catch(giveUp);
+        } else giveUp();
+      };
+      const mir = mirrorOf(orig);
+      if (step === 1 && mir) { im.src = mir; return; }
+      if (step <= 2) { viaApp(); return; }
+      giveUp();                                        /* never show a broken image */
     }));
     a.append(...imgs, tag); setLink();
     slot.replaceChildren(a);
@@ -227,7 +240,10 @@
   async function refresh(){
     try { const t=await getJson(TICKER_URL); addTicker(t); } catch(_){}
     try { const n=await getJson(NOTICE_URL); showNotice(n); } catch(_){}
-    try { const b=await getJson(BANNER_URL); addBanner(b); } catch(_){ if(!bannerSig) addBanner({enabled:true,ads:[]}); }
+    try { const b=await getJson(BANNER_URL); addBanner(b); try { localStorage.setItem('dr_banner_last', JSON.stringify(b)); } catch(_){} }
+    catch(_){
+      if(!bannerSig){ let last=null; try { last=JSON.parse(localStorage.getItem('dr_banner_last')||'null'); } catch(_){} addBanner(last||{enabled:true,ads:[]}); }
+    }
   }
   refresh(); window.setInterval(refresh,60000);
 })();
