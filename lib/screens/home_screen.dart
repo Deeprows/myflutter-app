@@ -278,10 +278,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                _reveal(1, const _HomeHeroCarousel()),
                 const SizedBox(height: 26),
                 _reveal(
-                  2,
+                  1,
                   _featureCard(
                     icon: Icons.sensors_rounded,
                     title: 'LIVE EVENTS',
@@ -291,7 +290,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 _reveal(
-                  3,
+                  2,
                   _featureCard(
                     icon: Icons.forum_rounded,
                     title: 'DEEPROWSS THREAD',
@@ -300,7 +299,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 _reveal(
-                  4,
+                  3,
                   _featureCard(
                     icon: Icons.cast_connected_rounded,
                     title: 'SMART DECODER',
@@ -318,74 +317,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-
-/// Rotating editorial banner for movies and football stars.
-class _HomeHeroCarousel extends StatefulWidget {
-  const _HomeHeroCarousel();
-  @override
-  State<_HomeHeroCarousel> createState() => _HomeHeroCarouselState();
-}
-class _HomeHeroCarouselState extends State<_HomeHeroCarousel> {
-  final PageController _controller = PageController();
-  Timer? _timer;
-  int _page = 0;
-  static const _slides = <({String title, String subtitle, String image})>[
-    (title: 'NOW SHOWING', subtitle: 'Discover movies worth watching', image: 'https://image.tmdb.org/t/p/w1280/1pdfLvkbY9ohJlCjQH2CZjjYVvJ9.jpg'),
-    (title: 'CRISTIANO RONALDO', subtitle: 'Al Nassr • The Yellow and Blue', image: 'https://pbs.twimg.com/media/GUnmAvTW0AAbh35.jpg'),
-    (title: 'LIONEL MESSI', subtitle: 'Inter Miami • The Herons', image: 'https://images.mlssoccer.com/image/private/t_keep-aspect-ratio-e-mobile/f_auto/mls-mia/dsze8wsazzinknx5f5wf.jpg'),
-    (title: 'MOVIE NIGHT', subtitle: 'Explore the latest movie stories', image: 'https://image.tmdb.org/t/p/w1280/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg'),
-    (title: 'CINEMA PICKS', subtitle: 'Your next favourite film awaits', image: 'https://image.tmdb.org/t/p/w1280/ptpr0kGAckfQkJeJIt8st5dglvd.jpg'),
-  ];
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!mounted || !_controller.hasClients) return;
-      _page = (_page + 1) % _slides.length;
-      _controller.animateToPage(_page, duration: const Duration(milliseconds: 650), curve: Curves.easeInOutCubic);
-    });
-  }
-  @override
-  void dispose() { _timer?.cancel(); _controller.dispose(); super.dispose(); }
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    height: 188,
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: Stack(fit: StackFit.expand, children: [
-        PageView.builder(
-          controller: _controller,
-          itemCount: _slides.length,
-          onPageChanged: (value) => setState(() => _page = value),
-          itemBuilder: (context, index) {
-            final slide = _slides[index];
-            return Stack(fit: StackFit.expand, children: [
-              Image.network(slide.image, fit: BoxFit.cover,
-                errorBuilder: (_, error, stack) => Container(
-                  color: Ui.panel, alignment: Alignment.center,
-                  child: Icon(Icons.movie_creation_outlined, color: Ui.muted, size: 42))),
-              DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
-                begin: Alignment.centerRight, end: Alignment.centerLeft,
-                colors: [Colors.black.withValues(alpha: .08), Colors.black.withValues(alpha: .82)]))),
-              Positioned(left: 18, right: 18, bottom: 20, child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(slide.title, style: const TextStyle(color: Colors.white, fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 5),
-                  Text(slide.subtitle, style: const TextStyle(color: Colors.white, fontSize: 17, height: 1.2, fontWeight: FontWeight.w800)),
-                ])),
-            ]);
-          }),
-        Positioned(right: 14, bottom: 12, child: Row(
-          children: List.generate(_slides.length, (i) => AnimatedContainer(
-            duration: const Duration(milliseconds: 220), margin: const EdgeInsets.only(left: 4),
-            width: i == _page ? 18 : 6, height: 6,
-            decoration: BoxDecoration(color: i == _page ? Ui.red : Colors.white.withValues(alpha: .65), borderRadius: BorderRadius.circular(8)),
-          )),
-        )),
-      ]),
-    ),
-  );
-}
 
 /// Small "LIVE" pill with a softly pulsing dot.
 class _LiveBadge extends StatefulWidget {
@@ -454,93 +385,76 @@ class _HomeBackdrop extends StatefulWidget {
   State<_HomeBackdrop> createState() => _HomeBackdropState();
 }
 
-class _HomeBackdropState extends State<_HomeBackdrop>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 10),
-  )..repeat(reverse: true);
+class _HomeBackdropState extends State<_HomeBackdrop> {
+  static const _wallpapers = <String>[
+    'https://image.tmdb.org/t/p/w1280/1pdfLvkbY9ohJlCjQH2CZjjYVvJ9.jpg',
+    'https://pbs.twimg.com/media/GUnmAvTW0AAbh35.jpg',
+    'https://images.mlssoccer.com/image/private/t_keep-aspect-ratio-e-mobile/f_auto/mls-mia/dsze8wsazzinknx5f5wf.jpg',
+    'https://image.tmdb.org/t/p/w1280/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg',
+    'https://image.tmdb.org/t/p/w1280/ptpr0kGAckfQkJeJIt8st5dglvd.jpg',
+  ];
+  Timer? _rotation;
+  int _wallpaperIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _rotation = Timer.periodic(const Duration(seconds: 7), (_) {
+      if (!mounted) return;
+      setState(() => _wallpaperIndex = (_wallpaperIndex + 1) % _wallpapers.length);
+    });
+  }
 
   @override
   void dispose() {
-    _c.dispose();
+    _rotation?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final light = Ui.isLight;
-    final accent = Ui.red;
-    final tint = Color.lerp(Ui.bg, accent, light ? .10 : .16)!;
+    final tint = Color.lerp(Ui.bg, Ui.red, light ? .10 : .16)!;
     final deep = Color.lerp(Ui.bg, Colors.black, light ? .04 : .35)!;
     return RepaintBoundary(
       child: IgnorePointer(
-        child: AnimatedBuilder(
-          animation: _c,
-          builder: (context, _) {
-            final t = Curves.easeInOut.transform(_c.value);
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [tint, Ui.bg, deep],
-                      stops: const [0, .45, 1],
-                    ),
-                  ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 1100),
+              switchInCurve: Curves.easeInOut,
+              switchOutCurve: Curves.easeInOut,
+              child: Image.network(
+                _wallpapers[_wallpaperIndex],
+                key: ValueKey(_wallpaperIndex),
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                errorBuilder: (_, __, ___) => ColoredBox(color: Ui.bg),
+              ),
+            ),
+            // Dark brand tint keeps the page content readable over every image.
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    tint.withValues(alpha: .82),
+                    Ui.bg.withValues(alpha: .88),
+                    deep.withValues(alpha: .97),
+                  ],
+                  stops: const [0, .48, 1],
                 ),
-                // Main glow, behind the logo.
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: Alignment(0, -1.05 + .12 * t),
-                      radius: .95,
-                      colors: [
-                        accent.withValues(alpha: (light ? .16 : .30) + .05 * t),
-                        accent.withValues(alpha: 0),
-                      ],
-                    ),
-                  ),
-                ),
-                // Soft side glow low on the right.
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: Alignment(1.1 - .2 * t, .55),
-                      radius: .8,
-                      colors: [
-                        Ui.redSoft.withValues(alpha: light ? .07 : .12),
-                        Ui.redSoft.withValues(alpha: 0),
-                      ],
-                    ),
-                  ),
-                ),
-                CustomPaint(
-                  painter: _PitchPainter(
-                    Ui.text.withValues(alpha: light ? .07 : .05),
-                  ),
-                ),
-                // Vignette so the lower cards stay calm and readable.
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.transparent,
-                        Ui.bg.withValues(alpha: .75),
-                      ],
-                      stops: const [0, .65, 1],
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
+              ),
+            ),
+            CustomPaint(
+              painter: _PitchPainter(
+                Ui.text.withValues(alpha: light ? .07 : .05),
+              ),
+            ),
+          ],
         ),
       ),
     );
