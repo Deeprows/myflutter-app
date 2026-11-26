@@ -555,7 +555,11 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
       },
       child: Scaffold(
         key: _scaffoldKey,
-        drawer: FootboliveDrawer(onHome: widget.onHome),
+        drawer: FootboliveDrawer(
+          onHome: widget.onHome,
+          // Already on Thread: the drawer entry just closes the menu.
+          onThread: widget.threadOnly ? () {} : null,
+        ),
         extendBody: false,
         body: Stack(
           children: [
