@@ -54,10 +54,10 @@ class HomeScreen extends StatelessWidget {
   }) {
     final onAccent = Ui.palette.onAccent;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(22),
           boxShadow: [
             if (featured)
               BoxShadow(
@@ -75,14 +75,14 @@ class HomeScreen extends StatelessWidget {
         ),
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(22),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onTap,
             child: Ink(
-              padding: EdgeInsets.fromLTRB(18, featured ? 22 : 18, 16, featured ? 22 : 18),
+              padding: EdgeInsets.fromLTRB(14, featured ? 14 : 11, 12, featured ? 14 : 11),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: BorderRadius.circular(22),
                 border: Border.all(
                   color: featured ? Ui.red.withValues(alpha: .6) : Ui.line,
                   width: featured ? 1.2 : 1,
@@ -104,10 +104,10 @@ class HomeScreen extends StatelessWidget {
               child: Row(
                 children: [
                   Container(
-                    width: featured ? 64 : 58,
-                    height: featured ? 64 : 58,
+                    width: featured ? 50 : 44,
+                    height: featured ? 50 : 44,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(15),
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -125,34 +125,34 @@ class HomeScreen extends StatelessWidget {
                     child: Icon(
                       icon,
                       color: featured ? onAccent : Ui.red,
-                      size: featured ? 32 : 29,
+                      size: featured ? 26 : 23,
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (featured) ...[
                           const _LiveBadge(),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 5),
                         ],
                         Text(
                           title,
                           style: TextStyle(
                             color: Ui.text,
-                            fontSize: 15.5,
-                            letterSpacing: .8,
+                            fontSize: 14,
+                            letterSpacing: .7,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
                           subtitle,
                           style: TextStyle(
                             color: Ui.muted,
-                            fontSize: 12.5,
-                            height: 1.4,
+                            fontSize: 11.5,
+                            height: 1.3,
                           ),
                         ),
                       ],
@@ -160,8 +160,8 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Container(
-                    width: 34,
-                    height: 34,
+                    width: 30,
+                    height: 30,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: featured
@@ -170,7 +170,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     child: Icon(
                       Icons.arrow_forward_rounded,
-                      size: 18,
+                      size: 16,
                       color: featured ? Ui.red : Ui.muted,
                     ),
                   ),
@@ -191,10 +191,10 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         centerTitle: true,
-        toolbarHeight: 68,
+        toolbarHeight: 84,
         title: Image.asset(
           'assets/icon/logo_header.png',
-          height: 52,
+          height: 68,
           fit: BoxFit.contain,
           filterQuality: FilterQuality.high,
           semanticLabel: 'Deeprowss',
@@ -224,7 +224,7 @@ class HomeScreen extends StatelessWidget {
           ),
           SafeArea(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 84, 20, 30),
+              padding: const EdgeInsets.fromLTRB(20, 100, 20, 30),
               children: [
                 _reveal(
                   0,
