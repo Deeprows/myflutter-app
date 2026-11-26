@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../config.dart';
+import '../screens/shell_screen.dart';
 import '../screens/app_lock_screen.dart';
 import '../screens/auth_screen.dart';
 import '../screens/bookmarks_screen.dart';
@@ -436,16 +437,29 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
                         'Profile'.tr,
                         (c) => _push(c, FanProfileScreen(userId: user.id)),
                       ),
-                    if (widget.onThread != null)
-                      _row(
-                        Icons.forum_outlined,
-                        'Thread'.tr,
-                        (c) async {
-                          if (!await ensureSignedIn(c)) return;
-                          if (!c.mounted) return;
+                    _row(
+                      Icons.forum_outlined,
+                      'Thread'.tr,
+                      (c) async {
+                        if (!await ensureSignedIn(c)) return;
+                        if (!c.mounted) return;
+                        if (widget.onThread != null) {
                           widget.onThread!();
-                        },
-                      ),
+                          return;
+                        }
+                        // Default: open the Deeprowss Thread section.
+                        await Navigator.of(c).push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (pc) => ShellScreen(
+                              threadOnly: true,
+                              initialTab: 3,
+                              restoreLastTab: false,
+                              onHome: () => Navigator.of(pc).pop(),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                     _row(
                       Icons.bookmark_border_rounded,
                       'Bookmarks'.tr,
