@@ -564,9 +564,12 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
           onThread: widget.threadOnly ? () {} : null,
         ),
         extendBody: false,
-        body: Stack(
-          children: [
-            IndexedStack(
+        body: SafeArea(
+          top: false,
+          bottom: true,
+          child: Stack(
+            children: [
+              IndexedStack(
               index: _index,
               children: [
                 const LiveScreen(),
@@ -600,9 +603,10 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
               ],
             ),
             // Small brand mark on Live.
-            if (_index == 0)
-              const Positioned(right: 8, bottom: 6, child: BrandTag()),
-          ],
+              if (_index == 0)
+                const Positioned(right: 8, bottom: 6, child: BrandTag()),
+            ],
+          ),
         ),
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
