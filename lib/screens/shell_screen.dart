@@ -601,6 +601,8 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
           mainAxisSize: MainAxisSize.min,
           children: [
             const MiniPlayer(),
+            // Live Events page has a single tab: no bottom bar needed.
+            if (!widget.liveOnly)
             DecoratedBox(
               decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: Ui.line)),
