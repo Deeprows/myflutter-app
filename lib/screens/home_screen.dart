@@ -191,14 +191,7 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         centerTitle: true,
-        toolbarHeight: 84,
-        title: Image.asset(
-          'assets/icon/logo_header.png',
-          height: 68,
-          fit: BoxFit.contain,
-          filterQuality: FilterQuality.high,
-          semanticLabel: 'Deeprowss',
-        ),
+        toolbarHeight: 56,
       ),
       extendBodyBehindAppBar: true,
       body: Stack(
@@ -217,6 +210,24 @@ class HomeScreen extends StatelessWidget {
                       Ui.red.withValues(alpha: Ui.isLight ? .10 : .22),
                       Ui.red.withValues(alpha: 0),
                     ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Logo sits lower, in the middle of the header area.
+          SafeArea(
+            child: IgnorePointer(
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 46),
+                  child: Image.asset(
+                    'assets/icon/logo_header.png',
+                    height: 68,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                    semanticLabel: 'Deeprowss',
                   ),
                 ),
               ),
