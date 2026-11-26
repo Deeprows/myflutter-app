@@ -451,17 +451,21 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
             () => _open(const DecoderFixturesPage(), 'fixtures'),
             badge: 'LIVE',
           ),
-          Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Expanded(
-              child: _gridCard(Icons.movie_filter_rounded, 'Moviebox', 'Search the library and cast a title',
-                  () => _open(const DecoderMoviesPage(), 'movies')),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _gridCard(Icons.live_tv_rounded, 'TV Channels', 'Browse and play compatible channels',
-                  () => _open(const DecoderChannelsPage(), 'channels')),
-            ),
-          ]),
+          // IntrinsicHeight: a stretch Row inside a ListView has unbounded height
+          // and throws a layout error, which blanks everything below it.
+          IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Expanded(
+                child: _gridCard(Icons.movie_filter_rounded, 'Moviebox', 'Search the library and cast a title',
+                    () => _open(const DecoderMoviesPage(), 'movies')),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _gridCard(Icons.live_tv_rounded, 'TV Channels', 'Browse and play compatible channels',
+                    () => _open(const DecoderChannelsPage(), 'channels')),
+              ),
+            ]),
+          ),
           decoderSectionHeader(
             icon: Icons.tune_rounded,
             kicker: '02 · Control room',
