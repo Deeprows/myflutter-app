@@ -2435,12 +2435,13 @@ async function subAdmin(request, env, url) {
       note = `Subscription stopped for ${id}`;
     } else {
       const e = await addDays(env, id, { email: null, source: "manual", days });
-      // Manual renewal before expiry extends the current Decoder number too.
+      // Top-ups always extend the same account subscription. While its
+      // Decoder number is still active, keep that exact number and its
+      // registered devices; only an expired Decoder number is re-issued,
+      // which starts a fresh two-device allowance.
       await env.DB.prepare(
         "UPDATE decoder_codes SET expires_at = ? WHERE owner_id = ? AND expires_at > ?"
       ).bind(e, id, Date.now()).run();
-      // Issue (or renew) the actual Premium Decoder number as the manual
-      // payment token, so the app, Windows EXE and Android TV share one gate.
       const issued = await issueDecoderCode(env, id);
       const issuedData = await issued.json().catch(() => ({}));
       const decoder = issuedData.active && issuedData.code ? String(issuedData.code) : "";
@@ -2611,7 +2612,8 @@ ${reqHtml}
 <input type="hidden" name="token" value="${tk}"><input type="hidden" name="action" value="grant">
 <p><input name="install_id" placeholder="Account ID or existing 10-digit Decoder number" style="${box}"></p>
 <p><input name="days" type="number" value="30" style="${box}"></p>
-<p><button style="${box};font-size:16px">Grant Premium + generate Decoder number (0 = revoke)</button></p>
+<p><button style="${box};font-size:16px">Grant / top up Premium (0 = revoke)</button></p>
+<p style="color:#94a3b8;font-size:12px">Top-ups keep the existing Decoder number and its device registrations while it is active. A new number is issued only after expiry.</p>
 </form>
 <h3>Unused legacy ad-free tokens</h3>
 <table style="width:100%;font-size:12.5px"><tr><th align=left>Token<th align=left>Days<th align=left>For<th align=left>Note<th></tr>${unusedHtml}</table>
