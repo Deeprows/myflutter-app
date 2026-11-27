@@ -9,6 +9,7 @@ import '../../services/feed_service.dart';
 import '../../services/tmdb_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/open_movie.dart';
+import '../../utils/premium_gate.dart';
 import '../../widgets/movie_card.dart';
 import 'decoder_common.dart';
 import 'decoder_flows.dart';
@@ -136,6 +137,9 @@ class _DecoderMoviesPageState extends State<DecoderMoviesPage> {
 
   /// Tap on any title: watch it in the app, or cast it to a bigger screen.
   Future<void> _select(Movie movie) async {
+    final key = '${movie.isSeries ? 'tv' : 'movie'}:${movie.tmdbId ?? movie.title.toLowerCase()}';
+    if (!await PremiumGate.allowMovies(context, key, action: 'play')) return;
+    if (!mounted) return;
     if (movie.url.trim().isEmpty) {
       decoderToast(context, 'No video link is available for this title.');
       return;
