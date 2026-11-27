@@ -1125,6 +1125,12 @@ async function ensureSchema(env) {
     env.DB.prepare(
       "CREATE TABLE IF NOT EXISTS cast_trials (owner_id TEXT NOT NULL, slot INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(owner_id, slot))"
     ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS decoder_trials (owner_id TEXT PRIMARY KEY, started_at INTEGER NOT NULL)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS movie_daily_trials (owner_id TEXT NOT NULL, day_utc TEXT NOT NULL, movie_key TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(owner_id, day_utc, movie_key))"
+    ),
   ]);
   // Older databases: remember which plan a phone asked for. Harmless when the
   // columns already exist.
@@ -1249,6 +1255,61 @@ async function recordMovieTrial(env, ownerId, movieKey) {
 }
 
 const RECEIVER_FREE_TV_CHANNELS = 4;
+const DECODER_TRIAL_MS = 3 * 24 * 60 * 60 * 1000;
+const DAILY_FREE_MOVIES = 3;
+
+async function decoderTrialState(env, ownerId, startIfMissing = false) {
+  const now = Date.now();
+  let row = await env.DB.prepare(
+    "SELECT started_at FROM decoder_trials WHERE owner_id = ?"
+  ).bind(ownerId).first();
+  if (!row && startIfMissing) {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO decoder_trials (owner_id, started_at) VALUES (?, ?)"
+    ).bind(ownerId, now).run();
+    row = await env.DB.prepare(
+      "SELECT started_at FROM decoder_trials WHERE owner_id = ?"
+    ).bind(ownerId).first();
+  }
+  const started = Number(row?.started_at || 0);
+  const expires = started ? started + DECODER_TRIAL_MS : 0;
+  return { started_at: started, trial_expires_at: expires, trial_active: expires > now, now };
+}
+
+async function subDecoderAccess(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const ownerId = String(body.install_id || "");
+  if (!receiverIdOk(ownerId)) return json({ error: "bad account id" }, 400);
+  const expires = await expiryOf(env, ownerId);
+  const trial = await decoderTrialState(env, ownerId, true);
+  return json({
+    premium: expires > Date.now(),
+    expires_at: expires,
+    ...trial,
+    free_tv_limit: RECEIVER_FREE_TV_CHANNELS,
+    free_movie_limit: DAILY_FREE_MOVIES,
+    now: Date.now(),
+  });
+}
+
+async function recordDailyMovieTrial(env, ownerId, movieKey) {
+  const key = cleanMovieKey(movieKey);
+  if (!receiverIdOk(ownerId) || !key) return { allowed: false, used: 0, remaining: 0 };
+  const now = Date.now();
+  const day = new Date(now).toISOString().slice(0, 10);
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO movie_daily_trials (owner_id, day_utc, movie_key, created_at) " +
+    "SELECT ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM movie_daily_trials WHERE owner_id = ? AND day_utc = ?) < ?"
+  ).bind(ownerId, day, key, now, ownerId, day, DAILY_FREE_MOVIES).run();
+  const seen = await env.DB.prepare(
+    "SELECT 1 AS found FROM movie_daily_trials WHERE owner_id = ? AND day_utc = ? AND movie_key = ?"
+  ).bind(ownerId, day, key).first();
+  const row = await env.DB.prepare(
+    "SELECT COUNT(*) AS used FROM movie_daily_trials WHERE owner_id = ? AND day_utc = ?"
+  ).bind(ownerId, day).first();
+  const used = Number(row?.used || 0);
+  return { allowed: Boolean(seen), used, remaining: Math.max(0, DAILY_FREE_MOVIES - used), limit: DAILY_FREE_MOVIES, day };
+}
 
 async function recordTvTrial(env, deviceId, channelKey) {
   const key = String(channelKey || '').trim().slice(0, 120);
@@ -1326,8 +1387,12 @@ async function subMovieAccess(request, env) {
   if (!receiverIdOk(ownerId) || !movieKey) return json({ error: "bad movie request" }, 400);
   const expires = await expiryOf(env, ownerId);
   if (expires > Date.now()) return json({ allowed: true, premium: true, used: 0, remaining: RECEIVER_FREE_MOVIES, expires_at: expires, now: Date.now() });
-  const result = await recordMovieTrial(env, ownerId, movieKey);
-  return json({ ...result, premium: false, limit: RECEIVER_FREE_MOVIES, now: Date.now() });
+  const trial = await decoderTrialState(env, ownerId, false);
+  if (trial.trial_active) {
+    return json({ allowed: true, premium: false, trial: true, trial_expires_at: trial.trial_expires_at, used: 0, remaining: DAILY_FREE_MOVIES, now: Date.now() });
+  }
+  const result = await recordDailyMovieTrial(env, ownerId, movieKey);
+  return json({ ...result, premium: false, trial: false, now: Date.now() });
 }
 
 async function receiverAccess(request, env, url, ctx = null) {
@@ -1428,6 +1493,8 @@ async function subscriptions(request, env, url, ctx = null) {
   const dbOnly =
     path === "/sub/status" ||
     path === "/sub/decoder/issue" ||
+    path === "/sub/decoder/access" ||
+    path === "/sub/tv-access" ||
     path === "/sub/movie-access" ||
     path === "/sub/movie-access-guest" ||
     path === "/sub/cast-access" ||
@@ -1448,6 +1515,8 @@ async function subscriptions(request, env, url, ctx = null) {
     const accountBound =
       path === "/sub/status" ||
       path === "/sub/decoder/issue" ||
+      path === "/sub/decoder/access" ||
+      path === "/sub/tv-access" ||
       path === "/sub/movie-access" ||
       path === "/sub/cast-access" ||
       path === "/sub/start" ||
@@ -1480,6 +1549,21 @@ async function subscriptions(request, env, url, ctx = null) {
       const ownerId = String(body.install_id || url.searchParams.get("install") || "");
       if (!ID_RE.test(ownerId)) return json({ error: "bad account id" }, 400);
       return issueDecoderCode(env, ownerId, request, ctx);
+    }
+    if (path === "/sub/decoder/access" && request.method === "POST") {
+      return subDecoderAccess(request, env);
+    }
+    if (path === "/sub/tv-access" && request.method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const ownerId = String(body.install_id || "");
+      const channelKey = String(body.channel_key || "").trim().slice(0, 120);
+      if (!receiverIdOk(ownerId) || !channelKey) return json({ error: "bad TV channel request" }, 400);
+      const expires = await expiryOf(env, ownerId);
+      if (expires > Date.now()) return json({ allowed: true, premium: true, used: 0, remaining: RECEIVER_FREE_TV_CHANNELS, now: Date.now() });
+      const trial = await decoderTrialState(env, ownerId, false);
+      if (trial.trial_active) return json({ allowed: true, premium: false, trial: true, used: 0, remaining: RECEIVER_FREE_TV_CHANNELS, trial_expires_at: trial.trial_expires_at, now: Date.now() });
+      const result = await recordTvTrial(env, ownerId, channelKey);
+      return json({ ...result, premium: false, trial: false, now: Date.now() });
     }
     if (path === "/sub/movie-access" && request.method === "POST") {
       return subMovieAccess(request, env);
