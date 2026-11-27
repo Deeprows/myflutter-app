@@ -619,7 +619,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
   function render(){
     const list=panel.querySelector('.dw-min-list'); if(!list)return;
     list.innerHTML=sessions.length?sessions.slice().reverse().map(x=>'<button class="dw-min-item" type="button" data-resume="'+x.id+'"><span class="dw-min-thumb">'+(x.kind==='tv'?'📺':'🎬')+'</span><span class="dw-min-meta"><b>'+esc(x.title)+'</b><small>'+(x.kind==='tv'?'Live TV channel':'Movie / series')+' · Paused</small></span><span class="dw-min-resume">RESUME ▶</span></button>').join(''):'<div class="dw-min-empty">Nothing minimised yet. Minimise a movie or channel to keep it here.</div>';
-    document.querySelectorAll('[data-minimise-open]').forEach(b=>b.textContent='Minimised'+(sessions.length?' ('+sessions.length+')':''));
+
   }
   function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
   function current(){
