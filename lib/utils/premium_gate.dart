@@ -97,27 +97,44 @@ class PremiumGate {
   static Future<bool> allowDownload(BuildContext context, String movieKey) =>
       allowMovies(context, movieKey, action: 'download');
 
-  /// Three distinct movies per UTC day after the trial. Reopening an already
-  /// counted title does not consume another slot.
+  /// Existing Movies catalogue allowance remains three distinct titles
+  /// across the account. Smart Decoder uses its separate daily quota below.
   static Future<bool> allowMovies(
     BuildContext context,
     String movieKey, {
     String action = 'play',
   }) async {
     final service = SubscriptionService.instance;
-    if (!service.enabled) return true;
-    final access = service.accountId == null
-        ? const DecoderAccessResult(premium: false, trialActive: false, verified: true)
-        : await service.readDecoderAccess();
-    if (!access.verified) {
-      if (!context.mounted) return false;
+    if (!AppConfig.moviesPremiumOnly || !service.enabled || service.isPremium) return true;
+    final quota = await service.consumeMovieAccess(movieKey, action: action);
+    if (!context.mounted) return false;
+    if (!quota.verified) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not verify movie access. Please try again when connected.')),
+        const SnackBar(content: Text('Could not verify your movie allowance. Please try again when connected.')),
       );
       return false;
     }
+    if (quota.allowed) return true;
+    return _gate(
+      context,
+      isLocked: () => !SubscriptionService.instance.isPremium,
+      title: 'Your 3 free movies are used',
+      body: 'Upgrade to Premium to keep watching, use the alternate player and download movies and series.',
+      allowAd: false,
+    );
+  }
+
+  /// Smart Decoder Moviebox: unlimited during the trial, then three distinct
+  /// titles per UTC day. The main Movies catalogue does not start the trial.
+  static Future<bool> allowDecoderMovies(
+    BuildContext context,
+    String movieKey, {
+    String action = 'play',
+  }) async {
+    final access = await _decoderAccess(context);
+    if (access == null) return false;
     if (access.premium || access.trialActive) return true;
-    final quota = await service.consumeMovieAccess(movieKey, action: action);
+    final quota = await SubscriptionService.instance.consumeDecoderMovieAccess(movieKey, action: action);
     if (!context.mounted) return false;
     if (!quota.verified) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -130,7 +147,7 @@ class PremiumGate {
       context,
       isLocked: () => !SubscriptionService.instance.isPremium,
       title: 'Today’s 3 free movies are used',
-      body: 'Your movie allowance resets at midnight UTC. Upgrade to Premium for unlimited movies, series and downloads.',
+      body: 'Your Smart Decoder movie allowance resets at midnight UTC. Upgrade to Premium for unlimited movies and series.',
       allowAd: false,
     );
   }
