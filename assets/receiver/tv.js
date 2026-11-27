@@ -719,6 +719,15 @@
     play(item, !!useBackup);
     return true;
   };
+  window.deeprowssGetTvSession = () => {
+    if (!cur || !cur.c) return null;
+    return { channel: cur.c, streamIndex: cur.streamIndex || 0 };
+  };
+  window.deeprowssResumeTvSession = session => {
+    if (!session || !session.channel) return false;
+    play(session.channel, session.streamIndex || 0);
+    return true;
+  };
   window.deeprowssTvRemote = command => {
     if (!cur || $('playerPanel').style.display !== 'block') return false;
     if (command === 'mainstream') { play(cur.c, 0); return true; }
