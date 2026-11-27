@@ -586,11 +586,7 @@ function record(
 // ----------------------------------------------------------------- stats
 
 async function stats(url, env) {
-  if (
-    !env.STATS_TOKEN ||
-    url.searchParams.get("token") !==
-      env.STATS_TOKEN
-  ) {
+  if (!(await fanAdminTokenValid(env.DB, url.searchParams.get("token"), env))) {
     return new Response(
       "Not found",
       { status: 404 }
@@ -2309,10 +2305,9 @@ async function stopPhone(env, id) {
  *  - Grant days straight to an ID (0 days switches someone off).
  */
 async function subAdmin(request, env, url) {
-  const secret = env.ADMIN_TOKEN || env.STATS_TOKEN;
   const form = request.method === "POST" ? await request.formData() : null;
-  const token = form ? form.get("token") : url.searchParams.get("token");
-  if (!secret || token !== secret) return json({ error: "forbidden" }, 403);
+  const token = String(form ? form.get("token") : url.searchParams.get("token") || "");
+  if (!(await fanAdminTokenValid(env.DB, token, env))) return json({ error: "forbidden" }, 403);
 
   let note = "";
   let made = [];
@@ -2661,6 +2656,7 @@ const FAN_SCHEMA = [
   `CREATE INDEX IF NOT EXISTS fan_posts_author ON fan_posts(user_id,hidden,at DESC,id DESC)`,
   `CREATE TABLE IF NOT EXISTS fan_post_reports (post_id TEXT NOT NULL, user_id TEXT NOT NULL, reason TEXT NOT NULL, PRIMARY KEY(post_id,user_id))`,
   `CREATE TABLE IF NOT EXISTS fan_accounts (id TEXT PRIMARY KEY, google_sub TEXT NOT NULL UNIQUE, email TEXT NOT NULL, name TEXT NOT NULL, photo TEXT NOT NULL, created_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS fan_admin_sessions (token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_legacy_claims (legacy_id TEXT PRIMARY KEY, account_id TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_form_cache (team_id TEXT PRIMARY KEY, data TEXT NOT NULL, fetched_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS fan_ai_limits (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL, expires INTEGER NOT NULL)`,
@@ -2752,6 +2748,17 @@ async function fanHash(s) {
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(b)].map(n => n.toString(16).padStart(2, '0')).join('');
 }
+async function fanAdminTokenValid(db, token, env) {
+  if (typeof token !== 'string' || !token || token.length > 512) return false;
+  const permanent = env?.ADMIN_TOKEN || env?.STATS_TOKEN;
+  if (permanent && token === permanent) return true;
+  if (!db) return false;
+  try {
+    const hash = await fanHash(token);
+    const row = await db.prepare('SELECT 1 AS ok FROM fan_admin_sessions WHERE token_hash=? AND expires_at>?').bind(hash, Date.now()).first();
+    return Boolean(row);
+  } catch (_) { return false; }
+}
 async function fanFixtures(env,timeout=10000) {
   const base = (env.GITHUB_RAW_BASE || DEFAULT_RAW_BASE).replace(/\/$/, '');
   const res = await fetch(`${base}/fixtures.json`, {signal: AbortSignal.timeout(timeout), cache: 'no-store'});
@@ -2771,6 +2778,20 @@ async function fanZone(request, env, url, ctx) {
   try {
     await fanInit(env.DB);
     const db = env.DB;
+    if (url.pathname === '/fan/admin/session' && request.method === 'POST') {
+      const bearer = String(request.headers.get('authorization') || '').replace(/^Bearer\\s+/i, '');
+      const identity = await verifyFanGoogleToken(bearer, env);
+      if (!identity || String(identity.email || '').toLowerCase() !== 'deeprows@gmail.com') return fail('Admin access is restricted to the authorised Google account.', 403);
+      const adminId = await fanHash('google:' + identity.sub);
+      const account = await db.prepare('SELECT id FROM fan_accounts WHERE id=? AND lower(email)=?').bind(adminId, 'deeprows@gmail.com').first();
+      if (!account) return fail('Sign in to the DeeprowssAdmin account in the app first.', 403);
+      const bytes = new Uint8Array(32); crypto.getRandomValues(bytes);
+      const session = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+      const tokenHash = await fanHash(session), now = Date.now(), expires = now + 15 * 60 * 1000;
+      await db.prepare('DELETE FROM fan_admin_sessions WHERE expires_at<=?').bind(now).run();
+      await db.prepare('INSERT INTO fan_admin_sessions(token_hash,email,expires_at,created_at) VALUES(?,?,?,?)').bind(tokenHash, 'deeprows@gmail.com', expires, now).run();
+      return json({ok:true, token:session, expires_at:expires});
+    }
     // AI extra quota workflow. User endpoints verify the Google ID token and derive the account ID server-side.
     if((url.pathname==='/fan/ai-quota/request' && request.method==='POST') || (url.pathname==='/fan/ai-quota/status' && request.method==='GET')) {
       const bearer=String(request.headers.get('authorization')||'').replace(/^Bearer\s+/i,'');
@@ -2893,11 +2914,14 @@ async function fanZone(request, env, url, ctx) {
       return new Response(image.body,{headers});
     }
     // A static page (no data, no secret) that talks to the header-protected admin routes below.
-    if (url.pathname === '/fan/admin' && request.method === 'GET') return fanAdminPage();
-    // Admin routes use a secret in the header, never a URL or the app.
+    if (url.pathname === '/fan/admin' && request.method === 'GET') {
+      const session = url.searchParams.get('session') || '';
+      if (!(await fanAdminTokenValid(db, session, env))) return fail('Unauthorized', 401);
+      return fanAdminPage();
+    }
     if (url.pathname.startsWith('/fan/admin/')) {
-      const secret = env.ADMIN_TOKEN || env.STATS_TOKEN;
-      if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) return fail('Unauthorized', 401);
+      const bearer = String(request.headers.get('authorization') || '').replace(/^Bearer\\s+/i, '');
+      if (!(await fanAdminTokenValid(db, bearer, env))) return fail('Unauthorized', 401);
       if (url.pathname === '/fan/admin/matches' && request.method === 'GET') {
         const rows = await db.prepare('SELECT match_key,title,kickoff,COUNT(*) AS picks FROM fan_picks GROUP BY match_key ORDER BY kickoff DESC LIMIT 300').all();
         return json({matches:rows.results});
@@ -5679,6 +5703,8 @@ function show(d){
   pc.appendChild(row);out.appendChild(pc);
 }
 $('load').onclick=loadWeeks;$('week').onchange=loadWeek;
+var sessionFromApp=new URLSearchParams(location.search).get('session');
+if(sessionFromApp){$('tok').value=sessionFromApp;$('tok').type='hidden';$('load').click();}
 
 function banFan(id,name,after){
   var reason=prompt('Ban '+name+'? Enter the rule they broke (shown to them):','');
