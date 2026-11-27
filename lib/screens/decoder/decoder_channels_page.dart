@@ -9,6 +9,7 @@ import '../../services/feed_service.dart';
 import '../../services/stream_resolver.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/open_channel.dart';
+import '../../utils/premium_gate.dart';
 import 'decoder_common.dart';
 import 'decoder_flows.dart';
 import 'stream_finder_page.dart';
@@ -109,6 +110,7 @@ class _DecoderChannelsPageState extends State<DecoderChannelsPage> {
   }
 
   Future<void> _open(Channel c) async {
+    if (!await PremiumGate.allowTvChannel(context, c.name) || !mounted) return;
     final t = _target(c);
     if (widget.only == 'receiver') {
       await sendToReceiver(context, t);
