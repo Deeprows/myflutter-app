@@ -277,6 +277,27 @@ assert.equal(j.premium, false);
 assert.equal(j.trial_active, false);
 assert.equal(j.started_at, 0, "expired Premium users do not receive a new trial");
 
+// Premium expiry immediately ends any still-running free trial.
+const EXPIRED_DURING_TRIAL = "edededededededededededededededed";
+sqlite.prepare("INSERT INTO decoder_trials (owner_id, started_at) VALUES (?, ?)")
+  .run(EXPIRED_DURING_TRIAL, Date.now() - 60 * 60 * 1000);
+sqlite.prepare("INSERT INTO subs (install_id, email, expires_at, source, updated_at) VALUES (?, ?, ?, ?, ?)")
+  .run(EXPIRED_DURING_TRIAL, "trial-premium@example.com", Date.now() - 1000, "test", Date.now());
+j = await (await post("/sub/decoder/access", {
+  install_id: EXPIRED_DURING_TRIAL, start_trial: true
+})).json();
+assert.equal(j.trial_active, false, "Premium expiry immediately disables a remaining trial");
+j = await (await post("/sub/tv-access", {
+  install_id: EXPIRED_DURING_TRIAL, channel_key: "expired-premium-channel"
+})).json();
+assert.equal(j.allowed, true);
+assert.equal(j.trial, false, "expired Premium uses the daily TV allowance");
+j = await (await post("/sub/decoder/movie-access", {
+  install_id: EXPIRED_DURING_TRIAL, movie_key: "expired-premium-movie"
+})).json();
+assert.equal(j.allowed, true);
+assert.equal(j.trial, false, "expired Premium uses the daily movie allowance");
+
 // An expired trial falls back to four distinct TV channels and three movies per UTC day.
 const EXPIRED_DECODER = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
 const expiredTrialStarted = Date.now() - 4 * 86400000;
