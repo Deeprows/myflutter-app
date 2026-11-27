@@ -14,8 +14,11 @@
 
   const css = document.createElement('style');
   css.textContent = `
-  .dw-search{position:absolute;z-index:9;left:0;top:0;width:min(440px,100%);pointer-events:none}
-  .dws-field{pointer-events:auto;position:relative;display:flex;align-items:center;gap:8px;max-width:440px;margin:0 auto;height:38px;padding:0 10px 0 12px;border-radius:999px;border:1px solid rgb(var(--n5,70 85 105));background:rgba(8,12,18,.78);backdrop-filter:blur(10px);color:#e8eef5;transition:border-color .15s,box-shadow .15s}
+  /* Keep the universal search dock in one consistent position on every browser
+     and device. Avoid measuring free space: browser viewport/UA differences
+     (notably Opera Mini) can otherwise move it to the header. */
+  .dw-search{position:absolute;z-index:9;left:50%;right:auto;top:auto;bottom:14px;transform:translateX(-50%);width:min(440px,calc(100% - 32px));pointer-events:none}
+  .dws-field{pointer-events:auto;position:relative;display:flex;align-items:center;gap:8px;width:100%;max-width:440px;margin:0 auto;height:38px;padding:0 10px 0 12px;border-radius:999px;border:1px solid rgb(var(--n5,70 85 105));background:rgba(8,12,18,.88);backdrop-filter:blur(10px);color:#e8eef5;transition:border-color .15s,box-shadow .15s}
   .dws-field:focus-within{border-color:rgb(var(--ar,29 180 234));box-shadow:0 0 0 3px rgba(var(--ar,29,180,234),.25)}
   .dws-field svg{flex:none;width:18px;height:18px;fill:none;stroke:#9fb0c3;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .dws-field input{flex:1;min-width:0;height:100%;padding:0;border:0;outline:0;background:transparent;color:inherit;font:600 14px/1 inherit;font-family:inherit}
@@ -36,9 +39,7 @@
   .dws-tag{flex:none;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:800;background:#ffffff1a;color:#cfe0f1}
   .dws-tag.live{background:#e5243b;color:#fff}
   .dws-empty{padding:18px 12px;text-align:center;color:#8fa0b4;font-size:13px}
-  .dw-search.dws-top .dws-panel{bottom:auto;top:46px;box-shadow:0 14px 40px #000a}
-  @media(max-width:820px){.dws-field{max-width:none}}
-  `;;
+  `;
   document.head.appendChild(css);
 
   const box = document.createElement('div');
@@ -51,35 +52,6 @@
     '</div>' +
     '<div class="dws-panel" id="dwSearchPanel" role="listbox" aria-label="Search results" hidden></div>';
   land.appendChild(box);
-
-  /* Sit in the free gap of the bottom strip (between the keyboard hints and the
-     round buttons). On windows too narrow for that, move to the top of the screen. */
-  function place() {
-    if (!land.classList.contains('active')) return;
-    const lr = land.getBoundingClientRect();
-    if (!lr.width) return;
-    const visible = s => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return r.width && r.height ? r : null; };
-    const hintEl = land.querySelector('.home-hint span:last-child');
-    const hr = hintEl ? hintEl.getBoundingClientRect() : null;
-    const lefts = ['#dwPowerOpen', '#dwSettingsOpen', '#subscriptionOpen'].map(visible).filter(Boolean).map(r => r.left);
-    const hasHint = !!(hr && hr.width);
-    const gapL = (hasHint ? hr.right : lr.left + 48) + 12;
-    const gapR = (lefts.length ? Math.min(...lefts) : lr.right - 28) - 12;
-    const mobile = lr.width <= 820;
-    if (!mobile && hasHint && gapR - gapL >= 230) {
-      const w = Math.min(440, gapR - gapL);
-      box.classList.remove('dws-top');
-      box.style.width = w + 'px';
-      box.style.left = Math.round(gapL + (gapR - gapL - w) / 2 - lr.left) + 'px';
-      box.style.top = Math.round((hr.top + hr.bottom) / 2 - 19 - lr.top) + 'px';
-    } else {
-      const w = Math.min(440, lr.width - (mobile ? 40 : 380));
-      box.classList.add('dws-top');
-      box.style.width = Math.max(240, w) + 'px';
-      box.style.left = Math.round((lr.width - Math.max(240, w)) / 2) + 'px';
-      box.style.top = (mobile ? 74 : 28) + 'px';
-    }
-  }
 
   const input = document.getElementById('dwSearchInput');
   const clearBtn = document.getElementById('dwSearchClear');
@@ -198,11 +170,6 @@
     else if (k === 'Escape' || k === 'Backspace' || k === 'GoBack' || k === 'BrowserBack') { e.preventDefault(); e.stopPropagation(); input.focus(); }
   });
 
-  place();
-  window.addEventListener('resize', place);
-  window.addEventListener('load', () => { place(); setTimeout(place, 600); setTimeout(place, 2000); });
-  setTimeout(place, 300);
-  if ('ResizeObserver' in window) { try { new ResizeObserver(place).observe(land); } catch (_) {} }
 
   /* "/" or Ctrl+K focuses the bar from anywhere on the home screen. */
   document.addEventListener('keydown', e => {
