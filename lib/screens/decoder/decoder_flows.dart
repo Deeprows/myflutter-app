@@ -263,9 +263,8 @@ Future<void> showCastOptions(
 }
 
 Future<void> castToTv(BuildContext context, CastTarget target, {VoidCallback? onCastStarted}) async {
-  // TV casting is available to registered users; non-Premium users have five
-  // successful casts before the Premium upgrade gate appears.
-  if (!await PremiumGate.allowDecoder(context) || !context.mounted) return;
+  // TV / Kodi casting is included in the 72-hour trial and Premium only.
+  if (!await PremiumGate.allowCast(context) || !context.mounted) return;
   final ready = await prepareTarget(context, target);
   if (ready == null || !context.mounted) return;
   await Navigator.of(context).push<void>(MaterialPageRoute(
