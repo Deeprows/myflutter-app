@@ -14,15 +14,11 @@
 
   const css = document.createElement('style');
   css.textContent = `
-  /* Keep the universal search dock in one consistent position on every browser
-     and device. Avoid measuring free space: browser viewport/UA differences
-     (notably Opera Mini) can otherwise move it to the header. */
-  /* Dock the search immediately to the left of the app Exit/Power control.
-     Keep it in the footer flow so it never covers navigation or status buttons. */
-  .receiver-footer{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:nowrap}
-  .dw-search{position:relative;z-index:9;left:auto;right:auto;top:auto;bottom:auto;transform:none;flex:0 1 300px;width:min(300px,24vw);min-width:190px;max-width:300px;margin:0;pointer-events:none}
-  .dws-field{pointer-events:auto;position:relative;display:flex;align-items:center;gap:7px;width:100%;max-width:300px;margin:0;height:32px;padding:0 9px 0 10px;border-radius:999px;border:1px solid rgb(var(--n5,70 85 105));background:rgba(8,12,18,.88);backdrop-filter:blur(10px);color:#e8eef5;transition:border-color .15s,box-shadow .15s}
-  @media(max-width:820px){.receiver-footer{flex-wrap:wrap}.dw-search{flex-basis:260px;width:min(260px,42vw);min-width:160px}.dws-field{height:32px}}
+  /* The dock spans the bottom row; place() (below) measures the free gap between the
+     keyboard hints on the left and the exit / settings / Subscribe cluster on the right
+     and centres the field inside it, so it never overlaps either side. */
+  .dw-search{position:absolute;z-index:9;left:0;right:0;top:auto;bottom:14px;height:38px;pointer-events:none;--dws-left:50%;--dws-w:440px}
+  .dws-field{pointer-events:auto;position:absolute;left:var(--dws-left);top:0;transform:translateX(-50%);display:flex;align-items:center;gap:8px;width:var(--dws-w);max-width:440px;height:38px;padding:0 10px 0 12px;border-radius:999px;border:1px solid rgb(var(--n5,70 85 105));background:rgba(8,12,18,.88);backdrop-filter:blur(10px);color:#e8eef5;transition:border-color .15s,box-shadow .15s}
   .dws-field:focus-within{border-color:rgb(var(--ar,29 180 234));box-shadow:0 0 0 3px rgba(var(--ar,29,180,234),.25)}
   .dws-field svg{flex:none;width:18px;height:18px;fill:none;stroke:#9fb0c3;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .dws-field input{flex:1;min-width:0;height:100%;padding:0;border:0;outline:0;background:transparent;color:inherit;font:600 14px/1 inherit;font-family:inherit}
@@ -56,22 +52,6 @@
     '</div>' +
     '<div class="dws-panel" id="dwSearchPanel" role="listbox" aria-label="Search results" hidden></div>';
   land.appendChild(box);
-
-  // The Exit/Power control is created by the main receiver script after this
-  // file loads. Move the search into the footer immediately before that control
-  // once it exists, keeping it alongside (not over) the footer buttons.
-  const dockSearch = () => {
-    const power = document.getElementById('dwPowerOpen');
-    const footer = power && power.closest('.receiver-footer');
-    if (footer && box.parentElement === land) footer.insertBefore(box, power);
-  };
-  const dockObserver = new MutationObserver(() => {
-    const power = document.getElementById('dwPowerOpen');
-    const footer = power && power.closest('.receiver-footer');
-    if (footer && box.parentElement !== footer) footer.insertBefore(box, power);
-  });
-  dockObserver.observe(land, { childList: true, subtree: true });
-  dockSearch();
 
   const input = document.getElementById('dwSearchInput');
   const clearBtn = document.getElementById('dwSearchClear');
@@ -199,7 +179,67 @@
     if (e.key === '/' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) { e.preventDefault(); input.focus(); input.select(); }
   });
 
+
+  /* Centre the search field in the free gap of the bottom row. */
+  function place() {
+    const W = land.clientWidth;
+    // Phones / narrow screens keep the original centred dock.
+    if (W <= 820) {
+      box.style.setProperty('--dws-w', 'min(440px,' + Math.max(0, W - 32) + 'px)');
+      box.style.setProperty('--dws-left', '50%');
+      box.style.bottom = '';
+      const h = land.querySelector('.home-hint'); if (h) h.style.visibility = '';
+      return;
+    }
+    const hint = land.querySelector('.home-hint');
+    const foot = land.querySelector('.receiver-footer');
+    const lr = land.getBoundingClientRect();
+    const hintShown = !!hint && getComputedStyle(hint).display !== 'none';
+    let left = 24, right = W - 24;
+    if (hintShown) {
+      let hr = 0;
+      hint.querySelectorAll('span').forEach(sp => { hr = Math.max(hr, sp.getBoundingClientRect().right - lr.left); });
+      if (hr) left = hr;
+    }
+    if (foot && getComputedStyle(foot).display === 'flex') {
+      let fl = Infinity;
+      Array.from(foot.children).forEach(c => {
+        if (c.hidden || getComputedStyle(c).display === 'none') return;
+        const r = c.getBoundingClientRect();
+        if (r.width) fl = Math.min(fl, r.left - lr.left);
+      });
+      if (isFinite(fl)) right = fl;
+    }
+    // Narrow windows: the keyboard hints are the least important item, so drop them
+    // rather than letting the bar overlap them.
+    if (hintShown && right - left < 260) {
+      hint.style.visibility = 'hidden';
+      left = 24;
+    } else if (hint) {
+      hint.style.visibility = '';
+    }
+    const gap = Math.max(0, right - left);
+    const w = Math.max(160, Math.min(440, gap - 32));
+    const centre = gap >= 192 ? left + gap / 2 : W / 2;
+    box.style.setProperty('--dws-w', w + 'px');
+    box.style.setProperty('--dws-left', Math.round(centre) + 'px');
+    // Line the bar up with the middle of the footer row.
+    if (foot) {
+      const fr = foot.getBoundingClientRect();
+      if (fr.height) {
+        const mid = fr.top + fr.height / 2 - lr.top;
+        box.style.bottom = Math.max(4, Math.round(land.clientHeight - mid - 19)) + 'px';
+      }
+    }
+  }
+  window.addEventListener('resize', place);
+  window.addEventListener('load', place);
+  [0, 300, 1200, 3000].forEach(t => setTimeout(place, t));   // the footer buttons are added late by other scripts
+  if (window.ResizeObserver) { const ro = new ResizeObserver(place); ro.observe(land); const f = land.querySelector('.receiver-footer'); if (f) ro.observe(f); }
+  if (window.MutationObserver) { const f = land.querySelector('.receiver-footer'); if (f) new MutationObserver(place).observe(f, { childList: true, subtree: true }); }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
+
   /* Click outside closes the list; leaving the home screen resets the bar. */
   document.addEventListener('click', e => { if (!box.contains(e.target)) { token++; panel.hidden = true; } });
-  window.addEventListener('hashchange', () => { if (location.hash && location.hash !== '#landing') reset();  });
+  window.addEventListener('hashchange', () => { if (location.hash && location.hash !== '#landing') reset(); setTimeout(place, 80); });
 })();
