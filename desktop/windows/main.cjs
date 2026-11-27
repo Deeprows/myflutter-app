@@ -224,7 +224,7 @@ let lastTap = 0;
 ipcMain.handle('embed:tap', (event, fx, fy) => {
   if (!trusted(event) || !mainWin || mainWin.isDestroyed()) return false;
   const now = Date.now();
-  if (now - lastTap < 250) return false;
+  if (now - lastTap < 90) return false;
   lastTap = now;
   fx = Number(fx); fy = Number(fy);
   if (!Number.isFinite(fx) || !Number.isFinite(fy)) return false;
