@@ -254,10 +254,10 @@ Future<void> showCastOptions(
     case 'receiver':
       await sendToReceiver(context, target);
     case 'mirror':
-      if (!await PremiumGate.allowDecoder(context) || !context.mounted) return;
+      if (!await PremiumGate.allowCast(context) || !context.mounted) return;
       await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => const DecoderMirrorPage()));
     default:
-      if (!await PremiumGate.allowDecoder(context) || !context.mounted) return;
+      if (!await PremiumGate.allowCast(context) || !context.mounted) return;
       await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => const DecoderRemotePage()));
   }
 }
