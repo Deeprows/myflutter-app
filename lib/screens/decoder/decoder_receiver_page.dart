@@ -74,6 +74,26 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     }
   }
 
+  Widget _contentShortcut(IconData icon, String label, String command, {bool danger = false}) => InkWell(
+    onTap: () => _key(command),
+    borderRadius: BorderRadius.circular(13),
+    child: Container(
+      constraints: const BoxConstraints(minHeight: 68),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
+      decoration: BoxDecoration(
+        color: danger ? const Color(0x22F0445E) : Ui.card,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: danger ? const Color(0x66F0445E) : Ui.line),
+      ),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(icon, size: 21, color: danger ? const Color(0xFFFF7185) : Ui.red),
+        const SizedBox(height: 5),
+        FittedBox(fit: BoxFit.scaleDown, child: Text(label,
+          maxLines: 1, style: TextStyle(color: Ui.text, fontSize: 10, fontWeight: FontWeight.w700))),
+      ]),
+    ),
+  );
+
   Widget _remotePanel() {
     final playing = m.receiverPlayerOpen;
     final mirror = m.receiverMode == 'mirror';
@@ -87,6 +107,31 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
           style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900, fontSize: 15))),
       ]),
       const SizedBox(height: 14),
+      Text('QUICK ACCESS', style: TextStyle(color: Ui.muted, fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 9),
+      GridView.count(
+        crossAxisCount: 4,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+        childAspectRatio: 1.12,
+        children: [
+          _contentShortcut(Icons.movie_creation_outlined, 'Movies', 'movies'),
+          _contentShortcut(Icons.live_tv_rounded, 'TV channels', 'tv'),
+          _contentShortcut(Icons.sports_soccer_rounded, 'Live football', 'football'),
+          _contentShortcut(Icons.qr_code_2_rounded, 'Connect app', 'connect'),
+          _contentShortcut(Icons.download_rounded, 'Download apps', 'downloads'),
+          _contentShortcut(Icons.power_settings_new_rounded, 'Off', 'off', danger: true),
+          _contentShortcut(Icons.settings_rounded, 'Settings', 'settings'),
+          _contentShortcut(Icons.workspace_premium_rounded, 'Subscribe', 'subscribe'),
+        ],
+      ),
+      const SizedBox(height: 16),
+      Divider(color: Ui.line.withValues(alpha: .8), height: 1),
+      const SizedBox(height: 12),
+      Text('REMOTE CONTROLS', style: TextStyle(color: Ui.muted, fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 10),
       // Navigation pad: moves around the TV screens and acts as seek / volume while a video plays.
       Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
         _RemoteButton(icon: Icons.keyboard_arrow_up_rounded, label: 'Up', onTap: () => _key('up'), width: 84),
@@ -178,7 +223,7 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     appBar: AppBar(backgroundColor: Ui.panel,
       title: const Text('Connect to receiver', style: TextStyle(fontWeight: FontWeight.w900))),
     body: ListenableBuilder(listenable: m, builder: (context, _) => ListView(
-      padding: const EdgeInsets.all(16), children: [
+      padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).viewPadding.bottom + 28), children: [
         decoderPanel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Icon(Icons.connected_tv_rounded, size: 29, color: Ui.red),
