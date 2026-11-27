@@ -2604,7 +2604,7 @@ ${reqHtml}
 <p><input name="note" placeholder="Note (optional, e.g. a name)" style="${box}"></p>
 <p><button style="${box};font-size:16px">Make legacy ad-free token(s)</button></p>
 </form>
-<h3>Grant Premium to an ID</h3>
+<h3>Grant / top up Premium</h3>
 <form method="post">
 <input type="hidden" name="token" value="${tk}"><input type="hidden" name="action" value="grant">
 <p><input name="install_id" placeholder="Paste the person's ID" style="${box}"></p>
