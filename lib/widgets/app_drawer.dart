@@ -13,6 +13,7 @@ import '../screens/fan_profile_screen.dart';
 import '../screens/fan_widgets.dart';
 import '../screens/guide_screen.dart';
 import '../screens/about_screen.dart';
+import '../screens/admin_hub_screen.dart';
 import '../screens/legal_screen.dart';
 import '../screens/content_shortcut_screen.dart';
 import '../screens/highlights_screen.dart';
@@ -544,6 +545,12 @@ class _FootboliveDrawerState extends State<FootboliveDrawer> {
                         title: 'Cricket Score'.tr,
                       ),
                     ),
+                    if (user?.email.toLowerCase() == 'deeprows@gmail.com')
+                      _row(
+                        Icons.admin_panel_settings_outlined,
+                        'Admin'.tr,
+                        (c) => _push(c, const AdminHubScreen()),
+                      ),
                     _heading('Tools'.tr),
                     _row(
                       Icons.link_rounded,
