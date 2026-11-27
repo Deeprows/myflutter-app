@@ -855,6 +855,13 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     function go(n){if(routeName()===n){route();return;}location.hash=n;}
     window.addEventListener('hashchange',route);
     document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
+    /* Windows EXE blocks target=_blank windows; route Learn with AI WhatsApp CTAs through the trusted desktop bridge. */
+    document.querySelectorAll('#learnView .learn-cta[href]').forEach(a=>a.addEventListener('click',e=>{
+      if(desktop&&typeof desktop.openExternal==='function'){
+        e.preventDefault();
+        try{Promise.resolve(desktop.openExternal(a.href)).catch(()=>{});}catch(_){}
+      }
+    }));
     $('playerBack').addEventListener('click',closePlayer);
     document.addEventListener('keydown',e=>{if((e.key==='Escape'||e.key==='Backspace')&&panel.style.display==='block'&&['movies','tv'].includes(document.body.dataset.mode)&&!/input|textarea|select/i.test(e.target.tagName)){e.preventDefault();closePlayer();}});
     window.deeprowssGo=go;window.deeprowssShowJoin=()=>go('connect');window.deeprowssShowLibrary=()=>go('movies');
