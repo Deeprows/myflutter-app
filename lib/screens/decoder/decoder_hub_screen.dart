@@ -117,6 +117,7 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
       referer: c.referer,
       userAgent: c.userAgent,
     );
+    if (!await PremiumGate.allowTvChannel(ctx, c.name) || !ctx.mounted) return;
     return chooseConnectivity(ctx, target, onWatchInApp: () => openChannelPlayer(ctx, c));
   }
 
@@ -485,7 +486,10 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
             Icons.sports_soccer_rounded,
             'Live Events',
             'Cast live matches with a main and a backup stream.',
-            () => _open(const DecoderFixturesPage(), 'fixtures'),
+            () async {
+              if (!await PremiumGate.allowLiveEvents(context) || !mounted) return;
+              await _open(const DecoderFixturesPage(), 'fixtures');
+            },
             badge: 'LIVE',
           ),
           // IntrinsicHeight: a stretch Row inside a ListView has unbounded height
@@ -512,7 +516,10 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
           ),
           _groupCard([
             _toolRow(Icons.cast_rounded, 'Cast to TV / Kodi', 'Find compatible screens on your Wi-Fi',
-                () => _open(const DecoderCastPage(), 'cast')),
+                () async {
+                  if (!await PremiumGate.allowCast(context) || !mounted) return;
+                  await _open(const DecoderCastPage(), 'cast');
+                }),
             _toolRow(Icons.screen_share_rounded, 'Screen mirroring', 'Mirror your phone screen',
                 () => _open(const DecoderMirrorPage(), 'mirror')),
             _toolRow(Icons.web_rounded, 'Send to receiver page', 'Use a browser screen as your receiver', _openReceiver),
