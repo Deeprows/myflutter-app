@@ -120,7 +120,7 @@ jobs:
             -archivePath "$RUNNER_TEMP/Deeprowss.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
             -exportOptionsPlist ExportOptions.plist
-          test -f "$RUNNER_TEMP/export/Deeprowss.ipa" || find "$RUNNER_TEMP/export" -name '*.ipa' -maxdepth 2 -print -quit | grep -q .
+          test -f "$RUNNER_TEMP/export/Deeprowss.ipa" || find "$RUNNER_TEMP/export" -name '*.ipa' -print -quit | grep -q .
 
       - name: Upload build to TestFlight
         env:
@@ -139,7 +139,7 @@ jobs:
                   "in_house": False
               }, f)
           PY
-          IPA=$(find "$RUNNER_TEMP/export" -maxdepth 2 -name '*.ipa' -print -quit)
+          IPA=$(find "$RUNNER_TEMP/export" -name '*.ipa' -print -quit)
           test -n "$IPA"
           gem install fastlane --no-document
           fastlane pilot upload --ipa "$IPA" \
