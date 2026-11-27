@@ -55,6 +55,7 @@ class _PlansScreenState extends State<PlansScreen> {
   TokenState _tokenState = const TokenState('unknown');
   bool _tokenChecking = true;
   String? _tokenError;
+  String? _manualTokenError;
   Timer? _poll;
 
   bool get _startup => widget.onContinue != null;
@@ -158,13 +159,13 @@ class _PlansScreenState extends State<PlansScreen> {
     if (_busy) return;
     setState(() {
       _busy = true;
-      _tokenError = null;
+      _manualTokenError = null;
     });
     final err = await _sub.redeemToken(token);
     if (!mounted) return;
     setState(() {
       _busy = false;
-      _tokenError = err;
+      _manualTokenError = err;
     });
     if (err == null) {
       _manualToken.clear();
@@ -796,9 +797,9 @@ class _PlansScreenState extends State<PlansScreen> {
                     borderRadius: BorderRadius.circular(24)),
               ),
             ),
-            if (_tokenError != null) ...[
+            if (_manualTokenError != null) ...[
               const SizedBox(height: 10),
-              Text(_tokenError!,
+              Text(_manualTokenError!,
                   style: TextStyle(color: Ui.redSoft, fontSize: 13, height: 1.3)),
             ],
           ],
