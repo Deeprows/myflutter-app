@@ -588,6 +588,31 @@ class SubscriptionService extends ChangeNotifier {
     }
   }
 
+  /// Smart Decoder movie quota: three distinct titles per UTC day after trial.
+  Future<MovieAccessResult> consumeDecoderMovieAccess(String movieKey, {String action = 'play'}) async {
+    if (!enabled || isPremium) return const MovieAccessResult(allowed: true, premium: true, remaining: 3);
+    try {
+      final id = accountId ?? await InstallId.get();
+      final uri = _uri('/sub/decoder/movie-access');
+      final payload = jsonEncode({'install_id': id, 'movie_key': movieKey, 'action': action});
+      final r = accountId == null
+          ? await http.post(uri, headers: {'content-type': 'application/json'}, body: payload)
+          : await _signed((h) => http.post(uri, headers: h, body: payload), json: true);
+      if (r == null || r.statusCode != 200) {
+        return const MovieAccessResult(allowed: false, verified: false);
+      }
+      final j = jsonDecode(r.body) as Map<String, dynamic>;
+      return MovieAccessResult(
+        allowed: j['allowed'] == true,
+        premium: j['premium'] == true,
+        used: (j['used'] as num?)?.toInt() ?? 0,
+        remaining: (j['remaining'] as num?)?.toInt() ?? 0,
+      );
+    } catch (_) {
+      return const MovieAccessResult(allowed: false, verified: false);
+    }
+  }
+
   /// Consumes one of the five free cast attempts. Premium users are unlimited.
   /// The Worker stores usage against the signed-in account or anonymous install ID.
   Future<CastAccessResult> consumeCastAccess({bool consume = false}) async {
