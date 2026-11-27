@@ -172,7 +172,17 @@
     const r = await api('/receiver/decoder/validate', 'POST', { code: n });
     return r.ok && r.data.valid === true ? r.data : { valid: false };
   }
+  // True while this device already has an active (unexpired) Premium subscription.
+  function premiumActiveNow() {
+    return !!(unlocked && (!codeExpiry || Date.now() + serverOffset < codeExpiry));
+  }
   async function unlock(raw, messageEl) {
+    // An account that already has active Premium must not be re-activated with
+    // another Decoder number. Activation is only allowed once it has expired.
+    if (premiumActiveNow()) {
+      if (messageEl) { messageEl.classList.remove('err'); messageEl.textContent = 'Premium is already active on this device.'; }
+      return false;
+    }
     const n = digits(raw);
     if (!/^\d{10}$/.test(n)) {
       if (messageEl) { messageEl.classList.add('err'); messageEl.textContent = 'Enter the 10-digit Decoder number.'; }
@@ -286,6 +296,8 @@
 .gate-code-row{display:flex;gap:9px;align-items:stretch}
 .gate-code-row input{flex:1 1 auto;min-width:0}
 .gate-code-row .gate-verify{flex:0 0 auto;width:auto;white-space:nowrap;margin:0}
+.gate-code.locked input,.gate-code.locked .gate-verify{opacity:.45;cursor:not-allowed;pointer-events:none;filter:grayscale(.6)}
+.gate-code.locked .gate-verify:hover{transform:none;box-shadow:none}
 .gate-code-msg{margin-top:10px;color:#aebbd0;font-size:12.5px;line-height:1.5}
 .gate-code-msg.err{color:#ff8a9a;font-weight:700}
 .gate-code-msg.ok{color:#5ee9a0;font-weight:700}
@@ -539,6 +551,10 @@ html.tv .gate-left,html.desktop-app .gate-left{border-bottom:0;border-right:1px 
     }
     signalPremiumState();
     render();
+    // If the subscription just expired (or just became active) re-draw the
+    // activation box so the Decoder form is enabled/disabled correctly.
+    const codeBox = $('gateCode');
+    if (codeBox && codeBox.classList.contains('locked') !== premiumActiveNow()) fillModal();
   }
   const CURRENCIES = [['NGN','Nigeria'],['EGP','Egypt'],['USD','United States'],['GBP','United Kingdom'],['GHS','Ghana'],['ZAR','South Africa'],['KES','Kenya'],['UGX','Uganda'],['TZS','Tanzania'],['AED','UAE'],['SAR','Saudi Arabia'],['INR','India'],['CAD','Canada'],['AUD','Australia']];
   function bestValueDays() {
@@ -573,7 +589,8 @@ html.tv .gate-left,html.desktop-app .gate-left{border-bottom:0;border-right:1px 
     return 'device';
   }
   function modalMarkup() {
-    const active = !!(unlocked && (!codeExpiry || Date.now() + serverOffset < codeExpiry));
+    const active = premiumActiveNow();
+    const lock = active ? ' disabled aria-disabled="true"' : '';
     return '<div class="gate-pop">' +
       '<button type="button" class="gate-x" id="gateX" aria-label="Close">✕</button>' +
       '<div class="gate-layout">' +
@@ -582,11 +599,11 @@ html.tv .gate-left,html.desktop-app .gate-left{border-bottom:0;border-right:1px 
       '<h2>Deeprowss Premium</h2>' +
       '<p>Enjoy unlimited live TV, movies, alternate players, downloads and Smart Decoder access. Visitors get 10 TV channels each day and 3 free movie titles.</p>' +
       '<ul class="gate-features"><li>Unlimited live TV channels</li><li>No pop-ups</li><li>Unlimited movies and downloads</li><li>Smart Decoder access</li></ul>' +
-      '<div class="gate-code" id="gateCode">' +
+      '<div class="gate-code' + (active ? ' locked' : '') + '" id="gateCode">' +
         '<div class="gate-code-head"><span aria-hidden="true">🔑</span><b>Activate with your Decoder number</b></div>' +
         '<p class="gate-code-sub">Already have Premium? Enter your 10-digit Decoder number to activate it on this ' + escapeHtml(deviceName()) + '. Anyone with an active Decoder number can use Premium on the Windows app, Android TV, LG TV and the Deeprowss website.</p>' +
         '<label class="gate-field" for="gateModalCode">Decoder number</label>' +
-        '<div class="gate-code-row"><input id="gateModalCode" type="text" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="e.g. 1234 567 890" aria-label="Decoder number"><button type="button" class="gate-verify" id="gateModalUnlock">Activate Premium</button></div>' +
+        '<div class="gate-code-row"><input id="gateModalCode" type="text" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="e.g. 1234 567 890" aria-label="Decoder number"' + lock + '><button type="button" class="gate-verify" id="gateModalUnlock"' + lock + '>Activate Premium</button></div>' +
         '<div class="gate-code-msg" id="gateCodeMsg" role="status" aria-live="polite">' + (active ? 'Premium is already active on this device.' : 'Find your Decoder number in your Premium account in the Deeprowss phone app.') + '</div>' +
       '</div>' +
       statusPanelMarkup(active, codeExpiry, code) +
@@ -633,6 +650,7 @@ html.tv .gate-left,html.desktop-app .gate-left{border-bottom:0;border-right:1px 
     codeInput.addEventListener('input', () => { const v = pretty(codeInput.value); if (v !== codeInput.value) codeInput.value = v; });
     const codeMsg = $('gateCodeMsg');
     const activate = async () => {
+      if (premiumActiveNow()) return;
       codeMsg.classList.remove('err', 'ok');
       const btn = $('gateModalUnlock');
       btn.disabled = true;
