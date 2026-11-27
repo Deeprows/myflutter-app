@@ -641,7 +641,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     sessions.push(item); while(sessions.length>8)sessions.shift();
     // Stop playback without invoking closePlayer(), which deliberately clears media.
     const v=$('screen'); if(v&&!v.paused){item.position=Number(v.currentTime)||item.position||0;v.pause();}
-    if(item.embed){try{const f=item.kind==='tv'?$ ('tvFrame'):$('movieFrame');f?.contentWindow?.postMessage({type:'pause'},'*');}catch(_){}}
+    if(item.embed){try{if(window.deeprowssPauseIframe)window.deeprowssPauseIframe();}catch(_){}}
     p.style.display='none'; document.body.classList.remove('fixture-streaming');
     panel.hidden=true; render();
     window.dispatchEvent(new CustomEvent('deeprowss-minimised-change',{detail:{count:sessions.length}}));
@@ -782,6 +782,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
       try{frame.contentWindow.postMessage({type:'player:command',command,value},origin);frame.contentWindow.postMessage({method:command==='stop'?'unload':command,value},origin);frame.contentWindow.postMessage({command,value},origin);}catch(_){}
       say('Remote command sent. Some embed providers do not expose external controls.');
     }
+    window.deeprowssPauseIframe = () => { iframePaused=true; iframeCommand('pause'); reportState(); };
     /* ---- phone remote: playback, volume, mute and TV-style navigation ---- */
     let iframePaused=false,iframeMuted=false,iframeVol=100,stateTimer=0,lastView='';
     const curView=()=>document.body.dataset.view||'landing';
