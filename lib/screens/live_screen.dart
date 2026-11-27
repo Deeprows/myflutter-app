@@ -418,6 +418,8 @@ class _LiveScreenState extends State<LiveScreen> {
     final ended = _fixtures.length - live - upcoming;
 
     final items = _items(now);
+    // Keep the final fixture/footer clear of Android's gesture and 3-button navigation area.
+    final bottomSafeArea = MediaQuery.of(context).viewPadding.bottom;
     // Back to where the user was scrolled, once the match list is there.
     if (_fixtures.isNotEmpty) {
       _scrollMemory.restoreOnce(() => _scroll, () => mounted);
@@ -507,11 +509,11 @@ class _LiveScreenState extends State<LiveScreen> {
             )
           else
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
+              padding: EdgeInsets.fromLTRB(
                 14,
                 2,
                 14,
-                18,
+                bottomSafeArea + 24,
               ),
               sliver: SliverList(
                 delegate: SliverChildListDelegate(items),
