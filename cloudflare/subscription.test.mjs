@@ -328,7 +328,7 @@ for (let n = 1; n <= 6; n++) {
   assert.equal(j.allowed, true);
 }
 for (let n = 1; n <= 6; n++) {
-  j = await (await post("/sub/movie-access", {
+  j = await (await post("/sub/decoder/movie-access", {
     install_id: DECODER_TRIAL_USER, movie_key: "trial-film:" + n
   })).json();
   assert.equal(j.allowed, true);
