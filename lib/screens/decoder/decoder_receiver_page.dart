@@ -225,9 +225,8 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     final canFull = (canPlay || mirror || pc) && !m.receiverIsTv;
     final vol = m.receiverMuted ? 0 : m.receiverVolume;
 
-    return Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 320), child: Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+    return Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 296), child: Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
         gradient: LinearGradient(
@@ -241,13 +240,17 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
       child: Column(children: [
         // ── top row: power · screen status · menu ──
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          _Round(icon: Icons.power_settings_new_rounded, size: 42, tone: _Tone.danger, onPress: _confirmOff, lock: _touching, semantics: 'Power off'),
+          _Round(icon: Icons.power_settings_new_rounded, size: 38, tone: _Tone.danger, onPress: _confirmOff, lock: _touching, semantics: 'Power off'),
           const SizedBox(width: 8),
-          Expanded(child: _statusChip(playing)),
+          Expanded(child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => decoderToast(context, '$_hint Tip: drag on OK to move a cursor, tap OK to click, double-tap OK to double-click.'),
+            child: _statusChip(playing),
+          )),
           const SizedBox(width: 8),
-          _Round(icon: Icons.settings_rounded, size: 42, onPress: () => _key('menu'), lock: _touching, semantics: 'Settings menu'),
+          _Round(icon: Icons.settings_rounded, size: 38, onPress: () => _key('menu'), lock: _touching, semantics: 'Settings menu'),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
 
         // ── navigation wheel ──
         _DPad(
@@ -255,7 +258,7 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
           onCursor: (dx, dy) => m.sendRemoteCommand('cursor', text: '${dx.toStringAsFixed(1)},${dy.toStringAsFixed(1)}'),
           lock: _touching,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
 
         // ── back · home · full screen ──
         Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
@@ -268,7 +271,7 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
             lock: _touching,
           ),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
 
         // ── volume · mute / keyboard · page ──
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, crossAxisAlignment: CrossAxisAlignment.center, children: [
@@ -288,10 +291,10 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
               label: m.receiverMuted ? 'Unmute' : 'Mute',
               onPress: playing ? () => m.toggleReceiverMute() : null,
               lock: _touching,
-              size: 42,
+              size: 38,
             ),
             const SizedBox(height: 8),
-            _LabeledRound(icon: Icons.keyboard_alt_outlined, label: 'Keyboard', onPress: _openKeyboard, lock: _touching, size: 42),
+            _LabeledRound(icon: Icons.keyboard_alt_outlined, label: 'Keyboard', onPress: _openKeyboard, lock: _touching, size: 38),
           ]),
           _Rocker(
             label: 'PAGE',
@@ -304,7 +307,7 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
             lock: _touching,
           ),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
 
         // ── transport ──
         Container(
@@ -315,7 +318,7 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
             border: Border.all(color: Ui.line),
           ),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-            _Round(icon: Icons.replay_10_rounded, size: 42, onPress: canPlay ? () => _key('rewind') : null, lock: _touching, semantics: 'Back 10 seconds'),
+            _Round(icon: Icons.replay_10_rounded, size: 38, onPress: canPlay ? () => _key('rewind') : null, lock: _touching, semantics: 'Back 10 seconds'),
             _Round(
               icon: m.receiverPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
               size: 52,
@@ -325,8 +328,8 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
               lock: _touching,
               semantics: m.receiverPlaying ? 'Pause' : 'Play',
             ),
-            _Round(icon: Icons.forward_10_rounded, size: 42, onPress: canPlay ? () => _key('forward') : null, lock: _touching, semantics: 'Forward 10 seconds'),
-            _Round(icon: Icons.stop_rounded, size: 42, onPress: playing ? () => m.stopPlayback() : null, lock: _touching, semantics: 'Stop'),
+            _Round(icon: Icons.forward_10_rounded, size: 38, onPress: canPlay ? () => _key('forward') : null, lock: _touching, semantics: 'Forward 10 seconds'),
+            _Round(icon: Icons.stop_rounded, size: 38, onPress: playing ? () => m.stopPlayback() : null, lock: _touching, semantics: 'Stop'),
           ]),
         ),
         if (m.receiverHasBackup) ...[
@@ -340,7 +343,7 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
             },
           ),
         ],
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
 
         // ── app shortcuts ──
         Align(alignment: Alignment.centerLeft, child: Text('QUICK ACCESS',
@@ -350,9 +353,9 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
           crossAxisCount: 3,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 6,
-          crossAxisSpacing: 6,
-          childAspectRatio: 1.75,
+          mainAxisSpacing: 5,
+          crossAxisSpacing: 5,
+          childAspectRatio: 2.1,
           children: [
             _AppTile(icon: Icons.movie_creation_outlined, label: 'Movies', color: const Color(0xFFE5484D), onPress: () => _key('movies'), lock: _touching),
             _AppTile(icon: Icons.live_tv_rounded, label: 'TV channels', color: const Color(0xFF3E8BFF), onPress: () => _key('tv'), lock: _touching),
@@ -417,19 +420,60 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
       child: Text(m.error!, style: TextStyle(color: Ui.red, fontSize: 12))),
   ]));
 
+  /// One-line version of the connection card, used while the remote is shown
+  /// so the whole remote fits on screen without scrolling.
+  Widget _compactConnectionCard() => Container(
+    padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+    decoration: BoxDecoration(
+      color: Ui.card,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: Ui.line),
+    ),
+    child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Icon(Icons.connected_tv_rounded, size: 22, color: Ui.red),
+        const SizedBox(width: 8),
+        Expanded(child: Text(m.status, maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 13))),
+        Icon(Icons.circle, size: 9, color: m.connected ? Colors.green : Ui.muted),
+        const SizedBox(width: 4),
+        TextButton(
+          style: TextButton.styleFrom(visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 10)),
+          onPressed: () async { await m.stop(); },
+          child: const Text('Disconnect', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
+        ),
+      ]),
+      if (m.error != null) Padding(padding: const EdgeInsets.only(bottom: 4),
+        child: Text(m.error!, style: TextStyle(color: Ui.red, fontSize: 11))),
+    ]),
+  );
+
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Ui.bg,
     appBar: AppBar(backgroundColor: Ui.panel,
       title: const Text('Connect to receiver', style: TextStyle(fontWeight: FontWeight.w900))),
-    body: ListenableBuilder(listenable: m, builder: (context, _) => ValueListenableBuilder<int>(
+    body: ListenableBuilder(listenable: m, builder: (context, _) => m.running
+      // Connected: no scrolling. The remote is scaled down to fit the free height.
+      ? SafeArea(child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          child: Column(children: [
+            _compactConnectionCard(),
+            const SizedBox(height: 10),
+            Expanded(child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.topCenter,
+              child: SizedBox(width: 296, child: _remote()),
+            )),
+          ]),
+        ))
+      : ValueListenableBuilder<int>(
       valueListenable: _touching,
       builder: (context, touching, _) => ListView(
         physics: touching > 0 ? const NeverScrollableScrollPhysics() : null,
         padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).viewPadding.bottom + 28),
         children: [
           _connectionCard(),
-          if (m.running) _remote(),
           decoderPanel(Text('The QR code pairs your phone with the TV. Video and audio travel directly between devices using WebRTC; the pairing service only relays connection messages.',
             style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5))),
         ],
@@ -906,7 +950,7 @@ class _DPadState extends State<_DPad> {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) {
-    final size = math.min(c.maxWidth, 216.0);
+    final size = math.min(c.maxWidth, 180.0);
     return Center(
       child: Semantics(
         label: 'Navigation wheel. Up, down, left, right and OK',
