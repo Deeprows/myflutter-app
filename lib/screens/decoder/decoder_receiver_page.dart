@@ -223,13 +223,16 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
       ),
       child: Column(children: [
         // ── top row: power · screen status · menu ──
-        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          _Round(icon: Icons.power_settings_new_rounded, size: 38, tone: _Tone.danger, onPress: _confirmOff, lock: _touching, semantics: 'Power off'),
-          const SizedBox(width: 8),
-          Expanded(child: _statusChip(playing)),
-          const SizedBox(width: 8),
-          _Round(icon: Icons.settings_rounded, size: 38, onPress: () => _key('menu'), lock: _touching, semantics: 'Settings menu'),
-        ]),
+        SizedBox(
+          height: _topRowHeight,
+          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            _Round(icon: Icons.power_settings_new_rounded, size: 38, tone: _Tone.danger, onPress: _confirmOff, lock: _touching, semantics: 'Power off'),
+            const SizedBox(width: 8),
+            Expanded(child: _statusChip(playing)),
+            const SizedBox(width: 8),
+            _Round(icon: Icons.settings_rounded, size: 38, onPress: () => _key('menu'), lock: _touching, semantics: 'Settings menu'),
+          ]),
+        ),
         const SizedBox(height: 8),
 
         // ── navigation wheel ──
@@ -348,8 +351,20 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     );
   }
 
+  /// Fixed-height status chip. The title always stays on ONE line: it shrinks
+  /// to fit the space it is given and is abbreviated with an ellipsis when it
+  /// is extremely long, so it can never push the navigation wheel smaller.
+  static const double _topRowHeight = 40;
+
+  String _abbrev(String s, {int max = 40}) {
+    final t = s.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (t.length <= max) return t;
+    return '${t.substring(0, max - 1).trimRight()}…';
+  }
+
   Widget _statusChip(bool playing) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    height: _topRowHeight,
+    padding: const EdgeInsets.symmetric(horizontal: 10),
     decoration: BoxDecoration(
       color: Ui.bg.withValues(alpha: .5),
       borderRadius: BorderRadius.circular(16),
@@ -358,8 +373,19 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     child: Row(children: [
       Icon(playing ? Icons.play_circle_fill_rounded : Icons.settings_remote_rounded, size: 18, color: Ui.red),
       const SizedBox(width: 6),
-      Expanded(child: Text(_screenLabel, maxLines: 2, overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 11, height: 1.15))),
+      Expanded(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _abbrev(_screenLabel),
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 12.5, height: 1.1),
+          ),
+        ),
+      ),
     ]),
   );
 
