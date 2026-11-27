@@ -612,6 +612,15 @@ class _ShellScreenState extends State<ShellScreen> with WidgetsBindingObserver {
           mainAxisSize: MainAxisSize.min,
           children: [
             const MiniPlayer(),
+            // Live Events page has a single tab and no bottom bar. The
+            // Scaffold hands the phone's navigation-bar inset to the bottom
+            // bar slot (the body's SafeArea sees 0), so with no NavigationBar
+            // nothing used it and the page ran under the system buttons.
+            if (widget.liveOnly)
+              Container(
+                height: MediaQuery.of(context).viewPadding.bottom,
+                color: Ui.isLight ? Ui.panel : Ui.bg,
+              ),
             // Live Events page has a single tab: no bottom bar needed.
             if (!widget.liveOnly)
             DecoratedBox(
