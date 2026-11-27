@@ -268,13 +268,14 @@ assert.equal(j.started_at, trialStarted, "reopening Decoder must not restart the
 
 // An expired trial falls back to four distinct TV channels and three movies per UTC day.
 const EXPIRED_DECODER = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
+const expiredTrialStarted = Date.now() - 4 * 86400000;
 sqlite.prepare("INSERT INTO decoder_trials (owner_id, started_at) VALUES (?, ?)")
-  .run(EXPIRED_DECODER, Date.now() - 4 * 86400000);
+  .run(EXPIRED_DECODER, expiredTrialStarted);
 j = await (await post("/sub/decoder/access", {
   install_id: EXPIRED_DECODER, start_trial: true
 })).json();
 assert.equal(j.trial_active, false);
-assert.equal(j.started_at, Date.now() - 4 * 86400000);
+assert.equal(j.started_at, expiredTrialStarted);
 for (let n = 1; n <= 4; n++) {
   j = await (await post("/sub/tv-access", {
     install_id: EXPIRED_DECODER, channel_key: "channel:" + n
