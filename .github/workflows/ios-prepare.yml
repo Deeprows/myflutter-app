@@ -1,0 +1,94 @@
+name: Prepare Deeprowss iOS project
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scaffold-and-verify:
+    name: Generate iOS project and verify simulator build
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate native iOS project
+        run: |
+          flutter create . --platforms=ios --project-name=footbolive --org=com.deeprows
+          flutter pub get
+
+      - name: Configure Deeprowss iOS app identity and permissions
+        run: |
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+
+          info_path = Path("ios/Runner/Info.plist")
+          with info_path.open("rb") as f:
+              info = plistlib.load(f)
+
+          info["CFBundleDisplayName"] = "Deeprowss"
+          info["NSCameraUsageDescription"] = "Deeprowss uses the camera to scan receiver QR codes and connect your devices."
+          info["NSMicrophoneUsageDescription"] = "Deeprowss uses the microphone for two-way audio during supported receiver connections."
+          info["NSPhotoLibraryUsageDescription"] = "Deeprowss needs photo library access when you choose media to share or upload."
+          info["NSPhotoLibraryAddUsageDescription"] = "Deeprowss saves files to your photo library only when you request it."
+          info["NSLocalNetworkUsageDescription"] = "Deeprowss uses your local network to discover and connect to compatible receivers."
+          info["NSBluetoothAlwaysUsageDescription"] = "Deeprowss uses Bluetooth when required to discover compatible nearby devices."
+          info["UIBackgroundModes"] = ["audio", "remote-notification"]
+          info["ITSAppUsesNonExemptEncryption"] = False
+
+          with info_path.open("wb") as f:
+              plistlib.dump(info, f, sort_keys=False)
+
+          entitlements = {
+              "aps-environment": "production"
+          }
+          ent_path = Path("ios/Runner/Runner.entitlements")
+          with ent_path.open("wb") as f:
+              plistlib.dump(entitlements, f, sort_keys=False)
+
+          project = Path("ios/Runner.xcodeproj/project.pbxproj")
+          text = project.read_text()
+          bundle_line = "PRODUCT_BUNDLE_IDENTIFIER = com.deeprows.footbolive;"
+          if bundle_line not in text:
+              raise SystemExit("Expected Deeprowss iOS bundle identifier was not generated.")
+          text = text.replace(
+              bundle_line,
+              bundle_line + "\n\t\t\t\tCODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;"
+          )
+          project.write_text(text)
+          PY
+
+      - name: Generate Deeprowss iOS splash screen and app icon
+        run: |
+          dart run flutter_native_splash:create
+          dart run flutter_launcher_icons
+
+      - name: Commit generated iOS project
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ios
+          if git diff --cached --quiet; then
+            echo "The iOS project is already up to date."
+          else
+            git commit -m "Add generated Deeprowss iOS project"
+            git push
+          fi
+
+      - name: Verify iOS simulator build
+        env:
+          FIREBASE_IOS_APP_ID: ${{ vars.FIREBASE_IOS_APP_ID }}
+          FIREBASE_IOS_API_KEY: ${{ secrets.FIREBASE_IOS_API_KEY }}
+        run: |
+          flutter build ios --simulator --no-codesign \
+            --dart-define=FIREBASE_IOS_APP_ID="$FIREBASE_IOS_APP_ID" \
+            --dart-define=FIREBASE_IOS_API_KEY="$FIREBASE_IOS_API_KEY"
