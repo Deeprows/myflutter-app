@@ -1395,6 +1395,17 @@ async function subMovieAccess(request, env) {
   if (!receiverIdOk(ownerId) || !movieKey) return json({ error: "bad movie request" }, 400);
   const expires = await expiryOf(env, ownerId);
   if (expires > Date.now()) return json({ allowed: true, premium: true, used: 0, remaining: RECEIVER_FREE_MOVIES, expires_at: expires, now: Date.now() });
+  const result = await recordMovieTrial(env, ownerId, movieKey);
+  return json({ ...result, premium: false, limit: RECEIVER_FREE_MOVIES, now: Date.now() });
+}
+
+async function subDecoderMovieAccess(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const ownerId = String(body.install_id || "");
+  const movieKey = cleanMovieKey(body.movie_key);
+  if (!receiverIdOk(ownerId) || !movieKey) return json({ error: "bad movie request" }, 400);
+  const expires = await expiryOf(env, ownerId);
+  if (expires > Date.now()) return json({ allowed: true, premium: true, used: 0, remaining: DAILY_FREE_MOVIES, expires_at: expires, now: Date.now() });
   const trial = await decoderTrialState(env, ownerId, false);
   if (trial.trial_active) {
     return json({ allowed: true, premium: false, trial: true, trial_expires_at: trial.trial_expires_at, used: 0, remaining: DAILY_FREE_MOVIES, now: Date.now() });
@@ -1503,6 +1514,7 @@ async function subscriptions(request, env, url, ctx = null) {
     path === "/sub/decoder/issue" ||
     path === "/sub/decoder/access" ||
     path === "/sub/tv-access" ||
+    path === "/sub/decoder/movie-access" ||
     path === "/sub/movie-access" ||
     path === "/sub/movie-access-guest" ||
     path === "/sub/cast-access" ||
@@ -1525,6 +1537,7 @@ async function subscriptions(request, env, url, ctx = null) {
       path === "/sub/decoder/issue" ||
       path === "/sub/decoder/access" ||
       path === "/sub/tv-access" ||
+      path === "/sub/decoder/movie-access" ||
       path === "/sub/movie-access" ||
       path === "/sub/cast-access" ||
       path === "/sub/start" ||
@@ -1575,6 +1588,9 @@ async function subscriptions(request, env, url, ctx = null) {
     }
     if (path === "/sub/movie-access" && request.method === "POST") {
       return subMovieAccess(request, env);
+    }
+    if (path === "/sub/decoder/movie-access" && request.method === "POST") {
+      return subDecoderMovieAccess(request, env);
     }
     if (path === "/sub/movie-access-guest" && request.method === "POST") {
       return subMovieAccess(request, env);
