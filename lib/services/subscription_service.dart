@@ -490,7 +490,34 @@ class SubscriptionService extends ChangeNotifier {
     try {
       final r = await _signed(
         (h) => http.post(_uri('/sub/decoder/access'), headers: h,
-            body: jsonEncode({'install_id': accountId})),
+            body: jsonEncode({'install_id': accountId, 'start_trial': true})),
+        json: true,
+      );
+      if (r == null || r.statusCode != 200) {
+        return const DecoderAccessResult(premium: false, trialActive: false, verified: false);
+      }
+      final j = jsonDecode(r.body) as Map<String, dynamic>;
+      return DecoderAccessResult(
+        premium: j['premium'] == true,
+        trialActive: j['trial_active'] == true,
+        verified: true,
+        trialExpiresAt: (j['trial_expires_at'] as num?)?.toInt() ?? 0,
+      );
+    } catch (_) {
+      return const DecoderAccessResult(premium: false, trialActive: false, verified: false);
+    }
+  }
+
+  /// Reads decoder entitlement without starting the trial. Used by the
+  /// general Movies area so opening it cannot start the Smart Decoder trial.
+  Future<DecoderAccessResult> readDecoderAccess() async {
+    if (!enabled || accountId == null) {
+      return const DecoderAccessResult(premium: false, trialActive: false, verified: false);
+    }
+    try {
+      final r = await _signed(
+        (h) => http.post(_uri('/sub/decoder/access'), headers: h,
+            body: jsonEncode({'install_id': accountId, 'start_trial': false})),
         json: true,
       );
       if (r == null || r.statusCode != 200) {
