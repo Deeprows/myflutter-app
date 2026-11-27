@@ -824,16 +824,15 @@ class _MovieSheet extends StatelessWidget {
     required this.trailerFuture, required this.similarFuture, required this.onMovieTap});
 
   Future<void> _download(BuildContext context) async {
-    // Premium only (no ad unlock): everyone else is sent to upgrade.
-    final key = '${movie.isSeries ? 'tv' : 'movie'}:${movie.tmdbId ?? movie.title.toLowerCase()}';
-    if (!await PremiumGate.allowDownload(context, key)) return;
-    if (!context.mounted) return;
     if (!movie.hasDownload) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('A download link is not available for this title.')),
       );
       return;
     }
+    final key = '${movie.isSeries ? 'tv' : 'movie'}:${movie.tmdbId ?? movie.title.toLowerCase()}';
+    if (!await PremiumGate.allowDownload(context, key)) return;
+    if (!context.mounted) return;
     // Deeprows Browser offer; otherwise the phone's own browser.
     await PartnerBrowser.instance.download(context, movie.downloadUrl);
   }
