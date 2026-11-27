@@ -610,7 +610,8 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     panel.addEventListener('click',e=>{
       const b=e.target.closest('[data-resume]'); if(!b)return;
       const item=sessions.find(x=>x.id===Number(b.dataset.resume)); if(!item)return;
-      resume(item); panel.hidden=true;
+      resume(item); const at=sessions.indexOf(item); if(at>=0)sessions.splice(at,1);
+      panel.hidden=true; render(); window.dispatchEvent(new CustomEvent('deeprowss-minimised-change',{detail:{count:sessions.length}}));
     });
     $('playerMinimise')?.addEventListener('click',minimise);
     render();
@@ -643,6 +644,7 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     if(item.embed){try{const f=item.kind==='tv'?$ ('tvFrame'):$('movieFrame');f?.contentWindow?.postMessage({type:'pause'},'*');}catch(_){}}
     p.style.display='none'; document.body.classList.remove('fixture-streaming');
     panel.hidden=true; render();
+    window.dispatchEvent(new CustomEvent('deeprowss-minimised-change',{detail:{count:sessions.length}}));
     window.dispatchEvent(new CustomEvent('deeprowss-content-minimised',{detail:{title:item.title}}));
   }
   function resume(x){
