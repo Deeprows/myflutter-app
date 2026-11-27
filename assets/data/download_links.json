@@ -1,6 +1,6 @@
 {
   "_help": "OWNER-MANAGED APP DOWNLOAD LINKS. Edit this file to control the Downloads page in both Deeprowss Cinema for Windows EXE and the receiver website. Paste your own direct HTTPS file URL for each app. Leave a value empty or set it to off to show Coming soon. These links are the ONLY source used; no GitHub Releases or app_config.json fallback is used. Commit changes and refresh the Downloads page.",
-  "mobile": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.9/Deeprowss-v1.3.9.apk",
+  "mobile": "https://files.catbox.moe/644jlp.apk",
   "androidTv": "https://akirabox.com/download/e1.zYsX3vD7sHmriOPgiLiefPBMNBaZclJQDkqn3xpkuIS5fuiWzH4Y7W6S_ck7TvThXwL7h07gDTir9dqrMZLZqL89j_quY_LN5oOd2tN0t8b5Tiw0vZRTIgmXl3RJU5lWZi9nMb5a98p1JQgLYaGli_cYW3gbb_VWLklUpyYxEzlvSAe5r0YmR1hHYjuK3gExuWBT2ghz-Z0oaAozMLRFvxc2bGi6WKo3a3bx1qRh-EQpOi8J5yG_1c7ICDiTgg54A-qvkoxEGwM0OSSBX6rsozeUPDiv0wtJxfkQGpD_EQib_7tgjhTJqF3t7SNeSNlh-02AoBpduKZX-Y8aSqc1g_qlSwHgmqqoOgj9BNeELmpRHUg/Deeprowss-Android-TV.apk",
   "webos": "https://akirabox.com/download/e1.d1MIRQe644POPK16sb6q-KgyCMy1KiofcfFua48Hz_VR47ViielsKeQ8cUGHW0mhM2E50LZz8_MShdpurSN-MyBFfVzdD2VKsemhF86OmrgUHw3lvpeIVg_zKLpflasUtiCg-Yio2DHlzMOjsTNFAOELKgk7VA1lnP4vCwxDTwrUmn-zOqxO-xXXFEQjkGDcny1tgVZa9jaHlSFVJgVU006HolpyLH8jvcyGtJEsXLGqHT6Dg7RVG6yxFEapMcqtxd96dNFlhAvm1sWLVGLDb8GhLmoHqpFP5-vvbl0wYGbgWTic3zCcZJvG_tZqfq3I1dOn2TY9_896lYmwichvYYcNL_JBTHSS5LKthN1Jld2C/Deeprowss-LG-webOS.ipk",
   "tizen": "",
