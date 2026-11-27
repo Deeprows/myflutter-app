@@ -8,7 +8,6 @@ import 'package:http/http.dart' as http;
 import '../config.dart';
 import '../services/ad_scheduler.dart';
 import '../services/install_id.dart';
-import '../services/remote_config.dart';
 import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_map.dart';
@@ -50,6 +49,13 @@ class _PlansScreenState extends State<PlansScreen> {
   bool _loadingPlans = true;
   bool _busy = false;
 
+  // "Request a token" card (replaces the old Free card).
+  final _contact = TextEditingController();
+  TokenState _tokenState = const TokenState('unknown');
+  bool _tokenChecking = true;
+  String? _tokenError;
+  Timer? _poll;
+
   bool get _startup => widget.onContinue != null;
 
   @override
@@ -59,10 +65,21 @@ class _PlansScreenState extends State<PlansScreen> {
     _sub.addListener(_changed);
     unawaited(_loadPaymentAccounts());
     _load();
+    // While a request is waiting, look for the answer every 20 seconds.
+    _poll = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (mounted &&
+          _tokenState.state == 'pending' &&
+          !_busy &&
+          !_tokenChecking) {
+        _checkToken();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _poll?.cancel();
+    _contact.dispose();
     _sub.removeListener(_changed);
     AdScheduler.instance.release();
     super.dispose();
@@ -78,7 +95,92 @@ class _PlansScreenState extends State<PlansScreen> {
     if (!mounted) return;
     setState(() => _installId = id);
     unawaited(_sub.refresh(force: true));
+    unawaited(_checkToken());
     await _loadPlans();
+  }
+
+  // ------------------------------------------------------ token request
+
+  Future<void> _checkToken() async {
+    try {
+      final st = await _sub.tokenStatus();
+      if (!mounted) return;
+      setState(() {
+        _tokenState = st;
+        _tokenChecking = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _tokenChecking = false);
+    }
+  }
+
+  Future<void> _requestToken() async {
+    if (_busy) return;
+    final number = _contact.text.trim();
+    final digits = number.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 7 || digits.length > 15) {
+      setState(() => _tokenError =
+          'Enter your WhatsApp number with country code, e.g. +234 801 234 5678');
+      return;
+    }
+    if (_sub.accountId == null) {
+      setState(() =>
+          _tokenError = 'Please sign in with Google before requesting a token.');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _busy = true;
+      _tokenError = null;
+    });
+    final err = await _sub.requestToken(
+      contact: number,
+      days: _plan.days,
+      currency: _priced?.currency ?? _currency,
+    );
+    if (!mounted) return;
+    if (err != null) {
+      setState(() {
+        _busy = false;
+        _tokenError = err;
+      });
+      return;
+    }
+    await _checkToken();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (!_sub.isPremium) _toast('Request sent ✅');
+  }
+
+  Future<void> _redeemToken(String token) async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _tokenError = null;
+    });
+    final err = await _sub.redeemToken(token);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _tokenError = err;
+    });
+    if (err == null) _toast('Premium activated. Thank you! 💗');
+  }
+
+  Future<void> _messageOnWhatsapp() async {
+    final uri = buildWhatsappUri(
+      AppConfig.whatsappUrl,
+      AppConfig.tokenRequestMessage,
+      _installId,
+    );
+    final link = uri?.toString() ?? AppConfig.joinUrl;
+    if (link.isEmpty) {
+      _toast('The chat link is not set up yet');
+      return;
+    }
+    if (!await openExternally(link) && mounted) {
+      _toast('Could not open WhatsApp');
+    }
   }
 
   void _continue() {
@@ -258,7 +360,9 @@ class _PlansScreenState extends State<PlansScreen> {
                 _premiumCard(premium),
                 const SizedBox(height: 12),
                 if (!premium) ...[
-                  _freeCard(),
+                  _tokenRequestCard(),
+                  const SizedBox(height: 12),
+                  _continueButton(_startup ? 'Continue with ads' : 'Maybe later'),
                   const SizedBox(height: 14),
                 ] else _continueButton('Continue'),
                 const SizedBox(height: 14),
@@ -443,26 +547,186 @@ class _PlansScreenState extends State<PlansScreen> {
     ]);
   }
 
-  Widget _freeCard() {
-    final m = RemoteConfig.instance.adIntervalMinutes;
+  Widget _tokenRequestCard() {
+    final st = _tokenState.state;
+    final days = _plan.days;
+    Widget body;
+    if (_tokenChecking) {
+      body = const Center(
+        child: Padding(
+          padding: EdgeInsets.all(8),
+          child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2.4)),
+        ),
+      );
+    } else if (st == 'ready' && _tokenState.token != null) {
+      body = _tokenReadyBlock();
+    } else if (st == 'pending') {
+      body = _tokenPendingBlock();
+    } else {
+      body = _tokenAskBlock(days);
+    }
     return _box(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Free',
+          const Text('Request a token',
               style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 4),
-          Text(
-            'Browse the full catalogue and watch 3 distinct movie or series '
-            'titles free. After that, Play, Alternate player and Download '
-            'require Premium. Smart Decoder is Premium-only. A short “Support” '
-            'page shows every $m minutes of use.',
-            style: TextStyle(color: Ui.muted, fontSize: 13.5, height: 1.25),
-          ),
-          const SizedBox(height: 12),
-          _continueButton(_startup ? 'Continue with ads' : 'Maybe later'),
+          const SizedBox(height: 6),
+          body,
+          if (_tokenError != null) ...[
+            const SizedBox(height: 10),
+            Text(_tokenError!,
+                style: TextStyle(color: Ui.redSoft, fontSize: 13, height: 1.3)),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _tokenAskBlock(int days) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Enter your WhatsApp number with country code. We will send your token there after payment details are confirmed.',
+            style: TextStyle(color: Ui.muted, fontSize: 13.5, height: 1.3),
+          ),
+          const SizedBox(height: 12),
+          Text('Token request amount: ${_plan.shownPrice}',
+              style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _contact,
+            maxLength: 20,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.done,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9+\- ()]')),
+            ],
+            onChanged: (_) {
+              if (_tokenError != null) setState(() => _tokenError = null);
+            },
+            onSubmitted: (_) => _requestToken(),
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.chat_rounded),
+              hintText: 'WhatsApp number, e.g. +234 801 234 5678',
+              counterText: '',
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _busy ? null : _requestToken,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF22B25D),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24)),
+              ),
+              child: _busy
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.2, color: Colors.white))
+                  : Text('Request $days-day token',
+                      style: const TextStyle(
+                          fontSize: 15.5, fontWeight: FontWeight.w800)),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: _messageOnWhatsapp,
+              child: Text('Or message us on WhatsApp',
+                  style: TextStyle(
+                      color: Ui.redSoft,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+      );
+
+  Widget _tokenPendingBlock() => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [
+            Icon(Icons.hourglass_top_rounded, color: Ui.muted, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Request sent. Your token will appear here by itself once your payment is confirmed.',
+                style: TextStyle(color: Ui.muted, fontSize: 13.5, height: 1.3),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _busy
+                  ? null
+                  : () async {
+                      setState(() => _busy = true);
+                      await _checkToken();
+                      if (mounted) setState(() => _busy = false);
+                    },
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Check now'),
+            ),
+          ),
+          TextButton(
+            onPressed: _messageOnWhatsapp,
+            child: Text('Need help? Chat on WhatsApp',
+                style: TextStyle(color: Ui.redSoft)),
+          ),
+        ],
+      );
+
+  Widget _tokenReadyBlock() {
+    final t = _tokenState.token!;
+    final d = _tokenState.days;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(d > 0 ? 'Your token is ready ($d days)' : 'Your token is ready',
+            style: TextStyle(color: Ui.green, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: Ui.bg.withValues(alpha: .55),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Ui.line),
+          ),
+          child: SelectableText(t,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 2)),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _busy ? null : () => _redeemToken(t),
+            icon: const Icon(Icons.check_circle_rounded),
+            label: const Text('Activate now'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF22B25D),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24)),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
