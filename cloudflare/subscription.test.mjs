@@ -236,6 +236,27 @@ const decoderCode = j.code;
 j = await (await post("/receiver/decoder/validate", { code: decoderCode })).json();
 assert.equal(j.valid, true);
 assert.equal("owner_id" in j, false);
+// One Decoder number can be paired with two devices, but not a third.
+const DEVICE_A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const DEVICE_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const DEVICE_C = "cccccccccccccccccccccccccccccccc";
+j = await (await post("/receiver/decoder/validate", { code: decoderCode, device_id: DEVICE_A })).json();
+assert.equal(j.valid, true);
+j = await (await post("/receiver/decoder/validate", { code: decoderCode, device_id: DEVICE_B })).json();
+assert.equal(j.valid, true);
+let limited = await post("/receiver/decoder/validate", { code: decoderCode, device_id: DEVICE_C });
+assert.equal(limited.status, 403);
+assert.equal((await limited.json()).limit_reached, true);
+// Admin can top up an existing subscription by entering its Decoder number.
+// The existing code remains valid and its expiry is extended, not replaced.
+const beforeTopup = await (await call("/receiver/sub/status?device=" + ID3)).json();
+page = await (await call("/sub/admin", form({ token: "adm", install_id: decoderCode, days: "30" }))).text();
+assert.match(page, /Premium until/);
+const afterTopup = await (await call("/receiver/sub/status?device=" + ID3)).json();
+assert.ok(afterTopup.expires_at > beforeTopup.expires_at + 29 * 86400000);
+j = await (await post("/receiver/decoder/validate", { code: decoderCode, device_id: DEVICE_A })).json();
+assert.equal(j.valid, true);
+assert.equal(j.expires_at, afterTopup.expires_at);
 // A renewal before expiry keeps the same code valid and extends its expiry.
 txs.set("DECODERRENEW", {
   status: "success", reference: "DECODERRENEW", currency: "NGN", amount: 200000,
