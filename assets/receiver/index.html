@@ -855,8 +855,8 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
     function go(n){if(routeName()===n){route();return;}location.hash=n;}
     window.addEventListener('hashchange',route);
     document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
-    /* Windows EXE blocks target=_blank windows; route Learn with AI WhatsApp CTAs through the trusted desktop bridge. */
-    document.querySelectorAll('#learnView .learn-cta[href]').forEach(a=>a.addEventListener('click',e=>{
+    /* Windows EXE blocks target=_blank windows; open all WhatsApp contact links through its trusted bridge. */
+    document.querySelectorAll('a[href^="https://wa.me/"],a[href^="https://api.whatsapp.com/"]').forEach(a=>a.addEventListener('click',e=>{
       if(desktop&&typeof desktop.openExternal==='function'){
         e.preventDefault();
         try{Promise.resolve(desktop.openExternal(a.href)).catch(()=>{});}catch(_){}
