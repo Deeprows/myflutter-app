@@ -158,8 +158,7 @@ assert.equal((await post("/sub/start", { install_id: A, email: "a@b.co" })).stat
 await admin({ action: "grant", install_id: B, days: 5 });
 const decoderBefore = sqlite.prepare("SELECT code, expires_at FROM decoder_codes WHERE owner_id = ?").get(B);
 assert.ok(decoderBefore?.code, "admin grant issues a Decoder number");
-await post("/sub/token/request", { install_id: B, contact: "+234 801 111 2222" });
-page = await (await admin({ action: "answer", install_id: B, days: 7 })).text();
+page = await (await admin({ action: "mint", days: 7, count: 1, note: "Premium top-up" })).text();
 const topupToken = tokenIn(page);
 j = await (await post("/sub/token/redeem", { install_id: B, token: topupToken })).json();
 const decoderAfter = sqlite.prepare("SELECT code, expires_at FROM decoder_codes WHERE owner_id = ?").get(B);
