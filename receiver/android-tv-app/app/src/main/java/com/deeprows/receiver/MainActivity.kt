@@ -598,7 +598,7 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun tap(fx: Double, fy: Double) {
             val now = SystemClock.uptimeMillis()
-            if (now - last < 250 || fx.isNaN() || fy.isNaN()) return
+            if (now - last < 90 || fx.isNaN() || fy.isNaN()) return
             last = now
             runOnUiThread {
                 val view = webView ?: return@runOnUiThread
