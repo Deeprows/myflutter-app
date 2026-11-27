@@ -197,24 +197,6 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     }
   }
 
-  String get _hint {
-    final playing = m.receiverPlayerOpen;
-    if (m.receiverIsDesktop) {
-      return playing
-          ? 'Windows app: OK / Play taps the player. If an ad eats the first tap, press it again. Full screen fills the PC screen (F11 or Esc leaves it).'
-          : 'Windows app: arrows and OK move around the app. Hold an arrow to keep moving. Back closes dialogs; Home always returns to the start screen.';
-    }
-    if (playing) {
-      if (m.receiverMode == 'iframe') {
-        return m.receiverIsTv
-            ? 'OK / Play taps the player. If an ad eats the first tap, press it again. Embedded providers may ignore seek and volume.'
-            : 'Embedded providers may ignore some buttons (seek, volume). Back and Home always work.';
-      }
-      return 'Left / Right seek ±10 s and Up / Down change the volume while a video is open. OK toggles play / pause.';
-    }
-    return 'Use the wheel to browse. Hold an arrow to keep moving. Back closes dialogs; Home always returns to the start screen.';
-  }
-
   // ───────────────────────── remote body ─────────────────────────
 
   Widget _remote() {
@@ -225,8 +207,10 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     final canFull = (canPlay || mirror || pc) && !m.receiverIsTv;
     final vol = m.receiverMuted ? 0 : m.receiverVolume;
 
-    return Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 296), child: Container(
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
         gradient: LinearGradient(
@@ -242,22 +226,18 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
           _Round(icon: Icons.power_settings_new_rounded, size: 38, tone: _Tone.danger, onPress: _confirmOff, lock: _touching, semantics: 'Power off'),
           const SizedBox(width: 8),
-          Expanded(child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => decoderToast(context, '$_hint Tip: drag on OK to move a cursor, tap OK to click, double-tap OK to double-click.'),
-            child: _statusChip(playing),
-          )),
+          Expanded(child: _statusChip(playing)),
           const SizedBox(width: 8),
           _Round(icon: Icons.settings_rounded, size: 38, onPress: () => _key('menu'), lock: _touching, semantics: 'Settings menu'),
         ]),
         const SizedBox(height: 8),
 
         // ── navigation wheel ──
-        _DPad(
+        Expanded(child: _DPad(
           onKey: _key,
           onCursor: (dx, dy) => m.sendRemoteCommand('cursor', text: '${dx.toStringAsFixed(1)},${dy.toStringAsFixed(1)}'),
           lock: _touching,
-        ),
+        )),
         const SizedBox(height: 8),
 
         // ── back · home · full screen ──
@@ -349,26 +329,23 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
         Align(alignment: Alignment.centerLeft, child: Text('QUICK ACCESS',
           style: TextStyle(color: Ui.muted, fontSize: 9, letterSpacing: 1.3, fontWeight: FontWeight.w900))),
         const SizedBox(height: 6),
-        GridView.count(
-          crossAxisCount: 3,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 5,
-          crossAxisSpacing: 5,
-          childAspectRatio: 2.1,
-          children: [
-            _AppTile(icon: Icons.movie_creation_outlined, label: 'Movies', color: const Color(0xFFE5484D), onPress: () => _key('movies'), lock: _touching),
-            _AppTile(icon: Icons.live_tv_rounded, label: 'TV channels', color: const Color(0xFF3E8BFF), onPress: () => _key('tv'), lock: _touching),
-            _AppTile(icon: Icons.sports_soccer_rounded, label: 'Live football', color: const Color(0xFF2FB36B), onPress: () => _key('football'), lock: _touching),
-            _AppTile(icon: Icons.download_rounded, label: 'Download apps', color: const Color(0xFFF59E0B), onPress: () => _key('downloads'), lock: _touching),
-            _AppTile(icon: Icons.qr_code_2_rounded, label: 'Connect app', color: const Color(0xFF8B5CF6), onPress: () => _key('connect'), lock: _touching),
-            _AppTile(icon: Icons.workspace_premium_rounded, label: 'Subscribe', color: const Color(0xFFEC4899), onPress: () => _key('subscribe'), lock: _touching),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text('$_hint\nTip: drag on OK to move a cursor · tap OK to click · double-tap OK to double-click.', textAlign: TextAlign.center, style: TextStyle(color: Ui.muted, fontSize: 10, height: 1.3)),
+        SizedBox(height: 62, child: Row(children: [
+          Expanded(child: _AppTile(icon: Icons.movie_creation_outlined, label: 'Movies', color: const Color(0xFFE5484D), onPress: () => _key('movies'), lock: _touching)),
+          const SizedBox(width: 6),
+          Expanded(child: _AppTile(icon: Icons.live_tv_rounded, label: 'TV channels', color: const Color(0xFF3E8BFF), onPress: () => _key('tv'), lock: _touching)),
+          const SizedBox(width: 6),
+          Expanded(child: _AppTile(icon: Icons.sports_soccer_rounded, label: 'Live football', color: const Color(0xFF2FB36B), onPress: () => _key('football'), lock: _touching)),
+        ]),),
+        const SizedBox(height: 6),
+        SizedBox(height: 62, child: Row(children: [
+          Expanded(child: _AppTile(icon: Icons.download_rounded, label: 'Download apps', color: const Color(0xFFF59E0B), onPress: () => _key('downloads'), lock: _touching)),
+          const SizedBox(width: 6),
+          Expanded(child: _AppTile(icon: Icons.qr_code_2_rounded, label: 'Connect app', color: const Color(0xFF8B5CF6), onPress: () => _key('connect'), lock: _touching)),
+          const SizedBox(width: 6),
+          Expanded(child: _AppTile(icon: Icons.workspace_premium_rounded, label: 'Subscribe', color: const Color(0xFFEC4899), onPress: () => _key('subscribe'), lock: _touching)),
+        ]),),
       ]),
-    )));
+    );
   }
 
   Widget _statusChip(bool playing) => Container(
@@ -449,37 +426,54 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
   );
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => ListenableBuilder(listenable: m, builder: (context, _) => Scaffold(
     backgroundColor: Ui.bg,
-    appBar: AppBar(backgroundColor: Ui.panel,
+    // The header only shows before a receiver is connected; the system back
+    // button still leaves the page.
+    appBar: m.running ? null : AppBar(backgroundColor: Ui.panel,
       title: const Text('Connect to receiver', style: TextStyle(fontWeight: FontWeight.w900))),
-    body: ListenableBuilder(listenable: m, builder: (context, _) => m.running
-      // Connected: no scrolling. The remote is scaled down to fit the free height.
+    body: m.running
       ? SafeArea(child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
           child: Column(children: [
             _compactConnectionCard(),
-            const SizedBox(height: 10),
-            Expanded(child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.topCenter,
-              child: SizedBox(width: 296, child: _remote()),
-            )),
+            const SizedBox(height: 8),
+            // The remote uses all the remaining width and height. On very short
+            // screens it is scaled down uniformly instead of scrolling.
+            Expanded(child: LayoutBuilder(builder: (context, box) {
+              const minH = 520.0;
+              return FittedBox(
+                fit: BoxFit.scaleDown,
+                child: SizedBox(
+                  width: box.maxWidth,
+                  height: math.max(box.maxHeight, minH),
+                  child: _remote(),
+                ),
+              );
+            })),
+            Padding(
+              padding: const EdgeInsets.only(top: 6, bottom: 2),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.mouse_rounded, size: 15, color: Ui.muted),
+                const SizedBox(width: 6),
+                Text('Use OK button as mouse to navigate', style: TextStyle(color: Ui.muted, fontSize: 11.5, fontWeight: FontWeight.w600)),
+              ]),
+            ),
           ]),
         ))
       : ValueListenableBuilder<int>(
-      valueListenable: _touching,
-      builder: (context, touching, _) => ListView(
-        physics: touching > 0 ? const NeverScrollableScrollPhysics() : null,
-        padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).viewPadding.bottom + 28),
-        children: [
-          _connectionCard(),
-          decoderPanel(Text('The QR code pairs your phone with the TV. Video and audio travel directly between devices using WebRTC; the pairing service only relays connection messages.',
-            style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5))),
-        ],
-      ),
-    )),
-  );
+          valueListenable: _touching,
+          builder: (context, touching, _) => ListView(
+            physics: touching > 0 ? const NeverScrollableScrollPhysics() : null,
+            padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).viewPadding.bottom + 28),
+            children: [
+              _connectionCard(),
+              decoderPanel(Text('The QR code pairs your phone with the TV. Video and audio travel directly between devices using WebRTC; the pairing service only relays connection messages.',
+                style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5))),
+            ],
+          ),
+        ),
+  ));
 }
 
 // ═══════════════════════════ remote widgets ═══════════════════════════
@@ -950,7 +944,7 @@ class _DPadState extends State<_DPad> {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) {
-    final size = math.min(c.maxWidth, 180.0);
+    final size = math.min(c.maxWidth, c.hasBoundedHeight ? c.maxHeight : 260.0);
     return Center(
       child: Semantics(
         label: 'Navigation wheel. Up, down, left, right and OK',
