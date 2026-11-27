@@ -375,7 +375,7 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     ]),
     if (!m.running) ...[
       const SizedBox(height: 10),
-      Text('On your TV or laptop, open the Deeprowss Receiver page, or open the Deeprowss Cinema Windows app and choose Cast from Phone. Scan the QR code shown there with your phone to connect.',
+      Text('On your TV or laptop, open the Deeprowss web receiver page and select Connect app. Then scan its QR code with this phone.',
         style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5)),
     ],
     const SizedBox(height: 14),
@@ -425,6 +425,106 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     ]),
   );
 
+  Widget _receiverGuideCard() {
+    const receiverUrl = 'https://deeprowss.pages.dev';
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.alphaBlend(Ui.red.withValues(alpha: .13), Ui.card),
+            Ui.panel,
+          ],
+        ),
+        border: Border.all(color: Ui.red.withValues(alpha: .28)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: .16), blurRadius: 18, offset: const Offset(0, 7)),
+        ],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Ui.red.withValues(alpha: .16),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(Icons.link_rounded, color: Ui.red, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('CONNECT YOUR TV OR PC',
+              style: TextStyle(color: Ui.text, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: .5)),
+            const SizedBox(height: 2),
+            Text('Use the web receiver page',
+              style: TextStyle(color: Ui.muted, fontSize: 11.5)),
+          ])),
+        ]),
+        const SizedBox(height: 16),
+        Text('1. Open this page on your TV or laptop',
+          style: TextStyle(color: Ui.text, fontSize: 12.5, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+          decoration: BoxDecoration(
+            color: Ui.bg.withValues(alpha: .72),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Ui.line),
+          ),
+          child: Row(children: [
+            Expanded(child: SelectableText(receiverUrl,
+              style: TextStyle(color: Ui.redSoft, fontSize: 13, fontWeight: FontWeight.w800))),
+            const SizedBox(width: 6),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                visualDensity: VisualDensity.compact,
+              ),
+              onPressed: () {
+                Clipboard.setData(const ClipboardData(text: receiverUrl));
+                HapticFeedback.selectionClick();
+                decoderToast(context, 'Receiver page link copied.');
+              },
+              icon: const Icon(Icons.copy_rounded, size: 16),
+              label: const Text('Copy'),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 16),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: Ui.red.withValues(alpha: .16), shape: BoxShape.circle),
+            child: Text('2', style: TextStyle(color: Ui.red, fontSize: 11, fontWeight: FontWeight.w900)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text('On the receiver page, click Connect app to display the QR code.',
+            style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.4))),
+        ]),
+        const SizedBox(height: 10),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: Ui.red.withValues(alpha: .16), shape: BoxShape.circle),
+            child: Text('3', style: TextStyle(color: Ui.red, fontSize: 11, fontWeight: FontWeight.w900)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text('Tap Scan TV QR code above and point your phone camera at the QR code.',
+            style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.4))),
+        ]),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(listenable: m, builder: (context, _) => Scaffold(
     backgroundColor: Ui.bg,
@@ -468,8 +568,7 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
             padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).viewPadding.bottom + 28),
             children: [
               _connectionCard(),
-              decoderPanel(Text('The QR code pairs your phone with the TV. Video and audio travel directly between devices using WebRTC; the pairing service only relays connection messages.',
-                style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5))),
+              _receiverGuideCard(),
             ],
           ),
         ),
