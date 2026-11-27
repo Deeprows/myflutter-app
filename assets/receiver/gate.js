@@ -186,6 +186,14 @@
     }
     code = n; unlocked = true; codeExpiry = Number(result.expires_at || 0); serverOffset = Number(result.now || Date.now()) - Date.now(); signalPremiumState();
     try { localStorage.setItem(CODE_KEY, code); } catch (_) {}
+    if (messageEl && messageEl.id === 'gateCodeMsg') {
+      // Subscribe page: confirm on the spot, then close the sheet a moment later.
+      messageEl.classList.remove('err'); messageEl.classList.add('ok');
+      messageEl.textContent = 'Premium activated' + (codeExpiry ? ' until ' + new Date(codeExpiry).toLocaleDateString() : '') + '. Enjoy Deeprowss!';
+      render(); refreshStatusPanel();
+      setTimeout(closeModal, 1800);
+      return true;
+    }
     if (messageEl) messageEl.textContent = 'Premium unlocked.';
     closeModal(); render();
     return true;
@@ -273,6 +281,15 @@
 .gate-check:hover:not(:disabled){background:#ffffff1a;border-color:#ffffff33}
 .gate-check:disabled{opacity:.55;cursor:wait}
 .gate-code{padding:16px;border:1px dashed #ffffff2b;border-radius:18px;background:#ffffff06}
+.gate-code-head{display:flex;align-items:center;gap:9px;margin:0 0 8px;color:#fff;font-size:15px}
+.gate-code-sub{margin:0 0 12px;color:#aebbd0;font-size:12.5px;line-height:1.55}
+.gate-code-row{display:flex;gap:9px;align-items:stretch}
+.gate-code-row input{flex:1 1 auto;min-width:0}
+.gate-code-row .gate-verify{flex:0 0 auto;width:auto;white-space:nowrap;margin:0}
+.gate-code-msg{margin-top:10px;color:#aebbd0;font-size:12.5px;line-height:1.5}
+.gate-code-msg.err{color:#ff8a9a;font-weight:700}
+.gate-code-msg.ok{color:#5ee9a0;font-weight:700}
+@media(max-width:520px){.gate-code-row{flex-direction:column}.gate-code-row .gate-verify{width:100%}}
 .gate-code .gate-field{margin:0 0 10px}
 .gate-field{display:block;margin:0 0 9px;font-size:12px;font-weight:800;line-height:1.4;color:#dbe6f3}
 .gate-code input{width:100%;padding:13px 14px;border:1px solid #ffffff1f;border-radius:13px;background:#05080e;color:#fff;font-size:16px;font-weight:800;letter-spacing:.14em;transition:.18s}
@@ -546,6 +563,15 @@ html.tv .gate-left,html.desktop-app .gate-left{border-bottom:0;border-right:1px 
         (sub ? '<small>' + escapeHtml(sub) + '</small>' : '') + '</button>';
     }).join('') + '</div>';
   }
+  function deviceName() {
+    try {
+      if (window.deeprowssDesktop) return 'Windows app';
+      if (window.DeeprowssTv) return 'Android TV';
+      if (window.tizen) return 'Samsung TV';
+      if (window.PalmSystem || window.webOS) return 'LG TV';
+    } catch (_) {}
+    return 'device';
+  }
   function modalMarkup() {
     const active = !!(unlocked && (!codeExpiry || Date.now() + serverOffset < codeExpiry));
     return '<div class="gate-pop">' +
@@ -556,8 +582,14 @@ html.tv .gate-left,html.desktop-app .gate-left{border-bottom:0;border-right:1px 
       '<h2>Deeprowss Premium</h2>' +
       '<p>Enjoy unlimited live TV, movies, alternate players, downloads and Smart Decoder access. Visitors get 10 TV channels each day and 3 free movie titles.</p>' +
       '<ul class="gate-features"><li>Unlimited live TV channels</li><li>No pop-ups</li><li>Unlimited movies and downloads</li><li>Smart Decoder access</li></ul>' +
+      '<div class="gate-code" id="gateCode">' +
+        '<div class="gate-code-head"><span aria-hidden="true">🔑</span><b>Activate with your Decoder number</b></div>' +
+        '<p class="gate-code-sub">Already have Premium? Enter your 10-digit Decoder number to activate it on this ' + escapeHtml(deviceName()) + '. Anyone with an active Decoder number can use Premium on the Windows app, Android TV, LG TV and the Deeprowss website.</p>' +
+        '<label class="gate-field" for="gateModalCode">Decoder number</label>' +
+        '<div class="gate-code-row"><input id="gateModalCode" type="text" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="e.g. 1234 567 890" aria-label="Decoder number"><button type="button" class="gate-verify" id="gateModalUnlock">Activate Premium</button></div>' +
+        '<div class="gate-code-msg" id="gateCodeMsg" role="status" aria-live="polite">' + (active ? 'Premium is already active on this device.' : 'Find your Decoder number in your Premium account in the Deeprowss phone app.') + '</div>' +
+      '</div>' +
       statusPanelMarkup(active, codeExpiry, code) +
-      '<div class="gate-code"><label class="gate-field" for="gateModalCode">Have a Premium activation token from Deeprowss on WhatsApp?</label><input id="gateModalCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Enter your 10-digit token"><button type="button" class="gate-verify" id="gateModalUnlock">Activate Premium</button></div>' +
       '</section><section class="gate-right">' +
       '<div class="gate-step"><i>1</i>Choose your plan</div>' +
       '<label class="gate-field" for="gateCurrency">Pricing currency</label>' +
@@ -599,7 +631,17 @@ html.tv .gate-left,html.desktop-app .gate-left{border-bottom:0;border-right:1px 
     if (statusRefresh) statusRefresh.onclick = refreshStatusPanel;
     const codeInput = $('gateModalCode');
     codeInput.addEventListener('input', () => { const v = pretty(codeInput.value); if (v !== codeInput.value) codeInput.value = v; });
-    $('gateModalUnlock').onclick = () => unlock(codeInput.value, $('gateStatus'));
+    const codeMsg = $('gateCodeMsg');
+    const activate = async () => {
+      codeMsg.classList.remove('err', 'ok');
+      const btn = $('gateModalUnlock');
+      btn.disabled = true;
+      const done = await unlock(codeInput.value, codeMsg);
+      if (!done) { const b = $('gateModalUnlock'); if (b) b.disabled = false; }
+    };
+    codeInput.addEventListener('input', () => codeMsg.classList.remove('err', 'ok'));
+    codeInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); activate(); } });
+    $('gateModalUnlock').onclick = activate;
   }
   function openExternal(url) {
     try {
