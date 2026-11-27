@@ -114,7 +114,7 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
         'tvchannels',
       );
 
-  Future<void> _channelTapped(BuildContext ctx, Channel c) {
+  Future<void> _channelTapped(BuildContext ctx, Channel c) async {
     final r = StreamResolver.resolve(c.url);
     final target = CastTarget(
       title: c.name,
@@ -124,7 +124,7 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
       userAgent: c.userAgent,
     );
     if (!await PremiumGate.allowTvChannel(ctx, c.name) || !ctx.mounted) return;
-    return chooseConnectivity(ctx, target, onWatchInApp: () => openChannelPlayer(ctx, c));
+    await chooseConnectivity(ctx, target, onWatchInApp: () => openChannelPlayer(ctx, c));
   }
 
   Future<void> _openReceiver() async {
