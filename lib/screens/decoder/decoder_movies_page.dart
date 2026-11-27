@@ -138,7 +138,7 @@ class _DecoderMoviesPageState extends State<DecoderMoviesPage> {
   /// Tap on any title: watch it in the app, or cast it to a bigger screen.
   Future<void> _select(Movie movie) async {
     final key = '${movie.isSeries ? 'tv' : 'movie'}:${movie.tmdbId ?? movie.title.toLowerCase()}';
-    if (!await PremiumGate.allowMovies(context, key, action: 'play')) return;
+    if (!await PremiumGate.allowDecoderMovies(context, key, action: 'play')) return;
     if (!mounted) return;
     if (movie.url.trim().isEmpty) {
       decoderToast(context, 'No video link is available for this title.');
@@ -154,7 +154,7 @@ class _DecoderMoviesPageState extends State<DecoderMoviesPage> {
       CastTarget(title: movie.title.isEmpty ? movie.name : movie.title, url: movie.url),
       image: movie.image,
       meta: meta,
-      onWatchInApp: () => openMoviePlayer(context, movie),
+      onWatchInApp: () => openMoviePlayer(context, movie, decoder: true),
     );
   }
 
