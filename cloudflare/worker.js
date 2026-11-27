@@ -136,6 +136,7 @@ export default {
         ai_quota_push: Boolean(env.DB && env.FIREBASE_SERVICE_ACCOUNT && env.AI_QUOTA_ADMIN_EMAIL),
         // Manual Premium grants and ad-free tokens need D1 + an admin password.
         tokens: Boolean(env.DB && (env.ADMIN_TOKEN || env.STATS_TOKEN)),
+        telegram_notifications: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
       });
     }
 
@@ -1456,7 +1457,7 @@ async function subscriptions(request, env, url, ctx = null) {
       return subCastAccess(request, env);
     }
     if (path === "/sub/start" && request.method === "POST") {
-      return subStart(request, env, url);
+      return subStart(request, env, url, ctx);
     }
     if (path === "/sub/verify" && request.method === "GET") {
       return subVerify(url, env);
@@ -1673,7 +1674,7 @@ function notifyAccessEvent(env, request, ctx, title, fields = []) {
     .replace(/[\u0000-\u001f\u007f]/g, " ")
     .replace(/\s+/g, " ").trim().slice(0, 300);
   const lines = [
-    "DEE P R O W S S  |  ACCESS ALERT",
+    "DEEPROWSS | ACCESS ALERT",
     title,
     "Platform: " + telegramPlatform(request),
     "Time: " + new Date().toISOString(),
