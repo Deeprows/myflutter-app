@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -27,6 +28,8 @@ import 'notification_center.dart';
 // build time:  --dart-define=FIREBASE_ANDROID_APP_ID=1:227439941748:android:...
 // (the GitHub workflow reads it from the repo variable FIREBASE_ANDROID_APP_ID).
 const _androidAppId = String.fromEnvironment('FIREBASE_ANDROID_APP_ID');
+const _iosAppId = String.fromEnvironment('FIREBASE_IOS_APP_ID');
+const _iosApiKey = String.fromEnvironment('FIREBASE_IOS_API_KEY');
 
 // Optional: the Android API key from Firebase (google-services.json >
 // client > api_key > current_key). If your website's key is restricted to
@@ -37,15 +40,24 @@ const _androidApiKey = String.fromEnvironment('FIREBASE_ANDROID_API_KEY');
 const _webApiKey = 'AIzaSyBs9eSquNu2drJjM3vqFGDX1QU-VE1_F7U';
 
 FirebaseOptions get _options => FirebaseOptions(
-  apiKey: _androidApiKey.isNotEmpty ? _androidApiKey : _webApiKey,
-  appId: _androidAppId,
+  apiKey: Platform.isIOS
+      ? (_iosApiKey.isNotEmpty ? _iosApiKey : _webApiKey)
+      : (_androidApiKey.isNotEmpty ? _androidApiKey : _webApiKey),
+  appId: Platform.isIOS ? _iosAppId : _androidAppId,
   messagingSenderId: '227439941748',
   projectId: 'deeprows-4d37c',
   storageBucket: 'deeprows-4d37c.firebasestorage.app',
+  iosBundleId: Platform.isIOS ? 'com.deeprows.footbolive' : null,
 );
 
-void _requireAndroidFirebaseConfig() {
-  if (_androidAppId.isEmpty) {
+void _requirePlatformFirebaseConfig() {
+  if (Platform.isIOS && _iosAppId.isEmpty) {
+    throw StateError(
+      'FIREBASE_IOS_APP_ID is missing. Add the iOS app in Firebase and '
+      'configure the FIREBASE_IOS_APP_ID GitHub Actions variable.',
+    );
+  }
+  if (Platform.isAndroid && _androidAppId.isEmpty) {
     throw StateError(
       'FIREBASE_ANDROID_APP_ID is missing. '
       'Configure it in GitHub Actions repository variables.',
@@ -185,7 +197,7 @@ class PushService {
     final launched = await NativeNotifier.launchPayload();
     if (launched != null && launched.isNotEmpty) _onPayload(launched);
     try {
-      _requireAndroidFirebaseConfig();
+      _requirePlatformFirebaseConfig();
       await Firebase.initializeApp(options: _options);
       FirebaseMessaging.onBackgroundMessage(firebaseBackgroundHandler);
       _coreReady = true;
