@@ -57,7 +57,7 @@ void _requirePlatformFirebaseConfig() {
       'configure the FIREBASE_IOS_APP_ID GitHub Actions variable.',
     );
   }
-  if (Platform.isAndroid && _androidAppId.isEmpty) {
+  if (!Platform.isIOS && _androidAppId.isEmpty) {
     throw StateError(
       'FIREBASE_ANDROID_APP_ID is missing. '
       'Configure it in GitHub Actions repository variables.',
