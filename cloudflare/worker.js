@@ -2303,7 +2303,7 @@ async function tokenRequest(request, env, ctx = null) {
   )
     .bind(installId, contact, Date.now(), days, amountNgn, currency)
     .run();
-  notifyAccessEvent(env, request, ctx, "Ad-free access token requested", [
+  notifyAccessEvent(env, request, ctx, "Premium / ad-free subscription token requested", [
     ["Account / device", installId], ["Contact", contact || "Not supplied"],
     ["Requested duration", days ? String(days) + " days" : "Not specified"],
     ["Quoted amount", amountNgn ? money(amountNgn, currency || "NGN") : "Not specified"]
@@ -2387,6 +2387,11 @@ async function tokenRedeem(request, env) {
     source: "token",
     days: Number(row.days),
   });
+  // A Premium token is a top-up: keep the current Decoder number and its
+  // paired devices while it is active, extending its expiry with the account.
+  await env.DB.prepare(
+    "UPDATE decoder_codes SET expires_at = ? WHERE owner_id = ? AND expires_at > ?"
+  ).bind(expires, installId, Date.now()).run();
   await env.DB.prepare("DELETE FROM token_requests WHERE install_id = ?")
     .bind(installId)
     .run();
