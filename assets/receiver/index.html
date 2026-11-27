@@ -807,9 +807,13 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
           reportState();return;
         }
         case 'off':{
-          const b=$('dwPowerOpen');
-          if(b)b.click();else say('Use the TV or browser controls to close Deeprowss.');
-          reportState();return;
+          // Exit installed receivers natively; browsers cannot close a tab they did not open.
+          try{if(window.deeprowssDesktop&&typeof window.deeprowssDesktop.quit==='function'){window.deeprowssDesktop.quit();return;}}catch(_){}
+          try{if(window.DeeprowssTv&&typeof window.DeeprowssTv.exitApp==='function'){window.DeeprowssTv.exitApp();return;}}catch(_){}
+          try{if(window.tizen&&tizen.application){tizen.application.getCurrentApplication().exit();return;}}catch(_){}
+          try{if(window.PalmSystem&&typeof PalmSystem.platformBack==='function'){PalmSystem.platformBack();return;}}catch(_){}
+          try{if(window.webOS&&typeof webOS.platformBack==='function'){webOS.platformBack();return;}}catch(_){}
+          closePlayer();go('landing');say('Returned to the receiver home. Close this browser tab to exit completely.');reportState();return;
         }
       }
       if(mode==='mirror'||mode==='idle'){
