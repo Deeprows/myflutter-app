@@ -266,6 +266,17 @@ j = await (await post("/sub/decoder/access", {
 })).json();
 assert.equal(j.started_at, trialStarted, "reopening Decoder must not restart the trial");
 
+// A previous Premium subscriber never receives a fresh trial after expiry.
+const EXPIRED_PREMIUM_USER = "dededededededededededededededede";
+sqlite.prepare("INSERT INTO subs (install_id, email, expires_at, source, updated_at) VALUES (?, ?, ?, ?, ?)")
+  .run(EXPIRED_PREMIUM_USER, "expired@example.com", Date.now() - 1000, "test", Date.now());
+j = await (await post("/sub/decoder/access", {
+  install_id: EXPIRED_PREMIUM_USER, start_trial: true
+})).json();
+assert.equal(j.premium, false);
+assert.equal(j.trial_active, false);
+assert.equal(j.started_at, 0, "expired Premium users do not receive a new trial");
+
 // An expired trial falls back to four distinct TV channels and three movies per UTC day.
 const EXPIRED_DECODER = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
 const expiredTrialStarted = Date.now() - 4 * 86400000;
