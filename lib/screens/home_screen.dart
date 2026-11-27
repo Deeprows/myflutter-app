@@ -37,6 +37,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openSection(BuildContext context, {required bool thread}) async {
+    // Live Events remain available to guests, but Deeprowss Thread is an
+    // account feature. Show the existing Log in / Sign up screen first.
+    if (thread && !await ensureSignedIn(context)) return;
+    if (!context.mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => ShellScreen(
