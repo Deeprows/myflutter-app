@@ -828,6 +828,12 @@ class _MovieSheet extends StatelessWidget {
     final key = '${movie.isSeries ? 'tv' : 'movie'}:${movie.tmdbId ?? movie.title.toLowerCase()}';
     if (!await PremiumGate.allowDownload(context, key)) return;
     if (!context.mounted) return;
+    if (!movie.hasDownload) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('A download link is not available for this title.')),
+      );
+      return;
+    }
     // Deeprows Browser offer; otherwise the phone's own browser.
     await PartnerBrowser.instance.download(context, movie.downloadUrl);
   }
@@ -951,21 +957,19 @@ class _MovieSheet extends StatelessWidget {
                     );
                   },
                 ),
-                if (movie.hasDownload) ...[
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _download(context),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        side: BorderSide(color: Ui.line),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      icon: const Icon(Icons.download_rounded),
-                      label: Text('Download'.tr, style: const TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _download(context),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      side: BorderSide(color: Ui.line),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
+                    icon: const Icon(Icons.download_rounded),
+                    label: Text('Download'.tr, style: const TextStyle(fontWeight: FontWeight.w800)),
                   ),
-                ],
+                ),
               ],
             ),
             const SizedBox(height: 18),
