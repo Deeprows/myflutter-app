@@ -32,7 +32,10 @@
     const code = String(e.code || '').toLowerCase();
     const prev = ['channel_down','channeldown','mediatrackprevious'].includes(k) || code === 'mediatrackprevious';
     const next = ['channel_up','channelup','mediatracknext'].includes(k) || code === 'mediatracknext';
-    if (k === '1' || code === 'digit1' || k === '2' || code === 'digit2') {
+    // Typing must keep working inside text fields (e.g. the Decoder number box).
+    const t = e.target;
+    const typing = !!(t && (/^(input|textarea|select)$/i.test(t.tagName || '') || t.isContentEditable));
+    if (!typing && (k === '1' || code === 'digit1' || k === '2' || code === 'digit2')) {
       e.preventDefault(); e.stopImmediatePropagation();
       if (window.deeprowssTvRemote) window.deeprowssTvRemote((k === '1' || code === 'digit1') ? 'mainstream' : 'backupstream');
       return;
