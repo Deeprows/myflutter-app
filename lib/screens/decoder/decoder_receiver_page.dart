@@ -427,6 +427,7 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
 
   Widget _receiverGuideCard() {
     const receiverUrl = 'https://deeprowss.pages.dev';
+    const instruction = 'Copy the Deeprowss web receiver page URL https://deeprowss.pages.dev, open it on your TV or laptop, click Connect with app, then use this app to scan the QR code.';
     return Container(
       margin: const EdgeInsets.only(top: 14),
       padding: const EdgeInsets.all(16),
@@ -435,39 +436,21 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: Ui.line),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(
-          'Copy the Deeprowss web receiver page URL, open it on your TV or laptop, click Connect app, then use this app to scan the QR code.',
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Expanded(child: SelectableText(
+          instruction,
           style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.45),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.fromLTRB(12, 7, 6, 7),
-          decoration: BoxDecoration(
-            color: Ui.bg.withValues(alpha: .72),
-            borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: Ui.line),
-          ),
-          child: Row(children: [
-            Expanded(child: SelectableText(
-              receiverUrl,
-              style: TextStyle(color: Ui.redSoft, fontSize: 13, fontWeight: FontWeight.w800),
-            )),
-            const SizedBox(width: 6),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
-                visualDensity: VisualDensity.compact,
-              ),
-              onPressed: () {
-                Clipboard.setData(const ClipboardData(text: receiverUrl));
-                HapticFeedback.selectionClick();
-                decoderToast(context, 'Link copied.');
-              },
-              icon: const Icon(Icons.copy_rounded, size: 15),
-              label: const Text('Copy'),
-            ),
-          ]),
+        )),
+        const SizedBox(width: 8),
+        IconButton(
+          tooltip: 'Copy receiver URL',
+          visualDensity: VisualDensity.compact,
+          onPressed: () {
+            Clipboard.setData(const ClipboardData(text: receiverUrl));
+            HapticFeedback.selectionClick();
+            decoderToast(context, 'Receiver URL copied.');
+          },
+          icon: Icon(Icons.copy_rounded, color: Ui.red, size: 20),
         ),
       ]),
     );
