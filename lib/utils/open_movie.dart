@@ -6,9 +6,12 @@ import 'premium_gate.dart';
 
 /// Opens the player after checking the shared three-title free allowance.
 /// After that, non-Premium people are sent to the upgrade page.
-Future<void> openMoviePlayer(BuildContext context, Movie m) async {
+Future<void> openMoviePlayer(BuildContext context, Movie m, {bool decoder = false}) async {
   final key = '${m.isSeries ? 'tv' : 'movie'}:${m.tmdbId ?? m.title.toLowerCase()}';
-  if (!await PremiumGate.allowMovies(context, key, action: 'play')) return;
+  final allowed = decoder
+      ? await PremiumGate.allowDecoderMovies(context, key, action: 'play')
+      : await PremiumGate.allowMovies(context, key, action: 'play');
+  if (!allowed) return;
   if (!context.mounted) return;
   Navigator.of(context).push(MaterialPageRoute<void>(
     builder: (_) => PlayerScreen(
