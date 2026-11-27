@@ -225,33 +225,37 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     final canFull = (canPlay || mirror || pc) && !m.receiverIsTv;
     final vol = m.receiverMuted ? 0 : m.receiverVolume;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
+    return Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 320), child: Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(38),
+        borderRadius: BorderRadius.circular(30),
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [Ui.cardDeep, Ui.card],
         ),
         border: Border.all(color: Ui.line),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .28), blurRadius: 26, offset: const Offset(0, 12))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .28), blurRadius: 18, offset: const Offset(0, 8))],
       ),
       child: Column(children: [
         // ── top row: power · screen status · menu ──
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          _Round(icon: Icons.power_settings_new_rounded, size: 52, tone: _Tone.danger, onPress: _confirmOff, lock: _touching, semantics: 'Power off'),
-          const SizedBox(width: 10),
+          _Round(icon: Icons.power_settings_new_rounded, size: 42, tone: _Tone.danger, onPress: _confirmOff, lock: _touching, semantics: 'Power off'),
+          const SizedBox(width: 8),
           Expanded(child: _statusChip(playing)),
-          const SizedBox(width: 10),
-          _Round(icon: Icons.settings_rounded, size: 52, onPress: () => _key('menu'), lock: _touching, semantics: 'Settings menu'),
+          const SizedBox(width: 8),
+          _Round(icon: Icons.settings_rounded, size: 42, onPress: () => _key('menu'), lock: _touching, semantics: 'Settings menu'),
         ]),
-        const SizedBox(height: 22),
+        const SizedBox(height: 12),
 
         // ── navigation wheel ──
-        _DPad(onKey: _key, lock: _touching),
-        const SizedBox(height: 22),
+        _DPad(
+          onKey: _key,
+          onCursor: (dx, dy) => m.sendRemoteCommand('cursor', text: '${dx.toStringAsFixed(1)},${dy.toStringAsFixed(1)}'),
+          lock: _touching,
+        ),
+        const SizedBox(height: 12),
 
         // ── back · home · full screen ──
         Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
@@ -264,7 +268,7 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
             lock: _touching,
           ),
         ]),
-        const SizedBox(height: 22),
+        const SizedBox(height: 12),
 
         // ── volume · mute / keyboard · page ──
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, crossAxisAlignment: CrossAxisAlignment.center, children: [
@@ -284,10 +288,10 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
               label: m.receiverMuted ? 'Unmute' : 'Mute',
               onPress: playing ? () => m.toggleReceiverMute() : null,
               lock: _touching,
-              size: 54,
+              size: 42,
             ),
-            const SizedBox(height: 14),
-            _LabeledRound(icon: Icons.keyboard_alt_outlined, label: 'Keyboard', onPress: _openKeyboard, lock: _touching, size: 54),
+            const SizedBox(height: 8),
+            _LabeledRound(icon: Icons.keyboard_alt_outlined, label: 'Keyboard', onPress: _openKeyboard, lock: _touching, size: 42),
           ]),
           _Rocker(
             label: 'PAGE',
@@ -300,33 +304,33 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
             lock: _touching,
           ),
         ]),
-        const SizedBox(height: 22),
+        const SizedBox(height: 12),
 
         // ── transport ──
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           decoration: BoxDecoration(
             color: Ui.bg.withValues(alpha: .45),
-            borderRadius: BorderRadius.circular(40),
+            borderRadius: BorderRadius.circular(32),
             border: Border.all(color: Ui.line),
           ),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-            _Round(icon: Icons.replay_10_rounded, size: 52, onPress: canPlay ? () => _key('rewind') : null, lock: _touching, semantics: 'Back 10 seconds'),
+            _Round(icon: Icons.replay_10_rounded, size: 42, onPress: canPlay ? () => _key('rewind') : null, lock: _touching, semantics: 'Back 10 seconds'),
             _Round(
               icon: m.receiverPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              size: 66,
+              size: 52,
               tone: _Tone.accent,
-              iconSize: 34,
+              iconSize: 28,
               onPress: canPlay ? () => m.toggleReceiverPlay() : null,
               lock: _touching,
               semantics: m.receiverPlaying ? 'Pause' : 'Play',
             ),
-            _Round(icon: Icons.forward_10_rounded, size: 52, onPress: canPlay ? () => _key('forward') : null, lock: _touching, semantics: 'Forward 10 seconds'),
-            _Round(icon: Icons.stop_rounded, size: 52, onPress: playing ? () => m.stopPlayback() : null, lock: _touching, semantics: 'Stop'),
+            _Round(icon: Icons.forward_10_rounded, size: 42, onPress: canPlay ? () => _key('forward') : null, lock: _touching, semantics: 'Forward 10 seconds'),
+            _Round(icon: Icons.stop_rounded, size: 42, onPress: playing ? () => m.stopPlayback() : null, lock: _touching, semantics: 'Stop'),
           ]),
         ),
         if (m.receiverHasBackup) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           _Pill(
             icon: Icons.swap_horiz_rounded,
             label: 'Switch to backup stream',
@@ -336,19 +340,19 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
             },
           ),
         ],
-        const SizedBox(height: 22),
+        const SizedBox(height: 12),
 
         // ── app shortcuts ──
         Align(alignment: Alignment.centerLeft, child: Text('QUICK ACCESS',
-          style: TextStyle(color: Ui.muted, fontSize: 10, letterSpacing: 1.4, fontWeight: FontWeight.w900))),
-        const SizedBox(height: 10),
+          style: TextStyle(color: Ui.muted, fontSize: 9, letterSpacing: 1.3, fontWeight: FontWeight.w900))),
+        const SizedBox(height: 6),
         GridView.count(
           crossAxisCount: 3,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 1.25,
+          mainAxisSpacing: 6,
+          crossAxisSpacing: 6,
+          childAspectRatio: 1.75,
           children: [
             _AppTile(icon: Icons.movie_creation_outlined, label: 'Movies', color: const Color(0xFFE5484D), onPress: () => _key('movies'), lock: _touching),
             _AppTile(icon: Icons.live_tv_rounded, label: 'TV channels', color: const Color(0xFF3E8BFF), onPress: () => _key('tv'), lock: _touching),
@@ -358,24 +362,24 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
             _AppTile(icon: Icons.workspace_premium_rounded, label: 'Subscribe', color: const Color(0xFFEC4899), onPress: () => _key('subscribe'), lock: _touching),
           ],
         ),
-        const SizedBox(height: 14),
-        Text(_hint, textAlign: TextAlign.center, style: TextStyle(color: Ui.muted, fontSize: 11, height: 1.4)),
+        const SizedBox(height: 8),
+        Text('$_hint\nTip: drag on OK to move a cursor · tap OK to click · double-tap OK to double-click.', textAlign: TextAlign.center, style: TextStyle(color: Ui.muted, fontSize: 10, height: 1.3)),
       ]),
-    );
+    )));
   }
 
   Widget _statusChip(bool playing) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
       color: Ui.bg.withValues(alpha: .5),
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(16),
       border: Border.all(color: Ui.line),
     ),
     child: Row(children: [
-      Icon(playing ? Icons.play_circle_fill_rounded : Icons.settings_remote_rounded, size: 20, color: Ui.red),
-      const SizedBox(width: 8),
+      Icon(playing ? Icons.play_circle_fill_rounded : Icons.settings_remote_rounded, size: 18, color: Ui.red),
+      const SizedBox(width: 6),
       Expanded(child: Text(_screenLabel, maxLines: 2, overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 12, height: 1.2))),
+        style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 11, height: 1.15))),
     ]),
   );
 
@@ -610,17 +614,17 @@ class _LabeledRound extends StatelessWidget {
     required this.onPress,
     this.lock,
     this.tone = _Tone.normal,
-    this.size = 60,
+    this.size = 46,
   });
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: 78,
+    width: 66,
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       _Round(icon: icon, onPress: onPress, lock: lock, tone: tone, size: size, semantics: label),
-      const SizedBox(height: 6),
+      const SizedBox(height: 4),
       FittedBox(fit: BoxFit.scaleDown, child: Text(label, maxLines: 1,
-        style: TextStyle(color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w700))),
+        style: TextStyle(color: Ui.muted, fontSize: 10, fontWeight: FontWeight.w700))),
     ]),
   );
 }
@@ -651,36 +655,36 @@ class _Rocker extends StatelessWidget {
     lock: lock,
     repeatMs: 170,
     builder: (pressed) => Container(
-      height: 58,
+      height: 42,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: pressed ? Ui.red.withValues(alpha: .28) : Colors.transparent,
         borderRadius: BorderRadius.vertical(
-          top: top ? const Radius.circular(32) : Radius.zero,
-          bottom: top ? Radius.zero : const Radius.circular(32),
+          top: top ? const Radius.circular(26) : Radius.zero,
+          bottom: top ? Radius.zero : const Radius.circular(26),
         ),
       ),
-      child: Icon(icon, size: 28, color: Ui.text),
+      child: Icon(icon, size: 24, color: Ui.text),
     ),
   );
 
   @override
   Widget build(BuildContext context) => Container(
-    width: 72,
+    width: 58,
     decoration: BoxDecoration(
       color: Ui.card,
-      borderRadius: BorderRadius.circular(34),
+      borderRadius: BorderRadius.circular(28),
       border: Border.all(color: Ui.line),
       boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .22), blurRadius: 8, offset: const Offset(0, 3))],
     ),
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       _half(upIcon, onUp, true),
       Container(
-        height: 40,
+        height: 30,
         alignment: Alignment.center,
         child: Column(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(label, style: TextStyle(color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
-          if (sub.isNotEmpty) Text(sub, style: TextStyle(color: Ui.red, fontSize: 10, fontWeight: FontWeight.w800)),
+          Text(label, style: TextStyle(color: Ui.muted, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: .8)),
+          if (sub.isNotEmpty) Text(sub, style: TextStyle(color: Ui.red, fontSize: 9, fontWeight: FontWeight.w800)),
         ]),
       ),
       _half(downIcon, onDown, false),
@@ -701,16 +705,16 @@ class _Pill extends StatelessWidget {
     lock: lock,
     builder: (pressed) => Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
         color: _toneFill(_Tone.accent, pressed),
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Ui.red),
       ),
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Icon(icon, size: 20, color: Ui.red),
-        const SizedBox(width: 8),
-        Text(label, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 13)),
+        Icon(icon, size: 18, color: Ui.red),
+        const SizedBox(width: 6),
+        Text(label, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 12)),
       ]),
     ),
   );
@@ -729,22 +733,22 @@ class _AppTile extends StatelessWidget {
     onPress: onPress,
     lock: lock,
     builder: (pressed) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
         color: Color.alphaBlend(color.withValues(alpha: pressed ? .34 : .16), Ui.card),
         border: Border.all(color: color.withValues(alpha: .55)),
       ),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(
-          width: 34,
-          height: 34,
+          width: 26,
+          height: 26,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          child: Icon(icon, size: 19, color: Colors.white),
+          child: Icon(icon, size: 15, color: Colors.white),
         ),
-        const SizedBox(height: 7),
+        const SizedBox(height: 4),
         FittedBox(fit: BoxFit.scaleDown, child: Text(label, maxLines: 1,
-          style: TextStyle(color: Ui.text, fontSize: 11, fontWeight: FontWeight.w800))),
+          style: TextStyle(color: Ui.text, fontSize: 10, fontWeight: FontWeight.w800))),
       ]),
     ),
   );
@@ -755,8 +759,10 @@ class _AppTile extends StatelessWidget {
 /// holding an arrow repeats it, exactly like holding a TV remote key.
 class _DPad extends StatefulWidget {
   final bool Function(String) onKey;
+  /// Touchpad movement (logical px) while a finger drags on the OK button.
+  final void Function(double dx, double dy)? onCursor;
   final ValueNotifier<int> lock;
-  const _DPad({required this.onKey, required this.lock});
+  const _DPad({required this.onKey, required this.lock, this.onCursor});
   @override
   State<_DPad> createState() => _DPadState();
 }
@@ -767,7 +773,16 @@ class _DPadState extends State<_DPad> {
   Timer? _hold;
   Timer? _rep;
 
+  // OK button doubles as a touchpad: a tap clicks, a drag moves the cursor.
+  bool _okActive = false;
+  bool _dragging = false;
+  Offset _okStart = Offset.zero;
+  Offset _okLast = Offset.zero;
+  double _pdx = 0, _pdy = 0;
+  DateTime _lastSend = DateTime.fromMillisecondsSinceEpoch(0);
+
   static const okRatio = .40;
+  static const _dragSlop = 9.0;
 
   String? _hit(Offset p, double size) {
     final r0 = size / 2;
@@ -808,11 +823,51 @@ class _DPadState extends State<_DPad> {
       widget.lock.value++;
     }
     final z = _hit(p, size);
+    if (z == 'enter') {
+      // Wait to see whether this becomes a drag (cursor) or a tap (click).
+      _stopTimers();
+      _okActive = true;
+      _dragging = false;
+      _okStart = p;
+      _okLast = p;
+      _pdx = 0;
+      _pdy = 0;
+      setState(() => _zone = 'enter');
+      return;
+    }
     if (z != null) _press(z);
+  }
+
+  void _flushCursor(bool force) {
+    if (_pdx == 0 && _pdy == 0) return;
+    final now = DateTime.now();
+    if (!force && now.difference(_lastSend).inMilliseconds < 28) return;
+    _lastSend = now;
+    widget.onCursor?.call(_pdx, _pdy);
+    _pdx = 0;
+    _pdy = 0;
   }
 
   void _move(Offset p, double size) {
     if (!_touching) return;
+    if (_okActive) {
+      final d = p - _okLast;
+      _okLast = p;
+      if (!_dragging) {
+        final off = p - _okStart;
+        if (off.distance < _dragSlop) return;
+        _dragging = true;
+        HapticFeedback.selectionClick();
+        _pdx += off.dx;
+        _pdy += off.dy;
+        setState(() {});
+      } else {
+        _pdx += d.dx;
+        _pdy += d.dy;
+      }
+      _flushCursor(false);
+      return;
+    }
     final z = _hit(p, size);
     if (z == _zone) return;
     if (z == null) {
@@ -823,8 +878,18 @@ class _DPadState extends State<_DPad> {
     }
   }
 
-  void _up() {
+  void _up({bool cancel = false}) {
     _stopTimers();
+    if (_okActive) {
+      if (_dragging) {
+        _flushCursor(true);
+      } else if (!cancel) {
+        HapticFeedback.lightImpact();
+        widget.onKey('enter'); // tap = click (two quick taps = double click on the receiver)
+      }
+      _okActive = false;
+      _dragging = false;
+    }
     if (_touching) {
       _touching = false;
       if (widget.lock.value > 0) widget.lock.value--;
@@ -841,7 +906,7 @@ class _DPadState extends State<_DPad> {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) {
-    final size = math.min(c.maxWidth, 296.0);
+    final size = math.min(c.maxWidth, 216.0);
     return Center(
       child: Semantics(
         label: 'Navigation wheel. Up, down, left, right and OK',
@@ -850,13 +915,14 @@ class _DPadState extends State<_DPad> {
           onPointerDown: (e) => _down(e.localPosition, size),
           onPointerMove: (e) => _move(e.localPosition, size),
           onPointerUp: (_) => _up(),
-          onPointerCancel: (_) => _up(),
+          onPointerCancel: (_) => _up(cancel: true),
           child: SizedBox(
             width: size,
             height: size,
             child: CustomPaint(
               painter: _PadPainter(
                 zone: _zone,
+                dragging: _dragging,
                 accent: Ui.red,
                 surface: Ui.card,
                 deep: Ui.bg,
@@ -873,6 +939,7 @@ class _DPadState extends State<_DPad> {
 
 class _PadPainter extends CustomPainter {
   final String? zone;
+  final bool dragging;
   final Color accent;
   final Color surface;
   final Color deep;
@@ -880,6 +947,7 @@ class _PadPainter extends CustomPainter {
   final Color text;
   const _PadPainter({
     required this.zone,
+    this.dragging = false,
     required this.accent,
     required this.surface,
     required this.deep,
@@ -958,7 +1026,7 @@ class _PadPainter extends CustomPainter {
     chevron('left', math.pi);
 
     // OK button
-    final okPressed = zone == 'enter';
+    final okPressed = zone == 'enter' || dragging;
     canvas.drawCircle(c, okR + 3, Paint()..color = deep.withValues(alpha: .55));
     canvas.drawCircle(c, okR, Paint()..color = accent.withValues(alpha: okPressed ? .42 : .18));
     canvas.drawCircle(c, okR, Paint()..style = PaintingStyle.stroke..strokeWidth = 2.2..color = accent);
@@ -971,5 +1039,5 @@ class _PadPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PadPainter old) =>
-      old.zone != zone || old.accent != accent || old.surface != surface || old.line != line || old.text != text || old.deep != deep;
+      old.zone != zone || old.dragging != dragging || old.accent != accent || old.surface != surface || old.line != line || old.text != text || old.deep != deep;
 }
