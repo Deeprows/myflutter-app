@@ -194,6 +194,21 @@ input{display:block;width:100%;padding:16px;border:1px solid #394657;border-radi
 #join h1{font-size:clamp(26px,5vw,38px);margin:0 0 12px;font-weight:950}
 #connectPin{width:100%;margin-top:4px;min-height:50px}#statusJoin,#statusPlayer{font-size:13px;color:#c1cad6;min-height:22px;margin-top:14px}.hint{font-size:12px;color:#8792a2;margin-top:18px}details summary{cursor:pointer;text-align:center;padding:8px}#pairQr img{max-width:190px!important;max-height:190px!important}
 
+/* ---- minimise / continue watching ---- */
+#playerMinimise{pointer-events:auto;flex:none;border:1px solid #ffffff35;background:#141c29e8;color:#fff;border-radius:999px;padding:9px 14px;font-weight:800;white-space:nowrap}
+#playerMinimise:hover,#playerMinimise:focus{border-color:#ff5c7c;box-shadow:0 0 0 3px #ff5c7c35;outline:0}
+.dw-min-panel{position:fixed;z-index:10020;left:50%;bottom:clamp(68px,10vh,112px);transform:translateX(-50%);width:min(520px,92vw);max-height:min(58vh,480px);overflow:auto;padding:14px;border:1px solid #35465b;border-radius:20px;background:linear-gradient(145deg,#172333f7,#080e18f7);box-shadow:0 22px 70px #000c;color:#f4f7fb;backdrop-filter:blur(18px)}
+.dw-min-panel[hidden]{display:none}
+.dw-min-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 2px 12px;border-bottom:1px solid #ffffff18}
+.dw-min-head strong{font-size:16px}.dw-min-head small{display:block;color:#92a3b7;font-size:11px;margin-top:3px}
+.dw-min-close{border:1px solid #ffffff26;border-radius:10px;background:#ffffff12;color:#fff;padding:7px 11px}
+.dw-min-item{display:flex;align-items:center;gap:12px;width:100%;padding:12px 8px;border:0;border-bottom:1px solid #ffffff12;background:transparent;color:#fff;text-align:left;cursor:pointer}
+.dw-min-item:hover,.dw-min-item:focus{background:#ffffff12;outline:2px solid #ff5c7c;outline-offset:-2px;border-radius:12px}
+.dw-min-thumb{width:46px;height:46px;flex:none;display:grid;place-items:center;border-radius:12px;background:linear-gradient(135deg,#472032,#182d43);font-size:22px}
+.dw-min-meta{flex:1;min-width:0}.dw-min-meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}.dw-min-meta small{display:block;color:#9aabbd;font-size:11px;margin-top:4px}
+.dw-min-resume{flex:none;border-radius:999px;background:#e11d48;color:white;padding:8px 12px;font-size:12px;font-weight:850}
+.dw-min-empty{padding:24px 8px;text-align:center;color:#9aabbd;font-size:13px}
+@media(max-width:600px){#playerMinimise{padding:8px 10px;font-size:11px}.player-head{gap:7px}}
 /* ---- player ---- */
 .player{display:none;position:fixed;inset:0;width:100vw;height:100dvh;z-index:60;background:#000}
 .player-head{position:absolute;z-index:4;top:0;left:0;right:0;display:flex;align-items:center;gap:12px;padding:max(14px,env(safe-area-inset-top)) 18px 14px;background:linear-gradient(#000d,transparent)}
@@ -572,13 +587,83 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
 
 <!-- player (movies + phone casting) -->
 <section class="player" id="playerPanel" tabindex="0" aria-label="Video player">
-  <div class="player-head"><button class="secondary pback" id="playerBack" type="button">← Back</button><div class="title" id="mediaTitle">Ready to play</div><span class="live" id="playState">CONNECTED</span></div>
+  <div class="player-head"><button class="secondary pback" id="playerBack" type="button">← Back</button><div class="title" id="mediaTitle">Ready to play</div><span class="live" id="playState">CONNECTED</span><button class="secondary" id="playerMinimise" type="button" aria-label="Minimise player" title="Minimise and keep for later">－ Minimise</button></div>
   <div class="stage"><video id="screen" playsinline autoplay></video><iframe id="movieFrame" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope; clipboard-write; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="Deeprowss video"></iframe><iframe id="tvFrame" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope; clipboard-write; web-share" allowfullscreen referrerpolicy="origin" title="Deeprowss live TV"></iframe></div>
   <div class="controls"><button class="secondary tvonly" id="prevCh" type="button" title="Previous channel" aria-label="Previous channel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 5v14L8 12z" fill="currentColor"/><path d="M5 5v14"/></svg><span class="lbl">Prev</span></button><button class="secondary tvonly" id="nextCh" type="button" title="Next channel" aria-label="Next channel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5v14l11-7z" fill="currentColor"/><path d="M19 5v14"/></svg><span class="lbl">Next</span></button><button class="secondary tvonly" id="mainStream" type="button" title="Switch backup stream" aria-label="Switch stream" disabled hidden><span class="lbl">Switch 1/1</span></button><button class="secondary tvonly" id="backupStream" type="button" title="Switch backup stream" aria-label="Switch stream" disabled hidden><span class="lbl">Switch stream</span></button><button class="secondary tvonly nomethod" id="tvMethod" type="button" title="Try another way to open this channel" aria-label="Try another way"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg><span class="lbl">Try another way</span></button><button class="secondary" id="rewind" title="Back 10 seconds" aria-label="Back 10 seconds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg><span class="lbl">10s</span></button><button id="play" title="Play" aria-label="Play"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg><span class="lbl">Play</span></button><button class="secondary" id="pause" title="Pause" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><rect x="6" y="4.5" width="4.2" height="15" rx="1.2"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.2"/></svg><span class="lbl">Pause</span></button><button class="secondary" id="forward" title="Forward 10 seconds" aria-label="Forward 10 seconds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg><span class="lbl">10s</span></button><button class="secondary" id="mute" aria-pressed="false" title="Mute" aria-label="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg><span class="lbl">Mute</span></button><button class="secondary" id="fullscreen" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg><span class="lbl">Fullscreen</span></button><button class="secondary" id="stop" title="Stop" aria-label="Stop"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2.2"/></svg><span class="lbl">Stop</span></button></div>
   <div class="progress"><div class="seekrow" id="seekRow" hidden><span id="currentTime">00:00</span><input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek"><span id="totalTime">LIVE</span></div><div class="volbox" id="volBox"><button type="button" class="volico" id="volIcon" aria-label="Toggle mute" title="Mute / unmute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4z" fill="currentColor"/><path class="w1" d="M15.5 8.5a5 5 0 0 1 0 7"/><path class="w2" d="M18.5 5.5a9 9 0 0 1 0 13"/></svg></button><input class="volume" id="volume" type="range" min="0" max="100" value="100" aria-label="Volume"><output class="volnum" id="volNum" for="volume">100</output></div></div>
   <div id="statusPlayer" role="status">Connected.</div>
 </section>
 
+<script>
+/* Deeprowss Minimise & Continue Watching */
+(() => {
+  const $ = id => document.getElementById(id);
+  const sessions = [];
+  let activeId = 0;
+  const panel = document.createElement('section');
+  panel.className = 'dw-min-panel'; panel.id = 'dwMinPanel'; panel.hidden = true;
+  panel.setAttribute('aria-label','Minimised content');
+  panel.innerHTML = '<div class="dw-min-head"><div><strong>Continue Watching</strong><small>Your saved movies and channels</small></div><button class="dw-min-close" type="button">Close</button></div><div class="dw-min-list"></div>';
+  document.addEventListener('DOMContentLoaded', () => {
+    document.body.appendChild(panel);
+    panel.querySelector('.dw-min-close').addEventListener('click',()=>panel.hidden=true);
+    panel.addEventListener('click',e=>{
+      const b=e.target.closest('[data-resume]'); if(!b)return;
+      const item=sessions.find(x=>x.id===Number(b.dataset.resume)); if(!item)return;
+      resume(item); panel.hidden=true;
+    });
+    $('playerMinimise')?.addEventListener('click',minimise);
+    render();
+  });
+  function render(){
+    const list=panel.querySelector('.dw-min-list'); if(!list)return;
+    list.innerHTML=sessions.length?sessions.slice().reverse().map(x=>'<button class="dw-min-item" type="button" data-resume="'+x.id+'"><span class="dw-min-thumb">'+(x.kind==='tv'?'📺':'🎬')+'</span><span class="dw-min-meta"><b>'+esc(x.title)+'</b><small>'+(x.kind==='tv'?'Live TV channel':'Movie / series')+' · Paused</small></span><span class="dw-min-resume">RESUME ▶</span></button>').join(''):'<div class="dw-min-empty">Nothing minimised yet. Minimise a movie or channel to keep it here.</div>';
+    document.querySelectorAll('[data-minimise-open]').forEach(b=>b.textContent='Minimised'+(sessions.length?' ('+sessions.length+')':''));
+  }
+  function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function current(){
+    const p=$('playerPanel'),v=$('screen'),mf=$('movieFrame'),tf=$('tvFrame');
+    if(!p||p.style.display!=='block')return null;
+    const mode=document.body.dataset.mode||'movies',title=$('mediaTitle')?.textContent||'Now playing';
+    if(mode==='tv'&&window.deeprowssGetTvSession){
+      const d=window.deeprowssGetTvSession(); if(d)return {kind:'tv',title,id:Date.now(),tv:d};
+    }
+    if(mf&&mf.style.display==='block'&&mf.src&&mf.src!=='about:blank')return {kind:'movie',title,id:Date.now(),url:mf.src,embed:true};
+    if(tf&&tf.style.display==='block'&&tf.src&&tf.src!=='about:blank')return {kind:'tv',title,id:Date.now(),url:tf.src,embed:true};
+    if(v&&v.style.display==='block'&&(v.currentSrc||v.src))return {kind:mode==='tv'?'tv':'movie',title,id:Date.now(),url:v.currentSrc||v.src,position:Number(v.currentTime)||0,playType:/\.m3u8(?:$|\?)/i.test(v.currentSrc||v.src)?'hls':/\.mpd(?:$|\?)/i.test(v.currentSrc||v.src)?'dash':'direct'};
+    return null;
+  }
+  function minimise(){
+    const p=$('playerPanel'); if(!p||p.style.display!=='block')return;
+    const item=current(); if(!item)return;
+    item.id=Date.now()+Math.floor(Math.random()*1000);
+    sessions.push(item); while(sessions.length>8)sessions.shift();
+    // Stop playback without invoking closePlayer(), which deliberately clears media.
+    const v=$('screen'); if(v&&!v.paused){item.position=Number(v.currentTime)||item.position||0;v.pause();}
+    if(item.embed){try{const f=item.kind==='tv'?$ ('tvFrame'):$('movieFrame');f?.contentWindow?.postMessage({type:'pause'},'*');}catch(_){}}
+    p.style.display='none'; document.body.classList.remove('fixture-streaming');
+    panel.hidden=true; render();
+    window.dispatchEvent(new CustomEvent('deeprowss-content-minimised',{detail:{title:item.title}}));
+  }
+  function resume(x){
+    // Starting another item naturally pauses/clears the currently active player.
+    if(x.kind==='tv'&&x.tv&&window.deeprowssResumeTvSession){window.deeprowssResumeTvSession(x.tv);return;}
+    if(x.embed){
+      if(x.kind==='tv'&&window.deeprowssPlayTv){window.deeprowssPlayTv(x.url,x.title);return;}
+      if(window.deeprowssPlay)window.deeprowssPlay(x.url,'embed',x.title);
+      return;
+    }
+    if(window.deeprowssPlay){
+      window.deeprowssPlay(x.url,x.playType||'direct',x.title);
+      if(x.position>0){const v=$('screen');const seek=()=>{try{v.currentTime=x.position;}catch(_){};};v.addEventListener('loadedmetadata',seek,{once:true});}
+    }
+  }
+  window.deeprowssMinimisedSessions=sessions;
+  window.deeprowssOpenMinimised=()=>{panel.hidden=!panel.hidden;render();};
+  window.deeprowssMinimiseCurrent=minimise;
+  window.addEventListener('keydown',e=>{if(e.key==='Escape'&&!panel.hidden){panel.hidden=true;}});
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
