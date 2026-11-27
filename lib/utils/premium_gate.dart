@@ -104,10 +104,20 @@ class PremiumGate {
     String movieKey, {
     String action = 'play',
   }) async {
-    final access = await _decoderAccess(context);
-    if (access == null) return false;
+    final service = SubscriptionService.instance;
+    if (!service.enabled) return true;
+    final access = service.accountId == null
+        ? const DecoderAccessResult(premium: false, trialActive: false, verified: true)
+        : await service.readDecoderAccess();
+    if (!access.verified) {
+      if (!context.mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not verify movie access. Please try again when connected.')),
+      );
+      return false;
+    }
     if (access.premium || access.trialActive) return true;
-    final quota = await SubscriptionService.instance.consumeMovieAccess(movieKey, action: action);
+    final quota = await service.consumeMovieAccess(movieKey, action: action);
     if (!context.mounted) return false;
     if (!quota.verified) {
       ScaffoldMessenger.of(context).showSnackBar(
