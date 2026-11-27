@@ -170,6 +170,7 @@
     const n = digits(raw);
     if (!/^\d{10}$/.test(n)) return { valid: false };
     const r = await api('/receiver/decoder/validate', 'POST', { code: n, device_id: deviceId() });
+    if (r.data.limit_reached) return r.data;
     return r.ok && r.data.valid === true ? r.data : { valid: false };
   }
   // True while this device already has an active (unexpired) Premium subscription.
