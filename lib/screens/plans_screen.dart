@@ -67,8 +67,8 @@ class _PlansScreenState extends State<PlansScreen> {
     _sub.addListener(_changed);
     unawaited(_loadPaymentAccounts());
     _load();
-    // While a request is waiting, look for the answer every 20 seconds.
-    _poll = Timer.periodic(const Duration(seconds: 20), (_) {
+    // While a request is waiting, check frequently so a new token appears promptly.
+    _poll = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted &&
           _tokenState.state == 'pending' &&
           !_busy &&
