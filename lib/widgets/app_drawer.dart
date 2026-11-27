@@ -12,6 +12,7 @@ import '../screens/browser_screen.dart';
 import '../screens/fan_profile_screen.dart';
 import '../screens/fan_widgets.dart';
 import '../screens/guide_screen.dart';
+import '../screens/about_screen.dart';
 import '../screens/legal_screen.dart';
 import '../screens/content_shortcut_screen.dart';
 import '../screens/highlights_screen.dart';
@@ -707,6 +708,7 @@ Future<void> showSettingsSheet(BuildContext context) {
                 hint: 'Lock the app with a PIN for children'.tr,
               ),
               Divider(height: 18, color: Ui.line),
+              item(Icons.info_outline_rounded, 'About Deeprowss'.tr, showAboutDeeprowss),
               item(Icons.campaign_outlined, 'Notice'.tr, showNoticeDialog),
               item(
                 Icons.chat_bubble_outline_rounded,
