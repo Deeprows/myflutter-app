@@ -1118,6 +1118,9 @@ async function ensureSchema(env) {
       "CREATE TABLE IF NOT EXISTS decoder_codes (owner_id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)"
     ),
     env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS decoder_devices (owner_id TEXT NOT NULL, device_id TEXT NOT NULL, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, PRIMARY KEY(owner_id, device_id))"
+    ),
+    env.DB.prepare(
       "CREATE TABLE IF NOT EXISTS movie_trials (owner_id TEXT NOT NULL, movie_key TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(owner_id, movie_key))"
     ),
     env.DB.prepare(
@@ -1185,7 +1188,28 @@ async function issueDecoderCode(env, ownerId, request = null, ctx = null) {
   return json({ error: "Could not issue a Decoder number. Try again." }, 503);
 }
 
-async function validateDecoderCode(env, raw) {
+// Decoder numbers belong to one subscription owner and support at most two devices.
+async function claimDecoderDevice(env, ownerId, deviceId) {
+  const id = String(deviceId || "");
+  if (!receiverIdOk(id)) return { allowed: false, count: 0 };
+  const now = Date.now();
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO decoder_devices (owner_id, device_id, first_seen, last_seen) " +
+    "SELECT ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM decoder_devices WHERE owner_id = ?) < 2"
+  ).bind(ownerId, id, now, now, ownerId).run();
+  const linked = await env.DB.prepare(
+    "SELECT device_id FROM decoder_devices WHERE owner_id = ? AND device_id = ?"
+  ).bind(ownerId, id).first();
+  if (linked) await env.DB.prepare(
+    "UPDATE decoder_devices SET last_seen = ? WHERE owner_id = ? AND device_id = ?"
+  ).bind(now, ownerId, id).run();
+  const countRow = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM decoder_devices WHERE owner_id = ?"
+  ).bind(ownerId).first();
+  return { allowed: !!linked, count: Number(countRow?.n || 0) };
+}
+
+async function validateDecoderCode(env, raw, deviceId = "") {
   const code = String(raw || "").replace(/\D/g, "");
   if (!/^\d{10}$/.test(code)) return { valid: false };
   const row = await env.DB.prepare(
@@ -1194,6 +1218,10 @@ async function validateDecoderCode(env, raw) {
   if (!row || Number(row.expires_at) <= Date.now()) return { valid: false };
   const subscriptionExpiry = await expiryOf(env, String(row.owner_id));
   if (subscriptionExpiry <= Date.now()) return { valid: false };
+  if (deviceId) {
+    const device = await claimDecoderDevice(env, String(row.owner_id), deviceId);
+    if (!device.allowed) return { valid: false, limit_reached: true, max_devices: 2 };
+  }
   return {
     valid: true,
     owner_id: String(row.owner_id),
@@ -1333,15 +1361,22 @@ async function receiverAccess(request, env, url, ctx = null) {
     }
     if (path === "/receiver/decoder/validate" && request.method === "POST") {
       const body = await request.json().catch(() => ({}));
-      const result = await validateDecoderCode(env, body.code);
-      return json({ valid: result.valid === true, expires_at: result.expires_at || 0, now: result.now || Date.now() });
+      const result = await validateDecoderCode(env, body.code, body.device_id);
+      return json({
+        valid: result.valid === true,
+        limit_reached: result.limit_reached === true,
+        max_devices: result.max_devices || 2,
+        expires_at: result.expires_at || 0,
+        now: result.now || Date.now(),
+      }, result.limit_reached ? 403 : 200);
     }
     if (path === "/receiver/movie-access" && request.method === "POST") {
       const body = await request.json().catch(() => ({}));
       const deviceId = String(body.device_id || "");
       const movieKey = cleanMovieKey(body.movie_key);
       if (!receiverIdOk(deviceId) || !movieKey) return json({ error: "bad movie request" }, 400);
-      const codeResult = await validateDecoderCode(env, body.decoder_code);
+      const codeResult = await validateDecoderCode(env, body.decoder_code, deviceId);
+      if (codeResult.limit_reached) return json({ allowed: false, error: "This Decoder number is already linked to 2 devices. Contact Admin on WhatsApp to add another device." }, 403);
       const ownerId = codeResult.valid ? codeResult.owner_id : deviceId;
       if (codeResult.valid) return json({ allowed: true, premium: true, used: 0, remaining: RECEIVER_FREE_MOVIES, expires_at: codeResult.expires_at, now: Date.now() });
       const expires = await expiryOf(env, ownerId);
@@ -1354,7 +1389,8 @@ async function receiverAccess(request, env, url, ctx = null) {
       const deviceId = String(body.device_id || "");
       const channelKey = String(body.channel_key || "").trim().slice(0, 120);
       if (!receiverIdOk(deviceId) || !channelKey) return json({ error: "bad TV channel request" }, 400);
-      const codeResult = await validateDecoderCode(env, body.decoder_code);
+      const codeResult = await validateDecoderCode(env, body.decoder_code, deviceId);
+      if (codeResult.limit_reached) return json({ allowed: false, error: "This Decoder number is already linked to 2 devices. Contact Admin on WhatsApp to add another device." }, 403);
       if (codeResult.valid) return json({ allowed: true, premium: true, used: 0, remaining: RECEIVER_FREE_TV_CHANNELS, expires_at: codeResult.expires_at, now: Date.now() });
       const expires = await expiryOf(env, deviceId);
       if (expires > Date.now()) return json({ allowed: true, premium: true, used: 0, remaining: RECEIVER_FREE_TV_CHANNELS, expires_at: expires, now: Date.now() });
@@ -2280,8 +2316,15 @@ async function subAdmin(request, env, url) {
   let made = [];
   if (form) {
     const action = String(form.get("action") || "grant");
-    const id = String(form.get("install_id") || "").trim();
+    let id = String(form.get("install_id") || "").trim();
     const days = parseInt(String(form.get("days") || ""), 10);
+    // Admin may top up using the customer's current Decoder number.
+    if (action === "grant" && /^\d{10}$/.test(id)) {
+      const decoderRow = await env.DB.prepare(
+        "SELECT owner_id FROM decoder_codes WHERE code = ?"
+      ).bind(id).first();
+      id = decoderRow ? String(decoderRow.owner_id) : "";
+    }
     const daysOk = days >= 0 && days <= MAX_TOKEN_DAYS;
 
     if (action === "mint") {
