@@ -1281,7 +1281,7 @@ async function subDecoderAccess(request, env) {
   const ownerId = String(body.install_id || "");
   if (!receiverIdOk(ownerId)) return json({ error: "bad account id" }, 400);
   const expires = await expiryOf(env, ownerId);
-  const trial = await decoderTrialState(env, ownerId, true);
+  const trial = await decoderTrialState(env, ownerId, body.start_trial === true);
   return json({
     premium: expires > Date.now(),
     expires_at: expires,
