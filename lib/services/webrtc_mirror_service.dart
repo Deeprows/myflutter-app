@@ -102,6 +102,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
   bool receiverMuted = false;
   bool receiverPlayerOpen = false;
   bool receiverFullscreen = false;
+  bool receiverOverlay = false; // a dialog / sheet is open on the receiver
   String receiverMode = 'idle'; // idle | media | iframe | mirror
   String receiverView = 'landing'; // landing | movies | connect
   String receiverPlatform = 'web'; // web | windows (the Deeprowss Cinema exe) | tv
@@ -358,6 +359,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
           receiverHasBackup = message['hasBackup'] == true;
           receiverMuted = message['muted'] == true;
           receiverFullscreen = message['fullscreen'] == true;
+          receiverOverlay = message['overlay'] == true;
           final vol = (message['volume'] as num?)?.round();
           // Do not fight the slider while the user is dragging it.
           if (vol != null && DateTime.now().difference(_volumeSetAt).inMilliseconds > 1500) {
@@ -584,17 +586,23 @@ class DeeprowssMirrorService extends ChangeNotifier {
   /// Volume step in percent (positive or negative).
   void nudgeReceiverVolume(int delta) => setReceiverVolume((receiverVolume + delta).toDouble());
 
-  /// TV-style navigation: up, down, left, right, enter, back, home.
+  /// TV-style navigation: up, down, left, right, enter, back, home, menu,
+  /// chup / chdown (page up / down), backspace.
   bool sendRemoteKey(String key) => sendRemoteCommand(key);
 
   /// Asks the receiver to report its current state (used right after pairing).
   void requestReceiverState() => sendRemoteCommand('hello');
 
-  bool sendRemoteCommand(String command, {double? value}) {
+  /// Types text into the field that is focused on the receiver (search box,
+  /// playlist URL...). With [submit] the receiver also presses Enter.
+  bool sendRemoteText(String text, {bool submit = false}) =>
+      sendRemoteCommand('text', value: submit ? 1.0 : 0.0, text: text);
+
+  bool sendRemoteCommand(String command, {double? value, String? text}) {
     final direct = _socket != null && _socket!.readyState == WebSocket.open;
     // QR pairing has no direct socket: commands travel through the pairing relay.
     if (!direct && !(usingQrPairing && running)) return false;
-    _send({'type': 'remote', 'command': command, if (value != null) 'value': value});
+    _send({'type': 'remote', 'command': command, if (value != null) 'value': value, if (text != null) 'text': text});
     return true;
   }
 
@@ -711,6 +719,7 @@ class DeeprowssMirrorService extends ChangeNotifier {
     receiverHasBackup = false;
     receiverMuted = false;
     receiverPlayerOpen = false;
+    receiverOverlay = false;
     receiverMode = 'idle';
     receiverView = 'landing';
     receiverPlatform = 'web';
