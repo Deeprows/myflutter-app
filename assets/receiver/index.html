@@ -790,6 +790,27 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
           if($('movieDetails').classList.contains('open'))$('detailClose').click();
           if(panel.style.display==='block')closePlayer();
           go('landing');reportState();return;
+        // Quick-access shortcuts from the phone remote.
+        case 'movies':go('movies');reportState();return;
+        case 'tv':go('tv');reportState();return;
+        case 'football':go('fixtures');reportState();return;
+        case 'connect':go('connect');reportState();return;
+        case 'downloads':go('downloads');reportState();return;
+        case 'settings':{
+          const b=$('dwSettingsOpen');
+          if(b)b.click();else say('Settings are not available in this receiver browser.');
+          reportState();return;
+        }
+        case 'subscribe':{
+          const b=$('subscriptionOpen');
+          if(b)b.click();else say('Subscription is not available in this receiver browser.');
+          reportState();return;
+        }
+        case 'off':{
+          const b=$('dwPowerOpen');
+          if(b)b.click();else say('Use the TV or browser controls to close Deeprowss.');
+          reportState();return;
+        }
       }
       if(mode==='mirror'||mode==='idle'){
         if(command==='fullscreen'&&(mode==='mirror'||desktop))enterFullscreen();
