@@ -51,6 +51,7 @@ class _PlansScreenState extends State<PlansScreen> {
 
   // "Request a token" card (replaces the old Free card).
   final _contact = TextEditingController();
+  final _manualToken = TextEditingController();
   TokenState _tokenState = const TokenState('unknown');
   bool _tokenChecking = true;
   String? _tokenError;
@@ -80,6 +81,7 @@ class _PlansScreenState extends State<PlansScreen> {
   void dispose() {
     _poll?.cancel();
     _contact.dispose();
+    _manualToken.dispose();
     _sub.removeListener(_changed);
     AdScheduler.instance.release();
     super.dispose();
@@ -164,7 +166,11 @@ class _PlansScreenState extends State<PlansScreen> {
       _busy = false;
       _tokenError = err;
     });
-    if (err == null) _toast('Premium activated. Thank you! 💗');
+    if (err == null) {
+      _manualToken.clear();
+      await _checkToken();
+      _toast('Premium activated. Thank you! 💗');
+    }
   }
 
   Future<void> _messageOnWhatsapp() async {
@@ -576,6 +582,47 @@ class _PlansScreenState extends State<PlansScreen> {
               style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
           body,
+          const SizedBox(height: 16),
+          Divider(color: Ui.line),
+          const SizedBox(height: 10),
+          const Text('Already have a token?',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 5),
+          Text('Paste the Premium token you received and activate your subscription.',
+              style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3)),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _manualToken,
+            textCapitalization: TextCapitalization.characters,
+            autocorrect: false,
+            enableSuggestions: false,
+            maxLength: 24,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9-]')),
+              UpperCaseTextFormatter(),
+            ],
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.key_rounded),
+              hintText: 'Paste your token',
+              counterText: '',
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _busy ? null : () => _redeemToken(_manualToken.text),
+              icon: const Icon(Icons.verified_rounded),
+              label: const Text('Activate Subscription'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF22B25D),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24)),
+              ),
+            ),
+          ),
           if (_tokenError != null) ...[
             const SizedBox(height: 10),
             Text(_tokenError!,
