@@ -164,6 +164,36 @@ let page = await (await call("/sub/admin", form({ token: "adm", install_id: ID3,
 assert.match(page, /Premium until/);
 assert.match(page, /Decoder number: [0-9]{10}/);
 assert.equal((await (await call(`/sub/status?install=${ID3}`)).json()).active, true);
+// Top up by the current Decoder number: preserve the number and both
+// registered devices; a third device must remain blocked.
+const codeMatch = /Decoder number: ([0-9]{10})/.exec(page);
+assert.ok(codeMatch, "admin grant issues a Decoder number");
+const stableCode = codeMatch[1];
+const deviceA = "11112222333344445555666677778888";
+const deviceB = "aaaabbbbccccddddeeeeffff00001111";
+const deviceC = "99998888777766665555444433332222";
+const validateDecoder = async (code, device_id) =>
+  (await post("/receiver/decoder/validate", { code, device_id })).json();
+assert.equal((await validateDecoder(stableCode, deviceA)).valid, true);
+assert.equal((await validateDecoder(stableCode, deviceB)).valid, true);
+assert.equal((await validateDecoder(stableCode, deviceC)).limit_reached, true);
+const expiryBeforeTopup = (await (await call(`/sub/status?install=${ID3}`)).json()).expires_at;
+page = await (await call("/sub/admin", form({ token: "adm", install_id: stableCode, days: "30" }))).text();
+assert.match(page, new RegExp(`Decoder number: ${stableCode}`), "active top-up preserves the same Decoder number");
+const expiryAfterTopup = (await (await call(`/sub/status?install=${ID3}`)).json()).expires_at;
+assert.equal(expiryAfterTopup, expiryBeforeTopup + 30 * 86400000, "top-up adds days to the existing expiry");
+assert.equal((await validateDecoder(stableCode, deviceA)).valid, true, "first device survives top-up");
+assert.equal((await validateDecoder(stableCode, deviceB)).valid, true, "second device survives top-up");
+assert.equal((await validateDecoder(stableCode, deviceC)).limit_reached, true, "top-up does not add device slots");
+
+// After expiry, a new Decoder number is issued with a fresh two-device allowance.
+sqlite.prepare("UPDATE decoder_codes SET expires_at=? WHERE owner_id=?").run(Date.now()-1000, ID3);
+page = await (await call("/sub/admin", form({ token: "adm", install_id: stableCode, days: "30" }))).text();
+const renewedCodeMatch = /Decoder number: ([0-9]{10})/.exec(page);
+assert.ok(renewedCodeMatch);
+assert.notEqual(renewedCodeMatch[1], stableCode, "expired Decoder number is replaced after reactivation");
+assert.equal((await validateDecoder(renewedCodeMatch[1], deviceC)).valid, true, "new number starts a fresh device allowance");
+
 await call("/sub/admin", form({ token: "adm", install_id: ID3, days: "0" }));
 assert.equal((await (await call(`/sub/status?install=${ID3}`)).json()).active, false);
 assert.equal((await call("/sub/admin?token=adm")).status, 200);
