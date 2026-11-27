@@ -125,3 +125,34 @@ automatically when the current `cloudflare/worker.js` is deployed.
 The receiver-only subscription flow is tied to that
 receiver's stored device ID; include this ID in manual WhatsApp payment
 messages so the admin can activate the correct EXE / Android TV.
+
+## Telegram access notifications
+
+The Worker can send private Telegram alerts when someone:
+
+- Requests an ad-free access token from Deeprowss App / PC / Android TV.
+- Starts a Premium subscription checkout (including the TV receiver).
+- Requests a Premium Decoder activation number.
+
+The notification includes the detected platform, request time, account/device ID,
+and the relevant plan/contact/payment reference. Telegram delivery is best-effort:
+a Telegram outage never blocks a token request, checkout, or Decoder response.
+
+### Create and connect the bot
+
+1. In Telegram, open **@BotFather**, send `/newbot`, and follow the prompts.
+2. Copy the bot token privately. Do not commit it to GitHub or put it in an app.
+3. Open the new bot and send `/start`. If you want alerts in a private group,
+   add the bot to that group and send a message there.
+4. Obtain the destination chat ID from the bot's `getUpdates` response (for a
+   group, it is usually a negative number). Keep both the token and chat ID private.
+5. In Cloudflare, open **Workers & Pages → your Deeprowss Worker → Settings →
+   Variables and Secrets**. Add these as **Secrets**:
+   - `TELEGRAM_BOT_TOKEN` — the token from BotFather
+   - `TELEGRAM_CHAT_ID` — your private chat ID or group chat ID
+6. Deploy the current `cloudflare/worker.js`. Open `/health`; it should show
+   `"telegram_notifications": true` (this confirms both secrets are configured,
+   not that a test message has been delivered).
+
+Do not expose the bot token in client apps, public URLs, screenshots, or repository
+files. If it is ever exposed, revoke it with BotFather and replace the Worker secret.
