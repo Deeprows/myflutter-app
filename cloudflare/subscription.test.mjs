@@ -306,16 +306,16 @@ assert.equal(j.allowed, false);
 assert.equal(j.remaining, 0);
 
 for (const key of ["film:one", "film:two", "film:three"]) {
-  j = await (await post("/sub/movie-access", {
+  j = await (await post("/sub/decoder/movie-access", {
     install_id: EXPIRED_DECODER, movie_key: key, action: "play"
   })).json();
   assert.equal(j.allowed, true);
 }
-j = await (await post("/sub/movie-access", {
+j = await (await post("/sub/decoder/movie-access", {
   install_id: EXPIRED_DECODER, movie_key: "film:four", action: "download"
 })).json();
 assert.equal(j.allowed, false);
-j = await (await post("/sub/movie-access", {
+j = await (await post("/sub/decoder/movie-access", {
   install_id: EXPIRED_DECODER, movie_key: "film:one", action: "download"
 })).json();
 assert.equal(j.allowed, true, "play and download of the same title share one daily slot");
