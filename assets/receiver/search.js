@@ -17,8 +17,12 @@
   /* Keep the universal search dock in one consistent position on every browser
      and device. Avoid measuring free space: browser viewport/UA differences
      (notably Opera Mini) can otherwise move it to the header. */
-  .dw-search{position:absolute;z-index:9;left:50%;right:auto;top:auto;bottom:14px;transform:translateX(-50%);width:min(440px,calc(100% - 32px));pointer-events:none}
-  .dws-field{pointer-events:auto;position:relative;display:flex;align-items:center;gap:8px;width:100%;max-width:440px;margin:0 auto;height:38px;padding:0 10px 0 12px;border-radius:999px;border:1px solid rgb(var(--n5,70 85 105));background:rgba(8,12,18,.88);backdrop-filter:blur(10px);color:#e8eef5;transition:border-color .15s,box-shadow .15s}
+  /* Dock the search immediately to the left of the app Exit/Power control.
+     Keep it in the footer flow so it never covers navigation or status buttons. */
+  .receiver-footer{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:nowrap}
+  .dw-search{position:relative;z-index:9;left:auto;right:auto;top:auto;bottom:auto;transform:none;flex:0 1 300px;width:min(300px,24vw);min-width:190px;max-width:300px;margin:0;pointer-events:none}
+  .dws-field{pointer-events:auto;position:relative;display:flex;align-items:center;gap:7px;width:100%;max-width:300px;margin:0;height:32px;padding:0 9px 0 10px;border-radius:999px;border:1px solid rgb(var(--n5,70 85 105));background:rgba(8,12,18,.88);backdrop-filter:blur(10px);color:#e8eef5;transition:border-color .15s,box-shadow .15s}
+  @media(max-width:820px){.receiver-footer{flex-wrap:wrap}.dw-search{flex-basis:260px;width:min(260px,42vw);min-width:160px}.dws-field{height:32px}}
   .dws-field:focus-within{border-color:rgb(var(--ar,29 180 234));box-shadow:0 0 0 3px rgba(var(--ar,29,180,234),.25)}
   .dws-field svg{flex:none;width:18px;height:18px;fill:none;stroke:#9fb0c3;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .dws-field input{flex:1;min-width:0;height:100%;padding:0;border:0;outline:0;background:transparent;color:inherit;font:600 14px/1 inherit;font-family:inherit}
@@ -52,6 +56,22 @@
     '</div>' +
     '<div class="dws-panel" id="dwSearchPanel" role="listbox" aria-label="Search results" hidden></div>';
   land.appendChild(box);
+
+  // The Exit/Power control is created by the main receiver script after this
+  // file loads. Move the search into the footer immediately before that control
+  // once it exists, keeping it alongside (not over) the footer buttons.
+  const dockSearch = () => {
+    const power = document.getElementById('dwPowerOpen');
+    const footer = power && power.closest('.receiver-footer');
+    if (footer && box.parentElement === land) footer.insertBefore(box, power);
+  };
+  const dockObserver = new MutationObserver(() => {
+    const power = document.getElementById('dwPowerOpen');
+    const footer = power && power.closest('.receiver-footer');
+    if (footer && box.parentElement !== footer) footer.insertBefore(box, power);
+  });
+  dockObserver.observe(land, { childList: true, subtree: true });
+  dockSearch();
 
   const input = document.getElementById('dwSearchInput');
   const clearBtn = document.getElementById('dwSearchClear');
@@ -181,5 +201,5 @@
 
   /* Click outside closes the list; leaving the home screen resets the bar. */
   document.addEventListener('click', e => { if (!box.contains(e.target)) { token++; panel.hidden = true; } });
-  window.addEventListener('hashchange', () => { if (location.hash && location.hash !== '#landing') reset(); setTimeout(place, 80); });
+  window.addEventListener('hashchange', () => { if (location.hash && location.hash !== '#landing') reset();  });
 })();
