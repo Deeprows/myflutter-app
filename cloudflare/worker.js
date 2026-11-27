@@ -1701,7 +1701,8 @@ function notifyAccessEvent(env, request, ctx, title, fields = []) {
   if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(task);
   else return task;
 }
-\n// ---- Paystack --------------------------------------------------------------
+
+// ---- Paystack --------------------------------------------------------------
 
 async function paystack(env, path, init = {}) {
   const r = await fetch(`https://api.paystack.co${path}`, {
