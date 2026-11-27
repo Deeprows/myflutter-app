@@ -27,7 +27,7 @@ pick('u3','m3',WEEK+1000,'score','',1,0);sql.prepare('INSERT INTO fan_results VA
 let r=await worker.fetch(new Request('https://feed.test/fan/admin'),env,{});
 assert.equal(r.status,401,'admin page must not be public');
 r=await worker.fetch(new Request('https://feed.test/fan/admin?session=admin-secret'),env,{});
-assert.equal(r.status,200);assert.match(r.headers.get('content-type'),/text\\/html/);assert.match(r.headers.get('content-security-policy'),/connect-src 'self'/);
+assert.equal(r.status,200);assert.match(r.headers.get('content-type'),/text\/html/);assert.match(r.headers.get('content-security-policy'),/connect-src 'self'/);
 assert.match(await r.text(),/Weekly winners/);
 assert.equal((await admin('/week',null,'wrong')).status,401);
 assert.equal((await admin('/week/finalize',{week:W},'wrong')).status,401);
