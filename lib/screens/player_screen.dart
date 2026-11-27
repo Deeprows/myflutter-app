@@ -907,7 +907,86 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  /// Movie / series page: title, slim controls, then the TMDB details.
+  Future<void> _downloadMovie() async {
+    final movie = widget.movie;
+    if (movie == null) return;
+    if (!movie.hasDownload) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('A download link is not available for this title.')),
+      );
+      return;
+    }
+    final key = (movie.isSeries ? 'tv:' : 'movie:') +
+        (movie.tmdbId?.toString() ?? movie.title.toLowerCase());
+    if (!await PremiumGate.allowDownload(context, key)) return;
+    if (!mounted) return;
+    await PartnerBrowser.instance.download(context, movie.downloadUrl);
+  }
+
+  Widget _trailerSection() {
+    final future = _trailerFuture;
+    if (future == null) return const SizedBox.shrink();
+    return FutureBuilder<TmdbTrailer?>(
+      future: future,
+      builder: (context, snapshot) {
+        final trailer = snapshot.data;
+        if (trailer == null) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Trailer', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => TrailerPlayerScreen(
+                    title: trailer.title,
+                    youtubeKey: trailer.youtubeKey,
+                    poster: trailer.poster,
+                  ),
+                )),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: SizedBox(
+                    height: 170,
+                    width: double.infinity,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.network(
+                          'https://img.youtube.com/vi/' + trailer.youtubeKey + '/hqdefault.jpg',
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => widget.movie!.hasImage
+                              ? Image.network(widget.movie!.image, fit: BoxFit.cover)
+                              : Container(color: Ui.card),
+                        ),
+                        Container(color: Colors.black.withValues(alpha: .25)),
+                        const Center(child: Icon(Icons.play_circle_fill_rounded, size: 58, color: Colors.white)),
+                        Positioned(
+                          left: 12,
+                          bottom: 10,
+                          right: 12,
+                          child: Text(
+                            'TRAILER · ' + widget.movie!.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Movie / series page: title, slim controls, TMDB details and movie actions.
   Widget _movieBody() {
     final info = _info;
     return ListView(
@@ -917,6 +996,23 @@ class _PlayerScreenState extends State<PlayerScreen>
         _compactControls(side: 16, top: 6),
         MovieInfoPanel(
             movie: widget.movie!, info: info, loading: _infoLoading),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _downloadMovie,
+              style: FilledButton.styleFrom(
+                backgroundColor: Ui.red,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              icon: const Icon(Icons.download_rounded),
+              label: const Text('Download', style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+          ),
+        ),
+        _trailerSection(),
       ],
     );
   }
