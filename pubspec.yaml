@@ -64,7 +64,7 @@ flutter_native_splash:
   color: "#080B10"
   image: assets/splash/splash.png
   android: true
-  ios: false
+  ios: true
   web: false
   android_gravity: center
   android_12:
@@ -76,7 +76,7 @@ flutter_native_splash:
 # after `flutter create`).
 flutter_launcher_icons:
   android: true
-  ios: false
+  ios: true
   image_path: assets/icon/icon.png
   adaptive_icon_background: "#080B10"
   adaptive_icon_foreground: assets/icon/icon_foreground.png
