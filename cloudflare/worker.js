@@ -2583,7 +2583,7 @@ async function subAdmin(request, env, url) {
         .map(
           (r) => `<form method="post" style="background:#101722;padding:10px;border-radius:8px;margin:8px 0">
 <input type="hidden" name="token" value="${tk}"><input type="hidden" name="install_id" value="${esc(r.install_id)}">
-<div style="font-size:12.5px;margin-bottom:6px">${esc(String(r.install_id).slice(0, 12))}… &middot; ${esc(day(r.created_at))}${r.contact ? ` &middot; <b>${esc(r.contact)}</b>` : ""}${waLink(r.contact)}</div>
+<div style="font-size:12.5px;margin-bottom:6px">${r.contact ? `WhatsApp: <b>${esc(r.contact)}</b>${waLink(r.contact)}<br>` : "WhatsApp: <i>not supplied</i><br>"}Device / account ID: <span style="font-family:monospace;word-break:break-all;user-select:all">${esc(r.install_id)}</span><br>Requested: ${esc(day(r.created_at))}</div>
 ${r.days ? `<div style="font-size:13.5px;margin-bottom:6px;color:#22e07a">Wants <b>${esc(r.days)} days</b>${r.amount_ngn ? ` &middot; ₦${esc(Number(r.amount_ngn).toLocaleString("en-US"))}` : ""}${r.currency ? ` (${esc(r.currency)})` : ""}</div>` : ""}
 <input name="days" type="number" value="${esc(r.days || 30)}" style="width:80px;padding:9px">
 <button name="action" value="answer" style="${btn}">Create token</button>
