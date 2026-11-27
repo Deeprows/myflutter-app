@@ -173,7 +173,21 @@ class TokenState {
   const TokenState(this.state, {this.token, this.days = 0});
 }
 
-/// Server decision for the shared three-title free movie allowance.
+/// Server decision for the account-based Smart Decoder trial.
+class DecoderAccessResult {
+  final bool premium;
+  final bool trialActive;
+  final bool verified;
+  final int trialExpiresAt;
+  const DecoderAccessResult({
+    required this.premium,
+    required this.trialActive,
+    required this.verified,
+    this.trialExpiresAt = 0,
+  });
+}
+
+/// Server decision for the shared daily free movie allowance.
 class MovieAccessResult {
   final bool allowed;
   final bool premium;
@@ -467,8 +481,60 @@ class SubscriptionService extends ChangeNotifier {
     }
   }
 
-  /// Checks and records one distinct movie against the shared three-title
-  /// free allowance. The Worker keys this to the signed-in Gmail account.
+  /// Starts (once) or reads the account's 72-hour Smart Decoder trial.
+  /// The Worker permanently records the first-entry timestamp per account.
+  Future<DecoderAccessResult> beginDecoderAccess() async {
+    if (!enabled || accountId == null) {
+      return const DecoderAccessResult(premium: false, trialActive: false, verified: false);
+    }
+    try {
+      final r = await _signed(
+        (h) => http.post(_uri('/sub/decoder/access'), headers: h,
+            body: jsonEncode({'install_id': accountId})),
+        json: true,
+      );
+      if (r == null || r.statusCode != 200) {
+        return const DecoderAccessResult(premium: false, trialActive: false, verified: false);
+      }
+      final j = jsonDecode(r.body) as Map<String, dynamic>;
+      return DecoderAccessResult(
+        premium: j['premium'] == true,
+        trialActive: j['trial_active'] == true,
+        verified: true,
+        trialExpiresAt: (j['trial_expires_at'] as num?)?.toInt() ?? 0,
+      );
+    } catch (_) {
+      return const DecoderAccessResult(premium: false, trialActive: false, verified: false);
+    }
+  }
+
+  /// Records one distinct TV channel for the current UTC day (four per day).
+  Future<CastAccessResult> consumeTvAccess(String channelKey) async {
+    if (!enabled || accountId == null) {
+      return const CastAccessResult(allowed: false, verified: false);
+    }
+    try {
+      final r = await _signed(
+        (h) => http.post(_uri('/sub/tv-access'), headers: h,
+            body: jsonEncode({'install_id': accountId, 'channel_key': channelKey})),
+        json: true,
+      );
+      if (r == null || r.statusCode != 200) {
+        return const CastAccessResult(allowed: false, verified: false);
+      }
+      final j = jsonDecode(r.body) as Map<String, dynamic>;
+      return CastAccessResult(
+        allowed: j['allowed'] == true,
+        premium: j['premium'] == true,
+        used: (j['used'] as num?)?.toInt() ?? 0,
+        remaining: (j['remaining'] as num?)?.toInt() ?? 0,
+      );
+    } catch (_) {
+      return const CastAccessResult(allowed: false, verified: false);
+    }
+  }
+
+  /// Checks and records one distinct movie against the account's daily limit.
   Future<MovieAccessResult> consumeMovieAccess(String movieKey, {String action = 'play'}) async {
     if (!enabled || isPremium) return const MovieAccessResult(allowed: true, premium: true, remaining: 3);
     try {
