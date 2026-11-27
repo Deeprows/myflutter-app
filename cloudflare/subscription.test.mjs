@@ -13,8 +13,14 @@ globalThis.caches = { default: {
 // ---- fake Paystack + exchange-rate API
 const txs = new Map();           // reference -> transaction object
 let initBody = null;
+const telegramMessages = [];
+const pendingNotifications = [];
 globalThis.fetch = async (url, opts = {}) => {
   const u = String(url);
+  if (u.includes("api.telegram.org/bot")) {
+    telegramMessages.push(JSON.parse(opts.body));
+    return new Response(JSON.stringify({ ok: true, result: { message_id: telegramMessages.length } }));
+  }
   if (u.includes("open.er-api.com")) {
     return new Response(JSON.stringify({ rates: { USD: 0.00065, GHS: 0.0099 } }));
   }
@@ -57,10 +63,18 @@ const DB = {
 };
 
 const worker = (await import("./worker.js")).default;
-const env = { DB, PAYSTACK_SECRET_KEY: "sk_test", PAYSTACK_PLAN_CODE: "PLN_x", ADMIN_TOKEN: "adm" };
-const ctx = { waitUntil: () => {} };
+const env = {
+  DB, PAYSTACK_SECRET_KEY: "sk_test", PAYSTACK_PLAN_CODE: "PLN_x", ADMIN_TOKEN: "adm",
+  TELEGRAM_BOT_TOKEN: "bot_test_token", TELEGRAM_CHAT_ID: "-1001234567890"
+};
+const ctx = { waitUntil: (promise) => pendingNotifications.push(promise) };
+const flushNotifications = async () => { await Promise.all(pendingNotifications.splice(0)); };
 const call = (path, init) => worker.fetch(new Request("https://feed.example.com" + path, init), env, ctx);
-const post = (path, body) => call(path, { method: "POST", body: JSON.stringify(body) });
+const post = (path, body, headers = {}) => call(path, {
+  method: "POST",
+  headers: { "content-type": "application/json", ...headers },
+  body: JSON.stringify(body)
+});
 const ID = "a1b2c3d4e5f60718293a4b5c6d7e8f90";
 const ID2 = "ffeeddccbbaa00998877665544332211";
 
@@ -82,7 +96,11 @@ assert.equal((await call("/sub/status?install=x")).status, 400);
 
 // 3. start: validates, builds the right Paystack request
 assert.equal((await post("/sub/start", { install_id: ID, email: "bad" })).status, 400);
-j = await (await post("/sub/start", { install_id: ID, email: "Ada@Example.com", recurring: false })).json();
+j = await (await post("/sub/start", { install_id: ID, email: "Ada@Example.com", recurring: false }, { "x-platform": "windows" })).json();
+await flushNotifications();
+assert.match(telegramMessages.at(-1).text, /Premium subscription checkout requested/);
+assert.match(telegramMessages.at(-1).text, /Windows PC app/);
+assert.equal(telegramMessages.at(-1).chat_id, "-1001234567890");
 assert.equal(j.authorization_url, "https://checkout.paystack.com/x");
 assert.equal(initBody.amount, 200000);
 assert.equal(initBody.currency, "NGN");
@@ -208,7 +226,10 @@ for (let n = 0; n < 7; n++) {
 const decoderGrant = await (await call("/sub/admin", form({ token: "adm", install_id: ID3, days: "30" }))).text();
 assert.match(decoderGrant, /Premium until/);
 assert.match(decoderGrant, /Decoder number: [0-9]{10}/);
-j = await (await post("/sub/decoder/issue", { install_id: ID3 })).json();
+j = await (await post("/sub/decoder/issue", { install_id: ID3 }, { "x-platform": "android" })).json();
+await flushNotifications();
+assert.match(telegramMessages.at(-1).text, /Premium Decoder activation requested/);
+assert.match(telegramMessages.at(-1).text, /Deeprowss App/);
 assert.equal(j.active, true);
 assert.match(j.code, /^\d{10}$/);
 const decoderCode = j.code;
@@ -236,6 +257,9 @@ assert.equal((await (await post("/receiver/decoder/validate", { code: j.code }))
 // 13. A receiver-only visitor can subscribe and receive a fresh Decoder number.
 const RECEIVER_PAID = "fedcba0987654321fedcba0987654321";
 j = await (await post("/receiver/sub/start", { install_id: RECEIVER_PAID, email: "tv@example.com", period: "year", recurring: false })).json();
+await flushNotifications();
+assert.match(telegramMessages.at(-1).text, /Premium subscription checkout requested/);
+assert.match(telegramMessages.at(-1).text, /Website \/ TV receiver/);
 assert.equal(initBody.metadata.install_id, RECEIVER_PAID);
 assert.equal(initBody.metadata.period, "year");
 assert.equal(initBody.amount, 2000000);
@@ -248,7 +272,17 @@ assert.match(j.code, /^\d{10}$/);
 assert.equal((await (await call("/receiver/sub/status?device=" + RECEIVER_PAID)).json()).active, true);
 assert.equal((await (await post("/receiver/decoder/validate", { code: j.code })).json()).valid, true);
 
-// 14. not set up: config still answers, the rest says 503; feed unaffected
+// 14. Ad-free token requests notify Telegram without changing the response.
+const TOKEN_REQUEST_ID = "aa11223344556677889900aabbccddeeff";
+j = await (await post("/sub/token/request", {
+  install_id: TOKEN_REQUEST_ID, contact: "@deeprowss_user", days: 30, currency: "NGN"
+}, { "x-platform": "android-tv" })).json();
+await flushNotifications();
+assert.equal(j.state, "pending");
+assert.match(telegramMessages.at(-1).text, /Ad-free access token requested/);
+assert.match(telegramMessages.at(-1).text, /Android TV/);
+
+// 15. not set up: config still answers, the rest says 503; feed unaffected
 const bare = (p) => worker.fetch(new Request("https://f.example.com" + p), {}, ctx);
 assert.equal((await bare("/sub/config")).status, 200);
 assert.equal((await (await bare("/sub/config")).json()).available, false);
