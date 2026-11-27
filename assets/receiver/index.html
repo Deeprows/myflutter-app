@@ -860,6 +860,9 @@ html.tv .card:focus{transform:scale(1.06);z-index:2}html.tv .card:focus .poster{
       if(desktop&&typeof desktop.openExternal==='function'){
         e.preventDefault();
         try{Promise.resolve(desktop.openExternal(a.href)).catch(()=>{});}catch(_){}
+      }else if(window.DeeprowssTv&&typeof window.DeeprowssTv.openExternal==='function'){
+        e.preventDefault();
+        try{window.DeeprowssTv.openExternal(a.href);}catch(_){}
       }
     }));
     $('playerBack').addEventListener('click',closePlayer);
