@@ -591,13 +591,13 @@ class SubscriptionService extends ChangeNotifier {
   /// Smart Decoder movie quota: three distinct titles per UTC day after trial.
   Future<MovieAccessResult> consumeDecoderMovieAccess(String movieKey, {String action = 'play'}) async {
     if (!enabled || isPremium) return const MovieAccessResult(allowed: true, premium: true, remaining: 3);
+    if (accountId == null) return const MovieAccessResult(allowed: false, verified: false);
     try {
-      final id = accountId ?? await InstallId.get();
-      final uri = _uri('/sub/decoder/movie-access');
-      final payload = jsonEncode({'install_id': id, 'movie_key': movieKey, 'action': action});
-      final r = accountId == null
-          ? await http.post(uri, headers: {'content-type': 'application/json'}, body: payload)
-          : await _signed((h) => http.post(uri, headers: h, body: payload), json: true);
+      final r = await _signed(
+        (h) => http.post(_uri('/sub/decoder/movie-access'), headers: h,
+            body: jsonEncode({'install_id': accountId, 'movie_key': movieKey, 'action': action})),
+        json: true,
+      );
       if (r == null || r.statusCode != 200) {
         return const MovieAccessResult(allowed: false, verified: false);
       }
