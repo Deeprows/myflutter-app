@@ -114,7 +114,7 @@ export default {
 
     if(url.pathname.startsWith('/public/data/'))return publicRepoData(request,env,url);
     if(url.pathname.startsWith('/public/releases/'))return publicReleaseAsset(request,env,url);
-    if(url.pathname.startsWith('/receiver/'))return receiverAccess(request,env,url);
+    if(url.pathname.startsWith('/receiver/'))return receiverAccess(request,env,url,ctx);
     if(url.pathname.startsWith('/cast/'))return castRelay(request,env,url);
     if(url.pathname==='/sports-news')return sportsNews(request,env,url,ctx);
     if(url.pathname==='/sports-reels')return sportsReels(request,env,url,ctx);
@@ -157,7 +157,7 @@ export default {
 
     // Premium subscriptions.
     if (url.pathname.startsWith("/sub/")) {
-      return subscriptions(request, env, url);
+      return subscriptions(request, env, url, ctx);
     }
 
     if (url.pathname.startsWith("/fan/")) return fanZone(request, env, url, ctx);
@@ -1151,7 +1151,7 @@ function randomDecoderCode() {
   return Array.from(bytes, b => String(b % 10)).join("");
 }
 
-async function issueDecoderCode(env, ownerId) {
+async function issueDecoderCode(env, ownerId, request = null, ctx = null) {
   const now = Date.now();
   const expires = await expiryOf(env, ownerId);
   if (expires <= now) return json({ active: false, error: "An active Premium subscription is required." }, 403);
@@ -1161,6 +1161,9 @@ async function issueDecoderCode(env, ownerId) {
   if (old && Number(old.expires_at) > now) {
     await env.DB.prepare("UPDATE decoder_codes SET expires_at = ? WHERE owner_id = ?")
       .bind(expires, ownerId).run();
+    if (request) notifyAccessEvent(env, request, ctx, "Premium Decoder activation requested", [
+      ["Account / device", ownerId], ["Subscription expires", new Date(expires).toISOString()]
+    ]);
     return json({ active: true, code: String(old.code), expires_at: expires, now });
   }
   for (let i = 0; i < 5; i++) {
@@ -1170,6 +1173,9 @@ async function issueDecoderCode(env, ownerId) {
         "INSERT INTO decoder_codes (owner_id, code, expires_at, created_at) VALUES (?, ?, ?, ?) " +
         "ON CONFLICT(owner_id) DO UPDATE SET code = excluded.code, expires_at = excluded.expires_at, created_at = excluded.created_at"
       ).bind(ownerId, code, expires, now).run();
+      if (request) notifyAccessEvent(env, request, ctx, "Premium Decoder activation requested", [
+        ["Account / device", ownerId], ["Subscription expires", new Date(expires).toISOString()]
+      ]);
       return json({ active: true, code, expires_at: expires, now });
     } catch (e) {
       if (i === 4) throw e;
@@ -1297,14 +1303,14 @@ async function subMovieAccess(request, env) {
   return json({ ...result, premium: false, limit: RECEIVER_FREE_MOVIES, now: Date.now() });
 }
 
-async function receiverAccess(request, env, url) {
+async function receiverAccess(request, env, url, ctx = null) {
   const path = url.pathname;
   if (!env.DB) return json({ error: "Premium service is not configured." }, 503);
   try {
     await ensureSchema(env);
     if (path === "/receiver/sub/start" && request.method === "POST") {
       if (!env.PAYSTACK_SECRET_KEY) return json({ error: "Online payment is not available. Please use WhatsApp." }, 503);
-      return subStart(request, env, url);
+      return subStart(request, env, url, ctx);
     }
     if (path === "/receiver/sub/verify" && request.method === "GET") {
       if (!env.PAYSTACK_SECRET_KEY) return json({ status: "failed", error: "Payment service unavailable." }, 503);
@@ -1322,7 +1328,7 @@ async function receiverAccess(request, env, url) {
       const body = await request.json().catch(() => ({}));
       const id = String(body.device_id || "");
       if (!receiverIdOk(id)) return json({ error: "bad device id" }, 400);
-      return issueDecoderCode(env, id);
+      return issueDecoderCode(env, id, request, ctx);
     }
     if (path === "/receiver/decoder/validate" && request.method === "POST") {
       const body = await request.json().catch(() => ({}));
@@ -1361,7 +1367,7 @@ async function receiverAccess(request, env, url) {
   return json({ error: "not found" }, 404);
 }
 
-async function subscriptions(request, env, url) {
+async function subscriptions(request, env, url, ctx = null) {
   const path = url.pathname;
 
   // The "payment finished" page Paystack sends the person back to. The app's
@@ -1438,7 +1444,7 @@ async function subscriptions(request, env, url) {
       const body = await request.json().catch(() => ({}));
       const ownerId = String(body.install_id || url.searchParams.get("install") || "");
       if (!ID_RE.test(ownerId)) return json({ error: "bad account id" }, 400);
-      return issueDecoderCode(env, ownerId);
+      return issueDecoderCode(env, ownerId, request, ctx);
     }
     if (path === "/sub/movie-access" && request.method === "POST") {
       return subMovieAccess(request, env);
@@ -1462,7 +1468,7 @@ async function subscriptions(request, env, url) {
       return subRestore(request, env);
     }
     if (path === "/sub/token/request" && request.method === "POST") {
-      return tokenRequest(request, env);
+      return tokenRequest(request, env, ctx);
     }
     if (path === "/sub/token/mine" && request.method === "GET") {
       return tokenMine(url, env);
@@ -1643,7 +1649,58 @@ async function adPlans(url, env) {
   return json({ currency: local ? wanted : "NGN", plans });
 }
 
-// ---- Paystack --------------------------------------------------------------
+
+ // ---------------------------------------------------------- Telegram alerts
+// Configure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as Cloudflare Worker
+// secrets. Notifications are deliberately best-effort: Telegram outages must
+// never block checkout, token requests, or Decoder activation.
+function telegramPlatform(request) {
+  const raw = String(request?.headers?.get("x-platform") || "").trim().toLowerCase();
+  const host = String(request?.headers?.get("origin") || request?.headers?.get("referer") || "").toLowerCase();
+  const path = (() => { try { return new URL(request.url).pathname; } catch { return ""; } })();
+  const source = raw || (path.startsWith("/receiver/") ? "receiver" : host);
+  if (/windows|desktop|exe|pc/.test(source)) return "Windows PC app";
+  if (/android.?tv|google.?tv|fire.?tv/.test(source)) return "Android TV";
+  if (/\blg\b|webos/.test(source)) return "LG webOS";
+  if (/android|deeprowss.?app|mobile/.test(source)) return "Deeprowss App";
+  if (/receiver|pages\.dev|github\.io|deeprowss\.com|web|browser/.test(source)) return "Website / TV receiver";
+  return source ? source.slice(0, 80) : "Platform not identified";
+}
+
+function notifyAccessEvent(env, request, ctx, title, fields = []) {
+  if (!env?.TELEGRAM_BOT_TOKEN || !env?.TELEGRAM_CHAT_ID) return;
+  const clean = value => String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ").trim().slice(0, 300);
+  const lines = [
+    "DEE P R O W S S  |  ACCESS ALERT",
+    title,
+    "Platform: " + telegramPlatform(request),
+    "Time: " + new Date().toISOString(),
+    ...fields.map(([label, value]) => label + ": " + clean(value))
+  ];
+  const task = (async () => {
+    try {
+      const response = await fetch("https://api.telegram.org/bot" +
+        encodeURIComponent(env.TELEGRAM_BOT_TOKEN) + "/sendMessage", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          chat_id: env.TELEGRAM_CHAT_ID,
+          text: lines.join("\n"),
+          disable_web_page_preview: true
+        }),
+        signal: AbortSignal.timeout(5000)
+      });
+      if (!response.ok) console.warn("Telegram notification failed:", response.status);
+    } catch (error) {
+      console.warn("Telegram notification unavailable:", String(error?.message || error).slice(0, 120));
+    }
+  })();
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(task);
+  else return task;
+}
+\n// ---- Paystack --------------------------------------------------------------
 
 async function paystack(env, path, init = {}) {
   const r = await fetch(`https://api.paystack.co${path}`, {
@@ -1853,7 +1910,7 @@ async function subStatus(url, env) {
   return json({ active: expires > Date.now(), expires_at: expires, now: Date.now() });
 }
 
-async function subStart(request, env, url) {
+async function subStart(request, env, url, ctx = null) {
   let b;
   try {
     b = await request.json();
@@ -1911,6 +1968,12 @@ async function subStart(request, env, url) {
   )
     .bind(installId, email, Date.now())
     .run();
+
+  notifyAccessEvent(env, request, ctx, "Premium subscription checkout requested", [
+    ["Account / device", installId], ["Email", email], ["Plan", period],
+    ["Amount", money(period === "year" ? priceYearNgn(env) : priceNgn(env), "NGN")],
+    ["Paystack reference", reference]
+  ]);
 
   return json({
     authorization_url: r.body.data.authorization_url,
@@ -2060,7 +2123,7 @@ async function mintTokens(env, { days, count = 1, boundTo = null, note = "" }) {
   return out;
 }
 
-async function tokenRequest(request, env) {
+async function tokenRequest(request, env, ctx = null) {
   let b;
   try {
     b = await request.json();
@@ -2089,6 +2152,11 @@ async function tokenRequest(request, env) {
   )
     .bind(installId, contact, Date.now(), days, amountNgn, currency)
     .run();
+  notifyAccessEvent(env, request, ctx, "Ad-free access token requested", [
+    ["Account / device", installId], ["Contact", contact || "Not supplied"],
+    ["Requested duration", days ? String(days) + " days" : "Not specified"],
+    ["Quoted amount", amountNgn ? money(amountNgn, currency || "NGN") : "Not specified"]
+  ]);
   return json({ ok: true, state: "pending" });
 }
 
