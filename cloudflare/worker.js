@@ -1281,7 +1281,15 @@ async function subDecoderAccess(request, env) {
   const ownerId = String(body.install_id || "");
   if (!receiverIdOk(ownerId)) return json({ error: "bad account id" }, 400);
   const expires = await expiryOf(env, ownerId);
-  const trial = await decoderTrialState(env, ownerId, body.start_trial === true);
+  // A former Premium account must fall straight back to the restricted tier;
+  // it must never receive a fresh 72-hour trial after expiry or revocation.
+  const [paidHistory, decoderHistory, subscriptionHistory] = await Promise.all([
+    env.DB.prepare("SELECT 1 AS found FROM payments WHERE install_id = ? LIMIT 1").bind(ownerId).first(),
+    env.DB.prepare("SELECT 1 AS found FROM decoder_codes WHERE owner_id = ? LIMIT 1").bind(ownerId).first(),
+    env.DB.prepare("SELECT 1 AS found FROM subs WHERE install_id = ? AND expires_at > 0 LIMIT 1").bind(ownerId).first(),
+  ]);
+  const hasPremiumHistory = Boolean(paidHistory || decoderHistory || subscriptionHistory);
+  const trial = await decoderTrialState(env, ownerId, body.start_trial === true && !hasPremiumHistory);
   return json({
     premium: expires > Date.now(),
     expires_at: expires,
