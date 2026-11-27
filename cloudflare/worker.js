@@ -2779,7 +2779,7 @@ async function fanZone(request, env, url, ctx) {
     await fanInit(env.DB);
     const db = env.DB;
     if (url.pathname === '/fan/admin/session' && request.method === 'POST') {
-      const bearer = String(request.headers.get('authorization') || '').replace(/^Bearer\\s+/i, '');
+      const bearer = String(request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
       const identity = await verifyFanGoogleToken(bearer, env);
       if (!identity || String(identity.email || '').toLowerCase() !== 'deeprows@gmail.com') return fail('Admin access is restricted to the authorised Google account.', 403);
       const adminId = await fanHash('google:' + identity.sub);
@@ -2841,14 +2841,14 @@ async function fanZone(request, env, url, ctx) {
       return json({ok:true,id,status:'pending'});
     }
     if(url.pathname==='/fan/admin/ai-quota' && request.method==='GET') {
-      const token=String(request.headers.get('authorization')||'').replace(/^Bearer\\s+/i,'');
+      const token=String(request.headers.get('authorization')||'').replace(/^Bearer\s+/i,'');
       if(!((env.ADMIN_TOKEN||env.STATS_TOKEN) && token===(env.ADMIN_TOKEN||env.STATS_TOKEN)))return fail('Unauthorized',401);
       const status=String(url.searchParams.get('status')||'pending');
       const rows=await db.prepare('SELECT * FROM fan_ai_quota_requests WHERE status=? ORDER BY created_at DESC LIMIT 300').bind(status).all();
       return json({ok:true,requests:rows.results||[]});
     }
     if(url.pathname==='/fan/admin/ai-quota' && request.method==='POST') {
-      const token=String(request.headers.get('authorization')||'').replace(/^Bearer\\s+/i,'');
+      const token=String(request.headers.get('authorization')||'').replace(/^Bearer\s+/i,'');
       if(!((env.ADMIN_TOKEN||env.STATS_TOKEN) && token===(env.ADMIN_TOKEN||env.STATS_TOKEN)))return fail('Unauthorized',401);
       const body=await request.json().catch(()=>({}));
       const id=String(body.id||'').trim(), action=String(body.action||'');
@@ -2920,7 +2920,7 @@ async function fanZone(request, env, url, ctx) {
       return fanAdminPage();
     }
     if (url.pathname.startsWith('/fan/admin/')) {
-      const bearer = String(request.headers.get('authorization') || '').replace(/^Bearer\\s+/i, '');
+      const bearer = String(request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
       if (!(await fanAdminTokenValid(db, bearer, env))) return fail('Unauthorized', 401);
       if (url.pathname === '/fan/admin/matches' && request.method === 'GET') {
         const rows = await db.prepare('SELECT match_key,title,kickoff,COUNT(*) AS picks FROM fan_picks GROUP BY match_key ORDER BY kickoff DESC LIMIT 300').all();
