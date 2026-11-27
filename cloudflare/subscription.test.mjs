@@ -442,7 +442,7 @@ j = await (await post("/sub/token/request", {
 }, { "x-platform": "android-tv" })).json();
 await flushNotifications();
 assert.equal(j.state, "pending");
-assert.match(telegramMessages.at(-1).text, /Ad-free access token requested/);
+assert.match(telegramMessages.at(-1).text, /Premium \/ ad-free subscription token requested/);
 assert.match(telegramMessages.at(-1).text, /Android TV/);
 
 // 15. not set up: config still answers, the rest says 503; feed unaffected
