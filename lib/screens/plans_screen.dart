@@ -372,6 +372,8 @@ class _PlansScreenState extends State<PlansScreen> {
                   const SizedBox(height: 14),
                 ] else _continueButton('Continue'),
                 const SizedBox(height: 14),
+                _manualTokenCard(),
+                const SizedBox(height: 14),
                 _manualCard(),
                 _idLine(),
               ],
@@ -582,47 +584,6 @@ class _PlansScreenState extends State<PlansScreen> {
               style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
           body,
-          const SizedBox(height: 16),
-          Divider(color: Ui.line),
-          const SizedBox(height: 10),
-          const Text('Already have a token?',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 5),
-          Text('Paste the Premium token you received and activate your subscription.',
-              style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3)),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _manualToken,
-            textCapitalization: TextCapitalization.characters,
-            autocorrect: false,
-            enableSuggestions: false,
-            maxLength: 24,
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9-]')),
-              UpperCaseTextFormatter(),
-            ],
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.key_rounded),
-              hintText: 'Paste your token',
-              counterText: '',
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _busy ? null : () => _redeemToken(_manualToken.text),
-              icon: const Icon(Icons.verified_rounded),
-              label: const Text('Activate Subscription'),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF22B25D),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24)),
-              ),
-            ),
-          ),
           if (_tokenError != null) ...[
             const SizedBox(height: 10),
             Text(_tokenError!,
@@ -790,6 +751,57 @@ class _PlansScreenState extends State<PlansScreen> {
           child: Text(label,
               style: const TextStyle(
                   fontSize: 15.5, fontWeight: FontWeight.w800)),
+        ),
+      );
+
+  Widget _manualTokenCard() => _box(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Already have a token?',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 5),
+            Text('Paste the Premium token you received and activate your subscription.',
+                style: TextStyle(color: Ui.muted, fontSize: 13, height: 1.3)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _manualToken,
+              textCapitalization: TextCapitalization.characters,
+              autocorrect: false,
+              enableSuggestions: false,
+              maxLength: 24,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9-]')),
+                TextInputFormatter.withFunction((oldValue, newValue) => newValue.copyWith(
+                  text: newValue.text.toUpperCase(),
+                  selection: newValue.selection,
+                )),
+              ],
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.key_rounded),
+                hintText: 'Paste your token',
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: _busy ? null : () => _redeemToken(_manualToken.text),
+              icon: const Icon(Icons.verified_rounded),
+              label: const Text('Activate Subscription'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF22B25D),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24)),
+              ),
+            ),
+            if (_tokenError != null) ...[
+              const SizedBox(height: 10),
+              Text(_tokenError!,
+                  style: TextStyle(color: Ui.redSoft, fontSize: 13, height: 1.3)),
+            ],
+          ],
         ),
       );
 
