@@ -56,6 +56,21 @@
   const input = document.getElementById('dwSearchInput');
   const clearBtn = document.getElementById('dwSearchClear');
   const panel = document.getElementById('dwSearchPanel');
+  const minTab = document.createElement('button');
+  minTab.type = 'button'; minTab.className = 'dws-min-tab'; minTab.id = 'dwMinTab';
+  minTab.setAttribute('data-minimise-open',''); minTab.setAttribute('aria-label','Open minimised content');
+  minTab.innerHTML = '<span aria-hidden="true">▣</span><b>Minimised</b><i id="dwMinCount">0</i>';
+  minTab.addEventListener('click', () => { if (window.deeprowssOpenMinimised) window.deeprowssOpenMinimised(); });
+  box.querySelector('.dws-field').appendChild(minTab);
+  const minCss = document.createElement('style');
+  minCss.textContent = `
+    .dws-min-tab{flex:none;display:flex;align-items:center;gap:5px;height:28px;padding:0 9px;border:1px solid #ff5c7c66;border-radius:999px;background:linear-gradient(135deg,#451b2c,#251d2c);color:#fff;cursor:pointer;font:700 11px/1 inherit;white-space:nowrap}
+    .dws-min-tab span{font-size:13px;color:#ff8da5}
+    .dws-min-tab i{font-style:normal;min-width:16px;height:16px;display:grid;place-items:center;border-radius:50%;background:#e11d48;color:#fff;font-size:10px}
+    .dws-min-tab:hover,.dws-min-tab:focus{outline:2px solid #ff8da5;outline-offset:2px}
+    @media(max-width:420px){.dws-min-tab{padding:0 7px}.dws-min-tab b{display:none}}
+  `;
+  document.head.appendChild(minCss);
 
   let token = 0, timer = 0, flat = [];
   const state = { fx: null, tv: null, mv: null };   // null = still searching
@@ -238,6 +253,17 @@
   if (window.ResizeObserver) { const ro = new ResizeObserver(place); ro.observe(land); const f = land.querySelector('.receiver-footer'); if (f) ro.observe(f); }
   if (window.MutationObserver) { const f = land.querySelector('.receiver-footer'); if (f) new MutationObserver(place).observe(f, { childList: true, subtree: true }); }
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
+
+  window.addEventListener('deeprowss-minimised-change', e => {
+    const n = Number(e.detail && e.detail.count) || 0;
+    const count = document.getElementById('dwMinCount'); if (count) count.textContent = String(n);
+    const tab = document.getElementById('dwMinTab'); if (tab) tab.setAttribute('aria-label','Open '+n+' minimised items');
+  });
+  const updateMinCount = () => {
+    const n = Array.isArray(window.deeprowssMinimisedSessions) ? window.deeprowssMinimisedSessions.length : 0;
+    const count = document.getElementById('dwMinCount'); if (count) count.textContent = String(n);
+  };
+  window.addEventListener('load', updateMinCount); setTimeout(updateMinCount, 0);
 
   /* Click outside closes the list; leaving the home screen resets the bar. */
   document.addEventListener('click', e => { if (!box.contains(e.target)) { token++; panel.hidden = true; } });
