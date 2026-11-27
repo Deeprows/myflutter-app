@@ -92,7 +92,13 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
   }
 
   Future<void> _open(Widget page, String id) async {
-    if (!await PremiumGate.allowDecoder(context) || !mounted) return;
+    if (id == 'fixtures') {
+      if (!await PremiumGate.allowLiveEvents(context) || !mounted) return;
+    } else if (id == 'cast' || id == 'mirror' || id == 'receiver' || id == 'remote') {
+      if (!await PremiumGate.allowCast(context) || !mounted) return;
+    } else if (!await PremiumGate.allowDecoder(context) || !mounted) {
+      return;
+    }
     DecoderMemory.save(id);
     await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => page));
     DecoderMemory.save('hub');
@@ -516,10 +522,7 @@ class _DecoderHubScreenState extends State<DecoderHubScreen> {
           ),
           _groupCard([
             _toolRow(Icons.cast_rounded, 'Cast to TV / Kodi', 'Find compatible screens on your Wi-Fi',
-                () async {
-                  if (!await PremiumGate.allowCast(context) || !mounted) return;
-                  await _open(const DecoderCastPage(), 'cast');
-                }),
+                () => _open(const DecoderCastPage(), 'cast')),
             _toolRow(Icons.screen_share_rounded, 'Screen mirroring', 'Mirror your phone screen',
                 () => _open(const DecoderMirrorPage(), 'mirror')),
             _toolRow(Icons.web_rounded, 'Send to receiver page', 'Use a browser screen as your receiver', _openReceiver),
