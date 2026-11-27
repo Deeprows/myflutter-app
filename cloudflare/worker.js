@@ -1258,6 +1258,15 @@ const RECEIVER_FREE_TV_CHANNELS = 4;
 const DECODER_TRIAL_MS = 3 * 24 * 60 * 60 * 1000;
 const DAILY_FREE_MOVIES = 3;
 
+async function hasPremiumHistory(env, ownerId) {
+  const [paidHistory, decoderHistory, subscriptionHistory] = await Promise.all([
+    env.DB.prepare("SELECT 1 AS found FROM payments WHERE install_id = ? LIMIT 1").bind(ownerId).first(),
+    env.DB.prepare("SELECT 1 AS found FROM decoder_codes WHERE owner_id = ? LIMIT 1").bind(ownerId).first(),
+    env.DB.prepare("SELECT 1 AS found FROM subs WHERE install_id = ? AND expires_at > 0 LIMIT 1").bind(ownerId).first(),
+  ]);
+  return Boolean(paidHistory || decoderHistory || subscriptionHistory);
+}
+
 async function decoderTrialState(env, ownerId, startIfMissing = false) {
   const now = Date.now();
   let row = await env.DB.prepare(
@@ -1281,15 +1290,11 @@ async function subDecoderAccess(request, env) {
   const ownerId = String(body.install_id || "");
   if (!receiverIdOk(ownerId)) return json({ error: "bad account id" }, 400);
   const expires = await expiryOf(env, ownerId);
-  // A former Premium account must fall straight back to the restricted tier;
-  // it must never receive a fresh 72-hour trial after expiry or revocation.
-  const [paidHistory, decoderHistory, subscriptionHistory] = await Promise.all([
-    env.DB.prepare("SELECT 1 AS found FROM payments WHERE install_id = ? LIMIT 1").bind(ownerId).first(),
-    env.DB.prepare("SELECT 1 AS found FROM decoder_codes WHERE owner_id = ? LIMIT 1").bind(ownerId).first(),
-    env.DB.prepare("SELECT 1 AS found FROM subs WHERE install_id = ? AND expires_at > 0 LIMIT 1").bind(ownerId).first(),
-  ]);
-  const hasPremiumHistory = Boolean(paidHistory || decoderHistory || subscriptionHistory);
-  const trial = await decoderTrialState(env, ownerId, body.start_trial === true && !hasPremiumHistory);
+  // Former Premium accounts return directly to the restricted tier, even
+  // if a trial had started before they subscribed.
+  const premiumHistory = await hasPremiumHistory(env, ownerId);
+  const trialState = await decoderTrialState(env, ownerId, body.start_trial === true && !premiumHistory);
+  const trial = premiumHistory ? { ...trialState, trial_active: false } : trialState;
   return json({
     premium: expires > Date.now(),
     expires_at: expires,
@@ -1406,8 +1411,9 @@ async function subDecoderMovieAccess(request, env) {
   if (!receiverIdOk(ownerId) || !movieKey) return json({ error: "bad movie request" }, 400);
   const expires = await expiryOf(env, ownerId);
   if (expires > Date.now()) return json({ allowed: true, premium: true, used: 0, remaining: DAILY_FREE_MOVIES, expires_at: expires, now: Date.now() });
+  const premiumHistory = await hasPremiumHistory(env, ownerId);
   const trial = await decoderTrialState(env, ownerId, false);
-  if (trial.trial_active) {
+  if (!premiumHistory && trial.trial_active) {
     return json({ allowed: true, premium: false, trial: true, trial_expires_at: trial.trial_expires_at, used: 0, remaining: DAILY_FREE_MOVIES, now: Date.now() });
   }
   const result = await recordDailyMovieTrial(env, ownerId, movieKey);
@@ -1581,8 +1587,9 @@ async function subscriptions(request, env, url, ctx = null) {
       if (!receiverIdOk(ownerId) || !channelKey) return json({ error: "bad TV channel request" }, 400);
       const expires = await expiryOf(env, ownerId);
       if (expires > Date.now()) return json({ allowed: true, premium: true, used: 0, remaining: RECEIVER_FREE_TV_CHANNELS, now: Date.now() });
+      const premiumHistory = await hasPremiumHistory(env, ownerId);
       const trial = await decoderTrialState(env, ownerId, false);
-      if (trial.trial_active) return json({ allowed: true, premium: false, trial: true, used: 0, remaining: RECEIVER_FREE_TV_CHANNELS, trial_expires_at: trial.trial_expires_at, now: Date.now() });
+      if (!premiumHistory && trial.trial_active) return json({ allowed: true, premium: false, trial: true, used: 0, remaining: RECEIVER_FREE_TV_CHANNELS, trial_expires_at: trial.trial_expires_at, now: Date.now() });
       const result = await recordTvTrial(env, ownerId, channelKey);
       return json({ ...result, premium: false, trial: false, now: Date.now() });
     }
