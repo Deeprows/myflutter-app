@@ -1170,6 +1170,8 @@ async function issueDecoderCode(env, ownerId, request = null, ctx = null) {
     ]);
     return json({ active: true, code: String(old.code), expires_at: expires, now });
   }
+  // A new Decoder number after expiry starts a fresh two-device allowance.
+  await env.DB.prepare("DELETE FROM decoder_devices WHERE owner_id = ?").bind(ownerId).run();
   for (let i = 0; i < 5; i++) {
     const code = randomDecoderCode();
     try {
