@@ -62,8 +62,8 @@ jobs:
       - name: Generate splash screen
         run: dart run flutter_native_splash:create
 
-      - name: Generate launcher icon
-        run: dart run flutter_launcher_icons
+      - name: Generate Android launcher icon
+        run: dart run flutter_launcher_icons -f .github/flutter_launcher_icons_android.yaml
 
       # ---------------------------------------------------------------
       # Android configuration
