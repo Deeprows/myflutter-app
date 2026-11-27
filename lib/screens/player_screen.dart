@@ -16,6 +16,7 @@ import '../services/ad_shield.dart';
 import '../services/dailymotion_check.dart';
 import '../services/background_playback.dart';
 import '../services/movie_library.dart';
+import '../services/partner_browser.dart';
 import '../services/player_html.dart';
 import '../services/settings_service.dart';
 import '../services/stream_resolver.dart';
@@ -28,6 +29,8 @@ import '../widgets/match_chat.dart';
 import '../services/remote_config.dart';
 import '../widgets/movie_card.dart' show MoviePoster;
 import '../widgets/movie_info_panel.dart';
+import '../utils/premium_gate.dart';
+import 'trailer_player_screen.dart';
 import 'browser_screen.dart' show siteOf;
 
 /// WebView based player. Plays:
@@ -180,6 +183,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   MovieInfo? _info; // TMDB details of a movie page
   bool _infoLoading = false;
+  Future<TmdbTrailer?>? _trailerFuture;
 
   Widget? _fullscreenWidget;
   VoidCallback? _fullscreenHidden;
@@ -264,6 +268,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     final movie = widget.movie;
     if (movie != null) MovieLibrary.instance.addToHistory(movie);
     if (movie != null && TmdbService.enabled) {
+      _trailerFuture = tmdb.trailerFor(movie);
       _infoLoading = true;
       tmdb.info(movie).then((i) {
         if (mounted) {
