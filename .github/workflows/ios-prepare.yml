@@ -1,6 +1,11 @@
 name: Prepare Deeprowss iOS project
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ios-prepare.yml'
   workflow_dispatch:
 
 permissions:
