@@ -522,6 +522,7 @@ html.tv .gate-left,html.desktop-app .gate-left{border-bottom:0;border-right:1px 
       const validated = await validateCode(decoder);
       active = !!validated.valid;
       expiry = Number(validated.expires_at || 0);
+      if (active) codeExpiry = expiry; // Refresh the on-device expiry after an admin top-up.
       if (validated.now) serverOffset = Number(validated.now) - Date.now();
       if (!active) { unlocked = false; code = ''; codeExpiry = 0; try { localStorage.removeItem(CODE_KEY); } catch (_) {} }
     } else {
