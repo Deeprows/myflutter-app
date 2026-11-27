@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -18,6 +21,19 @@ class DecoderReceiverPage extends StatefulWidget {
 class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
   final m = DeeprowssMirrorService.instance;
   bool _busy = false;
+
+  /// Counts fingers that are on a remote button. While > 0 the page does not
+  /// scroll, so pressing and holding a button can never scroll the page.
+  final ValueNotifier<int> _touching = ValueNotifier<int>(0);
+  DateTime _lastToast = DateTime.fromMillisecondsSinceEpoch(0);
+
+  @override
+  void dispose() {
+    _touching.dispose();
+    super.dispose();
+  }
+
+  // ───────────────────────── connection ─────────────────────────
 
   Future<void> _scanAndConnect() async {
     final pair = await Navigator.of(context).push<Map<String, String>>(
@@ -54,19 +70,126 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     }
   }
 
-  void _key(String command) {
-    HapticFeedback.selectionClick();
-    if (!m.sendRemoteKey(command) && mounted) decoderToast(context, 'Receiver is not connected yet.');
+  // ───────────────────────── remote keys ─────────────────────────
+
+  /// Sends one remote key. Returns false when the receiver is not connected
+  /// (the toast is rate-limited so a held button does not spam the screen).
+  bool _key(String command) {
+    final ok = m.sendRemoteKey(command);
+    if (!ok && mounted) {
+      final now = DateTime.now();
+      if (now.difference(_lastToast).inMilliseconds > 2500) {
+        _lastToast = now;
+        decoderToast(context, 'Receiver is not connected yet.');
+      }
+    }
+    return ok;
   }
+
+  Future<void> _confirmOff() async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Ui.panel,
+        title: Text('Turn off receiver?', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900)),
+        content: Text('This closes the Deeprowss app on the TV or PC.', style: TextStyle(color: Ui.muted)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Turn off')),
+        ],
+      ),
+    );
+    if (go == true) {
+      HapticFeedback.mediumImpact();
+      _key('off');
+    }
+  }
+
+  Future<void> _openKeyboard() async {
+    final ctrl = TextEditingController();
+    Timer? debounce;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Ui.panel,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(18, 16, 18, MediaQuery.of(ctx).viewInsets.bottom + 18),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.keyboard_alt_outlined, color: Ui.red),
+            const SizedBox(width: 10),
+            Expanded(child: Text('Phone keyboard', style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900, fontSize: 16))),
+            IconButton(onPressed: () => Navigator.pop(ctx), icon: Icon(Icons.close_rounded, color: Ui.muted)),
+          ]),
+          Text('Select a search box on the TV first, then type here. Text appears on the TV as you type.',
+            style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.4)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: ctrl,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            style: TextStyle(color: Ui.text),
+            decoration: InputDecoration(
+              hintText: 'Type to search…',
+              hintStyle: TextStyle(color: Ui.muted),
+              filled: true,
+              fillColor: Ui.card,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Ui.line)),
+              suffixIcon: IconButton(
+                icon: Icon(Icons.backspace_outlined, color: Ui.muted),
+                onPressed: () {
+                  ctrl.clear();
+                  m.sendRemoteCommand('clear');
+                },
+              ),
+            ),
+            onChanged: (v) {
+              debounce?.cancel();
+              debounce = Timer(const Duration(milliseconds: 350), () => m.sendRemoteText(v));
+            },
+            onSubmitted: (v) {
+              debounce?.cancel();
+              m.sendRemoteText(v, submit: true);
+              Navigator.pop(ctx);
+            },
+          ),
+          const SizedBox(height: 12),
+          SizedBox(width: double.infinity, child: FilledButton.icon(
+            onPressed: () {
+              debounce?.cancel();
+              m.sendRemoteText(ctrl.text, submit: true);
+              Navigator.pop(ctx);
+            },
+            icon: const Icon(Icons.search_rounded),
+            label: const Text('Search on TV'),
+          )),
+        ]),
+      ),
+    );
+    debounce?.cancel();
+    ctrl.dispose();
+  }
+
+  // ───────────────────────── labels ─────────────────────────
 
   String get _screenLabel {
     if (m.receiverPlayerOpen) {
       return m.nowPlayingTitle.isEmpty ? 'Playing on receiver' : m.nowPlayingTitle;
     }
+    if (m.receiverOverlay) return 'Dialog open on receiver';
     final pc = m.receiverIsDesktop;
     switch (m.receiverView) {
       case 'movies':
         return pc ? 'Browsing movies on the PC' : 'Browsing movies on the TV';
+      case 'tv':
+        return 'TV channels';
+      case 'fixtures':
+        return 'Live football';
+      case 'downloads':
+        return 'Download apps';
+      case 'learn':
+        return 'Learn';
       case 'connect':
         return 'Receiver is waiting for a video';
       default:
@@ -74,225 +197,779 @@ class _DecoderReceiverPageState extends State<DecoderReceiverPage> {
     }
   }
 
-  Widget _contentShortcut(IconData icon, String label, String command, {bool danger = false}) => InkWell(
-    onTap: () => _key(command),
-    borderRadius: BorderRadius.circular(13),
-    child: Container(
-      constraints: const BoxConstraints(minHeight: 68),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
-      decoration: BoxDecoration(
-        color: danger ? const Color(0x22F0445E) : Ui.card,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: danger ? const Color(0x66F0445E) : Ui.line),
-      ),
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Icon(icon, size: 21, color: danger ? const Color(0xFFFF7185) : Ui.red),
-        const SizedBox(height: 5),
-        FittedBox(fit: BoxFit.scaleDown, child: Text(label,
-          maxLines: 1, style: TextStyle(color: Ui.text, fontSize: 10, fontWeight: FontWeight.w700))),
-      ]),
-    ),
-  );
+  String get _hint {
+    final playing = m.receiverPlayerOpen;
+    if (m.receiverIsDesktop) {
+      return playing
+          ? 'Windows app: OK / Play taps the player. If an ad eats the first tap, press it again. Full screen fills the PC screen (F11 or Esc leaves it).'
+          : 'Windows app: arrows and OK move around the app. Hold an arrow to keep moving. Back closes dialogs; Home always returns to the start screen.';
+    }
+    if (playing) {
+      if (m.receiverMode == 'iframe') {
+        return m.receiverIsTv
+            ? 'OK / Play taps the player. If an ad eats the first tap, press it again. Embedded providers may ignore seek and volume.'
+            : 'Embedded providers may ignore some buttons (seek, volume). Back and Home always work.';
+      }
+      return 'Left / Right seek ±10 s and Up / Down change the volume while a video is open. OK toggles play / pause.';
+    }
+    return 'Use the wheel to browse. Hold an arrow to keep moving. Back closes dialogs; Home always returns to the start screen.';
+  }
 
-  Widget _remotePanel() {
+  // ───────────────────────── remote body ─────────────────────────
+
+  Widget _remote() {
     final playing = m.receiverPlayerOpen;
     final mirror = m.receiverMode == 'mirror';
     final canPlay = playing && !mirror;
     final pc = m.receiverIsDesktop;
-    return decoderPanel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Icon(playing ? Icons.play_circle_fill : Icons.settings_remote_rounded, color: Ui.red),
-        const SizedBox(width: 8),
-        Expanded(child: Text(_screenLabel, maxLines: 2, overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900, fontSize: 15))),
-      ]),
-      const SizedBox(height: 14),
-      Text('QUICK ACCESS', style: TextStyle(color: Ui.muted, fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.w900)),
-      const SizedBox(height: 9),
-      GridView.count(
-        crossAxisCount: 4,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-        childAspectRatio: 1.12,
-        children: [
-          _contentShortcut(Icons.movie_creation_outlined, 'Movies', 'movies'),
-          _contentShortcut(Icons.live_tv_rounded, 'TV channels', 'tv'),
-          _contentShortcut(Icons.sports_soccer_rounded, 'Live football', 'football'),
-          _contentShortcut(Icons.qr_code_2_rounded, 'Connect app', 'connect'),
-          _contentShortcut(Icons.download_rounded, 'Download apps', 'downloads'),
-          _contentShortcut(Icons.power_settings_new_rounded, 'Off', 'off', danger: true),
-          _contentShortcut(Icons.settings_rounded, 'Settings', 'settings'),
-          _contentShortcut(Icons.workspace_premium_rounded, 'Subscribe', 'subscribe'),
-        ],
+    final canFull = (canPlay || mirror || pc) && !m.receiverIsTv;
+    final vol = m.receiverMuted ? 0 : m.receiverVolume;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(38),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Ui.cardDeep, Ui.card],
+        ),
+        border: Border.all(color: Ui.line),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .28), blurRadius: 26, offset: const Offset(0, 12))],
       ),
-      const SizedBox(height: 16),
-      Divider(color: Ui.line.withValues(alpha: .8), height: 1),
-      const SizedBox(height: 12),
-      Text('REMOTE CONTROLS', style: TextStyle(color: Ui.muted, fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.w900)),
-      const SizedBox(height: 10),
-      // Navigation pad: moves around the TV screens and acts as seek / volume while a video plays.
-      Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        _RemoteButton(icon: Icons.keyboard_arrow_up_rounded, label: 'Up', onTap: () => _key('up'), width: 84),
-        const SizedBox(height: 8),
-        Row(mainAxisSize: MainAxisSize.min, children: [
-          _RemoteButton(icon: Icons.keyboard_arrow_left_rounded, label: 'Left', onTap: () => _key('left'), width: 84),
-          const SizedBox(width: 8),
-          _RemoteButton(icon: Icons.radio_button_checked_rounded, label: 'OK', onTap: () => _key('enter'), primary: true, width: 84),
-          const SizedBox(width: 8),
-          _RemoteButton(icon: Icons.keyboard_arrow_right_rounded, label: 'Right', onTap: () => _key('right'), width: 84),
+      child: Column(children: [
+        // ── top row: power · screen status · menu ──
+        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          _Round(icon: Icons.power_settings_new_rounded, size: 52, tone: _Tone.danger, onPress: _confirmOff, lock: _touching, semantics: 'Power off'),
+          const SizedBox(width: 10),
+          Expanded(child: _statusChip(playing)),
+          const SizedBox(width: 10),
+          _Round(icon: Icons.settings_rounded, size: 52, onPress: () => _key('menu'), lock: _touching, semantics: 'Settings menu'),
         ]),
-        const SizedBox(height: 8),
-        _RemoteButton(icon: Icons.keyboard_arrow_down_rounded, label: 'Down', onTap: () => _key('down'), width: 84),
-      ])),
-      const SizedBox(height: 12),
-      Row(children: [
-        Expanded(child: _RemoteButton(icon: Icons.arrow_back_rounded, label: 'Back', onTap: () => _key('back'))),
-        const SizedBox(width: 8),
-        Expanded(child: _RemoteButton(icon: Icons.home_rounded, label: 'Home', onTap: () => _key('home'))),
-        const SizedBox(width: 8),
-        Expanded(child: _RemoteButton(
-          icon: m.receiverFullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
-          label: m.receiverFullscreen ? 'Exit full' : 'Full screen',
-          onTap: (canPlay || mirror || pc) && !m.receiverIsTv ? () => _key('fullscreen') : null)),
-      ]),
-      const SizedBox(height: 8),
-      Row(children: [
-        Expanded(child: _RemoteButton(icon: Icons.replay_10_rounded, label: '−10 sec',
-          onTap: canPlay ? () => _key('rewind') : null)),
-        const SizedBox(width: 8),
-        Expanded(child: _RemoteButton(
-          icon: m.receiverPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-          label: m.receiverPlaying ? 'Pause' : 'Play',
-          primary: true,
-          onTap: canPlay ? () { HapticFeedback.selectionClick(); m.toggleReceiverPlay(); } : null)),
-        const SizedBox(width: 8),
-        Expanded(child: _RemoteButton(icon: Icons.forward_10_rounded, label: '+10 sec',
-          onTap: canPlay ? () => _key('forward') : null)),
-        const SizedBox(width: 8),
-        Expanded(child: _RemoteButton(icon: Icons.stop_rounded, label: 'Stop',
-          onTap: playing ? () => m.stopPlayback() : null)),
-      ]),
-      const SizedBox(height: 8),
-      if (m.receiverHasBackup) ...[
-        Row(children: [
-          Expanded(child: _RemoteButton(icon: Icons.swap_horiz_rounded, label: 'Switch to backup stream',
-            onTap: () { HapticFeedback.selectionClick(); if (!m.switchToBackup()) decoderToast(context, 'Receiver is not connected yet.'); })),
+        const SizedBox(height: 22),
+
+        // ── navigation wheel ──
+        _DPad(onKey: _key, lock: _touching),
+        const SizedBox(height: 22),
+
+        // ── back · home · full screen ──
+        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+          _LabeledRound(icon: Icons.arrow_back_rounded, label: 'Back', onPress: () => _key('back'), lock: _touching),
+          _LabeledRound(icon: Icons.home_rounded, label: 'Home', onPress: () => _key('home'), lock: _touching, tone: _Tone.accent),
+          _LabeledRound(
+            icon: m.receiverFullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+            label: m.receiverFullscreen ? 'Exit full' : 'Full screen',
+            onPress: canFull ? () => _key('fullscreen') : null,
+            lock: _touching,
+          ),
         ]),
-        const SizedBox(height: 8),
-      ],
-      Row(children: [
-        Expanded(child: _RemoteButton(
-          icon: m.receiverMuted ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-          label: m.receiverMuted ? 'Unmute' : 'Mute',
-          onTap: playing ? () { HapticFeedback.selectionClick(); m.toggleReceiverMute(); } : null)),
-        const SizedBox(width: 8),
-        Expanded(child: _RemoteButton(icon: Icons.volume_down_rounded, label: 'Vol −',
-          onTap: playing ? () => m.nudgeReceiverVolume(-10) : null)),
-        const SizedBox(width: 8),
-        Expanded(child: _RemoteButton(icon: Icons.volume_up_rounded, label: 'Vol +',
-          onTap: playing ? () => m.nudgeReceiverVolume(10) : null)),
+        const SizedBox(height: 22),
+
+        // ── volume · mute / keyboard · page ──
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, crossAxisAlignment: CrossAxisAlignment.center, children: [
+          _Rocker(
+            label: 'VOL',
+            sub: playing ? (m.receiverMuted ? 'MUTE' : '$vol%') : '',
+            upIcon: Icons.add_rounded,
+            downIcon: Icons.remove_rounded,
+            enabled: playing,
+            onUp: () => m.nudgeReceiverVolume(10),
+            onDown: () => m.nudgeReceiverVolume(-10),
+            lock: _touching,
+          ),
+          Column(mainAxisSize: MainAxisSize.min, children: [
+            _LabeledRound(
+              icon: m.receiverMuted ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+              label: m.receiverMuted ? 'Unmute' : 'Mute',
+              onPress: playing ? () => m.toggleReceiverMute() : null,
+              lock: _touching,
+              size: 54,
+            ),
+            const SizedBox(height: 14),
+            _LabeledRound(icon: Icons.keyboard_alt_outlined, label: 'Keyboard', onPress: _openKeyboard, lock: _touching, size: 54),
+          ]),
+          _Rocker(
+            label: 'PAGE',
+            sub: '',
+            upIcon: Icons.keyboard_arrow_up_rounded,
+            downIcon: Icons.keyboard_arrow_down_rounded,
+            enabled: true,
+            onUp: () => _key('chup'),
+            onDown: () => _key('chdown'),
+            lock: _touching,
+          ),
+        ]),
+        const SizedBox(height: 22),
+
+        // ── transport ──
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            color: Ui.bg.withValues(alpha: .45),
+            borderRadius: BorderRadius.circular(40),
+            border: Border.all(color: Ui.line),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+            _Round(icon: Icons.replay_10_rounded, size: 52, onPress: canPlay ? () => _key('rewind') : null, lock: _touching, semantics: 'Back 10 seconds'),
+            _Round(
+              icon: m.receiverPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              size: 66,
+              tone: _Tone.accent,
+              iconSize: 34,
+              onPress: canPlay ? () => m.toggleReceiverPlay() : null,
+              lock: _touching,
+              semantics: m.receiverPlaying ? 'Pause' : 'Play',
+            ),
+            _Round(icon: Icons.forward_10_rounded, size: 52, onPress: canPlay ? () => _key('forward') : null, lock: _touching, semantics: 'Forward 10 seconds'),
+            _Round(icon: Icons.stop_rounded, size: 52, onPress: playing ? () => m.stopPlayback() : null, lock: _touching, semantics: 'Stop'),
+          ]),
+        ),
+        if (m.receiverHasBackup) ...[
+          const SizedBox(height: 12),
+          _Pill(
+            icon: Icons.swap_horiz_rounded,
+            label: 'Switch to backup stream',
+            lock: _touching,
+            onPress: () {
+              if (!m.switchToBackup()) decoderToast(context, 'Receiver is not connected yet.');
+            },
+          ),
+        ],
+        const SizedBox(height: 22),
+
+        // ── app shortcuts ──
+        Align(alignment: Alignment.centerLeft, child: Text('QUICK ACCESS',
+          style: TextStyle(color: Ui.muted, fontSize: 10, letterSpacing: 1.4, fontWeight: FontWeight.w900))),
+        const SizedBox(height: 10),
+        GridView.count(
+          crossAxisCount: 3,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 1.25,
+          children: [
+            _AppTile(icon: Icons.movie_creation_outlined, label: 'Movies', color: const Color(0xFFE5484D), onPress: () => _key('movies'), lock: _touching),
+            _AppTile(icon: Icons.live_tv_rounded, label: 'TV channels', color: const Color(0xFF3E8BFF), onPress: () => _key('tv'), lock: _touching),
+            _AppTile(icon: Icons.sports_soccer_rounded, label: 'Live football', color: const Color(0xFF2FB36B), onPress: () => _key('football'), lock: _touching),
+            _AppTile(icon: Icons.download_rounded, label: 'Download apps', color: const Color(0xFFF59E0B), onPress: () => _key('downloads'), lock: _touching),
+            _AppTile(icon: Icons.qr_code_2_rounded, label: 'Connect app', color: const Color(0xFF8B5CF6), onPress: () => _key('connect'), lock: _touching),
+            _AppTile(icon: Icons.workspace_premium_rounded, label: 'Subscribe', color: const Color(0xFFEC4899), onPress: () => _key('subscribe'), lock: _touching),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Text(_hint, textAlign: TextAlign.center, style: TextStyle(color: Ui.muted, fontSize: 11, height: 1.4)),
       ]),
-      Row(children: [
-        Icon(m.receiverMuted ? Icons.volume_off_rounded : Icons.volume_down_rounded, color: Ui.muted),
-        Expanded(child: Slider(
-          value: (m.receiverMuted ? 0 : m.receiverVolume).toDouble().clamp(0.0, 100.0).toDouble(),
-          min: 0, max: 100,
-          onChanged: playing ? m.setReceiverVolume : null)),
-        Text((m.receiverMuted ? 0 : m.receiverVolume).toString() + '%', style: TextStyle(color: Ui.muted, fontSize: 11)),
-      ]),
-      Text(pc
-          ? (playing
-              ? 'Windows app: OK / Play taps the player. If an ad eats the first tap, press it again. Full screen fills the PC screen (F11 or Esc leaves it).'
-              : 'Windows app: arrows and OK move around the app. Full screen, Back and Home work too.')
-        : playing
-          ? (m.receiverMode == 'iframe'
-              ? (m.receiverIsTv
-                  ? 'OK / Play taps the player. If an ad eats the first tap, press it again. Embedded providers may ignore seek and volume.'
-                  : 'Embedded providers may ignore some buttons (seek, volume). Back and Home always work.')
-              : 'Arrows seek ±10 s and change volume while a video is open. OK toggles play / pause.')
-          : 'Use the arrows and OK to browse movies on the TV. Back and Home work like the TV remote.',
-        style: TextStyle(color: Ui.muted, fontSize: 11, height: 1.35)),
-    ]));
+    );
   }
+
+  Widget _statusChip(bool playing) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+    decoration: BoxDecoration(
+      color: Ui.bg.withValues(alpha: .5),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: Ui.line),
+    ),
+    child: Row(children: [
+      Icon(playing ? Icons.play_circle_fill_rounded : Icons.settings_remote_rounded, size: 20, color: Ui.red),
+      const SizedBox(width: 8),
+      Expanded(child: Text(_screenLabel, maxLines: 2, overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 12, height: 1.2))),
+    ]),
+  );
+
+  // ───────────────────────── page ─────────────────────────
+
+  Widget _connectionCard() => decoderPanel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Row(children: [
+      Icon(Icons.connected_tv_rounded, size: 29, color: Ui.red),
+      const SizedBox(width: 11),
+      Expanded(child: Text(m.running ? m.status : 'No receiver connected',
+        style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900))),
+      Icon(Icons.circle, size: 10, color: m.connected ? Colors.green : Ui.muted),
+    ]),
+    if (!m.running) ...[
+      const SizedBox(height: 10),
+      Text('On your TV or laptop, open the Deeprowss Receiver page, or open the Deeprowss Cinema Windows app and choose Cast from Phone. Scan the QR code shown there with your phone to connect.',
+        style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5)),
+    ],
+    const SizedBox(height: 14),
+    if (!m.running) ...[
+      SizedBox(width: double.infinity, child: FilledButton.icon(
+        onPressed: _busy ? null : _scanAndConnect,
+        icon: _busy ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.qr_code_scanner_rounded),
+        label: Text(_busy ? 'Connecting…' : 'Scan TV QR code'))),
+      const SizedBox(height: 8),
+      SizedBox(width: double.infinity, child: OutlinedButton.icon(
+        onPressed: _busy ? null : _startLegacy,
+        icon: const Icon(Icons.pin_outlined), label: const Text('Use legacy PIN connection'))),
+    ] else
+      SizedBox(width: double.infinity, child: OutlinedButton.icon(
+        onPressed: () async { await m.stop(); },
+        icon: const Icon(Icons.stop_circle_outlined), label: const Text('Disconnect receiver'))),
+    if (m.error != null) Padding(padding: const EdgeInsets.only(top: 10),
+      child: Text(m.error!, style: TextStyle(color: Ui.red, fontSize: 12))),
+  ]));
 
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Ui.bg,
     appBar: AppBar(backgroundColor: Ui.panel,
       title: const Text('Connect to receiver', style: TextStyle(fontWeight: FontWeight.w900))),
-    body: ListenableBuilder(listenable: m, builder: (context, _) => ListView(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).viewPadding.bottom + 28), children: [
-        decoderPanel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Icon(Icons.connected_tv_rounded, size: 29, color: Ui.red),
-            const SizedBox(width: 11),
-            Expanded(child: Text(m.running ? m.status : 'No receiver connected',
-              style: TextStyle(color: Ui.text, fontWeight: FontWeight.w900))),
-            Icon(Icons.circle, size: 10, color: m.connected ? Colors.green : Ui.muted),
-          ]),
-          const SizedBox(height: 10),
-          Text('On your TV or laptop, open the Deeprowss Receiver page, or open the Deeprowss Cinema Windows app and choose Cast from Phone. Scan the QR code shown there with your phone to connect.',
-            style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5)),
-          const SizedBox(height: 16),
-          SizedBox(width: double.infinity, child: FilledButton.icon(
-            onPressed: _busy || m.running ? null : _scanAndConnect,
-            icon: _busy ? const SizedBox(width: 17,height: 17,child:CircularProgressIndicator(strokeWidth:2))
-              : const Icon(Icons.qr_code_scanner_rounded),
-            label: Text(_busy ? 'Connecting…' : 'Scan TV QR code'))),
-          if (!m.running) ...[
-            const SizedBox(height: 8),
-            SizedBox(width: double.infinity, child: OutlinedButton.icon(
-              onPressed: _busy ? null : _startLegacy,
-              icon: const Icon(Icons.pin_outlined), label: const Text('Use legacy PIN connection'))),
-          ] else ...[
-            const SizedBox(height: 8),
-            SizedBox(width: double.infinity, child: OutlinedButton.icon(
-              onPressed: () async { await m.stop(); },
-              icon: const Icon(Icons.stop_circle_outlined), label: const Text('Disconnect receiver'))),
-          ],
-          if (m.error != null) Padding(padding: const EdgeInsets.only(top:10),
-            child: Text(m.error!, style: TextStyle(color: Ui.red, fontSize:12))),
-        ])),
-        if (m.running) _remotePanel(),
-        decoderPanel(Text('The QR code pairs your phone with the TV. Video and audio travel directly between devices using WebRTC; the pairing service only relays connection messages.',
-          style:TextStyle(color:Ui.muted,fontSize:12,height:1.5))),
-      ])),
+    body: ListenableBuilder(listenable: m, builder: (context, _) => ValueListenableBuilder<int>(
+      valueListenable: _touching,
+      builder: (context, touching, _) => ListView(
+        physics: touching > 0 ? const NeverScrollableScrollPhysics() : null,
+        padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).viewPadding.bottom + 28),
+        children: [
+          _connectionCard(),
+          if (m.running) _remote(),
+          decoderPanel(Text('The QR code pairs your phone with the TV. Video and audio travel directly between devices using WebRTC; the pairing service only relays connection messages.',
+            style: TextStyle(color: Ui.muted, fontSize: 12, height: 1.5))),
+        ],
+      ),
+    )),
   );
 }
 
-class _RemoteButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  final bool primary;
-  final double? width;
-  const _RemoteButton({required this.icon, required this.label, required this.onTap, this.primary = false, this.width});
+// ═══════════════════════════ remote widgets ═══════════════════════════
+
+enum _Tone { normal, accent, danger }
+
+/// A button that reacts the moment a finger touches it (like a real remote),
+/// shrinks while pressed, and optionally repeats while it is held down.
+class _Press extends StatefulWidget {
+  final VoidCallback? onPress;
+  final ValueNotifier<int>? lock;
+  final int repeatMs; // 0 = no repeat
+  final Widget Function(bool pressed) builder;
+  const _Press({required this.onPress, required this.builder, this.lock, this.repeatMs = 0});
+  @override
+  State<_Press> createState() => _PressState();
+}
+
+class _PressState extends State<_Press> {
+  bool _down = false;
+  Timer? _hold;
+  Timer? _rep;
+
+  void _stopTimers() {
+    _hold?.cancel();
+    _rep?.cancel();
+    _hold = null;
+    _rep = null;
+  }
+
+  void _start() {
+    final cb = widget.onPress;
+    if (cb == null || _down) return;
+    setState(() => _down = true);
+    widget.lock?.value++;
+    HapticFeedback.selectionClick();
+    cb();
+    if (widget.repeatMs > 0) {
+      _hold = Timer(const Duration(milliseconds: 380), () {
+        _rep = Timer.periodic(Duration(milliseconds: widget.repeatMs), (_) {
+          final c = widget.onPress;
+          if (c == null) {
+            _stopTimers();
+            return;
+          }
+          c();
+        });
+      });
+    }
+  }
+
+  void _end() {
+    if (!_down) return;
+    _stopTimers();
+    final l = widget.lock;
+    if (l != null && l.value > 0) l.value--;
+    if (mounted) setState(() => _down = false);
+  }
+
+  @override
+  void dispose() {
+    _stopTimers();
+    if (_down) {
+      final l = widget.lock;
+      if (l != null && l.value > 0) l.value--;
+    }
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final enabled = onTap != null;
+    final enabled = widget.onPress != null;
     return Opacity(
       opacity: enabled ? 1 : .38,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          width: width,
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-          constraints: const BoxConstraints(minHeight: 64),
-          decoration: BoxDecoration(
-            color: primary ? Ui.red.withValues(alpha: .18) : Ui.card,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: primary ? Ui.red : Ui.line),
-          ),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, color: primary ? Ui.red : Ui.text, size: 24),
-            const SizedBox(height: 4),
-            FittedBox(fit: BoxFit.scaleDown, child: Text(label, maxLines: 1, style: TextStyle(color: Ui.muted, fontSize: 10))),
-          ]),
+      child: Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: (_) => _start(),
+        onPointerUp: (_) => _end(),
+        onPointerCancel: (_) => _end(),
+        child: AnimatedScale(
+          scale: _down ? .92 : 1,
+          duration: const Duration(milliseconds: 70),
+          child: widget.builder(_down),
         ),
       ),
     );
   }
+}
+
+Color _toneFill(_Tone t, bool pressed) {
+  switch (t) {
+    case _Tone.accent:
+      return Ui.red.withValues(alpha: pressed ? .45 : .22);
+    case _Tone.danger:
+      return const Color(0xFFF0445E).withValues(alpha: pressed ? .4 : .18);
+    case _Tone.normal:
+      return pressed ? Ui.line : Ui.card;
+  }
+}
+
+Color _toneBorder(_Tone t) {
+  switch (t) {
+    case _Tone.accent:
+      return Ui.red;
+    case _Tone.danger:
+      return const Color(0x99F0445E);
+    case _Tone.normal:
+      return Ui.line;
+  }
+}
+
+Color _toneIcon(_Tone t) {
+  switch (t) {
+    case _Tone.accent:
+      return Ui.red;
+    case _Tone.danger:
+      return const Color(0xFFFF7185);
+    case _Tone.normal:
+      return Ui.text;
+  }
+}
+
+class _Round extends StatelessWidget {
+  final IconData icon;
+  final double size;
+  final double? iconSize;
+  final _Tone tone;
+  final VoidCallback? onPress;
+  final ValueNotifier<int>? lock;
+  final int repeatMs;
+  final String? semantics;
+  const _Round({
+    required this.icon,
+    required this.onPress,
+    this.size = 56,
+    this.iconSize,
+    this.tone = _Tone.normal,
+    this.lock,
+    this.repeatMs = 0,
+    this.semantics,
+  });
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: semantics,
+    child: _Press(
+      onPress: onPress,
+      lock: lock,
+      repeatMs: repeatMs,
+      builder: (pressed) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: _toneFill(tone, pressed),
+          border: Border.all(color: _toneBorder(tone), width: tone == _Tone.normal ? 1 : 1.6),
+          boxShadow: pressed ? null : [BoxShadow(color: Colors.black.withValues(alpha: .22), blurRadius: 8, offset: const Offset(0, 3))],
+        ),
+        child: Icon(icon, size: iconSize ?? size * .46, color: _toneIcon(tone)),
+      ),
+    ),
+  );
+}
+
+class _LabeledRound extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPress;
+  final ValueNotifier<int>? lock;
+  final _Tone tone;
+  final double size;
+  const _LabeledRound({
+    required this.icon,
+    required this.label,
+    required this.onPress,
+    this.lock,
+    this.tone = _Tone.normal,
+    this.size = 60,
+  });
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 78,
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      _Round(icon: icon, onPress: onPress, lock: lock, tone: tone, size: size, semantics: label),
+      const SizedBox(height: 6),
+      FittedBox(fit: BoxFit.scaleDown, child: Text(label, maxLines: 1,
+        style: TextStyle(color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w700))),
+    ]),
+  );
+}
+
+/// Vertical two-way pill (volume / page) like the rockers on a TV remote.
+class _Rocker extends StatelessWidget {
+  final String label;
+  final String sub;
+  final IconData upIcon;
+  final IconData downIcon;
+  final bool enabled;
+  final VoidCallback onUp;
+  final VoidCallback onDown;
+  final ValueNotifier<int> lock;
+  const _Rocker({
+    required this.label,
+    required this.sub,
+    required this.upIcon,
+    required this.downIcon,
+    required this.enabled,
+    required this.onUp,
+    required this.onDown,
+    required this.lock,
+  });
+
+  Widget _half(IconData icon, VoidCallback cb, bool top) => _Press(
+    onPress: enabled ? cb : null,
+    lock: lock,
+    repeatMs: 170,
+    builder: (pressed) => Container(
+      height: 58,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: pressed ? Ui.red.withValues(alpha: .28) : Colors.transparent,
+        borderRadius: BorderRadius.vertical(
+          top: top ? const Radius.circular(32) : Radius.zero,
+          bottom: top ? Radius.zero : const Radius.circular(32),
+        ),
+      ),
+      child: Icon(icon, size: 28, color: Ui.text),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 72,
+    decoration: BoxDecoration(
+      color: Ui.card,
+      borderRadius: BorderRadius.circular(34),
+      border: Border.all(color: Ui.line),
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .22), blurRadius: 8, offset: const Offset(0, 3))],
+    ),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      _half(upIcon, onUp, true),
+      Container(
+        height: 40,
+        alignment: Alignment.center,
+        child: Column(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(label, style: TextStyle(color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
+          if (sub.isNotEmpty) Text(sub, style: TextStyle(color: Ui.red, fontSize: 10, fontWeight: FontWeight.w800)),
+        ]),
+      ),
+      _half(downIcon, onDown, false),
+    ]),
+  );
+}
+
+class _Pill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPress;
+  final ValueNotifier<int> lock;
+  const _Pill({required this.icon, required this.label, required this.onPress, required this.lock});
+
+  @override
+  Widget build(BuildContext context) => _Press(
+    onPress: onPress,
+    lock: lock,
+    builder: (pressed) => Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        color: _toneFill(_Tone.accent, pressed),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Ui.red),
+      ),
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(icon, size: 20, color: Ui.red),
+        const SizedBox(width: 8),
+        Text(label, style: TextStyle(color: Ui.text, fontWeight: FontWeight.w800, fontSize: 13)),
+      ]),
+    ),
+  );
+}
+
+class _AppTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onPress;
+  final ValueNotifier<int> lock;
+  const _AppTile({required this.icon, required this.label, required this.color, required this.onPress, required this.lock});
+
+  @override
+  Widget build(BuildContext context) => _Press(
+    onPress: onPress,
+    lock: lock,
+    builder: (pressed) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: Color.alphaBlend(color.withValues(alpha: pressed ? .34 : .16), Ui.card),
+        border: Border.all(color: color.withValues(alpha: .55)),
+      ),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          child: Icon(icon, size: 19, color: Colors.white),
+        ),
+        const SizedBox(height: 7),
+        FittedBox(fit: BoxFit.scaleDown, child: Text(label, maxLines: 1,
+          style: TextStyle(color: Ui.text, fontSize: 11, fontWeight: FontWeight.w800))),
+      ]),
+    ),
+  );
+}
+
+/// The navigation wheel: four arrow segments around a round OK button.
+/// Touch reacts instantly, sliding the finger moves to the next segment and
+/// holding an arrow repeats it, exactly like holding a TV remote key.
+class _DPad extends StatefulWidget {
+  final bool Function(String) onKey;
+  final ValueNotifier<int> lock;
+  const _DPad({required this.onKey, required this.lock});
+  @override
+  State<_DPad> createState() => _DPadState();
+}
+
+class _DPadState extends State<_DPad> {
+  String? _zone;
+  bool _touching = false;
+  Timer? _hold;
+  Timer? _rep;
+
+  static const okRatio = .40;
+
+  String? _hit(Offset p, double size) {
+    final r0 = size / 2;
+    final d = p - Offset(r0, r0);
+    final r = d.distance;
+    if (r > r0) return null;
+    if (r < r0 * okRatio) return 'enter';
+    final a = math.atan2(d.dy, d.dx); // 0 = right, pi/2 = down
+    if (a >= -math.pi / 4 && a < math.pi / 4) return 'right';
+    if (a >= math.pi / 4 && a < 3 * math.pi / 4) return 'down';
+    if (a >= -3 * math.pi / 4 && a < -math.pi / 4) return 'up';
+    return 'left';
+  }
+
+  void _stopTimers() {
+    _hold?.cancel();
+    _rep?.cancel();
+    _hold = null;
+    _rep = null;
+  }
+
+  void _press(String zone) {
+    _stopTimers();
+    setState(() => _zone = zone);
+    HapticFeedback.lightImpact();
+    if (!widget.onKey(zone)) return;
+    if (zone == 'enter') return;
+    _hold = Timer(const Duration(milliseconds: 380), () {
+      _rep = Timer.periodic(const Duration(milliseconds: 120), (_) {
+        if (!widget.onKey(zone)) _stopTimers();
+      });
+    });
+  }
+
+  void _down(Offset p, double size) {
+    if (!_touching) {
+      _touching = true;
+      widget.lock.value++;
+    }
+    final z = _hit(p, size);
+    if (z != null) _press(z);
+  }
+
+  void _move(Offset p, double size) {
+    if (!_touching) return;
+    final z = _hit(p, size);
+    if (z == _zone) return;
+    if (z == null) {
+      _stopTimers();
+      setState(() => _zone = null);
+    } else {
+      _press(z);
+    }
+  }
+
+  void _up() {
+    _stopTimers();
+    if (_touching) {
+      _touching = false;
+      if (widget.lock.value > 0) widget.lock.value--;
+    }
+    if (mounted) setState(() => _zone = null);
+  }
+
+  @override
+  void dispose() {
+    _stopTimers();
+    if (_touching && widget.lock.value > 0) widget.lock.value--;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) {
+    final size = math.min(c.maxWidth, 296.0);
+    return Center(
+      child: Semantics(
+        label: 'Navigation wheel. Up, down, left, right and OK',
+        child: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (e) => _down(e.localPosition, size),
+          onPointerMove: (e) => _move(e.localPosition, size),
+          onPointerUp: (_) => _up(),
+          onPointerCancel: (_) => _up(),
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: CustomPaint(
+              painter: _PadPainter(
+                zone: _zone,
+                accent: Ui.red,
+                surface: Ui.card,
+                deep: Ui.bg,
+                line: Ui.line,
+                text: Ui.text,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  });
+}
+
+class _PadPainter extends CustomPainter {
+  final String? zone;
+  final Color accent;
+  final Color surface;
+  final Color deep;
+  final Color line;
+  final Color text;
+  const _PadPainter({
+    required this.zone,
+    required this.accent,
+    required this.surface,
+    required this.deep,
+    required this.line,
+    required this.text,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final r = size.width / 2;
+    final okR = r * _DPadState.okRatio;
+
+    // soft shadow + ring body
+    canvas.drawCircle(c + const Offset(0, 6), r - 2,
+      Paint()..color = Colors.black.withValues(alpha: .30)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
+    canvas.drawCircle(c, r - 1, Paint()
+      ..shader = RadialGradient(colors: [surface, Color.alphaBlend(deep.withValues(alpha: .55), surface)])
+          .createShader(Rect.fromCircle(center: c, radius: r)));
+    canvas.drawCircle(c, r - 1, Paint()..style = PaintingStyle.stroke..strokeWidth = 1.5..color = line);
+
+    // pressed segment
+    if (zone != null && zone != 'enter') {
+      double start;
+      switch (zone) {
+        case 'right':
+          start = -math.pi / 4;
+          break;
+        case 'down':
+          start = math.pi / 4;
+          break;
+        case 'left':
+          start = 3 * math.pi / 4;
+          break;
+        default: // up
+          start = -3 * math.pi / 4;
+      }
+      const sweep = math.pi / 2;
+      final path = Path()
+        ..arcTo(Rect.fromCircle(center: c, radius: r - 2), start, sweep, true)
+        ..arcTo(Rect.fromCircle(center: c, radius: okR + 6), start + sweep, -sweep, false)
+        ..close();
+      canvas.drawPath(path, Paint()..color = accent.withValues(alpha: .34));
+    }
+
+    // diagonal dividers
+    final div = Paint()..color = line.withValues(alpha: .8)..strokeWidth = 1.3..strokeCap = StrokeCap.round;
+    for (final a in [math.pi / 4, 3 * math.pi / 4, 5 * math.pi / 4, 7 * math.pi / 4]) {
+      final dir = Offset(math.cos(a), math.sin(a));
+      canvas.drawLine(c + dir * (okR + 12), c + dir * (r - 12), div);
+    }
+
+    // arrows
+    void chevron(String name, double angle) {
+      final active = zone == name;
+      final p = c + Offset(math.cos(angle), math.sin(angle)) * (r * .72);
+      canvas.save();
+      canvas.translate(p.dx, p.dy);
+      canvas.rotate(angle + math.pi / 2);
+      final s = r * .085;
+      final path = Path()
+        ..moveTo(-s * 1.2, s * .6)
+        ..lineTo(0, -s * .7)
+        ..lineTo(s * 1.2, s * .6);
+      canvas.drawPath(path, Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = active ? 5 : 4
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..color = active ? accent : text.withValues(alpha: .9));
+      canvas.restore();
+    }
+    chevron('up', -math.pi / 2);
+    chevron('right', 0);
+    chevron('down', math.pi / 2);
+    chevron('left', math.pi);
+
+    // OK button
+    final okPressed = zone == 'enter';
+    canvas.drawCircle(c, okR + 3, Paint()..color = deep.withValues(alpha: .55));
+    canvas.drawCircle(c, okR, Paint()..color = accent.withValues(alpha: okPressed ? .42 : .18));
+    canvas.drawCircle(c, okR, Paint()..style = PaintingStyle.stroke..strokeWidth = 2.2..color = accent);
+    final tp = TextPainter(
+      text: TextSpan(text: 'OK', style: TextStyle(color: okPressed ? accent : text, fontSize: r * .15, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, c - Offset(tp.width / 2, tp.height / 2));
+  }
+
+  @override
+  bool shouldRepaint(covariant _PadPainter old) =>
+      old.zone != zone || old.accent != accent || old.surface != surface || old.line != line || old.text != text || old.deep != deep;
 }
