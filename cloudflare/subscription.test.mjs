@@ -252,6 +252,85 @@ for (let n = 0; n < 7; n++) {
   assert.equal(j.premium, true);
 }
 
+// 12b. Smart Decoder trial starts on first entry, lasts 72 hours, and never restarts.
+const DECODER_TRIAL_USER = "abababababababababababababababab";
+j = await (await post("/sub/decoder/access", {
+  install_id: DECODER_TRIAL_USER, start_trial: true
+})).json();
+assert.equal(j.premium, false);
+assert.equal(j.trial_active, true);
+const trialStarted = j.started_at;
+assert.ok(j.trial_expires_at - trialStarted === 72 * 60 * 60 * 1000);
+j = await (await post("/sub/decoder/access", {
+  install_id: DECODER_TRIAL_USER, start_trial: true
+})).json();
+assert.equal(j.started_at, trialStarted, "reopening Decoder must not restart the trial");
+
+// An expired trial falls back to four distinct TV channels and three movies per UTC day.
+const EXPIRED_DECODER = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
+sqlite.prepare("INSERT INTO decoder_trials (owner_id, started_at) VALUES (?, ?)")
+  .run(EXPIRED_DECODER, Date.now() - 4 * 86400000);
+j = await (await post("/sub/decoder/access", {
+  install_id: EXPIRED_DECODER, start_trial: true
+})).json();
+assert.equal(j.trial_active, false);
+assert.equal(j.started_at, Date.now() - 4 * 86400000);
+for (let n = 1; n <= 4; n++) {
+  j = await (await post("/sub/tv-access", {
+    install_id: EXPIRED_DECODER, channel_key: "channel:" + n
+  })).json();
+  assert.equal(j.allowed, true);
+  assert.equal(j.used, n);
+  assert.equal(j.remaining, 4 - n);
+}
+j = await (await post("/sub/tv-access", {
+  install_id: EXPIRED_DECODER, channel_key: "channel:1"
+})).json();
+assert.equal(j.allowed, true, "reopening a channel does not consume another daily slot");
+j = await (await post("/sub/tv-access", {
+  install_id: EXPIRED_DECODER, channel_key: "channel:5"
+})).json();
+assert.equal(j.allowed, false);
+assert.equal(j.remaining, 0);
+
+for (const key of ["film:one", "film:two", "film:three"]) {
+  j = await (await post("/sub/movie-access", {
+    install_id: EXPIRED_DECODER, movie_key: key, action: "play"
+  })).json();
+  assert.equal(j.allowed, true);
+}
+j = await (await post("/sub/movie-access", {
+  install_id: EXPIRED_DECODER, movie_key: "film:four", action: "download"
+})).json();
+assert.equal(j.allowed, false);
+j = await (await post("/sub/movie-access", {
+  install_id: EXPIRED_DECODER, movie_key: "film:one", action: "download"
+})).json();
+assert.equal(j.allowed, true, "play and download of the same title share one daily slot");
+
+// During the 72-hour trial, TV and movie usage is unlimited.
+for (let n = 1; n <= 6; n++) {
+  j = await (await post("/sub/tv-access", {
+    install_id: DECODER_TRIAL_USER, channel_key: "trial-channel:" + n
+  })).json();
+  assert.equal(j.allowed, true);
+}
+for (let n = 1; n <= 6; n++) {
+  j = await (await post("/sub/movie-access", {
+    install_id: DECODER_TRIAL_USER, movie_key: "trial-film:" + n
+  })).json();
+  assert.equal(j.allowed, true);
+}
+
+// The trial timestamp is permanent: an expired trial cannot be started again.
+sqlite.prepare("UPDATE decoder_trials SET started_at=? WHERE owner_id=?")
+  .run(Date.now() - 4 * 86400000, DECODER_TRIAL_USER);
+j = await (await post("/sub/decoder/access", {
+  install_id: DECODER_TRIAL_USER, start_trial: true
+})).json();
+assert.equal(j.trial_active, false);
+assert.ok(j.started_at < Date.now() - 3 * 86400000);
+
 // 13. Decoder numbers are server-issued and stop working when Premium expires.
 const decoderGrant = await (await call("/sub/admin", form({ token: "adm", install_id: ID3, days: "30" }))).text();
 assert.match(decoderGrant, /Premium until/);
