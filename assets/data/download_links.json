@@ -2,7 +2,7 @@
   "_help": "OWNER-MANAGED APP DOWNLOAD LINKS. Edit this file to control the Downloads page in both Deeprowss Cinema for Windows EXE and the receiver website. Paste your own direct HTTPS file URL for each app. Leave a value empty or set it to off to show Coming soon. These links are the ONLY source used; no GitHub Releases or app_config.json fallback is used. Commit changes and refresh the Downloads page.",
   "mobile": "https://files.catbox.moe/644jlp.apk",
   "androidTv": "https://mega.nz/file/CqZBmK7D#FyR3gwU11uieNQhAZK4NjAEwCY-2xQZBSFR43g9UbwQ",
-  "webos": "https://akirabox.com/download/e1.d1MIRQe644POPK16sb6q-KgyCMy1KiofcfFua48Hz_VR47ViielsKeQ8cUGHW0mhM2E50LZz8_MShdpurSN-MyBFfVzdD2VKsemhF86OmrgUHw3lvpeIVg_zKLpflasUtiCg-Yio2DHlzMOjsTNFAOELKgk7VA1lnP4vCwxDTwrUmn-zOqxO-xXXFEQjkGDcny1tgVZa9jaHlSFVJgVU006HolpyLH8jvcyGtJEsXLGqHT6Dg7RVG6yxFEapMcqtxd96dNFlhAvm1sWLVGLDb8GhLmoHqpFP5-vvbl0wYGbgWTic3zCcZJvG_tZqfq3I1dOn2TY9_896lYmwichvYYcNL_JBTHSS5LKthN1Jld2C/Deeprowss-LG-webOS.ipk",
+  "webos": "https://mega.nz/file/b3AH0CoB#Oz-veYNRRG-1a23uw98dlI5tw7hSbK0ApAw03LbCUQ8",
   "tizen": "",
   "windows": "https://mega.nz/file/amJ0yChI#vYnex65Kzu3zmh1mpzGDIohtl6bCrPu_wTQJhmCI73k"
 }
