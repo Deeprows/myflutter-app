@@ -48,11 +48,11 @@
   },
   "downloads": {
     "_help": "Download Apps page. auto = newest GitHub release file (mobile uses update.apkUrl). Set a key to a full https link to override it, or to off to show Coming soon.",
-    "mobile": "auto",
-    "androidTv": "auto",
-    "webos": "auto",
+    "mobile": "https://files.catbox.moe/644jlp.apk",
+    "androidTv": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.9/Deeprowss-Android-TV.apk",
+    "webos": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.9/Deeprowss-LG-webOS.ipk",
     "tizen": "auto",
-    "windows": "auto",
+    "windows": "https://github.com/Deeprows/myflutter-app/releases/download/v1.3.9/Deeprowss-Windows-Setup.exe",
     "windowsPortable": "auto"
   },
   "tmdb": {
